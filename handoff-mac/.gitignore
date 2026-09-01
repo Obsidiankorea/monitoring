@@ -1,0 +1,15 @@
+# 비밀 파일 — 저장소에 올리지 말 것
+# (gitignore는 줄 끝 주석을 패턴의 일부로 보므로 주석은 윗줄에 쓴다)
+config/api_keys.txt
+api_keys.txt
+.env
+.env.*
+
+# 파이썬
+__pycache__/
+*.pyc
+
+# 런타임 산출물
+data/cache/
+data/uploads/
+*.db
