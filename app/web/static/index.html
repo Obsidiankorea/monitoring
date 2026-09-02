@@ -618,15 +618,19 @@ td.totc .tot { width: auto; display: block; }
 .qpf-stage.panning { cursor: grabbing; }
 
 .qpf-img { position: relative; width: 100%; height: 100%; background: #fff; }
-/* 겹쳐 둔 두 장. 다음 장을 미리 깔아 두고 투명도만 바꿔 이어 붙인다 —
-   그림을 갈아 끼우는 순간 흰 바탕이 비치는 깜박임이 이렇게 없어진다. */
+/* 겹쳐 둔 두 장을 번갈아 띄운다.
+   ⚠️ 투명도를 서서히 바꾸면(크로스페이드) 도중에 두 장이 반씩 섞여
+      색이 옅어졌다 돌아온다 — 그게 '깜박임'으로 보인다. 즉시 바꾼다.
+   ⚠️ 감춘 쪽을 opacity:0으로 두면 브라우저가 그리지 않고 미뤄 두었다가
+      띄우는 순간 그린다. 다음 장을 미리 깔아 둔 보람이 없어진다.
+      보이지 않을 만큼만 남겨(0.004) 미리 그려 두게 한다. */
 .qpf-lay {
   position: absolute; inset: 0;
   background-repeat: no-repeat; background-color: #fff;
-  transition: opacity .16s linear,
-    background-size .35s cubic-bezier(.4,0,.2,1), background-position .35s cubic-bezier(.4,0,.2,1);
+  transition: background-size .35s cubic-bezier(.4,0,.2,1), background-position .35s cubic-bezier(.4,0,.2,1);
+  will-change: opacity;
 }
-.qpf-stage.panning .qpf-lay { transition: opacity .16s linear; }
+.qpf-stage.panning .qpf-lay { transition: none; }
 /* 배율·위치는 스크립트가 계산해 넣는다 — 경남이 항상 화면 가운데에 오도록
    확대할수록 배경 위치를 다시 잡아야 하기 때문이다. */
 .qpf-map { width: 100%; height: 100%; }
@@ -1234,7 +1238,7 @@ tbody.swap tr { animation: rowin .36s cubic-bezier(.2,.7,.3,1) both; animation-d
                  두 겹을 겹쳐 두고 번갈아 띄워 이어 붙인다. -->
             <div class="qpf-img" id="qpf-img" role="img" aria-label="초단기예측 강수 분포">
               <div class="qpf-lay" style="opacity:1"></div>
-              <div class="qpf-lay" style="opacity:0"></div>
+              <div class="qpf-lay" style="opacity:.004"></div>
             </div>
             <svg class="qpf-map" id="qpf-map" viewBox="0 0 900 620" preserveAspectRatio="xMidYMid meet"
                  role="img" aria-label="초단기 강수 예측 분포(대체 그림)" hidden></svg>
@@ -2327,26 +2331,48 @@ buildScale();
 
 
 let qpfLay = 0;
+const HIDE = ".004";       // 0으로 두면 브라우저가 미리 그려 두지 않는다
+
+/* 다음 장은 '보여 주기 한 박자 전에' 감춘 겹에 깔아 둔다.
+   재생 간격(420ms) 동안 브라우저가 다 그려 놓으므로, 띄울 때는 바꾸기만 하면 된다. */
 function qpfShow() {
-  const src = QPF_FRAMES[qpfIdx];
   const lays = document.querySelectorAll("#qpf-img .qpf-lay");
   if (lays.length < 2) return;
+  const src = QPF_FRAMES[qpfIdx];
   if (!src) { lays.forEach(l => { l.style.backgroundImage = "none"; l.dataset.src = ""; }); return; }
+
   const cur = lays[qpfLay];
-  if (cur.dataset.src === src) return;
-  const next = lays[qpfLay ^ 1];
-  next.style.backgroundImage = `url("${src}")`;
-  next.dataset.src = src;
-  next.style.opacity = "1";
-  cur.style.opacity = "0";
-  qpfLay ^= 1;
+  if (cur.dataset.src !== src) {
+    const next = lays[qpfLay ^ 1];
+    if (next.dataset.src !== src) {          // 미리 못 깔아 뒀으면 지금 깐다
+      next.style.backgroundImage = `url("${src}")`;
+      next.dataset.src = src;
+    }
+    next.style.opacity = "1";
+    cur.style.opacity = HIDE;
+    qpfLay ^= 1;
+  }
+  // 그 다음 장을 감춘 겹에 미리 깔아 둔다
+  const nxt = QPF_N ? QPF_FRAMES[(qpfIdx + 1) % QPF_N] : null;
+  const hid = lays[qpfLay ^ 1];
+  if (nxt && hid.dataset.src !== nxt) {
+    hid.style.backgroundImage = `url("${nxt}")`;
+    hid.dataset.src = nxt;
+  }
 }
 
-/* 미리 받아 둔다 — 재생하면서 받으면 첫 바퀴가 통째로 끊긴다.
+/* 미리 받아 두고, 받은 것을 미리 풀어 둔다(decode).
+   ⚠️ 내려받기만 해서는 부족하다 — 화면에 처음 얹는 순간 압축을 푸느라
+      한 박자 멈춘다. 그게 첫 바퀴의 깜박임이었다.
    서버가 이미 잘라 둔 그림이라 한 벌이 1MB가 안 된다. */
 let QPF_CACHE = [];
 function qpfPreload() {
-  QPF_CACHE = QPF_FRAMES.map(u => { const im = new Image(); im.src = u; return im; });
+  QPF_CACHE = QPF_FRAMES.map(u => {
+    const im = new Image();
+    im.src = u;
+    if (im.decode) im.decode().catch(() => {});
+    return im;
+  });
 }
 
 /* 그림 위 안내 한 줄. 비면 자리도 사라진다. */
