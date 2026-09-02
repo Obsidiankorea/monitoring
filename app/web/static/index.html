@@ -1459,9 +1459,9 @@ async function loadRain() {
   for (const k of Object.keys(SIG)) delete SIG[k];
   for (const r of j.rows) {
     (SIG[r.sigun] ??= { sigun: r.sigun, stations: [] }).stations.push({
-      // d는 누적용(정시 이후 증분), dv는 표시용(최근 60분 시우량).
-      // ⚠️ 섞으면 마지막 정시와 43분이 겹쳐 누적이 부풀어 오른다.
-      name: r.name, prev: 0, f: 1, rep: !!r.rep, d: r.d, dv: r.dv || r.d,   // 서버가 결측을 null로 준다 — 0으로 바꾸지 않는다
+      // 마지막 칸은 '정시부터 지금까지'다(21:36이면 21:00~21:36).
+      // m60(직전 60분)은 참고값 — 툴팁에만 쓴다. 칸에 넣으면 구간이 어긋난다.
+      name: r.name, prev: 0, f: 1, rep: !!r.rep, d: r.d, m60: r.m60,   // 서버가 결측을 null로 준다 — 0으로 바꾸지 않는다
     });
   }
   FEEDS.rain.base = (j.minute_tm || j.base_hour) + " 실측";
@@ -1654,7 +1654,7 @@ function heatCols() {
 
 // 타임라인의 점 목록 — 실측 구간 전부 + 예측 6칸을 하나로 잇는다
 function tlPoints(row) {
-  const obs = (row.dv || row.d).slice(cut());
+  const obs = row.d.slice(cut());
   const fc  = row.fcd || [];
   const mins = [];
   for (let i = cut(); i < N(); i++) mins.push(obsMin(i));
@@ -1666,21 +1666,17 @@ function tlPoints(row) {
    ⚠️ 표본이다. 원본 프로젝트는 내부망에서 평균강수량을 직접 받아 온다. */
 function avgSeries(sig) {
   const sts = stationsOf(sig), n = sts[0].d.length;
-  const d = [], dv = [], bad = [];
-  const mean = (i, key) => {
+  const d = [], bad = [];
+  for (let i = 0; i < n; i++) {
     let sum = 0, ok = 0, out = 0;
     for (const st of sts) {
-      const v = (st[key] || st.d)[i];
+      const v = st.d[i];
       if (typeof v === "number") { sum += v; ok++; } else out++;
     }
-    return [ok ? Math.round((sum / ok) * 10) / 10 : null, out];
-  };
-  for (let i = 0; i < n; i++) {
-    const [v, out] = mean(i, "d");
-    d.push(v); bad.push(out);
-    dv.push(mean(i, "dv")[0]);
+    d.push(ok ? Math.round((sum / ok) * 10) / 10 : null);
+    bad.push(out);
   }
-  return { d, dv, bad };
+  return { d, bad };
 }
 
 /* 화면에 그릴 행. 지점마다 자기 격자의 예측을 들고 간다. */
@@ -1691,14 +1687,14 @@ function buildRows() {
       const mf = stationsOf(sig).reduce((t, x) => t + x.f, 0) / stationsOf(sig).length;
       const fcd = fcFor(sig, mf);
       return { sig, kind: "main", stn: `평균 ${stationsOf(sig).length}개소`,
-               d: a.d, dv: a.dv, bads: a.bad, ...accOf(a.d), fcd, fc: sumOf(fcd) };
+               d: a.d, bads: a.bad, ...accOf(a.d), fcd, fc: sumOf(fcd) };
     });
 
   if (metric === "rep")
     return ORDER.filter(sig => stationsOf(sig).length).map(sig => {
       const st = stationsOf(sig).find(x => x.rep) || liveFirst(sig)[0];
       const fcd = fcFor(sig, st.f);
-      return { sig, kind: "main", stn: st.name, d: st.d, dv: st.dv, ...accOf(st.d), fcd, fc: sumOf(fcd) };
+      return { sig, kind: "main", stn: st.name, d: st.d, m60: st.m60, ...accOf(st.d), fcd, fc: sumOf(fcd) };
     });
 
   if (flat) {
@@ -1706,7 +1702,7 @@ function buildRows() {
     for (const sig of ORDER)
       for (const st of stationsOf(sig)) {
         const fcd = fcFor(sig, st.f);
-        all.push({ sig, stn: st.name, d: st.d, dv: st.dv, ...accOf(st.d), fcd, fc: sumOf(fcd) });
+        all.push({ sig, stn: st.name, d: st.d, m60: st.m60, ...accOf(st.d), fcd, fc: sumOf(fcd) });
       }
     all.sort((x, y) => y.sum - x.sum);
     return all.slice(0, 20).map(r => ({ ...r, kind: "main" }));
@@ -1723,7 +1719,7 @@ function buildRows() {
       if (!st) return;
       const fcd = fcFor(sig, st.f);
       rows.push({ sig, kind: k === 0 ? "main" : "extra", stn: st.name,
-                  d: st.d, dv: st.dv, ...accOf(st.d), fcd, fc: sumOf(fcd) });
+                  d: st.d, m60: st.m60, ...accOf(st.d), fcd, fc: sumOf(fcd) });
     });
   }
   if (sortMode === "acc") {
@@ -1821,10 +1817,8 @@ function timelineSvg(row, r, mx) {
   const nowX = xAt(split - 1, n);
   const lastV = all[split - 1];
 
-  /* 마지막 점이 담고 있는 60분 — 매분자료의 RN-60m이라 꽉 찬 한 시간이다.
-     정시 눈금에 걸치지 않으므로, 그 60분이 어디를 덮는지 옅게 칠해 둔다.
-     ⚠️ 예전처럼 '아직 안 찬 칸'으로 그리면 안 된다. 값은 이미 60분치다. */
-  const hourX = xM(obsMin(N() - 1) - 60);
+  // 진행 중인 1시간 — 정시부터 지금까지만 옅게 칠해 '아직 안 찬 칸'을 보여준다
+  const hourX = xM(obsMin(N() - 1) - NOWMIN);
   const progress = `<rect x="${hourX.toFixed(1)}" y="0" width="${Math.max(1, nowX - hourX).toFixed(1)}" height="${TLH}"
       fill="var(--ink)" opacity=".055"/>`;
   const pace = "";
@@ -1903,7 +1897,7 @@ function timelineSvg(row, r, mx) {
 /* ── 히트맵 칸 ────────────────────────────────────────────────────── */
 function heatCell(row, col) {
   const fc = col.kind === "fc";
-  const src = fc ? (row.fcd || null) : (row.dv || row.d);
+  const src = fc ? (row.fcd || null) : row.d;
   if (!src) return `<span class="hc empty"></span>`;
 
   let v, bad = 0;
@@ -1918,15 +1912,19 @@ function heatCell(row, col) {
     if (v === "fail") return `<span class="hc fail" title="조회 실패 — 값 없음이 아니다">✕</span>`;
   }
   const partial = !fc && !col.group && col.idx[0] === N() - 1;   // 아직 1시간이 안 찬 칸
-  // 마지막 칸도 꽉 찬 60분(RN-60m)이라 다른 칸과 같은 눈금으로 칠한다.
-  // 다만 정시가 아니라 '지금부터 거슬러 60분'이므로 점선 테두리로 구분한다.
-  const bg = v > 0 ? (fc ? `color-mix(in oklab, ${rampVar(v)} 62%, var(--panel))` : rampVar(v)) : "transparent";
-  const fg = v > 0 ? (fc ? (v >= 20 ? "var(--on-fill)" : "") : inkOn(v)) : "";
+  let bg = v > 0 ? (fc ? `color-mix(in oklab, ${rampVar(v)} 62%, var(--panel))` : rampVar(v)) : "transparent";
+  // 마지막 칸은 정시부터 지금까지만 담는다 — 칠한 폭이 곧 경과 시간이다
+  if (partial && v > 0) {
+    const pct = Math.round((NOWMIN / 60) * 100);
+    bg = `linear-gradient(90deg, ${rampVar(v)} 0 ${pct}%, color-mix(in oklab, ${rampVar(v)} 26%, transparent) ${pct}%)`;
+  }
+  const fg = v > 0 ? (fc ? (v >= 20 ? "var(--on-fill)" : "") : (partial ? "var(--ink)" : inkOn(v))) : "";
   /* 무강수는 숫자로 적지 않는다 — 0.0이 화면을 덮으면 실제로 온 칸이 묻힌다.
      결측('—' + 빗금 바탕)과 글자는 같아도 바탕이 달라 구분된다. */
   const txt = v > 0 ? v.toFixed(1) : "—";
   return `<span class="hc${fc ? " fc" : ""}${partial ? " partial" : ""}${col.first ? " nowedge" : ""}${v ? "" : " z"}"
     data-v="${v}" data-sigun="${row.sig}" data-stn="${fc ? FCSIG[row.sig].emd : row.stn}" data-hour="${col.label}"
+    ${partial && typeof row.m60 === "number" ? `data-m60="${row.m60}"` : ""}
     style="background:${bg}${fg ? ";color:" + fg : ""}">${txt}</span>`;
 }
 
@@ -3095,6 +3093,15 @@ document.querySelectorAll(".panel").forEach(p => {
 });
 activate(document.getElementById("p-rain"));
 
+/* 마지막 칸이 담고 있는 구간을 그대로 적는다 — 21:36이면 21:00~21:36.
+   직전 60분(RN-60m)은 시우량 감을 잡는 참고값으로만 덧붙인다. */
+function partLabel(m60) {
+  const from = (HOURS[N() - 2] || "").slice(0, 2) + ":00";
+  const ref = m60 === undefined || m60 === null || m60 === ""
+    ? "" : ` · 직전 60분 ${(+m60).toFixed(1)}mm`;
+  return `${from}~${HOURS[N() - 1]} · ${NOWMIN}분 경과${ref}`;
+}
+
 /* ── 셀 툴팁 ──────────────────────────────────────────────────────── */
 const tip = document.getElementById("tip");
 document.addEventListener("mouseover", e => {
@@ -3104,7 +3111,7 @@ document.addEventListener("mouseover", e => {
   const part = c.classList.contains("partial");
   tip.innerHTML = `<div class="k">${c.dataset.sigun} · ${c.dataset.stn}</div>
     <div class="v">${pv.toFixed(1)} mm</div>
-    <div class="k">${part ? `${HOURS[N() - 1]} 기준 · 최근 60분 시우량 (매분자료)` : c.dataset.hour + " 시간대"}</div>`;
+    <div class="k">${part ? partLabel(c.dataset.m60) : c.dataset.hour + " 시간대"}</div>`;
   tip.classList.add("on");
 });
 document.addEventListener("mousemove", e => {
@@ -3135,7 +3142,7 @@ document.getElementById("rain-body").addEventListener("mousemove", e => {
   const part = !isFc && cut() + i === N() - 1;
   tip.innerHTML = `<div class="k">${sig} ${isFc ? (FCSIG[sig] ? FCSIG[sig].emd : "") + " · 예측" : row.stn + " · 실측"}</div>
     <div class="v">${typeof v === "number" ? v.toFixed(1) : v === null ? "결측" : "조회실패"} ${typeof v === "number" ? "mm" : ""}</div>
-    <div class="k">${part ? `${HOURS[N() - 1]} 기준 · 최근 60분 시우량 (매분자료)`
+    <div class="k">${part ? partLabel(row.m60)
       : isFc ? hour + "시 예상 · 1시간" : hour + "시 · 1시간"}</div>`;
   tip.classList.add("on");
   tip.style.left = Math.min(e.clientX + 14, innerWidth - 210) + "px";

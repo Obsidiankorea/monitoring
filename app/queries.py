@@ -35,11 +35,10 @@ def rain(hours: int = 12, now: datetime | None = None) -> dict:
             )
 
         # 정시 이후 구간 — 실제 최신 시각을 화면에 그대로 쓴다.
-        # 마지막 칸에는 두 값이 필요하다. 하나로는 둘 다 못 한다.
-        #   add … RN_DAY 증분 = '정시 이후 지금까지'. 앞 칸과 안 겹치니 누적에 더할 수 있다.
-        #   m60 … RN-60m = '지금부터 거슬러 60분'. 앞 칸과 겹치니 더하면 안 되지만,
-        #         꽉 찬 한 시간이라 다른 칸과 같은 눈금의 시우량으로 읽힌다.
-        # ⚠️ 둘을 섞지 않는다. 누적은 add로, 화면 표시는 m60으로.
+        # 마지막 칸은 '정시부터 지금까지'다. 21:36이면 21:00~21:36.
+        # ⚠️ RN-60m(직전 60분)을 쓰면 안 된다. 앞 정시 칸과 겹쳐 누적이 부풀고,
+        #    칸이 가리키는 구간과 값이 담고 있는 구간이 어긋난다.
+        #    RN-60m은 참고값으로 툴팁에만 붙인다.
         m = con.execute("SELECT MAX(tm) AS tm FROM obs_minute").fetchone()
         minute_tm = m["tm"] if m and m["tm"] else None
         minute: dict[str, float | None] = {}
@@ -66,18 +65,14 @@ def rain(hours: int = 12, now: datetime | None = None) -> dict:
     out = []
     for stn, name in STN_NAME.items():
         vals = [series.get(stn, {}).get(s) for s in slots]
-        show = list(vals)
         if partial:
             vals.append(minute.get(stn))
-            # 표시용 마지막 칸은 꽉 찬 60분이다 — 없으면 증분으로 물러선다
-            v60 = m60.get(stn)
-            show.append(v60 if v60 is not None else minute.get(stn))
         ok = [v for v in vals if v is not None]
         out.append({
             "stn": stn, "name": name, "sigun": STN_SIGUN[stn],
             "rep": REP_STN.get(STN_SIGUN[stn]) == stn,
-            "d": vals,          # 누적용
-            "dv": show,         # 표시용
+            "d": vals,
+            "m60": m60.get(stn) if partial else None,   # 참고 — 툴팁에만 쓴다
             "sum": round(sum(ok), 1),
             "bad": len(vals) - len(ok),
         })
@@ -86,7 +81,6 @@ def rain(hours: int = 12, now: datetime | None = None) -> dict:
         "labels": labels, "hours": hours,
         "base_hour": slots[-1][11:16],
         "minute_tm": minute_tm[11:16] if partial else None,
-        "m60": partial and any(v is not None for v in m60.values()),
         "rows": out,
     }
 
