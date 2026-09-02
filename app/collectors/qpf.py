@@ -16,7 +16,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import logging
 from datetime import datetime, timedelta
 from io import BytesIO
@@ -28,6 +27,7 @@ from ..kma import KmaError, fetch_bytes
 log = logging.getLogger("collect.qpf")
 
 KEEP_DEFAULT = 3
+SCAN_BACK = 9          # 가진 것이 없을 때 거슬러 훑을 슬롯 수(90분)
 
 # size=1800 응답(1835×1820) 기준 경남 광역 박스.
 # ⚠️ 크롭 박스는 소스마다 다르다(QPF 835×820, 초단기 분포도 901×1551).
@@ -81,31 +81,6 @@ async def _one(tmfc: str, ef: int, size: int) -> bytes:
         "zoom_level": 0, "zoom_x": "0000000", "zoom_y": "0000000",
         "stn": 108, "x1": 470, "y1": 575,
     })
-
-
-def _stamp(raw: bytes) -> str:
-    """이미지 왼쪽 아래에 찍힌 발표시각 표시를 해시한다.
-
-    강수역이 똑같아도 이 글자는 발표마다 달라지므로, 이것으로 판정하면
-    무강수 상황에서도 속지 않는다.
-    """
-    try:
-        from PIL import Image
-    except ImportError:
-        return hashlib.md5(raw).hexdigest()
-    im = Image.open(BytesIO(raw))
-    return hashlib.md5(im.crop((0, im.height - 22, 240, im.height)).tobytes()).hexdigest()
-
-
-async def latest_stamp() -> str:
-    """지금 올라와 있는 최신 발표분의 표시.
-
-    ⚠️ 아직 안 나온 tm을 주면 API가 최신 발표분으로 바꿔 돌려준다.
-       그 성질을 거꾸로 이용한다 — 넉넉히 미래를 요청하면 늘 '최신'이 온다.
-       작은 크기(600)로 한 장만 받으므로 확인 비용은 한 번의 호출이다.
-    """
-    future = (datetime.now() + timedelta(hours=1)).strftime("%Y%m%d%H%M")
-    return _stamp(await _one(future, 10, 600))
 
 
 async def _is_blank_slot(tmfc: str, ef: int, size: int) -> bool:
@@ -162,94 +137,72 @@ def _prune(keep: int) -> None:
                 d.rmdir()
 
 
-async def backfill(now: datetime, c: dict, at: str, tries: int = 6) -> dict:
-    """화면에 아무것도 없을 때 뒤로 물러나며 그림이 있는 발표분을 찾아 받는다.
-
-    ⚠️ 스탬프가 바뀌었다고 그림이 준비된 것은 아니다 — 실측으로 19:30 발표는
-       모든 ef가 빈 그림이었고 19:20 이전은 정상이었다. 최신에 매달리며 빈 화면을
-       오래 두느니, 있는 것 중 가장 최근 것을 보여주는 편이 낫다.
-    """
-    efs = frame_efs(c)
-    slot = _slot(now)
-    for back in range(1, tries + 1):
-        tmfc = (slot - timedelta(minutes=10 * back)).strftime("%Y%m%d%H%M")
-        try:
-            if await _is_blank_slot(tmfc, efs[0], c["size"]):
-                continue
-        except KmaError:
-            continue
-        saved, blanks, failed = await _download(tmfc, efs, c, at)
-        if saved:
-            _prune(int(c.get("keep", KEEP_DEFAULT)))
-            log.info("qpf 최신분이 아직이라 %s 를 대신 받았다 — %d장", tmfc[8:12], saved)
-            db.log_collect("qpf", True, at, f"발표 {tmfc[8:12]}(대체) · {saved}장")
-            return {"tmfc": tmfc, "saved": saved, "fallback": True}
-    db.log_collect("qpf", False, at, "받을 수 있는 발표분이 없다")
-    return {"tmfc": None, "saved": 0, "skipped": "받을 수 있는 발표분이 없다"}
+def _last_have() -> str | None:
+    with db.tx() as con:
+        r = con.execute("SELECT MAX(tmfc) t FROM qpf_frame").fetchone()
+    return r["t"] if r and r["t"] else None
 
 
 async def collect(now: datetime | None = None, force: bool = False) -> dict:
-    """발표가 났는지 먼저 보고, 난 것만 내려받는다."""
+    """가진 것보다 새로운 발표분이 올라왔는지 앞으로 훑어 보고, 있으면 최신 것을 받는다.
+
+    ⚠️ 이 API는 지금 시각의 발표분을 바로 주지 않는다. 실측으로 최신 가용분은
+       보통 **20~30분 전** 것이다(19:44에 확인한 최신은 19:30). 그래서 현재 슬롯을
+       노리고 기다리는 방식은 틀렸다 — 가진 것 다음 슬롯부터 앞으로 훑어
+       '빈 그림이 나오기 직전'까지가 올라온 범위다.
+
+    ⚠️ 발표 스탬프는 그림보다 먼저 바뀐다. 그림이 실제로 있는지로만 판정한다.
+    """
     now = now or datetime.now()
     at = now.strftime("%Y-%m-%d %H:%M")
     c = cfg()
-    slot = _slot(now)
-    tmfc = slot.strftime("%Y%m%d%H%M")
     efs = frame_efs(c)
+    cur = _slot(now)
 
-    with db.tx() as con:
-        have = {r["ef"] for r in con.execute("SELECT ef FROM qpf_frame WHERE tmfc=?", (tmfc,))}
-        known = con.execute("SELECT 1 FROM qpf_publish WHERE tmfc=?", (tmfc,)).fetchone()
+    last = _last_have()
+    if last:
+        start = datetime.strptime(last, "%Y%m%d%H%M") + timedelta(minutes=10)
+    else:
+        start = cur - timedelta(minutes=10 * SCAN_BACK)   # 처음이면 이만큼 거슬러 훑는다
 
-    # 이미 다 받았으면 아무 것도 하지 않는다
-    if have >= set(efs):
-        return {"tmfc": tmfc, "saved": 0, "skipped": "완료"}
-
-    # 판정 경로가 보이지 않으면 왜 받았는지/안 받았는지 알 수 없다
-    log.debug("qpf %s have=%d/%d known=%s force=%s", tmfc, len(have), len(efs), bool(known), force)
-
-    elapsed = (now - slot).total_seconds() / 60
-
-    if force:
-        log.info("qpf %s 수동 조회 — 발표 확인을 건너뛴다", tmfc)
-
-    if not known and not force:
-        # 감시 구간 밖에서는 부르지 않는다 — 발표 전에 불러 봐야 헛수고다
-        if elapsed < c["watch_from"]:
-            return {"tmfc": tmfc, "saved": 0, "skipped": f"대기(+{elapsed:.0f}분)"}
-        if elapsed > c["watch_to"]:
-            return {"tmfc": tmfc, "saved": 0, "skipped": f"이번 발표는 넘김(+{elapsed:.0f}분)"}
+    # 앞으로 훑으며 그림이 있는 마지막 슬롯을 찾는다. 빈 것이 나오면 거기서 멈춘다.
+    newest, probes = None, 0
+    t = start
+    while t <= cur:
+        tmfc = t.strftime("%Y%m%d%H%M")
+        probes += 1
         try:
-            now_stamp = await latest_stamp()
+            if await _is_blank_slot(tmfc, efs[0], c["size"]):
+                break
         except KmaError as e:
-            db.log_collect("qpf", False, at, f"발표 확인 실패: {e}")
-            return {"tmfc": tmfc, "saved": 0, "error": str(e)}
-        if now_stamp == db.get_setting("qpf_stamp", ""):
-            log.debug("qpf %s 미발표 (+%.0f분)", tmfc, elapsed)
-            return {"tmfc": tmfc, "saved": 0, "skipped": f"미발표(+{elapsed:.0f}분)"}
-        db.put_setting("qpf_stamp", now_stamp)
-        db.note_publish(tmfc, at, round(elapsed, 1))
-        log.info("발표 %s 확인 (정시+%.0f분) — %d장 내려받는다", tmfc[8:12], elapsed, len(efs))
+            db.log_collect("qpf", False, at, f"확인 실패: {e}")
+            return {"tmfc": last, "saved": 0, "error": str(e)}
+        newest = tmfc
+        t += timedelta(minutes=10)
 
-    saved, blanks, failed = await _download(tmfc, efs, c, at)
+    if not newest:
+        # 새로 올라온 것이 없다. 가진 것을 그대로 쓴다 — 이건 실패가 아니다.
+        if last:
+            with db.tx() as con:
+                have = con.execute("SELECT COUNT(*) n FROM qpf_frame WHERE tmfc=?", (last,)).fetchone()["n"]
+            if have >= len(efs):
+                return {"tmfc": last, "saved": 0, "skipped": f"새 발표 없음(확인 {probes}회)"}
+            newest = last                 # 받다 만 것이 있으면 마저 받는다
+        else:
+            db.log_collect("qpf", False, at, "받을 수 있는 발표분이 없다")
+            return {"tmfc": None, "saved": 0, "skipped": "받을 수 있는 발표분이 없다"}
+
+    lag = (now - datetime.strptime(newest, "%Y%m%d%H%M")).total_seconds() / 60
+    saved, blanks, failed = await _download(newest, efs, c, at)
     _prune(int(c.get("keep", KEEP_DEFAULT)))
 
-    # 한 장도 못 건졌으면 그림이 아직 올라오는 중이다 —
-    # 발표를 못 본 것으로 되돌려 다음 주기에 다시 시도한다
-    if saved == 0 and blanks:
-        db.put_setting("qpf_stamp", "")
-        with db.tx() as con:
-            con.execute("DELETE FROM qpf_publish WHERE tmfc=?", (tmfc,))
-            n = con.execute("SELECT COUNT(*) c FROM qpf_frame").fetchone()["c"]
-        log.info("qpf %s 그림이 아직 비어 있다", tmfc)
-        if n == 0:
-            # 보여줄 것이 하나도 없다 — 빈 화면을 두느니 있는 것 중 최신을 받는다
-            return await backfill(now, c, at)
-        db.log_collect("qpf", False, at, f"발표 {tmfc[8:12]} · 그림 준비 중")
-        return {"tmfc": tmfc, "saved": 0, "skipped": "그림 준비 중"}
+    if saved:
+        db.note_publish(newest, at, round(lag, 1))
+        log.info("qpf %s 받음 — %d/%d장 (지금-%.0f분, 확인 %d회)",
+                 newest[8:12], saved, len(efs), lag, probes)
 
-    db.log_collect("qpf", saved > 0, at, f"발표 {tmfc[8:12]} · {saved}/{len(efs)}장"
-                                        + (f" · 빈 그림 {blanks}" if blanks else "")
-                                        + (f" · 실패 {len(failed)}" if failed else ""))
-    return {"tmfc": tmfc, "saved": saved, "frames": len(efs),
-            "blank": blanks, "failed": failed}
+    db.log_collect("qpf", saved > 0 or bool(last), at,
+                   f"발표 {newest[8:12]} · {saved}/{len(efs)}장 · 지금-{lag:.0f}분"
+                   + (f" · 실패 {len(failed)}" if failed else ""))
+    return {"tmfc": newest, "saved": saved, "frames": len(efs),
+            "lag_min": round(lag, 1), "probes": probes, "failed": failed}

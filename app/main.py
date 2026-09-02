@@ -131,11 +131,6 @@ async def api_settings_qpf(body: dict):
             if v not in ok:
                 raise HTTPException(400, f"{k}: {ok} 중 하나여야 한다")
             cur[k] = v
-    for k in ("watch_from", "watch_to"):
-        if k in body:
-            cur[k] = max(0, min(10, int(body[k])))
-    if cur["watch_from"] >= cur["watch_to"]:
-        raise HTTPException(400, "감시 시작이 끝보다 늦다")
     db.put_setting("qpf", cur)
     return {"qpf": cur, "frames": len(qpf.frame_efs(cur))}
 
