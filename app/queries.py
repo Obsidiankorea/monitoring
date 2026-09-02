@@ -35,21 +35,26 @@ def rain(hours: int = 12, now: datetime | None = None) -> dict:
             )
 
         # 정시 이후 구간 — 실제 최신 시각을 화면에 그대로 쓴다.
-        # ⚠️ 여기에 RN-60m(직전 1시간)을 넣으면 앞 정시 칸과 58분이 겹쳐 합계가 부풀어 오른다.
-        #    마지막 칸은 '정시 이후 지금까지'만 담아야 한다 → RN_DAY 증분을 쓴다.
+        # 마지막 칸에는 두 값이 필요하다. 하나로는 둘 다 못 한다.
+        #   add … RN_DAY 증분 = '정시 이후 지금까지'. 앞 칸과 안 겹치니 누적에 더할 수 있다.
+        #   m60 … RN-60m = '지금부터 거슬러 60분'. 앞 칸과 겹치니 더하면 안 되지만,
+        #         꽉 찬 한 시간이라 다른 칸과 같은 눈금의 시우량으로 읽힌다.
+        # ⚠️ 둘을 섞지 않는다. 누적은 add로, 화면 표시는 m60으로.
         m = con.execute("SELECT MAX(tm) AS tm FROM obs_minute").fetchone()
         minute_tm = m["tm"] if m and m["tm"] else None
         minute: dict[str, float | None] = {}
+        m60: dict[str, float | None] = {}
         if minute_tm:
             base_day = {r["stn"]: r["rn_day"] for r in con.execute(
                 "SELECT stn, rn_day FROM obs_hourly WHERE tm=? AND quality='ok'", (slots[-1],))}
             for r in con.execute(
-                "SELECT stn, rn_day, quality FROM obs_minute WHERE tm=?", (minute_tm,)
+                "SELECT stn, rn_day, rn_60m, quality FROM obs_minute WHERE tm=?", (minute_tm,)
             ):
                 b, cur = base_day.get(r["stn"]), r["rn_day"]
                 # RN_DAY는 01시에 0으로 리셋된다 — 증분이 음수면 자정을 넘은 것이므로 버린다
                 minute[r["stn"]] = (round(cur - b, 1) if r["quality"] == "ok"
                                     and b is not None and cur is not None and cur >= b else None)
+                m60[r["stn"]] = r["rn_60m"] if r["quality"] == "ok" else None
 
     # ⚠️ 매분 보강값으로 마지막 정시 칸을 덮으면 그 한 시간이 통째로 사라진다.
     #    칸을 하나 더 붙여야 '정시까지'와 '정시 이후 지금까지'가 둘 다 남는다.
@@ -61,13 +66,18 @@ def rain(hours: int = 12, now: datetime | None = None) -> dict:
     out = []
     for stn, name in STN_NAME.items():
         vals = [series.get(stn, {}).get(s) for s in slots]
+        show = list(vals)
         if partial:
             vals.append(minute.get(stn))
+            # 표시용 마지막 칸은 꽉 찬 60분이다 — 없으면 증분으로 물러선다
+            v60 = m60.get(stn)
+            show.append(v60 if v60 is not None else minute.get(stn))
         ok = [v for v in vals if v is not None]
         out.append({
             "stn": stn, "name": name, "sigun": STN_SIGUN[stn],
             "rep": REP_STN.get(STN_SIGUN[stn]) == stn,
-            "d": vals,
+            "d": vals,          # 누적용
+            "dv": show,         # 표시용
             "sum": round(sum(ok), 1),
             "bad": len(vals) - len(ok),
         })
@@ -76,11 +86,12 @@ def rain(hours: int = 12, now: datetime | None = None) -> dict:
         "labels": labels, "hours": hours,
         "base_hour": slots[-1][11:16],
         "minute_tm": minute_tm[11:16] if partial else None,
+        "m60": partial and any(v is not None for v in m60.values()),
         "rows": out,
     }
 
 
-def forecast(hours: int = 6) -> dict:
+def forecast(hours: int = 6, now: datetime | None = None) -> dict:
     """최신 발표분의 읍면동 예측. 시군 대표값은 그 시군 읍면동 최대값이다."""
     with db.tx() as con:
         row = con.execute("SELECT MAX(tmfc) AS t FROM fcst_rn1").fetchone()
@@ -88,8 +99,12 @@ def forecast(hours: int = 6) -> dict:
         if not tmfc:
             return {"tmfc": None, "labels": [], "emd": [], "sigun": []}
 
+        # ⚠️ 발표가 한 박자 늦으면 첫 예측 시각이 이미 지나간 시각이다.
+        #    그대로 그리면 예측이 현재보다 뒤에 놓여 한 시간씩 밀린다. 지난 것은 버린다.
+        now_h = (now or datetime.now()).strftime("%Y%m%d%H")
         tmefs = [r["tmef"] for r in con.execute(
-            "SELECT DISTINCT tmef FROM fcst_rn1 WHERE tmfc=? ORDER BY tmef", (tmfc,))][:hours]
+            "SELECT DISTINCT tmef FROM fcst_rn1 WHERE tmfc=? ORDER BY tmef", (tmfc,))
+            if r["tmef"] > now_h][:hours]
         rows = list(con.execute(
             "SELECT tmef, sigun, emd, rn1 FROM fcst_rn1 WHERE tmfc=?", (tmfc,)))
 

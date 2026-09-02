@@ -616,14 +616,17 @@ td.totc .tot { width: auto; display: block; }
    비율이 안 맞는 전국 보기는 위아래를 덮어 채운다(위쪽은 대개 비어 있다). */
 .qpf-stage { cursor: grab; }
 .qpf-stage.panning { cursor: grabbing; }
-.qpf-stage.panning .qpf-img { transition: none; }   /* 끄는 동안은 따라붙어야 한다 */
 
-.qpf-img {
-  width: 100%; height: 100%;
-  background-repeat: no-repeat;
-  background-color: #fff;
-  transition: background-size .35s cubic-bezier(.4,0,.2,1), background-position .35s cubic-bezier(.4,0,.2,1);
+.qpf-img { position: relative; width: 100%; height: 100%; background: #fff; }
+/* 겹쳐 둔 두 장. 다음 장을 미리 깔아 두고 투명도만 바꿔 이어 붙인다 —
+   그림을 갈아 끼우는 순간 흰 바탕이 비치는 깜박임이 이렇게 없어진다. */
+.qpf-lay {
+  position: absolute; inset: 0;
+  background-repeat: no-repeat; background-color: #fff;
+  transition: opacity .16s linear,
+    background-size .35s cubic-bezier(.4,0,.2,1), background-position .35s cubic-bezier(.4,0,.2,1);
 }
+.qpf-stage.panning .qpf-lay { transition: opacity .16s linear; }
 /* 배율·위치는 스크립트가 계산해 넣는다 — 경남이 항상 화면 가운데에 오도록
    확대할수록 배경 위치를 다시 잡아야 하기 때문이다. */
 .qpf-map { width: 100%; height: 100%; }
@@ -1227,7 +1230,12 @@ tbody.swap tr { animation: rowin .36s cubic-bezier(.2,.7,.3,1) both; animation-d
         </header>
         <div class="body qpf-body">
           <div class="qpf-stage" id="qpf-stage">
-            <div class="qpf-img" id="qpf-img" role="img" aria-label="초단기예측 강수 분포"></div>
+            <!-- 한 겹으로 그림만 갈아 끼우면 갈아 끼우는 순간 흰 바탕이 비쳐 깜박인다.
+                 두 겹을 겹쳐 두고 번갈아 띄워 이어 붙인다. -->
+            <div class="qpf-img" id="qpf-img" role="img" aria-label="초단기예측 강수 분포">
+              <div class="qpf-lay" style="opacity:1"></div>
+              <div class="qpf-lay" style="opacity:0"></div>
+            </div>
             <svg class="qpf-map" id="qpf-map" viewBox="0 0 900 620" preserveAspectRatio="xMidYMid meet"
                  role="img" aria-label="초단기 강수 예측 분포(대체 그림)" hidden></svg>
 
@@ -1451,7 +1459,9 @@ async function loadRain() {
   for (const k of Object.keys(SIG)) delete SIG[k];
   for (const r of j.rows) {
     (SIG[r.sigun] ??= { sigun: r.sigun, stations: [] }).stations.push({
-      name: r.name, prev: 0, f: 1, d: r.d,   // 서버가 결측을 null로 준다 — 0으로 바꾸지 않는다
+      // d는 누적용(정시 이후 증분), dv는 표시용(최근 60분 시우량).
+      // ⚠️ 섞으면 마지막 정시와 43분이 겹쳐 누적이 부풀어 오른다.
+      name: r.name, prev: 0, f: 1, d: r.d, dv: r.dv || r.d,   // 서버가 결측을 null로 준다 — 0으로 바꾸지 않는다
     });
   }
   FEEDS.rain.base = (j.minute_tm || j.base_hour) + " 실측";
@@ -1519,6 +1529,7 @@ async function loadQpf() {
   const seek = document.getElementById("qpf-seek");
   seek.max = Math.max(0, QPF_N - 1);
   if (qpfIdx >= QPF_N) qpfIdx = 0;
+  qpfPreload();
 }
 
 // 초단기예보 상위 읍면동. 값은 정수 mm로 양자화돼 온다(실제 응답 그대로).
@@ -1634,7 +1645,7 @@ function heatCols() {
 
 // 타임라인의 점 목록 — 실측 구간 전부 + 예측 6칸을 하나로 잇는다
 function tlPoints(row) {
-  const obs = row.d.slice(cut());
+  const obs = (row.dv || row.d).slice(cut());
   const fc  = row.fcd || [];
   const mins = [];
   for (let i = cut(); i < N(); i++) mins.push(obsMin(i));
@@ -1646,17 +1657,21 @@ function tlPoints(row) {
    ⚠️ 표본이다. 원본 프로젝트는 내부망에서 평균강수량을 직접 받아 온다. */
 function avgSeries(sig) {
   const sts = stationsOf(sig), n = sts[0].d.length;
-  const d = [], bad = [];
-  for (let i = 0; i < n; i++) {
+  const d = [], dv = [], bad = [];
+  const mean = (i, key) => {
     let sum = 0, ok = 0, out = 0;
     for (const st of sts) {
-      const v = st.d[i];
+      const v = (st[key] || st.d)[i];
       if (typeof v === "number") { sum += v; ok++; } else out++;
     }
-    d.push(ok ? Math.round((sum / ok) * 10) / 10 : null);
-    bad.push(out);
+    return [ok ? Math.round((sum / ok) * 10) / 10 : null, out];
+  };
+  for (let i = 0; i < n; i++) {
+    const [v, out] = mean(i, "d");
+    d.push(v); bad.push(out);
+    dv.push(mean(i, "dv")[0]);
   }
-  return { d, bad };
+  return { d, dv, bad };
 }
 
 /* 화면에 그릴 행. 지점마다 자기 격자의 예측을 들고 간다. */
@@ -1667,14 +1682,14 @@ function buildRows() {
       const mf = stationsOf(sig).reduce((t, x) => t + x.f, 0) / stationsOf(sig).length;
       const fcd = fcFor(sig, mf);
       return { sig, kind: "main", stn: `평균 ${stationsOf(sig).length}개소`,
-               d: a.d, bads: a.bad, ...accOf(a.d), fcd, fc: sumOf(fcd) };
+               d: a.d, dv: a.dv, bads: a.bad, ...accOf(a.d), fcd, fc: sumOf(fcd) };
     });
 
   if (metric === "rep")
     return ORDER.filter(sig => stationsOf(sig).length).map(sig => {
       const st = stationsOf(sig).find(x => x.name === REP[sig]) || stationsOf(sig)[0];
       const fcd = fcFor(sig, st.f);
-      return { sig, kind: "main", stn: st.name, d: st.d, ...accOf(st.d), fcd, fc: sumOf(fcd) };
+      return { sig, kind: "main", stn: st.name, d: st.d, dv: st.dv, ...accOf(st.d), fcd, fc: sumOf(fcd) };
     });
 
   if (flat) {
@@ -1682,7 +1697,7 @@ function buildRows() {
     for (const sig of ORDER)
       for (const st of stationsOf(sig)) {
         const fcd = fcFor(sig, st.f);
-        all.push({ sig, stn: st.name, d: st.d, ...accOf(st.d), fcd, fc: sumOf(fcd) });
+        all.push({ sig, stn: st.name, d: st.d, dv: st.dv, ...accOf(st.d), fcd, fc: sumOf(fcd) });
       }
     all.sort((x, y) => y.sum - x.sum);
     return all.slice(0, 20).map(r => ({ ...r, kind: "main" }));
@@ -1699,7 +1714,7 @@ function buildRows() {
       if (!st) return;
       const fcd = fcFor(sig, st.f);
       rows.push({ sig, kind: k === 0 ? "main" : "extra", stn: st.name,
-                  d: st.d, ...accOf(st.d), fcd, fc: sumOf(fcd) });
+                  d: st.d, dv: st.dv, ...accOf(st.d), fcd, fc: sumOf(fcd) });
     });
   }
   if (sortMode === "acc") {
@@ -1720,7 +1735,18 @@ const PADX = 5, TOP = 5, BOT = 2;
 let NOWMIN = 20;                                     // 마지막 칸이 담고 있는 분
 const obsMin = i => SLOT_MIN[i] ?? i * 60;
 // 예측은 마지막 실측 칸의 정시 다음 시각부터 1시간 간격
-const fcMin  = j => (SLOT_MIN[SLOTS - 1] ?? 0) - NOWMIN + (j + 1) * 60;
+/* 예측 칸의 축 위치 — 라벨(시)에서 직접 잡는다.
+   ⚠️ '마지막 정시 + n시간'으로 가정하면 안 된다. 발표가 한 박자 늦으면
+      첫 예측 시각이 지금보다 앞이라 예측 곡선이 통째로 밀려 그려진다. */
+const fcMin = j => {
+  const now = SLOT_MIN[SLOTS - 1] ?? 0;
+  const top = Math.floor(now / 60) * 60;               // 지금이 속한 정시
+  const hh = +String(FC_HOURS[j] ?? "").slice(0, 2);
+  if (!Number.isFinite(hh)) return top + (j + 1) * 60;
+  const cur = ((top / 60) % 24 + 24) % 24;
+  const ahead = ((hh - cur + 24) % 24) || 24;          // 같은 시면 다음 날이다
+  return top + ahead * 60;
+};
 
 let MINS = [], M0 = 0, M1 = 1;
 function setAxis(mins) { MINS = mins; M0 = mins[0]; M1 = mins[mins.length - 1] || M0 + 1; }
@@ -1786,20 +1812,13 @@ function timelineSvg(row, r, mx) {
   const nowX = xAt(split - 1, n);
   const lastV = all[split - 1];
 
-  // 진행 중인 1시간 — 정시부터 지금까지만 옅게 칠해 '아직 안 찬 칸'을 보여준다
-  const hourX = xM(obsMin(N() - 1) - NOWMIN);
+  /* 마지막 점이 담고 있는 60분 — 매분자료의 RN-60m이라 꽉 찬 한 시간이다.
+     정시 눈금에 걸치지 않으므로, 그 60분이 어디를 덮는지 옅게 칠해 둔다.
+     ⚠️ 예전처럼 '아직 안 찬 칸'으로 그리면 안 된다. 값은 이미 60분치다. */
+  const hourX = xM(obsMin(N() - 1) - 60);
   const progress = `<rect x="${hourX.toFixed(1)}" y="0" width="${Math.max(1, nowX - hourX).toFixed(1)}" height="${TLH}"
-      fill="var(--ink)" opacity=".07"/>`;
-
-  // 이 페이스로 1시간을 채우면 어디까지 가는가 — 점선으로만, 값은 툴팁에
-  let pace = "";
-  if (ok(lastV) && lastV > 0) {
-    const pv = Math.min(lastV * (60 / NOWMIN), mx);
-    const py = yAt(pv, mx), ay = yAt(lastV, mx);
-    if (py < ay - 2) pace = `<line x1="${nowX.toFixed(1)}" y1="${ay.toFixed(1)}" x2="${nowX.toFixed(1)}" y2="${py.toFixed(1)}"
-        stroke="${lvc}" stroke-width="1" stroke-dasharray="1.5 2" opacity=".55"/>
-      <circle cx="${nowX.toFixed(1)}" cy="${py.toFixed(1)}" r="2" fill="none" stroke="${lvc}" stroke-width="1.2" opacity=".7"/>`;
-  }
+      fill="var(--ink)" opacity=".055"/>`;
+  const pace = "";
 
   const peakI = all.reduce((bi, v, i) => (num(v) > num(all[bi]) ? i : bi), 0);
 
@@ -1875,7 +1894,7 @@ function timelineSvg(row, r, mx) {
 /* ── 히트맵 칸 ────────────────────────────────────────────────────── */
 function heatCell(row, col) {
   const fc = col.kind === "fc";
-  const src = fc ? (row.fcd || null) : row.d;
+  const src = fc ? (row.fcd || null) : (row.dv || row.d);
   if (!src) return `<span class="hc empty"></span>`;
 
   let v, bad = 0;
@@ -1890,12 +1909,10 @@ function heatCell(row, col) {
     if (v === "fail") return `<span class="hc fail" title="조회 실패 — 값 없음이 아니다">✕</span>`;
   }
   const partial = !fc && !col.group && col.idx[0] === N() - 1;   // 아직 1시간이 안 찬 칸
-  let bg = v > 0 ? (fc ? `color-mix(in oklab, ${rampVar(v)} 62%, var(--panel))` : rampVar(v)) : "transparent";
-  if (partial && v > 0) {
-    const pct = Math.round((NOWMIN / 60) * 100);
-    bg = `linear-gradient(90deg, ${rampVar(v)} 0 ${pct}%, color-mix(in oklab, ${rampVar(v)} 26%, transparent) ${pct}%)`;
-  }
-  const fg = v > 0 ? (fc ? (v >= 20 ? "var(--on-fill)" : "") : (partial ? "var(--ink)" : inkOn(v))) : "";
+  // 마지막 칸도 꽉 찬 60분(RN-60m)이라 다른 칸과 같은 눈금으로 칠한다.
+  // 다만 정시가 아니라 '지금부터 거슬러 60분'이므로 점선 테두리로 구분한다.
+  const bg = v > 0 ? (fc ? `color-mix(in oklab, ${rampVar(v)} 62%, var(--panel))` : rampVar(v)) : "transparent";
+  const fg = v > 0 ? (fc ? (v >= 20 ? "var(--on-fill)" : "") : inkOn(v)) : "";
   /* 무강수는 숫자로 적지 않는다 — 0.0이 화면을 덮으면 실제로 온 칸이 묻힌다.
      결측('—' + 빗금 바탕)과 글자는 같아도 바탕이 달라 구분된다. */
   const txt = v > 0 ? v.toFixed(1) : "—";
@@ -2289,9 +2306,27 @@ function buildScale() {
 buildScale();
 
 
+let qpfLay = 0;
 function qpfShow() {
   const src = QPF_FRAMES[qpfIdx];
-  document.getElementById("qpf-img").style.backgroundImage = src ? `url("${src}")` : "none";
+  const lays = document.querySelectorAll("#qpf-img .qpf-lay");
+  if (lays.length < 2) return;
+  if (!src) { lays.forEach(l => { l.style.backgroundImage = "none"; l.dataset.src = ""; }); return; }
+  const cur = lays[qpfLay];
+  if (cur.dataset.src === src) return;
+  const next = lays[qpfLay ^ 1];
+  next.style.backgroundImage = `url("${src}")`;
+  next.dataset.src = src;
+  next.style.opacity = "1";
+  cur.style.opacity = "0";
+  qpfLay ^= 1;
+}
+
+/* 미리 받아 둔다 — 재생하면서 받으면 첫 바퀴가 통째로 끊긴다.
+   서버가 이미 잘라 둔 그림이라 한 벌이 1MB가 안 된다. */
+let QPF_CACHE = [];
+function qpfPreload() {
+  QPF_CACHE = QPF_FRAMES.map(u => { const im = new Image(); im.src = u; return im; });
 }
 
 /* 그림 위 안내 한 줄. 비면 자리도 사라진다. */
@@ -2371,8 +2406,12 @@ function applyCrop(save) {
   if (IH > H) GN_F.y = clamp(GN_F.y, H / (2 * IH), 1 - H / (2 * IH));
   const px = IW > W + 1 ? 100 * (GN_F.x * IW - W / 2) / (IW - W) : 50;
   const py = IH > H + 1 ? 100 * (GN_F.y * IH - H / 2) / (IH - H) : 50;
-  img.style.backgroundSize = (z * 100).toFixed(1) + "% auto";
-  img.style.backgroundPosition = `${clamp(px, 0, 100).toFixed(1)}% ${clamp(py, 0, 100).toFixed(1)}%`;
+  const size = (z * 100).toFixed(1) + "% auto";
+  const pos = `${clamp(px, 0, 100).toFixed(1)}% ${clamp(py, 0, 100).toFixed(1)}%`;
+  img.querySelectorAll(".qpf-lay").forEach(l => {
+    l.style.backgroundSize = size;
+    l.style.backgroundPosition = pos;
+  });
   if (save !== false) {
     try {
       localStorage.setItem("gn-zoom", String(z));
@@ -3043,7 +3082,7 @@ document.addEventListener("mouseover", e => {
   const part = c.classList.contains("partial");
   tip.innerHTML = `<div class="k">${c.dataset.sigun} · ${c.dataset.stn}</div>
     <div class="v">${pv.toFixed(1)} mm</div>
-    <div class="k">${part ? `${HOURS[N() - 1]} · 최근 ${NOWMIN}분 (1시간 페이스 ${(pv * 60 / NOWMIN).toFixed(0)}mm/h)` : c.dataset.hour + " 시간대"}</div>`;
+    <div class="k">${part ? `${HOURS[N() - 1]} 기준 · 최근 60분 시우량 (매분자료)` : c.dataset.hour + " 시간대"}</div>`;
   tip.classList.add("on");
 });
 document.addEventListener("mousemove", e => {
@@ -3074,7 +3113,7 @@ document.getElementById("rain-body").addEventListener("mousemove", e => {
   const part = !isFc && cut() + i === N() - 1;
   tip.innerHTML = `<div class="k">${sig} ${isFc ? (FCSIG[sig] ? FCSIG[sig].emd : "") + " · 예측" : row.stn + " · 실측"}</div>
     <div class="v">${typeof v === "number" ? v.toFixed(1) : v === null ? "결측" : "조회실패"} ${typeof v === "number" ? "mm" : ""}</div>
-    <div class="k">${part ? `최근 ${NOWMIN}분 · 아직 1시간이 안 찼다 (페이스 ${(num(v) * 60 / NOWMIN).toFixed(0)}mm/h)`
+    <div class="k">${part ? `${HOURS[N() - 1]} 기준 · 최근 60분 시우량 (매분자료)`
       : isFc ? hour + "시 예상 · 1시간" : hour + "시 · 1시간"}</div>`;
   tip.classList.add("on");
   tip.style.left = Math.min(e.clientX + 14, innerWidth - 210) + "px";
