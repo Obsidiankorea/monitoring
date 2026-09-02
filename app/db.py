@@ -70,6 +70,19 @@ CREATE TABLE IF NOT EXISTS collect_log (
   detail     TEXT
 );
 
+-- 설정. 벽면 화면이라 브라우저가 아니라 서버에 둔다 — 어느 화면에서 바꿔도 같이 간다.
+CREATE TABLE IF NOT EXISTS setting (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
+-- 발표 감지 이력. 실제 지연을 쌓아 두면 감시 구간을 추측이 아니라 실측으로 잡을 수 있다.
+CREATE TABLE IF NOT EXISTS qpf_publish (
+  tmfc TEXT PRIMARY KEY,
+  detected_at TEXT NOT NULL,
+  delay_min REAL NOT NULL
+);
+
 -- 예측 분포 이미지. 파일은 data/cache 에 두고 여기에는 목록만.
 CREATE TABLE IF NOT EXISTS qpf_frame (
   tmfc TEXT NOT NULL, ef INTEGER NOT NULL,
@@ -131,3 +144,42 @@ def latest_snapshot(kind: str) -> dict | None:
     if not r:
         return None
     return {"base_time": r["base_time"], "fetched_at": r["fetched_at"], "data": json.loads(r["payload"])}
+
+
+def get_setting(key: str, default):
+    with tx() as con:
+        r = con.execute("SELECT value FROM setting WHERE key=?", (key,)).fetchone()
+    if not r:
+        return default
+    try:
+        v = json.loads(r["value"])
+    except json.JSONDecodeError:
+        return default
+    # 저장된 것이 dict면 기본값 위에 덮어쓴다 — 새 항목이 생겨도 옛 설정이 막지 않는다
+    if isinstance(default, dict) and isinstance(v, dict):
+        return {**default, **v}
+    return v
+
+
+def put_setting(key: str, value) -> None:
+    with tx() as con:
+        con.execute("INSERT OR REPLACE INTO setting(key, value) VALUES(?,?)",
+                    (key, json.dumps(value, ensure_ascii=False)))
+
+
+def note_publish(tmfc: str, detected_at: str, delay_min: float) -> None:
+    with tx() as con:
+        con.execute("INSERT OR IGNORE INTO qpf_publish(tmfc, detected_at, delay_min) VALUES(?,?,?)",
+                    (tmfc, detected_at, delay_min))
+
+
+def publish_stats(limit: int = 60) -> dict:
+    """최근 발표 지연 통계. 감시 구간을 실측으로 좁히는 근거가 된다."""
+    with tx() as con:
+        rows = [r["delay_min"] for r in con.execute(
+            "SELECT delay_min FROM qpf_publish ORDER BY tmfc DESC LIMIT ?", (limit,))]
+    if not rows:
+        return {"n": 0}
+    rows.sort()
+    return {"n": len(rows), "min": rows[0], "max": rows[-1],
+            "p50": rows[len(rows) // 2], "p90": rows[int(len(rows) * 0.9)]}

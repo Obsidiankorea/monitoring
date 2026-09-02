@@ -1,4 +1,10 @@
-"""예측 분포 이미지 수집 — nph-qpf_ana_img (융합 qpf=B), 10분 간격 36장.
+"""예측 분포 이미지 수집 — nph-qpf_ana_img (융합 qpf=B).
+
+장수는 설정으로 정한다. 간격 10분·6시간이면 36장, 20분·3시간이면 9장.
+발표는 10분마다 나오므로 이 숫자가 곧 10분당 호출 수다.
+
+발표가 났는지 먼저 1분 간격으로 확인하고, 난 뒤에만 내려받는다.
+못 났는데 36장을 부르면 전부 헛수고이고, 늦게 부르면 그만큼 화면이 늦는다.
 
 ⚠️ 이 API는 지역 크롭을 안 해 준다. stn·zoom_*·lon/lat을 줘도 전국 이미지를 준다.
    전국을 받아 PIL로 직접 잘라야 한다.
@@ -10,28 +16,39 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 from datetime import datetime, timedelta
 from io import BytesIO
 
 from .. import db
-from ..config import CACHE
+from ..config import CACHE, QPF
 from ..kma import KmaError, fetch_bytes
 
 log = logging.getLogger("collect.qpf")
 
-SIZE = 1800          # 벽면용. 응답은 1835×1820이 된다.
-EF_MAX = 360         # +10 ~ +360분, 10분 간격 36장
-KEEP_TMFC = 3        # 최근 발표분 몇 개까지 남길지
+KEEP_DEFAULT = 3
 
-# size=1800 응답(1835×1820) 기준 경남 광역 박스. 원본 비율이 바뀌면 여기만 고친다.
+# size=1800 응답(1835×1820) 기준 경남 광역 박스.
+# ⚠️ 크롭 박스는 소스마다 다르다(QPF 835×820, 초단기 분포도 901×1551).
+#    하나로 쓰면 엉뚱한 데가 잘린다 — 소스별로 따로 둔다.
 CROP = (660, 560, 660 + 950, 560 + 800)
 
 
+def cfg() -> dict:
+    """설정은 DB가 이긴다 — 화면에서 바꾼 값이 재시작해도 남는다."""
+    return db.get_setting("qpf", QPF)
+
+
+def frame_efs(c: dict) -> list[int]:
+    step = max(10, int(c["step"]) // 10 * 10)
+    return list(range(step, int(c["ahead"]) + 1, step))
+
+
 def _slot(now: datetime) -> datetime:
+    """발표시각 후보 — 가장 최근 10분 경계. 발표는 10분마다 나온다."""
     t = now.replace(second=0, microsecond=0)
-    t -= timedelta(minutes=t.minute % 10)
-    return t - timedelta(minutes=10)      # 발표 지연 +2~8분
+    return t - timedelta(minutes=t.minute % 10)
 
 
 def _crop(raw: bytes) -> bytes:
@@ -46,32 +63,86 @@ def _crop(raw: bytes) -> bytes:
     return out.getvalue()
 
 
-async def _one(tmfc: str, ef: int) -> bytes:
+async def _one(tmfc: str, ef: int, size: int) -> bytes:
     return await fetch_bytes("/api/typ03/cgi/dfs/nph-qpf_ana_img", {
         "eva": 1, "tm": tmfc, "qpf": "B", "ef": ef,
-        "map": "HR", "grid": 2, "legend": 1, "size": SIZE,
+        "map": "HR", "grid": 2, "legend": 1, "size": size,
         "zoom_level": 0, "zoom_x": "0000000", "zoom_y": "0000000",
         "stn": 108, "x1": 470, "y1": 575,
     })
 
 
-async def collect(now: datetime | None = None) -> dict:
+def _stamp(raw: bytes) -> str:
+    """이미지 왼쪽 아래에 찍힌 발표시각 표시를 해시한다.
+
+    강수역이 똑같아도 이 글자는 발표마다 달라지므로, 이것으로 판정하면
+    무강수 상황에서도 속지 않는다.
+    """
+    try:
+        from PIL import Image
+    except ImportError:
+        return hashlib.md5(raw).hexdigest()
+    im = Image.open(BytesIO(raw))
+    return hashlib.md5(im.crop((0, im.height - 22, 240, im.height)).tobytes()).hexdigest()
+
+
+async def latest_stamp() -> str:
+    """지금 올라와 있는 최신 발표분의 표시.
+
+    ⚠️ 아직 안 나온 tm을 주면 API가 최신 발표분으로 바꿔 돌려준다.
+       그 성질을 거꾸로 이용한다 — 넉넉히 미래를 요청하면 늘 '최신'이 온다.
+       작은 크기(600)로 한 장만 받으므로 확인 비용은 한 번의 호출이다.
+    """
+    future = (datetime.now() + timedelta(hours=1)).strftime("%Y%m%d%H%M")
+    return _stamp(await _one(future, 10, 600))
+
+
+async def collect(now: datetime | None = None, force: bool = False) -> dict:
+    """발표가 났는지 먼저 보고, 난 것만 내려받는다."""
     now = now or datetime.now()
     at = now.strftime("%Y-%m-%d %H:%M")
-    tmfc = _slot(now).strftime("%Y%m%d%H%M")
-    outdir = CACHE / "qpf" / tmfc
-    outdir.mkdir(parents=True, exist_ok=True)
+    c = cfg()
+    slot = _slot(now)
+    tmfc = slot.strftime("%Y%m%d%H%M")
+    efs = frame_efs(c)
 
     with db.tx() as con:
         have = {r["ef"] for r in con.execute("SELECT ef FROM qpf_frame WHERE tmfc=?", (tmfc,))}
+        known = con.execute("SELECT 1 FROM qpf_publish WHERE tmfc=?", (tmfc,)).fetchone()
+
+    # 이미 다 받았으면 아무 것도 하지 않는다
+    if have >= set(efs):
+        return {"tmfc": tmfc, "saved": 0, "skipped": "완료"}
+
+    elapsed = (now - slot).total_seconds() / 60
+
+    if not known and not force:
+        # 감시 구간 밖에서는 부르지 않는다 — 발표 전에 불러 봐야 헛수고다
+        if elapsed < c["watch_from"]:
+            return {"tmfc": tmfc, "saved": 0, "skipped": f"대기(+{elapsed:.0f}분)"}
+        if elapsed > c["watch_to"]:
+            return {"tmfc": tmfc, "saved": 0, "skipped": f"이번 발표는 넘김(+{elapsed:.0f}분)"}
+        try:
+            now_stamp = await latest_stamp()
+        except KmaError as e:
+            db.log_collect("qpf", False, at, f"발표 확인 실패: {e}")
+            return {"tmfc": tmfc, "saved": 0, "error": str(e)}
+        if now_stamp == db.get_setting("qpf_stamp", ""):
+            return {"tmfc": tmfc, "saved": 0, "skipped": f"미발표(+{elapsed:.0f}분)"}
+        db.put_setting("qpf_stamp", now_stamp)
+        db.note_publish(tmfc, at, round(elapsed, 1))
+        log.info("발표 %s 확인 (정시+%.0f분) — %d장 내려받는다", tmfc[8:12], elapsed, len(efs))
+
+    outdir = CACHE / "qpf" / tmfc
+    outdir.mkdir(parents=True, exist_ok=True)
 
     saved, failed = 0, []
-    for ef in range(10, EF_MAX + 1, 10):
+    for ef in efs:
         if ef in have:
             continue
         for attempt in range(2):
             try:
-                raw = _crop(await _one(tmfc, ef))
+                raw = _crop(await _one(tmfc, ef, c["size"]))
                 path = outdir / f"{ef:03d}.png"
                 path.write_bytes(raw)
                 with db.tx() as con:
@@ -81,6 +152,8 @@ async def collect(now: datetime | None = None) -> dict:
                 saved += 1
                 break
             except KmaError as e:
+                # ⚠️ 한꺼번에 던지면 중간이 통째로 실패한다(실측: ef 190~240 누락).
+                #    한 번 쉬고 다시 시도한다.
                 if attempt:
                     failed.append(f"ef={ef}: {e}")
                 else:
@@ -89,7 +162,7 @@ async def collect(now: datetime | None = None) -> dict:
     # 오래된 발표분 정리 — 캐시가 무한히 자라지 않게
     with db.tx() as con:
         olds = [r["tmfc"] for r in con.execute(
-            "SELECT DISTINCT tmfc FROM qpf_frame ORDER BY tmfc DESC")][KEEP_TMFC:]
+            "SELECT DISTINCT tmfc FROM qpf_frame ORDER BY tmfc DESC")][int(c.get("keep", KEEP_DEFAULT)):]
         for old in olds:
             con.execute("DELETE FROM qpf_frame WHERE tmfc=?", (old,))
             d = CACHE / "qpf" / old
@@ -99,6 +172,6 @@ async def collect(now: datetime | None = None) -> dict:
                 d.rmdir()
 
     ok = saved > 0 or bool(have)
-    db.log_collect("qpf", ok, at, f"발표 {tmfc[8:12]} · {saved}장"
+    db.log_collect("qpf", ok, at, f"발표 {tmfc[8:12]} · {saved}/{len(efs)}장"
                                   + (f" · 실패 {len(failed)}" if failed else ""))
-    return {"tmfc": tmfc, "saved": saved, "failed": failed}
+    return {"tmfc": tmfc, "saved": saved, "frames": len(efs), "failed": failed}

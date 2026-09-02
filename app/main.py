@@ -36,12 +36,15 @@ COLLECTORS = {"rain": rain.collect, "forecast": forecast.collect,
 _locks = {k: asyncio.Lock() for k in COLLECTORS}
 
 
-async def run_one(kind: str) -> dict:
+async def run_one(kind: str, force: bool = False) -> dict:
     if kind not in COLLECTORS:
         raise HTTPException(404, f"모르는 수집기: {kind}")
     async with _locks[kind]:
         try:
-            return {"ok": True, "kind": kind, "result": await COLLECTORS[kind]()}
+            fn = COLLECTORS[kind]
+            # 수동 조회는 감시 구간을 무시하고 실제로 다녀온다
+            res = await (fn(force=True) if force and kind == "qpf" else fn())
+            return {"ok": True, "kind": kind, "result": res}
         except Exception as e:                       # noqa: BLE001
             log.warning("%s 수집 실패: %s", kind, e)
             db.log_collect(kind, False, datetime.now().strftime("%Y-%m-%d %H:%M"), str(e))
@@ -101,17 +104,49 @@ async def api_qpf_frame(tmfc: str, ef: int):
 
 @app.get("/api/status")
 async def api_status():
-    return {"collect": queries.status(), "poll": POLL_DEFAULT, "intervals": INTERVALS}
+    return {"collect": queries.status(), "poll": POLL_DEFAULT, "intervals": INTERVALS,
+            "qpf": qpf.cfg(), "publish": db.publish_stats()}
+
+
+@app.get("/api/settings")
+async def api_settings_get():
+    """설정은 서버에 둔다 — 벽면 화면이라 어느 브라우저에서 바꿔도 같이 가야 한다."""
+    c = qpf.cfg()
+    return {"qpf": c, "frames": len(qpf.frame_efs(c)),
+            "publish": db.publish_stats(), "intervals": INTERVALS}
+
+
+@app.put("/api/settings/qpf")
+async def api_settings_qpf(body: dict):
+    cur = qpf.cfg()
+    allowed = {"step": (10, 20, 30), "ahead": (180, 240, 360),
+               "size": (600, 900, 1200, 1800), "keep": tuple(range(1, 7))}
+    for k, ok in allowed.items():
+        if k in body:
+            try:
+                v = int(body[k])
+            except (TypeError, ValueError):
+                raise HTTPException(400, f"{k}: 숫자가 아니다")
+            if v not in ok:
+                raise HTTPException(400, f"{k}: {ok} 중 하나여야 한다")
+            cur[k] = v
+    for k in ("watch_from", "watch_to"):
+        if k in body:
+            cur[k] = max(0, min(10, int(body[k])))
+    if cur["watch_from"] >= cur["watch_to"]:
+        raise HTTPException(400, "감시 시작이 끝보다 늦다")
+    db.put_setting("qpf", cur)
+    return {"qpf": cur, "frames": len(qpf.frame_efs(cur))}
 
 
 @app.post("/api/refresh/{kind}")
-async def api_refresh(kind: str):
+async def api_refresh(kind: str, force: bool = False):
     """수동 조회. ⚠️ 주기와 무관하게 실제로 다녀온다.
 
     내부 주기 함수를 그냥 부르면 '이미 처리함' 분기로 빠져 아무 일도
     일어나지 않는다(pitfalls ★3). 여기서는 항상 수집기를 직접 부른다.
     """
-    return await run_one(kind)
+    return await run_one(kind, force=force)
 
 
 if STATIC.exists():

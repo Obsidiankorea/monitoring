@@ -1115,6 +1115,12 @@ tbody.swap tr { animation: rowin .36s cubic-bezier(.2,.7,.3,1) both; animation-d
       <button class="mb-item" id="m-crop" type="button" data-owner="p-qpf" aria-haspopup="menu" aria-expanded="false">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 9V5h4M20 9V5h-4M4 15v4h4M20 15v4h-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span id="lb-crop">광역</span><svg class="chev" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
+      <button class="mb-item" id="m-step" type="button" data-owner="p-qpf" aria-haspopup="menu" aria-expanded="false">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 12h3M10.5 12h3M17 12h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M4 7v10M20 7v10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity=".55"/></svg><span id="lb-step">10분</span><svg class="chev" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button class="mb-item" id="m-ahead" type="button" data-owner="p-qpf" aria-haspopup="menu" aria-expanded="false">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 18V6M4 18h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M15 9l4 3-4 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span id="lb-ahead">6시간</span><svg class="chev" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
       <button class="mb-item" id="m-speed" type="button" data-owner="p-qpf" aria-haspopup="menu" aria-expanded="false">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 20a8 8 0 1 1 8-8" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M12 12l4.5-3" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg><span id="lb-speed">1×</span><svg class="chev" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
@@ -2432,6 +2438,43 @@ bindMenu("m-win", "mb-view", "창",
   () => VIEWS.map(v => ({ k: v.k, l: v.l, on: v.k === view2 })),
   k => showView(k));
 
+/* ── 예측 이미지 설정 — 호출량이 여기서 정해진다 ────────────────────
+   한 발표분의 장수 = 최대 선행시간 ÷ 간격. 발표는 10분마다 나오므로
+   이 숫자가 곧 10분당 기상청 호출 수다. 설정은 서버에 저장한다 —
+   벽면 화면이라 어느 브라우저에서 바꿔도 같이 가야 한다. */
+let QCFG = { step: 10, ahead: 360 };
+
+async function loadSettings() {
+  try {
+    const j = await getJson("/api/settings");
+    QCFG = j.qpf;
+    document.getElementById("lb-step").textContent = QCFG.step + "분";
+    document.getElementById("lb-ahead").textContent = QCFG.ahead / 60 + "시간";
+  } catch (e) { console.warn("설정", e); }
+}
+
+async function putQpfSetting(patch) {
+  const r = await fetch("/api/settings/qpf", {
+    method: "PUT", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (!r.ok) { alert("설정을 바꾸지 못했습니다"); return; }
+  const j = await r.json();
+  QCFG = j.qpf;
+  document.getElementById("lb-step").textContent = QCFG.step + "분";
+  document.getElementById("lb-ahead").textContent = QCFG.ahead / 60 + "시간";
+  // 장수가 달라졌으니 다음 발표분부터 적용된다. 지금 것을 바로 보려면 수동 조회.
+  qpfStatus(`다음 발표분부터 ${j.frames}장 · 10분당 호출 ${j.frames}회`);
+}
+
+bindMenu("m-step", "lb-step", "프레임 간격",
+  () => [10, 20, 30].map(v => ({ k: v, l: v + "분", on: v === QCFG.step })),
+  k => putQpfSetting({ step: +k }));
+
+bindMenu("m-ahead", "lb-ahead", "최대 선행시간",
+  () => [180, 240, 360].map(v => ({ k: v, l: v / 60 + "시간", on: v === QCFG.ahead })),
+  k => putQpfSetting({ ahead: +k }));
+
 bindMenu("m-crop", "lb-crop", "화각",
   () => CROPS.map(([k, l]) => ({ k, l,
     on: (k === "all" && qpfZoom <= fitZoom() + .02) ||
@@ -2680,7 +2723,7 @@ async function pull(kind, how) {
   if (panel) panel.dataset.busy = "1";
   document.getElementById("manual").dataset.busy = "true";
   try {
-    if (how === "수동") await fetch(`/api/refresh/${kind}`, { method: "POST" });
+    if (how === "수동") await fetch(`/api/refresh/${kind}?force=true`, { method: "POST" });
     await f.load();
     f.after();
     setOrigin(kind, how === "수동" ? "API 직조회" : "DB 조회", true);
@@ -2819,7 +2862,7 @@ document.getElementById("rain-body").addEventListener("mouseleave", () => tip.cl
 applySide(); applySkin(false); showView('all');
 
 (async () => {
-  await Promise.allSettled([loadRain(), loadForecast(), loadAlerts(), loadQpf()]);
+  await Promise.allSettled([loadRain(), loadForecast(), loadAlerts(), loadQpf(), loadSettings()]);
   paintRange(); repaint(); drawWrns(); drawQpf(); applyCrop(false);
   startTimer(); paintCd();
 })();
