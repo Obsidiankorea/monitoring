@@ -746,6 +746,16 @@ td.totc .tot { width: auto; display: block; }
 /* ── 예측 상위 시군 ───────────────────────────────────────────────
    자막 칸과 같은 방식 — 곡선은 배경에 깔고 글자를 위에 얹는다. */
 /* 두 칸으로 나눠 담으면 한 줄의 위아래 폭이 두 배가 된다 — 곡선이 그만큼 읽힌다 */
+/* 시간축은 맨 위에 한 줄만. 칸마다 반복하면 숫자가 그림을 덮는다. */
+.fs-axis {
+  display: grid; grid-template-columns: repeat(var(--fscols, 2), minmax(0, 1fr));
+  gap: 1px; background: var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+}
+.fs-axis > div { display: flex; justify-content: space-between; padding: 5px 12px 4px; background: var(--panel); }
+.fs-axis span { font-family: var(--mono); font-size: 9.5px; color: var(--ink-3); letter-spacing: -.02em; }
+.fs-axis span:first-child { color: var(--ink-2); }
+
 .fs-grid {
   display: grid; grid-template-columns: repeat(var(--fscols, 2), minmax(0, 1fr));
   gap: 1px; background: var(--line-soft);
@@ -851,7 +861,20 @@ td.totc .tot { width: auto; display: block; }
 /* 아직 안 찬 칸 — 칠해진 폭이 곧 경과 시간이다 */
 .hc.partial { outline: 1px dotted color-mix(in oklab, var(--ink) 45%, transparent); outline-offset: -1px; }
 .hc.fc { outline: 1px dashed color-mix(in oklab, var(--accent) 40%, transparent); outline-offset: -1px; }
-.nowedge { box-shadow: -3px 0 0 -1px var(--ink-2); }
+/* '지금'은 칸마다 그으면 행 사이 틈에서 끊겨 지저분하다.
+   표 위에 선 하나를 머리글부터 마지막 행까지 관통시킨다. */
+.tblwrap { position: relative; }
+.nowline {
+  position: absolute; top: 0; bottom: 0; width: 1px;
+  background: linear-gradient(180deg,
+    color-mix(in oklab, var(--ink) 55%, transparent) 0 var(--headh, 24px),
+    color-mix(in oklab, var(--ink) 26%, transparent) var(--headh, 24px) 100%);
+  pointer-events: none; z-index: 2;
+}
+.nowline::before {
+  content: ""; position: absolute; left: -2.5px; top: 0; width: 6px; height: 6px;
+  border-radius: 50%; background: var(--ink); opacity: .55;
+}
 .hc.miss { color: var(--ink-3); background: repeating-linear-gradient(135deg, transparent 0 3px, var(--line-soft) 3px 4px); }
 .hc.fail { color: var(--lv-fail); background: color-mix(in oklab, var(--lv-fail) 14%, transparent); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--lv-fail) 40%, transparent); }
 
@@ -1141,6 +1164,9 @@ tbody.swap tr { animation: rowin .36s cubic-bezier(.2,.7,.3,1) both; animation-d
       <button class="mb-item" id="m-fc" type="button" data-owner="p-rain p-fcsig" aria-haspopup="menu" aria-expanded="false">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 18c3-1 4-9 8-9s5 6 8 6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="3 2.5"/><path d="M12 3v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span id="lb-fc">예측 6h</span><svg class="chev" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
+      <button class="mb-item" id="m-shape" type="button" data-owner="p-fcsig" aria-haspopup="menu" aria-expanded="false">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 17c3 0 4-8 7-8s4 5 9 5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity=".5"/></svg><span id="lb-shape">꺾은선</span><svg class="chev" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
       <button class="mb-item" id="m-cnt" type="button" data-owner="p-fcsig" aria-haspopup="menu" aria-expanded="false">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg><span id="lb-cnt">12개</span><svg class="chev" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
@@ -1241,7 +1267,8 @@ tbody.swap tr { animation: rowin .36s cubic-bezier(.2,.7,.3,1) both; animation-d
         <span class="src">nph-dfs_vsrt_grd · 읍면동 최대</span>
       </header>
       <div class="body">
-        <div class="fs-grid" id="fs-body"></div>
+        <div class="fs-axis" id="fs-axis"></div>
+          <div class="fs-grid" id="fs-body"></div>
       </div>
     </section>
     </div>
@@ -1256,10 +1283,13 @@ tbody.swap tr { animation: rowin .36s cubic-bezier(.2,.7,.3,1) both; animation-d
         <span class="src">awsh.php · nph-aws2_min · nph-dfs_vsrt_grd</span>
       </header>
       <div class="body">
-        <table id="rain-table">
-          <thead><tr id="rain-head"></tr></thead>
-          <tbody id="rain-body"></tbody>
-        </table>
+        <div class="tblwrap">
+          <table id="rain-table">
+            <thead><tr id="rain-head"></tr></thead>
+            <tbody id="rain-body"></tbody>
+          </table>
+          <div class="nowline" id="nowline" hidden></div>
+        </div>
       </div>
     </section>
   </div>
@@ -1523,6 +1553,8 @@ const RANGE = [
 ];
 let rangeKey   = "12";
 let fcHours    = 6;         // 향후 예측 시간 — 3 또는 6
+let fsShape    = "line";   // 예측 곡선 모양: line | bar
+try { fsShape = localStorage.getItem("gn-fsshape") || "line"; } catch {}
 let tkCount    = 12;        // 예측 순위 줄에 펼칠 읍면동 수
 const TK_ROWS  = 2;         // 두 줄로 나눠 담는다
 let metric     = "max";     // 'max' 다우지점 | 'avg' 시군 평균 | 'rep' 대표지점
@@ -1902,7 +1934,8 @@ function drawRain(animate) {
   if (view === "tl") {
     const mins = [];
     for (let i = cut(); i < N(); i++) mins.push(obsMin(i));
-    for (let j = 0; j < fcHours; j++) mins.push(fcMin(j));
+    const nFc = Math.min(fcHours, FC_HOURS.length);
+    for (let j = 0; j < nFc; j++) mins.push(fcMin(j));
     setAxis(mins);
     const nObs = N() - cut();
     const nowX = xM(mins[nObs - 1]);
@@ -1928,19 +1961,20 @@ function drawRain(animate) {
       // 지금 표시와 겹칠 자리는 비운다
       if (Math.abs(x - nowX) < NOW_W) return "";
       const lbl = isFc ? FC_HOURS[i - nObs] : isMid ? DAYS[dayOf(gi)] : HOURS[gi].slice(0, 2);
-      return `<text x="${x.toFixed(1)}" y="11" text-anchor="middle"
+      return `<text x="${x.toFixed(1)}" y="30" text-anchor="middle"
         font-family="IBM Plex Mono, monospace" font-size="${isMid ? 10 : 11}"
         font-weight="${isMid ? 600 : 400}"
         fill="${isFc ? "color-mix(in oklab, var(--accent) 62%, var(--ink-3))"
               : isMid ? "var(--ink-2)" : "var(--ink-3)"}">${lbl}</text>`;
     }).join("");
 
-    cell.innerHTML = `<svg viewBox="0 0 ${TLW} 15" width="100%" height="15" preserveAspectRatio="xMinYMid meet" overflow="visible">
+    // 세로로 세운 '지금' 글자가 들어갈 만큼 줄을 키운다. 잘리는 것보다 낫다.
+    cell.innerHTML = `<svg viewBox="0 0 ${TLW} 34" width="100%" height="34" preserveAspectRatio="xMinYMid meet">
       ${ticks}
-      <text x="${(nowX + 4).toFixed(1)}" y="13" transform="rotate(-90 ${(nowX + 4).toFixed(1)} 13)"
+      <text x="${(nowX + 4.5).toFixed(1)}" y="31" transform="rotate(-90 ${(nowX + 4.5).toFixed(1)} 31)"
         font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600"
         fill="var(--ink)">${HOURS[SLOTS - 1]}</text>
-      <line x1="${nowX.toFixed(1)}" y1="1" x2="${nowX.toFixed(1)}" y2="15" stroke="var(--ink)" stroke-width="1.1"/>
+      <line x1="${nowX.toFixed(1)}" y1="2" x2="${nowX.toFixed(1)}" y2="34" stroke="var(--ink)" stroke-width="1.1"/>
     </svg>`;
   } else {
     cell.innerHTML = `<div class="cells" style="--n:${cols.length}">` +
@@ -1996,6 +2030,8 @@ function drawRain(animate) {
 
   if (animate) { body.classList.remove("swap"); void body.offsetWidth; body.classList.add("swap"); }
 
+  placeNowLine();
+
   // 폭과 높이를 실제로 재서 어긋나면 한 번만 고쳐 그린다.
   // 표가 놓이기 전에 잰 값은 열 배분·스크롤바 때문에 빗나간다.
   if (!drawRain.fixing) {
@@ -2018,6 +2054,21 @@ function drawRain(animate) {
   }
 }
 
+/* 관통선 — 예측이 시작되는 칸의 왼쪽 모서리에 맞춘다.
+   히트맵에서만 쓴다. 타임라인은 행마다 선을 이미 그린다. */
+function placeNowLine() {
+  const el = document.getElementById("nowline");
+  const wrap = el.parentElement;
+  const edge = view === "heat" ? document.querySelector("#rain-body .nowedge") : null;
+  if (!edge) { el.hidden = true; return; }
+  const w = wrap.getBoundingClientRect(), e = edge.getBoundingClientRect();
+  const head = document.getElementById("rain-head").getBoundingClientRect();
+  el.style.left = (e.left - w.left - 1).toFixed(1) + "px";
+  el.style.setProperty("--headh", (head.bottom - w.top).toFixed(1) + "px");
+  el.hidden = false;
+}
+addEventListener("resize", () => placeNowLine());
+
 /* 합계 자리 옮기기 — 좌우로 끌면 막대 옆과 행 맨 오른쪽 사이를 오간다 */
 document.getElementById("rain-head").addEventListener("pointerdown", e => {
   const g = e.target.closest("#tot-grip");
@@ -2025,7 +2076,7 @@ document.getElementById("rain-head").addEventListener("pointerdown", e => {
   e.preventDefault();
   const x0 = e.clientX;
   g.classList.add("dragging");
-  g.setPointerCapture(e.pointerId);
+  try { g.setPointerCapture(e.pointerId); } catch {}
   const move = ev => {
     const dx = ev.clientX - x0;
     if (dx < -70 && totalPos !== "bar")   { totalPos = "bar";   drawRain(false); }
@@ -2047,12 +2098,24 @@ document.getElementById("rain-head").addEventListener("pointerdown", e => {
    칸 크기가 설정에 따라 달라지므로 픽셀로 고정하지 않는다. */
 function sparkSvg(d, gmax, lv) {
   const W = 100, H = 100, PAD = 6;
-  const x = i => (d.length < 2 ? W / 2 : (i / (d.length - 1)) * W);
   const y = v => PAD + (1 - v / gmax) * (H - PAD * 2);
-  const pts = d.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" L");
   const pk = d.indexOf(Math.max(...d));
   const c = lv === "warn" ? "var(--lv-warn)" : lv === "watch" ? "var(--lv-watch)" : "var(--accent)";
-  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+  const open = `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">`;
+
+  if (fsShape === "bar") {
+    // 막대는 한 시간이 한 칸이라는 것을 그대로 보여준다 — RN1처럼 계단으로 바뀌는 자료에 맞다
+    const bw = W / d.length, gap = Math.min(1.6, bw * 0.18);
+    const bars = d.map((v, i) => v <= 0 ? "" :
+      `<rect x="${(i * bw + gap / 2).toFixed(2)}" y="${y(v).toFixed(1)}"
+        width="${(bw - gap).toFixed(2)}" height="${(H - y(v)).toFixed(1)}"
+        fill="${c}" opacity="${i === pk ? .34 : .18}"/>`).join("");
+    return `${open}${bars}</svg>`;
+  }
+
+  const x = i => (d.length < 2 ? W / 2 : (i / (d.length - 1)) * W);
+  const pts = d.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" L");
+  return `${open}
     <path d="M0,${H} L${pts} L${W},${H} Z" fill="${c}" opacity=".13"/>
     <path d="M${pts}" fill="none" stroke="${c}" stroke-width="2.2" stroke-opacity=".55"
       stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
@@ -2075,6 +2138,16 @@ function drawFcSigun() {
 
   document.getElementById("fs-span").textContent = `＋${fcHours}시간`;
   const gmax = Math.max(...rows.map(r => r.peak), 5);
+
+  // 시간축 — 두 칸이므로 칸마다 하나씩, 맨 위에 한 줄만 둔다
+  const span = FC_HOURS.length
+    ? `<span>${FC_HOURS[0]}시</span>`
+      + (FC_HOURS.length > 2 ? `<span>${FC_HOURS[Math.floor(FC_HOURS.length / 2)]}시</span>` : "")
+      + `<span>${FC_HOURS[FC_HOURS.length - 1]}시</span>`
+    : "";
+  const axis = document.getElementById("fs-axis");
+  axis.style.setProperty("--fscols", 2);
+  axis.innerHTML = `<div>${span}</div><div>${span}</div>`;
 
   const body = document.getElementById("fs-body");
   const lines = Math.ceil(rows.length / 2);
@@ -2561,6 +2634,7 @@ async function loadSettings() {
   try {
     const j = await getJson("/api/settings");
     QCFG = j.qpf;
+    COLLECT_SEC = j.intervals || {};
     document.getElementById("lb-step").textContent = QCFG.step + "분";
     document.getElementById("lb-ahead").textContent = QCFG.ahead / 60 + "시간";
   } catch (e) { console.warn("설정", e); }
@@ -2599,6 +2673,15 @@ bindMenu("m-speed", "lb-speed", "재생 속도",
   () => [0.5, 1, 2].map(v => ({ k: v, l: v + "×", on: v === qpfSpeed })),
   k => { qpfSpeed = +k; if (qpfPlaying) qpfStart(); });
 
+bindMenu("m-shape", "lb-shape", "곡선 모양",
+  () => [{ k: "line", l: "꺾은선", on: fsShape === "line" },
+         { k: "bar", l: "히스토그램", on: fsShape === "bar" }],
+  k => {
+    fsShape = k;
+    try { localStorage.setItem("gn-fsshape", k); } catch {}
+    drawFcSigun(); drawTicker();
+  });
+
 bindMenu("m-cnt", "lb-cnt", "예상 순위 표시",
   () => [6, 8, 12, 16, "all"].map(v => ({ k: v, l: v === "all" ? "전부" : v + "개", on: v === tkCount })),
   k => { tkCount = k === "all" ? "all" : +k; drawTicker(); });
@@ -2609,17 +2692,35 @@ function activeFeed() {
   for (const k in FEEDS) if (FEEDS[k].panel === p?.id) return k;
   return "rain";
 }
-bindMenu("m-period", "lb-period", "갱신 주기",
+/* 두 가지 주기가 있다 — 헷갈리기 쉬워 한 메뉴에 나란히 둔다.
+   화면 갱신은 DB만 읽으므로 아무리 잦아도 기상청 호출이 늘지 않는다.
+   수집 주기가 실제로 기상청을 부르는 간격이다. */
+let COLLECT_SEC = {};
+bindMenu("m-period", "lb-period", "",
   () => {
-    const f = FEEDS[activeFeed()];
-    return [{ head: f.label + " 자료" },
+    const k = activeFeed(), f = FEEDS[k];
+    return [
+      { head: f.label + " · 화면 갱신" },
       ...[60, 300, 600, 900, 1800].map(sec => ({
-        k: sec, l: sec < 60 ? sec + "초" : sec / 60 + "분", on: sec === f.sec }))];
+        k: "v:" + sec, l: sec < 60 ? sec + "초" : sec / 60 + "분", on: sec === f.sec })),
+      { sep: true },
+      { head: f.label + " · 수집(기상청 호출)" },
+      ...[60, 300, 600, 900, 1800].map(sec => ({
+        k: "c:" + sec, l: sec / 60 + "분", on: sec === COLLECT_SEC[k] })),
+    ];
   },
-  k => {
-    FEEDS[activeFeed()].sec = +k;
-    try { localStorage.setItem("gn-feeds",
-      JSON.stringify(Object.fromEntries(Object.entries(FEEDS).map(([n, f]) => [n, f.sec])))); } catch {}
+  async k => {
+    const [kind, v] = k.split(":"), feed = activeFeed();
+    if (kind === "v") {
+      FEEDS[feed].sec = +v;
+      try { localStorage.setItem("gn-feeds",
+        JSON.stringify(Object.fromEntries(Object.entries(FEEDS).map(([n, f]) => [n, f.sec])))); } catch {}
+    } else {
+      const r = await fetch("/api/settings/intervals", {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [feed]: +v }) });
+      if (r.ok) COLLECT_SEC = (await r.json()).intervals;
+    }
     paintCd();
   });
 
@@ -2808,6 +2909,7 @@ const CIRC = 2 * Math.PI * 16;
 function paintCd() {
   const k = activeFeed(), f = FEEDS[k];
   document.getElementById("lb-period").textContent = f.sec < 60 ? f.sec + "초" : f.sec / 60 + "분";
+  if (COLLECT_SEC[k]) document.getElementById("lb-period").textContent += ` / ${COLLECT_SEC[k] / 60}분`;
   const box = document.getElementById("mb-when");
   document.getElementById("w-got").textContent = f.got || "—";
   document.getElementById("w-base").textContent = f.base || "—";

@@ -56,7 +56,8 @@ async def run_one(kind: str, force: bool = False) -> dict:
 async def lifespan(app: FastAPI):
     db.init()
     sched = AsyncIOScheduler(timezone="Asia/Seoul")   # 시각은 전부 KST. UTC로 바꾸지 않는다.
-    for kind, sec in INTERVALS.items():
+    app.state.sched = sched
+    for kind, sec in db.get_setting("intervals", INTERVALS).items():
         sched.add_job(run_one, "interval", seconds=sec, args=[kind],
                       id=kind, max_instances=1, coalesce=True)
     sched.start()
@@ -105,7 +106,8 @@ async def api_qpf_frame(tmfc: str, ef: int):
 
 @app.get("/api/status")
 async def api_status():
-    return {"collect": queries.status(), "poll": POLL_DEFAULT, "intervals": INTERVALS,
+    return {"collect": queries.status(), "poll": POLL_DEFAULT,
+            "intervals": db.get_setting("intervals", INTERVALS),
             "qpf": qpf.cfg(), "publish": db.publish_stats()}
 
 
@@ -114,7 +116,8 @@ async def api_settings_get():
     """설정은 서버에 둔다 — 벽면 화면이라 어느 브라우저에서 바꿔도 같이 가야 한다."""
     c = qpf.cfg()
     return {"qpf": c, "frames": len(qpf.frame_efs(c)),
-            "publish": db.publish_stats(), "intervals": INTERVALS}
+            "publish": db.publish_stats(),
+            "intervals": db.get_setting("intervals", INTERVALS)}
 
 
 @app.put("/api/settings/qpf")
@@ -133,6 +136,21 @@ async def api_settings_qpf(body: dict):
             cur[k] = v
     db.put_setting("qpf", cur)
     return {"qpf": cur, "frames": len(qpf.frame_efs(cur))}
+
+
+@app.put("/api/settings/intervals")
+async def api_settings_intervals(body: dict):
+    """수집 주기. ⚠️ 화면 갱신 주기와 다르다 — 이건 기상청을 실제로 부르는 간격이다."""
+    cur = db.get_setting("intervals", INTERVALS)
+    for k in COLLECTORS:
+        if k in body:
+            sec = max(30, min(3600, int(body[k])))
+            cur[k] = sec
+            job = app.state.sched.get_job(k)
+            if job:
+                job.reschedule("interval", seconds=sec)
+    db.put_setting("intervals", cur)
+    return {"intervals": cur}
 
 
 @app.post("/api/refresh/{kind}")
