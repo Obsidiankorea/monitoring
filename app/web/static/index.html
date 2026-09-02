@@ -605,6 +605,10 @@ td.totc .tot { width: auto; display: block; }
 }
 /* 화각 — 원본 한 벌에서 배경 위치·배율만 바꿔 만든다.
    비율이 안 맞는 전국 보기는 위아래를 덮어 채운다(위쪽은 대개 비어 있다). */
+.qpf-stage { cursor: grab; }
+.qpf-stage.panning { cursor: grabbing; }
+.qpf-stage.panning .qpf-img { transition: none; }   /* 끄는 동안은 따라붙어야 한다 */
+
 .qpf-img {
   width: 100%; height: 100%;
   background-repeat: no-repeat;
@@ -2198,7 +2202,11 @@ function qpfStart() {
    판 크기는 그대로 두고 경남을 중심으로 확대·축소한다. 배경 위치를 %로 주면
    확대 배율에 따라 같은 지점이 다른 자리로 가므로, 매번 다시 계산한다.
    경남 중심은 원본(1835×1820)에서 가로 65.8% · 세로 53.4% 지점이다. */
-const GN_F = { x: 0.658, y: 0.534 }, IMG_R = 1820 / 1835;
+/* 경남 중심의 원본 내 위치. 끌어서 옮기면 이 값이 바뀌고, 놓을 때 저장된다. */
+const GN_HOME = { x: 0.658, y: 0.534 };
+const IMG_R = 1820 / 1835;
+let GN_F = { ...GN_HOME };
+try { GN_F = { ...GN_HOME, ...JSON.parse(localStorage.getItem("gn-center") || "{}") }; } catch {}
 const CROPS = [["wide", "광역"], ["gn", "경남"], ["all", "전국"]];
 const CROP_Z = { wide: 2.0, gn: 3.8, all: 0 };   // 0이면 전체가 들어가는 배율로 맞춘다
 let qpfZoom = 2.0;
@@ -2218,11 +2226,19 @@ function applyCrop(save) {
   const W = st.clientWidth || 1, H = st.clientHeight || 1;
   const z = clamp(qpfZoom, fitZoom(), 6);
   const IW = z * W, IH = IW * IMG_R;
+  // 화면 밖으로 끌려 나가지 않게 중심을 가둔다
+  if (IW > W) GN_F.x = clamp(GN_F.x, W / (2 * IW), 1 - W / (2 * IW));
+  if (IH > H) GN_F.y = clamp(GN_F.y, H / (2 * IH), 1 - H / (2 * IH));
   const px = IW > W + 1 ? 100 * (GN_F.x * IW - W / 2) / (IW - W) : 50;
   const py = IH > H + 1 ? 100 * (GN_F.y * IH - H / 2) / (IH - H) : 50;
   img.style.backgroundSize = (z * 100).toFixed(1) + "% auto";
   img.style.backgroundPosition = `${clamp(px, 0, 100).toFixed(1)}% ${clamp(py, 0, 100).toFixed(1)}%`;
-  if (save !== false) { try { localStorage.setItem("gn-zoom", String(z)); } catch {} }
+  if (save !== false) {
+    try {
+      localStorage.setItem("gn-zoom", String(z));
+      localStorage.setItem("gn-center", JSON.stringify(GN_F));
+    } catch {}
+  }
   const lb = document.getElementById("lb-crop");
   if (lb) lb.textContent = z <= fitZoom() + .02 ? "전국" : z >= 3.4 ? "경남" : "광역";
 }
@@ -2231,6 +2247,39 @@ const setZoom = z => { qpfZoom = clamp(z, fitZoom(), 6); applyCrop(); };
 
 document.getElementById("qpf-in").addEventListener("click", () => setZoom(qpfZoom * 1.25));
 document.getElementById("qpf-out").addEventListener("click", () => setZoom(qpfZoom / 1.25));
+/* ── 끌어서 옮기기 ─────────────────────────────────────────────────
+   배경 위치를 %로 주고 있으므로, 끈 픽셀만큼을 이미지 폭으로 나눠
+   중심 비율을 옮긴다. 놓으면 그 자리가 저장된다. */
+(() => {
+  const st = document.getElementById("qpf-stage");
+  let from = null;
+
+  st.addEventListener("pointerdown", e => {
+    if (e.button !== 0 || e.target.closest(".qpf-bar")) return;   // 조작 막대는 건드리지 않는다
+    from = { x: e.clientX, y: e.clientY, cx: GN_F.x, cy: GN_F.y, w: st.clientWidth };
+    st.classList.add("panning");
+    try { st.setPointerCapture(e.pointerId); } catch {}
+  });
+
+  st.addEventListener("pointermove", e => {
+    if (!from) return;
+    const IW = clamp(qpfZoom, fitZoom(), 6) * from.w;
+    GN_F.x = from.cx - (e.clientX - from.x) / IW;
+    GN_F.y = from.cy - (e.clientY - from.y) / (IW * IMG_R);
+    applyCrop(false);
+  });
+
+  const end = e => {
+    if (!from) return;
+    from = null;
+    st.classList.remove("panning");
+    try { st.releasePointerCapture(e.pointerId); } catch {}
+    applyCrop();            // 놓은 자리를 저장한다
+  };
+  st.addEventListener("pointerup", end);
+  st.addEventListener("pointercancel", end);
+})();
+
 document.getElementById("qpf-stage").addEventListener("wheel", e => {
   e.preventDefault();
   setZoom(qpfZoom * (e.deltaY > 0 ? 0.92 : 1.087));
@@ -2480,7 +2529,7 @@ bindMenu("m-crop", "lb-crop", "화각",
     on: (k === "all" && qpfZoom <= fitZoom() + .02) ||
         (k === "gn" && qpfZoom >= 3.4) ||
         (k === "wide" && qpfZoom > fitZoom() + .02 && qpfZoom < 3.4) })),
-  k => setZoom(CROP_Z[k] || fitZoom()));
+  k => { GN_F = { ...GN_HOME }; setZoom(CROP_Z[k] || fitZoom()); });
 
 bindMenu("m-speed", "lb-speed", "재생 속도",
   () => [0.5, 1, 2].map(v => ({ k: v, l: v + "×", on: v === qpfSpeed })),

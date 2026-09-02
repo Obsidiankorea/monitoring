@@ -114,7 +114,13 @@ async def collect(now: datetime | None = None, force: bool = False) -> dict:
     if have >= set(efs):
         return {"tmfc": tmfc, "saved": 0, "skipped": "완료"}
 
+    # 판정 경로가 보이지 않으면 왜 받았는지/안 받았는지 알 수 없다
+    log.debug("qpf %s have=%d/%d known=%s force=%s", tmfc, len(have), len(efs), bool(known), force)
+
     elapsed = (now - slot).total_seconds() / 60
+
+    if force:
+        log.info("qpf %s 수동 조회 — 발표 확인을 건너뛴다", tmfc)
 
     if not known and not force:
         # 감시 구간 밖에서는 부르지 않는다 — 발표 전에 불러 봐야 헛수고다
@@ -128,6 +134,7 @@ async def collect(now: datetime | None = None, force: bool = False) -> dict:
             db.log_collect("qpf", False, at, f"발표 확인 실패: {e}")
             return {"tmfc": tmfc, "saved": 0, "error": str(e)}
         if now_stamp == db.get_setting("qpf_stamp", ""):
+            log.debug("qpf %s 미발표 (+%.0f분)", tmfc, elapsed)
             return {"tmfc": tmfc, "saved": 0, "skipped": f"미발표(+{elapsed:.0f}분)"}
         db.put_setting("qpf_stamp", now_stamp)
         db.note_publish(tmfc, at, round(elapsed, 1))

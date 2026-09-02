@@ -25,6 +25,7 @@ from .config import CACHE, INTERVALS, POLL_DEFAULT
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
 # ⚠️ httpx는 요청 URL을 통째로 찍는다 — authKey가 로그 파일에 그대로 남는다.
 logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("collect.qpf").setLevel(logging.DEBUG)
 log = logging.getLogger("main")
 
 STATIC = Path(__file__).parent / "web" / "static"
