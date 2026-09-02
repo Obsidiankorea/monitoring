@@ -1,0 +1,556 @@
+<title>강수 타임라인 시안</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+/* 상황판과 같은 시각 체계를 쓴다 — 이 문서가 그 화면을 고르는 자리이므로
+   여기서 본 인상이 그대로 화면 인상이어야 한다. */
+:root {
+  --ground: #090D13;
+  --panel:  #111823;
+  --panel-2:#18202C;
+  --raised: #1E2836;
+  --line:   #222D3C;
+  --line-soft:#1A2330;
+
+  --ink:   #E8EEF6;
+  --ink-2: #94A5B8;
+  --ink-3: #5C6D80;
+
+  --accent: #2FA3DC;
+
+  --rain-1:#1B3A55; --rain-2:#1E5B87; --rain-3:#2280B8;
+  --rain-4:#2FA3DC; --rain-5:#5EC3EE; --rain-6:#96DBF6; --rain-7:#D7F0FC;
+
+  --lv-watch:#E8B23A; --lv-warn:#F2543D; --lv-ok:#3FB98A;
+
+  --mono:"IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --sans:"IBM Plex Sans KR", system-ui, -apple-system, "Apple SD Gothic Neo", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
+}
+
+.wrap { max-width: 1180px; margin: 0 auto; padding: 40px 22px 90px; }
+
+.micro {
+  font-size: 10.5px; font-weight: 500; letter-spacing: .14em;
+  color: var(--ink-3); text-transform: uppercase;
+}
+
+header.top { margin-bottom: 34px; }
+header.top h1 {
+  margin: 8px 0 12px;
+  font-size: 30px; font-weight: 700; letter-spacing: -.025em;
+  text-wrap: balance;
+}
+header.top p { margin: 0; max-width: 66ch; color: var(--ink-2); }
+header.top p b { color: var(--ink); font-weight: 600; }
+
+/* 핵심 전제 — 이게 성립하지 않으면 아래 시안이 전부 무의미하다 */
+.premise {
+  margin: 22px 0 0;
+  display: grid;
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  grid-template-columns: repeat(3, 1fr);
+}
+.premise div { background: var(--panel); padding: 13px 16px; }
+.premise .k { font-size: 10.5px; letter-spacing: .12em; color: var(--ink-3); text-transform: uppercase; }
+.premise .v { font-size: 14.5px; font-weight: 600; margin-top: 3px; }
+.premise .v small { display: block; font-size: 11.5px; font-weight: 400; color: var(--ink-3); letter-spacing: 0; }
+
+/* ── 시안 카드 ──────────────────────────────────────────────────── */
+.opt {
+  margin-top: 30px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.opt.pick { border-color: color-mix(in oklab, var(--accent) 45%, var(--line)); }
+
+.opt > header {
+  display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  padding: 15px 18px 13px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.opt > header .no {
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  color: var(--ink-3); letter-spacing: .06em;
+}
+.opt > header h2 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -.015em; }
+.opt > header .en { font-family: var(--mono); font-size: 10.5px; color: var(--ink-3); }
+.opt > header .tag {
+  margin-left: auto; font-size: 10.5px; font-weight: 600; letter-spacing: .06em;
+  padding: 2px 9px; border-radius: 999px;
+  color: color-mix(in oklab, var(--accent) 75%, var(--ink));
+  border: 1px solid color-mix(in oklab, var(--accent) 38%, var(--line));
+  background: color-mix(in oklab, var(--accent) 10%, transparent);
+}
+.opt > header .tag.ok { color: color-mix(in oklab, var(--lv-ok) 82%, var(--ink)); border-color: color-mix(in oklab, var(--lv-ok) 38%, var(--line)); background: color-mix(in oklab, var(--lv-ok) 10%, transparent); }
+
+.stage { padding: 14px 18px 6px; overflow-x: auto; }
+
+.verdict {
+  display: grid; gap: 1px; background: var(--line-soft);
+  border-top: 1px solid var(--line-soft);
+  grid-template-columns: repeat(3, 1fr);
+}
+.verdict div { background: var(--panel); padding: 11px 18px 13px; }
+.verdict .k { font-size: 10px; letter-spacing: .12em; color: var(--ink-3); text-transform: uppercase; margin-bottom: 3px; }
+.verdict p { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--ink-2); }
+.verdict p b { color: var(--ink); font-weight: 500; }
+
+/* ── 공통 표 골격 ───────────────────────────────────────────────── */
+.rows { display: grid; gap: 2px; min-width: 720px; }
+.hrow { display: grid; grid-template-columns: 92px 1fr 96px; align-items: center; gap: 10px; }
+.hrow .nm { font-size: 12.5px; font-weight: 600; text-align: right; }
+.hrow .nm sup { font-size: .7em; color: var(--ink-3); font-weight: 500; margin-right: 2px; }
+.hrow .nm.lv-warn  { color: color-mix(in oklab, var(--lv-warn) 55%, var(--ink)); }
+.hrow .nm.lv-watch { color: color-mix(in oklab, var(--lv-watch) 55%, var(--ink)); }
+
+.hrow .sum { font-family: var(--mono); font-size: 11.5px; text-align: right; color: var(--ink-3); }
+.hrow .sum b { color: var(--ink-2); font-weight: 600; font-size: 12.5px; }
+.hrow .sum i { font-style: normal; color: var(--rain-5); }
+
+.axis {
+  display: grid; grid-template-columns: 92px 1fr 96px; gap: 10px;
+  margin-bottom: 6px;
+}
+.ticks { display: grid; grid-template-columns: repeat(12, 1fr); }
+.ticks span { font-family: var(--mono); font-size: 9.5px; color: var(--ink-3); text-align: center; }
+.ticks span.fc { color: color-mix(in oklab, var(--accent) 62%, var(--ink-3)); }
+.ticks span.now { color: var(--ink); font-weight: 600; }
+
+/* ── A. 히트맵 ──────────────────────────────────────────────────── */
+.cells { display: grid; grid-template-columns: repeat(12, 1fr); gap: 2px; }
+.cells span {
+  font-family: var(--mono); font-size: 11px; font-weight: 500;
+  text-align: center; line-height: 21px; border-radius: 3px;
+  color: var(--ink);
+}
+.cells span.z { color: var(--ink-3); }
+.cells span.fc { outline: 1px dashed color-mix(in oklab, var(--accent) 42%, transparent); outline-offset: -1px; }
+.cells span.nowedge { box-shadow: -3px 0 0 -1px var(--ink-2); }
+
+/* ── D. 누적 막대 ───────────────────────────────────────────────── */
+.stack { height: 20px; position: relative; background: var(--panel-2); border-radius: 4px; overflow: hidden; }
+.stack .obs { position: absolute; left: 0; top: 0; bottom: 0; background: var(--rain-4); }
+.stack .obs.warn  { background: var(--lv-warn); }
+.stack .obs.watch { background: var(--lv-watch); }
+.stack .fc {
+  position: absolute; top: 0; bottom: 0;
+  background: repeating-linear-gradient(115deg, transparent 0 4px, color-mix(in oklab, var(--rain-5) 55%, transparent) 4px 8px);
+  border: 1px dashed color-mix(in oklab, var(--rain-5) 70%, transparent);
+  border-left: 0;
+}
+
+svg { display: block; overflow: visible; }
+
+/* ── 추천 / 참고 ────────────────────────────────────────────────── */
+.rec {
+  margin-top: 34px; padding: 20px 22px;
+  border: 1px solid color-mix(in oklab, var(--accent) 40%, var(--line));
+  background: color-mix(in oklab, var(--accent) 7%, var(--panel));
+  border-radius: 12px;
+}
+.rec h2 { margin: 0 0 10px; font-size: 17px; font-weight: 600; letter-spacing: -.015em; }
+.rec p { margin: 0 0 10px; color: var(--ink-2); max-width: 74ch; }
+.rec p:last-child { margin-bottom: 0; }
+.rec b { color: var(--ink); font-weight: 600; }
+
+.refs { margin-top: 30px; }
+.refs h2 { font-size: 14px; font-weight: 600; margin: 0 0 12px; }
+.refs table { width: 100%; border-collapse: collapse; }
+.refs th {
+  text-align: left; font-size: 10px; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--ink-3); font-weight: 500; padding: 0 12px 7px 0; border-bottom: 1px solid var(--line);
+}
+.refs td { padding: 8px 12px 8px 0; border-bottom: 1px solid var(--line-soft); font-size: 12.5px; color: var(--ink-2); vertical-align: top; }
+.refs td:first-child { color: var(--ink); font-weight: 500; white-space: nowrap; }
+.refs code { font-family: var(--mono); font-size: 11.5px; color: var(--rain-5); }
+
+.tip {
+  position: fixed; z-index: 60; pointer-events: none;
+  background: var(--raised); border: 1px solid var(--line); border-radius: 8px;
+  padding: 7px 10px; font-size: 11.5px; line-height: 1.5;
+  box-shadow: 0 8px 24px rgb(0 0 0 / .5); opacity: 0; transition: opacity .12s;
+}
+.tip.on { opacity: 1; }
+.tip .k { color: var(--ink-3); font-size: 10.5px; letter-spacing: .06em; }
+.tip .v { font-family: var(--mono); font-weight: 600; font-size: 14px; }
+
+@media (max-width: 760px) {
+  .premise, .verdict { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+}
+</style>
+
+<div class="wrap">
+
+  <header class="top">
+    <div class="micro">경남 기상 대시보드 · 강수 패널 시안</div>
+    <h1>지금까지 이렇게 왔고, 앞으로 이렇게 온다</h1>
+    <p>
+      실측(AWS)과 초단기예측(RN1)을 <b>한 줄로 이어 붙이는</b> 네 가지 방법을 같은 자료로 그렸다.
+      2026-08-29 14:20 기준, 강수량 상위 12개 시군. 왼쪽 6칸이 실측, 오른쪽 6칸이 예측이다.
+    </p>
+
+    <div class="premise">
+      <div>
+        <div class="k">이어 붙일 수 있는 이유</div>
+        <div class="v">단위가 같다<small>둘 다 mm/h — 선행 1시간 강수량</small></div>
+      </div>
+      <div>
+        <div class="k">환산</div>
+        <div class="v">필요 없음<small>RN1이 이미 시우량이다. 곱하거나 나누지 않는다</small></div>
+      </div>
+      <div>
+        <div class="k">경계</div>
+        <div class="v">14:20 → 15:00<small>실측 마지막 칸은 매분자료 보강값</small></div>
+      </div>
+    </div>
+  </header>
+
+  <!-- A -->
+  <section class="opt">
+    <header>
+      <span class="no">시안 A</span>
+      <h2>히트맵 타임라인</h2>
+      <span class="en">heatmap / conditional formatting</span>
+      <span class="tag">지금 화면에 들어간 방식</span>
+    </header>
+    <div class="stage">
+      <div class="axis"><span></span><div class="ticks" id="ax-a"></div><span></span></div>
+      <div class="rows" id="opt-a"></div>
+    </div>
+    <div class="verdict">
+      <div><div class="k">강점</div><p><b>값을 정확히 읽는다.</b> 30인지 33인지 보고에 그대로 쓸 수 있다. 결측·실패를 칸 단위로 다르게 표시할 수 있는 유일한 형식.</p></div>
+      <div><div class="k">약점</div><p>칸이 끊겨 있어 <b>흐름이 안 보인다.</b> 비가 세지는 중인지 잦아드는 중인지 숫자를 훑어야 안다. 멀리서 보면 색 얼룩이다.</p></div>
+      <div><div class="k">어울리는 곳</div><p>가까이서 값을 옮겨 적는 사람. 보고서 작성 화면.</p></div>
+    </div>
+  </section>
+
+  <!-- B -->
+  <section class="opt pick">
+    <header>
+      <span class="no">시안 B</span>
+      <h2>스파크 면적 그래프</h2>
+      <span class="en">small-multiple area, split at now</span>
+      <span class="tag ok">추천</span>
+    </header>
+    <div class="stage">
+      <div class="axis"><span></span><div class="ticks" id="ax-b"></div><span></span></div>
+      <div class="rows" id="opt-b"></div>
+    </div>
+    <div class="verdict">
+      <div><div class="k">강점</div><p><b>모양 하나로 이야기가 끝난다.</b> 채운 면이 지나간 비, 빗금 면이 올 비. 봉우리가 왼쪽에 있으면 지나갔고 오른쪽에 있으면 이제 온다 — 3m 밖에서 0.5초에 읽힌다.</p></div>
+      <div><div class="k">약점</div><p>정확한 값은 봉우리 라벨과 오른쪽 합계로만 준다. 모든 칸의 숫자를 동시에 보여줄 수 없다.</p></div>
+      <div><div class="k">어울리는 곳</div><p><b>상황실 벽면.</b> 지켜보는 사람이 판단만 하면 되는 화면.</p></div>
+    </div>
+  </section>
+
+  <!-- C -->
+  <section class="opt">
+    <header>
+      <span class="no">시안 C</span>
+      <h2>호라이즌 차트</h2>
+      <span class="en">horizon chart</span>
+      <span class="tag">가장 촘촘함</span>
+    </header>
+    <div class="stage">
+      <div class="axis"><span></span><div class="ticks" id="ax-c"></div><span></span></div>
+      <div class="rows" id="opt-c"></div>
+      <div style="display:flex;gap:14px;align-items:center;margin:10px 0 2px;flex-wrap:wrap">
+        <span class="micro">밴드</span>
+        <span style="font-family:var(--mono);font-size:10.5px;color:var(--ink-2);display:flex;gap:8px;align-items:center">
+          <i style="width:16px;height:9px;border-radius:2px;background:var(--rain-2);display:inline-block"></i>0–10
+          <i style="width:16px;height:9px;border-radius:2px;background:var(--rain-3);display:inline-block"></i>10–20
+          <i style="width:16px;height:9px;border-radius:2px;background:var(--rain-5);display:inline-block"></i>20–30
+          <i style="width:16px;height:9px;border-radius:2px;background:var(--rain-7);display:inline-block"></i>30+ mm/h
+        </span>
+      </div>
+    </div>
+    <div class="verdict">
+      <div><div class="k">강점</div><p>같은 세로 공간에 <b>4배 많은 정보</b>가 들어간다. 18개 시군을 다 넣고도 지도 3판 자리가 남는다. 색이 진해지는 순간이 곧 위험 구간.</p></div>
+      <div><div class="k">약점</div><p><b>배워야 읽힌다.</b> 접힌 밴드를 처음 보면 오해한다. 교대 근무자가 바뀌는 상황실에서 설명 없이 쓰기 어렵다.</p></div>
+      <div><div class="k">어울리는 곳</div><p>전 시군 56지점을 한 화면에 놓아야 할 때. 분석용 보조 화면.</p></div>
+    </div>
+  </section>
+
+  <!-- D -->
+  <section class="opt">
+    <header>
+      <span class="no">시안 D</span>
+      <h2>누적 막대 연장</h2>
+      <span class="en">stacked bar, observed + projected</span>
+      <span class="tag">총량만 볼 때</span>
+    </header>
+    <div class="stage">
+      <div class="axis" style="margin-bottom:10px"><span></span><div style="font-family:var(--mono);font-size:9.5px;color:var(--ink-3)">채움 = 지금까지 온 총량 &nbsp;·&nbsp; 빗금 = 앞으로 6시간 예상량</div><span></span></div>
+      <div class="rows" id="opt-d"></div>
+    </div>
+    <div class="verdict">
+      <div><div class="k">강점</div><p>“<b>여기가 제일 위험하다</b>”가 막대 길이 하나로 끝난다. 순위 매기기에 가장 강하고, 시군명 뒤에 깔면 칸을 따로 안 먹는다.</p></div>
+      <div><div class="k">약점</div><p>시간 정보가 <b>통째로 사라진다.</b> 12시간에 걸쳐 온 100mm와 2시간에 쏟아진 100mm가 같은 길이로 보인다.</p></div>
+      <div><div class="k">어울리는 곳</div><p>단독으로는 부족하다. 시군명 칸 배경으로 깔아 다른 시안과 <b>함께</b> 쓴다.</p></div>
+    </div>
+  </section>
+
+  <div class="rec">
+    <h2>추천 — B를 본체로, D를 시군명 칸에 겹쳐서</h2>
+    <p>
+      상황실 벽면은 <b>값을 옮겨 적는 화면이 아니라 판단하는 화면</b>이다. 그러면 A의 정밀함보다
+      B의 “한눈에 읽히는 모양”이 이긴다. 다만 B만으로는 총량 순위가 흐릿하니, 이미 만들어 둔
+      <b>시군명 칸 데이터막대(D)</b>를 그대로 두고 그 오른쪽에 B를 붙이면 두 질문에 한 번에 답한다 —
+      <b>어디가 제일 많이 왔나(막대 길이)</b>, <b>지금 세지는 중인가 잦아드는 중인가(면적 모양)</b>.
+    </p>
+    <p>
+      A는 버리지 말고 <b>같은 패널의 다른 보기</b>로 남긴다. 보고서를 쓸 때는 숫자가 필요하다.
+      C는 나중에 56지점 전체를 보는 분석 화면을 만들 때 꺼내 쓴다.
+    </p>
+    <p>
+      어느 쪽이든 <b>예측 구간은 반드시 다르게 그린다</b> — 빗금과 점선. 실측과 예측이 같은 모양으로
+      이어지면, 아직 오지 않은 비가 관측된 것처럼 읽힌다. 재난 화면에서 이건 오보다.
+    </p>
+  </div>
+
+  <div class="refs">
+    <h2>참고한 기법과 구현 수단</h2>
+    <table>
+      <thead><tr><th>기법</th><th>어디서 쓰나</th><th>구현</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Forecast zones</td>
+          <td>실측/예측 경계에서 선 종류·채움·색을 바꾸는 표준 방식. Highcharts가 <code>zones</code> + <code>dashStyle</code>로 정식 지원한다</td>
+          <td>Highcharts, ECharts <code>markArea</code></td>
+        </tr>
+        <tr>
+          <td>Horizon chart</td>
+          <td>세로 공간을 접어 여러 계열을 촘촘히. 시안 C가 이것</td>
+          <td>D3 <code>d3.horizon</code>, R <code>ggTimeSeries::ggplot_horizon</code>, <code>ggalt::geom_horizon</code>, <code>latticeExtra::horizonplot</code></td>
+        </tr>
+        <tr>
+          <td>Small multiples</td>
+          <td>시군마다 같은 축의 작은 그래프를 세로로 쌓기. 시안 B가 이것</td>
+          <td>Observable Plot, Vega-Lite <code>facet</code>, ggplot2 <code>facet_wrap</code></td>
+        </tr>
+        <tr>
+          <td>Fan chart</td>
+          <td>예측의 <b>불확실성 폭</b>까지 그리는 방식. RN1은 단일값이라 지금은 못 쓰지만, 앙상블을 붙이면 그때 이것</td>
+          <td>Highcharts <code>arearange</code>, ggplot2 <code>geom_ribbon</code></td>
+        </tr>
+        <tr>
+          <td>Ridgeline</td>
+          <td>보기엔 가장 화려하나 겹친 곡선이 값을 가린다. <b>재난 화면에는 비추천</b></td>
+          <td>R <code>ggridges</code></td>
+        </tr>
+        <tr>
+          <td>Tableau</td>
+          <td>호라이즌 차트는 계산식으로 흉내낼 수 있으나 밴드 접기가 수작업이다. 이 화면은 <b>웹 직접 구현이 더 빠르다</b></td>
+          <td>—</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="tip" id="tip" role="status" aria-live="polite"></div>
+
+<script>
+/* 상황판과 같은 표본 자료. 실측 09~14:20 여섯 칸 + 예측 15~20시 여섯 칸.
+   두 계열 모두 단위가 mm/h(선행 1시간)라 그대로 한 줄로 이어 붙인다. */
+const HOURS = ["09", "10", "11", "12", "13", "14:20", "15", "16", "17", "18", "19", "20"];
+const SPLIT = 6;   // 이 인덱스부터 예측
+
+const DATA = [
+  { sig:"산청", stn:"지리산", lv:"warn",  obs:[16,28,42,33,18,7.5], fc:[30,20,20,10,5,0], emd:"시천면" },
+  { sig:"하동", stn:"화개",   lv:"warn",  obs:[14,25,38,30,16,6.5], fc:[30,30,20,10,5,0], emd:"화개면" },
+  { sig:"함양", stn:"백천",   lv:"warn",  obs:[10,19,30,24,12,5],   fc:[20,30,20,5,5,0],  emd:"마천면" },
+  { sig:"거창", stn:"북상",   lv:"warn",  obs:[6,12,20,16,8,3],     fc:[10,20,20,10,0,0], emd:"북상면" },
+  { sig:"진주", stn:"수곡",   lv:"watch", obs:[8,14,22,18,9,3.5],   fc:[10,10,5,5,0,0],   emd:"수곡면" },
+  { sig:"의령", stn:"신포",   lv:"watch", obs:[4,9,15,12,6,2],      fc:[5,10,10,5,0,0],   emd:"궁류면" },
+  { sig:"합천", stn:"대병",   lv:"watch", obs:[3,7,12,10,5,2],      fc:[10,10,20,10,0,0], emd:"가야면" },
+  { sig:"남해", stn:"상주면", lv:"watch", obs:[3,6,10,8,3,1],       fc:[10,5,5,0,0,0],    emd:"상주면" },
+  { sig:"사천", stn:"삼천포", lv:"watch", obs:[2,5,9,7,3,1],        fc:[5,10,5,0,0,0],    emd:"곤명면" },
+  { sig:"함안", stn:"함안",   lv:null,    obs:[2,4,7,5,2,0.5],      fc:[5,5,5,0,0,0],     emd:"여항면" },
+  { sig:"창녕", stn:"길곡",   lv:"watch", obs:[1.5,3,5,4,2,0.5],    fc:[5,5,10,5,0,0],    emd:"이방면" },
+  { sig:"고성", stn:"개천",   lv:null,    obs:[1,3,5,4,1.5,0.5],    fc:[5,5,0,0,0,0],     emd:"개천면" },
+];
+
+const series = d => [...d.obs, ...d.fc];
+const sum = a => Math.round(a.reduce((x, y) => x + y, 0) * 10) / 10;
+const MAXV = Math.max(...DATA.flatMap(series));
+const MAXTOT = Math.max(...DATA.map(d => sum(d.obs) + sum(d.fc)));
+
+/* ── 눈금 ─────────────────────────────────────────────────────── */
+function axis(id) {
+  document.getElementById(id).innerHTML = HOURS.map((h, i) =>
+    `<span class="${i >= SPLIT ? "fc" : ""}${i === SPLIT - 1 ? " now" : ""}">${i === SPLIT - 1 ? "지금 " + h : h + (h.length === 2 ? "시" : "")}</span>`
+  ).join("");
+}
+["ax-a", "ax-b", "ax-c"].forEach(axis);
+
+const nameCell = d =>
+  `<div class="nm ${d.lv ? "lv-" + d.lv : ""}"><sup>${d.sig}</sup>${d.stn}</div>`;
+
+const sumCell = d =>
+  `<div class="sum"><b>${sum(d.obs).toFixed(1)}</b> <i>+${sum(d.fc)}</i></div>`;
+
+/* ── A. 히트맵 ────────────────────────────────────────────────── */
+const RAMP = [[0.1,"--rain-1"],[1,"--rain-2"],[5,"--rain-3"],[10,"--rain-4"],[20,"--rain-5"],[30,"--rain-6"],[50,"--rain-7"]];
+function ramp(v) {
+  let hit = null;
+  for (const [t, n] of RAMP) if (v >= t) hit = n;
+  return hit ? `var(${hit})` : "transparent";
+}
+const inkOn = v => (v >= 10 ? "#0B1219" : "var(--ink)");
+
+document.getElementById("opt-a").innerHTML = DATA.map(d => {
+  const cells = series(d).map((v, i) => {
+    const fc = i >= SPLIT;
+    // 예측은 같은 색 눈금을 쓰되 채도를 낮추고 점선을 두른다 —
+    // 같은 자로 잰 값이지만 아직 관측된 것이 아니라는 표시.
+    const bg = v > 0 ? (fc ? `color-mix(in oklab, ${ramp(v)} 62%, var(--panel))` : ramp(v)) : "transparent";
+    const fg = v > 0 && !fc ? inkOn(v) : (v >= 20 && fc ? "#0B1219" : "");
+    return `<span class="${v ? "" : "z"}${fc ? " fc" : ""}${i === SPLIT ? " nowedge" : ""}"
+      style="background:${bg}${fg ? ";color:" + fg : ""}">${v.toFixed(1)}</span>`;
+  }).join("");
+  return `<div class="hrow">${nameCell(d)}<div class="cells">${cells}</div>${sumCell(d)}</div>`;
+}).join("");
+
+/* ── B. 스파크 면적 ───────────────────────────────────────────── */
+const W = 660, H = 36, PAD = 4;
+const xAt = i => (i / (HOURS.length - 1)) * W;
+const yAt = v => PAD + (1 - v / MAXV) * (H - PAD * 2);
+
+// 실측과 예측을 하나의 선으로 잇되, 칠은 경계에서 끊어 두 개로 그린다.
+function areaPath(vals, from, to) {
+  const pts = [];
+  for (let i = from; i <= to; i++) pts.push(`${xAt(i).toFixed(1)},${yAt(vals[i]).toFixed(1)}`);
+  return `M${xAt(from).toFixed(1)},${H} L${pts.join(" L")} L${xAt(to).toFixed(1)},${H} Z`;
+}
+function linePath(vals, from, to) {
+  const pts = [];
+  for (let i = from; i <= to; i++) pts.push(`${xAt(i).toFixed(1)},${yAt(vals[i]).toFixed(1)}`);
+  return `M${pts.join(" L")}`;
+}
+
+document.getElementById("opt-b").innerHTML = DATA.map((d, r) => {
+  const v = series(d);
+  const peakI = v.indexOf(Math.max(...v));
+  const nowX = xAt(SPLIT - 1);
+  const lvc = d.lv === "warn" ? "var(--lv-warn)" : d.lv === "watch" ? "var(--lv-watch)" : "var(--rain-4)";
+
+  return `<div class="hrow">${nameCell(d)}
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:${H}px"
+         role="img" aria-label="${d.sig} ${d.stn} 시간별 강수강도">
+      <defs>
+        <linearGradient id="g${r}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="${lvc}" stop-opacity=".85"/>
+          <stop offset="1" stop-color="${lvc}" stop-opacity=".22"/>
+        </linearGradient>
+        <pattern id="h${r}" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <line x1="0" y1="0" x2="0" y2="7" stroke="var(--rain-5)" stroke-width="1.5" opacity=".34"/>
+        </pattern>
+      </defs>
+
+      <line x1="0" y1="${H - .5}" x2="${W}" y2="${H - .5}" stroke="var(--line)" stroke-width="1"/>
+
+      <path d="${areaPath(v, 0, SPLIT - 1)}" fill="url(#g${r})"/>
+      <path d="${linePath(v, 0, SPLIT - 1)}" fill="none" stroke="${lvc}" stroke-width="1.8" stroke-linejoin="round"/>
+
+      <path d="${areaPath(v, SPLIT - 1, v.length - 1)}" fill="var(--rain-4)" opacity=".10"/>
+      <path d="${areaPath(v, SPLIT - 1, v.length - 1)}" fill="url(#h${r})"/>
+      <path d="${linePath(v, SPLIT - 1, v.length - 1)}" fill="none" stroke="var(--rain-5)" stroke-width="1.5"
+            stroke-dasharray="4 3" stroke-linejoin="round" opacity=".9"/>
+
+      <line x1="${nowX}" y1="0" x2="${nowX}" y2="${H}" stroke="var(--ink-2)" stroke-width="1.2" opacity=".85"/>
+      <circle cx="${xAt(peakI)}" cy="${yAt(v[peakI])}" r="2.6" fill="${peakI >= SPLIT ? "var(--rain-6)" : lvc}"
+              stroke="#0E1621" stroke-width="1.4"/>
+      <text x="${xAt(peakI) + (peakI > 8 ? -7 : 7)}" y="${yAt(v[peakI]) + 4}"
+            text-anchor="${peakI > 8 ? "end" : "start"}"
+            font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600"
+            fill="${peakI >= SPLIT ? "var(--rain-6)" : "var(--ink)"}">${v[peakI]}</text>
+    </svg>
+    ${sumCell(d)}</div>`;
+}).join("");
+
+/* ── C. 호라이즌 ──────────────────────────────────────────────── */
+const BAND = 10, BANDS = 4, HH = 20;
+const BANDC = ["--rain-2", "--rain-3", "--rain-5", "--rain-7"];
+
+function horizonBand(vals, k) {
+  // 밴드 k에 해당하는 몫만 잘라 0~1로 정규화한 뒤 같은 높이에 겹쳐 그린다
+  const pts = vals.map((v, i) => {
+    const frac = Math.min(Math.max((v - k * BAND) / BAND, 0), 1);
+    return `${xAt(i).toFixed(1)},${(HH - frac * HH).toFixed(1)}`;
+  });
+  return `M0,${HH} L${pts.join(" L")} L${W},${HH} Z`;
+}
+
+document.getElementById("opt-c").innerHTML = DATA.map(d => {
+  const v = series(d);
+  const nowX = xAt(SPLIT - 1);
+  const bands = Array.from({ length: BANDS }, (_, k) =>
+    `<path d="${horizonBand(v, k)}" fill="var(${BANDC[k]})"/>`).join("");
+  return `<div class="hrow">${nameCell(d)}
+    <svg viewBox="0 0 ${W} ${HH}" preserveAspectRatio="none" style="width:100%;height:${HH}px"
+         role="img" aria-label="${d.sig} 호라이즌">
+      <rect width="${W}" height="${HH}" fill="#0D141D"/>
+      ${bands}
+      <rect x="${nowX}" y="0" width="${W - nowX}" height="${HH}" fill="#090D13" opacity=".30"/>
+      <line x1="${nowX}" y1="0" x2="${nowX}" y2="${HH}" stroke="var(--ink)" stroke-width="1.2" opacity=".9"/>
+    </svg>
+    ${sumCell(d)}</div>`;
+}).join("");
+
+/* ── D. 누적 막대 ─────────────────────────────────────────────── */
+document.getElementById("opt-d").innerHTML = DATA.map(d => {
+  const o = sum(d.obs), f = sum(d.fc);
+  const ow = (o / MAXTOT) * 100, fw = (f / MAXTOT) * 100;
+  return `<div class="hrow">${nameCell(d)}
+    <div class="stack">
+      <div class="obs ${d.lv || ""}" style="width:${ow}%"></div>
+      <div class="fc" style="left:${ow}%;width:${fw}%"></div>
+    </div>
+    ${sumCell(d)}</div>`;
+}).join("");
+
+/* ── 값 읽기 ──────────────────────────────────────────────────── */
+const tip = document.getElementById("tip");
+document.querySelectorAll("#opt-b .hrow, #opt-c .hrow").forEach((row, i) => {
+  const d = DATA[i % DATA.length];
+  const svg = row.querySelector("svg");
+  svg.addEventListener("mousemove", e => {
+    const r = svg.getBoundingClientRect();
+    const idx = Math.round(((e.clientX - r.left) / r.width) * (HOURS.length - 1));
+    const v = series(d)[Math.min(Math.max(idx, 0), HOURS.length - 1)];
+    const fc = idx >= SPLIT;
+    tip.innerHTML = `<div class="k">${d.sig} ${fc ? d.emd + " · 예측" : d.stn + " · 실측"}</div>
+      <div class="v">${v} mm/h</div>
+      <div class="k">${HOURS[Math.min(Math.max(idx, 0), HOURS.length - 1)]}${fc ? "시 예상" : ""}</div>`;
+    tip.classList.add("on");
+    tip.style.left = Math.min(e.clientX + 14, innerWidth - 200) + "px";
+    tip.style.top = (e.clientY + 18) + "px";
+  });
+  svg.addEventListener("mouseleave", () => tip.classList.remove("on"));
+});
+</script>

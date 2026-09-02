@@ -1,0 +1,16 @@
+# 비밀 — 절대 커밋하지 않는다
+config/api_keys.txt
+.env
+
+# 데이터·캐시
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/cache/
+
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+.preview/
+.DS_Store

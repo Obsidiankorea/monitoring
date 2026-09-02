@@ -1,0 +1,2827 @@
+<meta charset="utf-8">
+<title>경남 기상 대시보드</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+/* ── 토큰 ─────────────────────────────────────────────────────────────
+   기본은 어둡다 — 야간 상황실에서 흰 바탕은 눈부심이 된다. 밝은 테마는
+   사용자가 고를 때만 켜지고, OS 설정을 따라가지 않는다(벽면 화면이
+   운영체제 설정에 따라 제멋대로 바뀌면 곤란하다).
+
+   ⚠️ 화면의 모든 색은 여기 있는 변수에서만 나온다. 기관 색으로 바꾸려면
+   이 블록만 갈아 끼우면 되고, 마크업은 건드릴 필요가 없다.
+   운영 시에는 이 블록 바로 뒤 #user-css 에 기관별 CSS를 주입하면 된다. */
+:root {
+  --ground:      #090D13;
+  --panel:       #111823;
+  --panel-2:     #18202C;
+  --raised:      #1E2836;
+  --line:        #222D3C;
+  --line-soft:   #1A2330;
+
+  --ink:         #E8EEF6;
+  --ink-2:       #94A5B8;
+  --ink-3:       #5C6D80;
+
+  /* 강조는 한 곳에만 쓴다 — 강수 청색 */
+  --accent:      #2FA3DC;
+  --accent-dim:  #1E5B87;
+
+  /* 강수량 단일 색상 램프(명도 단조 증가). 무지개 색계는 쓰지 않는다.
+     기상청 표준 무지개 색계는 '기상청이 만든 이미지' 안에만 두고,
+     우리가 그리는 표·그래프는 한 색으로 크기를 표현한다. */
+  --rain-0:      #16202C;
+  --rain-1:      #1B3A55;
+  --rain-2:      #1E5B87;
+  --rain-3:      #2280B8;
+  --rain-4:      #2FA3DC;
+  --rain-5:      #5EC3EE;
+  --rain-6:      #96DBF6;
+  --rain-7:      #D7F0FC;
+
+  /* 예약색 — 특보 등급 전용. 계열 색으로 재사용하지 않는다.
+     항상 글자 라벨과 함께 나간다(색만으로 뜻을 지지 않는다). */
+  --lv-watch:    #E8B23A;  /* 주의보 */
+  --lv-warn:     #F2543D;  /* 경보 */
+  --lv-severe:   #A265E8;  /* 중대경보 */
+  --lv-pre:      #6E7FA6;  /* 예비특보 */
+  --lv-ok:       #3FB98A;  /* 정상·해제 */
+  --lv-fail:     #FF8A5B;  /* 조회 실패 — '없음'과 절대 같은 표시를 쓰지 않는다 */
+
+  /* 칠해진 바탕 위에 얹히는 글자색 */
+  --on-fill:     #08111A;  /* 진한 강수 칸 위 */
+  --on-bar:      #08111A;  /* 누적 막대 위 */
+  --on-accent:   #06121B;  /* 강조색 배경 위 */
+  --track:       #131B26;  /* 막대 트랙 바탕 */
+
+  --r-sm: 4px;
+  --r:    8px;
+  --r-lg: 12px;
+
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --sans: "IBM Plex Sans KR", system-ui, -apple-system, "Apple SD Gothic Neo", sans-serif;
+}
+
+/* 밝은 테마 — 명도 방향이 뒤집히므로 강수 램프도 함께 뒤집는다.
+   어두운 바탕에서는 값이 클수록 밝고, 밝은 바탕에서는 값이 클수록 어둡다. */
+:root[data-theme="light"] {
+  --ground:      #EEF2F7;
+  --panel:       #FFFFFF;
+  --panel-2:     #F5F8FC;
+  --raised:      #E8EEF6;
+  --line:        #D3DCE7;
+  --line-soft:   #E5EBF3;
+
+  --ink:         #101821;
+  --ink-2:       #47596D;
+  --ink-3:       #7688A0;
+
+  --accent:      #1B7FBF;
+  --accent-dim:  #8CC0E2;
+
+  --rain-0:      #F1F5FA;
+  --rain-1:      #DDEDF8;
+  --rain-2:      #BADCF1;
+  --rain-3:      #86C0E4;
+  --rain-4:      #2E86C2;
+  --rain-5:      #1B6698;
+  --rain-6:      #0E4A73;
+  --rain-7:      #073050;
+
+  --lv-watch:    #C08400;
+  --lv-warn:     #CF3320;
+  --lv-severe:   #7B3FBF;
+  --lv-pre:      #5A6C8C;
+  --lv-ok:       #12805A;
+  --lv-fail:     #C4521E;
+
+  --on-fill:     #FFFFFF;
+  --on-bar:      #FFFFFF;
+  --on-accent:   #FFFFFF;
+  --track:       #E4EAF2;
+}
+
+@property --sweep { syntax: "<percentage>"; inherits: false; initial-value: 0%; }
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100svh;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
+}
+
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+.micro {
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: .13em;
+  color: var(--ink-3);
+  text-transform: uppercase;
+}
+
+/* ── 전체 배치 ────────────────────────────────────────────────────── */
+.board {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  padding: 10px;
+  flex: 1 1 auto;
+  min-height: 0;
+  container-type: inline-size;
+}
+
+.row {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr;
+  min-height: 0;
+}
+
+/* 벽면 표출 — 한 화면에 들어가야 한다. 스크롤은 패널 안에서만 일어난다.
+   (.board는 자기 자신의 컨테이너 질의에 반응하지 않으므로 미디어 질의로 잡는다) */
+@media (min-width: 1180px) {
+  body { height: 100svh; min-height: 0; overflow: hidden; }
+}
+
+@container (min-width: 1180px) {
+  /* 종합 창 — 왼쪽에 예측(재생 + 상위 시군), 오른쪽에 타임라인 */
+  .row-data[data-v="all"] { grid-template-columns: minmax(0, 4.1fr) minmax(0, 7.9fr); }
+  .row-data[data-v="all"][data-side="right"] { grid-template-columns: minmax(0, 7.9fr) minmax(0, 4.1fr); }
+}
+
+/* ── 패널 ─────────────────────────────────────────────────────────── */
+.panel[hidden] { display: none; }
+
+/* 받아오는 중 — 판 위쪽 모서리를 따라 가는 빛이 한 번 지나간다.
+   화려할 필요는 없고, 지금 갱신 중이라는 것만 알면 된다. */
+.panel::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  border-radius: inherit; opacity: 0;
+  background: linear-gradient(90deg, transparent 0 35%,
+    color-mix(in oklab, var(--accent) 55%, transparent) 50%, transparent 65%) 0 0 / 220% 2px no-repeat;
+  transition: opacity .2s;
+}
+.panel[data-busy]::after { opacity: 1; animation: edge 1.1s linear infinite; }
+@keyframes edge { from { background-position: -120% 0; } to { background-position: 220% 0; } }
+
+/* 창에 따라 무엇을 보일지 — 표시 여부는 CSS가 정하고 JS는 창 이름만 바꾼다 */
+.col-left { display: grid; grid-template-rows: minmax(0, 1.3fr) minmax(0, 1fr); gap: 10px; min-height: 0; }
+.row-data[data-v="rain"] #col-left,
+.row-data[data-v="qpf"] #p-fcsig,
+.row-data[data-v="qpf"] #p-rain { display: none; }
+/* 재생만 볼 때는 왼쪽 열이 한 칸이 된다 — 안 그러면 빈 칸이 자리를 잡고 있는다 */
+.row-data[data-v="qpf"] #col-left { grid-template-rows: minmax(0, 1fr); }
+
+/* 예측 패널을 오른쪽에 둘 때는 열 순서만 바꾼다 — 마크업은 그대로다 */
+.row-data[data-side="right"] #col-left { order: 2; }
+.panel.active { border-color: color-mix(in oklab, var(--accent) 34%, var(--line)); }
+
+.panel {
+  container-type: inline-size;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.panel > header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px 9px;
+  border-bottom: 1px solid var(--line-soft);
+  background: linear-gradient(180deg, color-mix(in oklab, var(--panel-2) 70%, transparent), transparent);
+}
+
+.panel > header h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  text-wrap: balance;
+}
+
+.panel > header .src {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-3);
+  margin-left: auto;
+  letter-spacing: 0;
+}
+
+.panel > .body { grid-row: 2; min-height: 0; overflow: auto; padding: 4px 0 8px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+
+/* 기준시각 — F1.3. 모든 자료 옆에 반드시 붙는다 */
+.basetime {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-2);
+  padding: 2px 7px;
+  border-radius: var(--r-sm);
+  background: var(--raised);
+  border: 1px solid var(--line);
+  white-space: nowrap;
+}
+.basetime b { color: var(--ink); font-weight: 600; }
+.basetime.stale { color: var(--lv-fail); border-color: color-mix(in oklab, var(--lv-fail) 45%, var(--line)); }
+
+/* 자료 출처 배지 — API 직조회인지 DB 조회인지 구분해 보여준다 */
+.origin {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--accent) 35%, var(--line));
+  color: color-mix(in oklab, var(--accent) 75%, var(--ink));
+  background: color-mix(in oklab, var(--accent) 10%, transparent);
+  white-space: nowrap;
+}
+.origin.db { border-color: color-mix(in oklab, var(--lv-ok) 35%, var(--line)); color: color-mix(in oklab, var(--lv-ok) 80%, var(--ink)); background: color-mix(in oklab, var(--lv-ok) 10%, transparent); }
+
+/* ── 메뉴바 ───────────────────────────────────────────────────────────
+   애플 메뉴바를 본떴다. 얇고, 이름은 왼쪽에 작게, 상태 항목은 오른쪽에.
+   벽면에서 세로 픽셀 하나가 아깝기 때문에 높이를 34px로 묶어 둔다. */
+.menubar {
+  flex: none;
+  height: 34px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 0 12px 0 13px;
+  background: color-mix(in oklab, var(--panel) 86%, black);
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: saturate(140%) blur(12px);
+  user-select: none;
+}
+
+/* 애플 메뉴바처럼 — 마크, 앱 이름, 그다음이 지금 보고 있는 창(패널)의 이름.
+   패널이 활성화되면 그 패널의 머리글은 사라지고 여기로 올라온다.
+   같은 줄을 두 번 그리지 않으니 표에 세로 픽셀을 그만큼 돌려준다. */
+.mb-brand { display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; }
+.mb-mark { flex: none; display: block; }
+.mb-brand b { font-size: 12.5px; font-weight: 600; letter-spacing: -.01em; white-space: nowrap; }
+.mb-arrow { color: var(--ink-3); font-size: 13px; flex: none; }
+/* 창 이름이 곧 창 전환 단추다 — 맥에서 앞창을 바꾸는 것과 같은 자리 */
+.mb-win {
+  display: inline-flex; align-items: center; gap: 5px;
+  font: inherit; font-size: 12.5px; font-weight: 600;
+  color: var(--ink-2); background: transparent; border: 0;
+  padding: 3px 7px; border-radius: 5px; cursor: pointer;
+  white-space: nowrap; transition: background .13s, color .13s;
+}
+.mb-win:hover { background: color-mix(in oklab, var(--ink) 10%, transparent); color: var(--ink); }
+.mb-win[aria-expanded="true"] { background: var(--accent); color: var(--on-accent); }
+.mb-win .chev { opacity: .55; }
+
+.mb-meta { display: flex; align-items: center; gap: 7px; min-width: 0; margin-left: 4px; }
+.mb-meta .basetime { font-size: 10.5px; padding: 1px 6px; background: transparent; border-color: var(--line); }
+.mb-meta .origin { font-size: 9.5px; padding: 1px 6px; }
+.mb-meta .src { margin-left: 2px; font-size: 9.5px; }
+
+/* 언제 받아 온 자료인지 — 판을 고르면 그 판 것이 뜬다 */
+.fetched {
+  font-family: var(--mono); font-size: 10.5px; color: var(--ink-3);
+  white-space: nowrap;
+}
+.fetched b { color: var(--ink-2); font-weight: 500; }
+@media (max-width: 1320px) { .mb-meta .fetched { display: none; } }
+
+/* 좁아지면 뒤쪽부터 접는다 — 기준시각은 마지막까지 남긴다(F1.3) */
+@media (max-width: 1420px) { .mb-meta .src { display: none; } }
+@media (max-width: 1120px) { .mb-meta .origin { display: none; } }
+@media (max-width: 900px)  { .mb-meta, .mb-slash, .mb-win { display: none; } }
+
+.mb-right { display: flex; align-items: center; gap: 4px; }
+
+/* 활성 창의 것들 — 가운데. 창을 바꾸면 이 구역이 통째로 바뀐다. */
+.mb-center {
+  display: flex; align-items: center; gap: 8px;
+  justify-self: center; min-width: 0;
+}
+.mb-win-name { font-size: 12.5px; font-weight: 600; color: var(--ink); white-space: nowrap; }
+.mb-panelmenus { display: flex; align-items: center; gap: 2px; }
+.mb-item[hidden] { display: none; }
+
+/* 패널 머리글은 두지 않는다 — 같은 내용이 메뉴바에 있으므로 세로 공간만 먹는다 */
+.panel > header { display: none; }
+
+/* 메뉴바 항목 — 평소엔 배경 없이 글자만, 눌릴 때만 밝아진다 */
+.mb-item {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-2);
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  padding: 4px 8px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .13s, color .13s;
+}
+.mb-item:hover { background: color-mix(in oklab, var(--ink) 10%, transparent); color: var(--ink); }
+.mb-item[aria-expanded="true"] { background: var(--accent); color: var(--on-accent); }
+.mb-item .chev { opacity: .55; margin-left: -1px; }
+.mb-item > svg:first-child { opacity: .82; }
+.mb-item[aria-expanded="true"] > svg { opacity: 1; }
+
+/* 좁아지면 값 글자를 접고 아이콘만 남긴다 — 맥 메뉴바와 같은 방식 */
+@media (max-width: 1700px) { .mb-panelmenus .mb-item span, .mb-panelmenus .mb-item .chev { display: none; } }
+@media (max-width: 1480px) { .mb-right .mb-item span, .mb-right .mb-item .chev { display: none; } }
+@media (max-width: 1100px) { .mb-meta .src { display: none; } }
+
+.mb-icon { width: 26px; padding: 0; justify-content: center; }
+.mb-icon[data-busy="true"] { pointer-events: none; color: var(--accent); }
+.mb-icon[data-busy="true"] svg { animation: spin .9s linear infinite; }
+@keyframes spin { to { rotate: 360deg; } }
+
+.mb-sep { width: 1px; height: 15px; background: var(--line); margin: 0 3px; flex: none; }
+
+/* 남은 시간 — 링 하나로 줄였다. 숫자는 겹쳐 두지 않고 옆에 작게. */
+.mb-cd { display: inline-flex; align-items: center; gap: 6px; padding: 0 4px 0 2px; }
+.ring { width: 15px; height: 15px; flex: none; transform: rotate(-90deg); }
+.ring circle { fill: none; stroke-width: 2.4; }
+.ring .track { stroke: var(--line); }
+.ring .head  { stroke: var(--accent); stroke-linecap: round; transition: stroke-dashoffset .95s linear; }
+.mb-cd b { font-family: var(--mono); font-size: 11.5px; font-weight: 500; color: var(--ink-3); }
+
+
+/* 메뉴바에서 내려오는 작은 메뉴 */
+.menu {
+  position: fixed; z-index: 90;
+  min-width: 132px;
+  background: color-mix(in oklab, var(--panel-2) 94%, black);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: 0 14px 40px rgb(0 0 0 / .6);
+  padding: 4px;
+  display: none;
+}
+.menu.on { display: block; }
+.menu button {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; text-align: left;
+  font: inherit; font-size: 12.5px;
+  color: var(--ink); background: transparent; border: 0;
+  padding: 5px 8px; border-radius: 5px; cursor: pointer;
+}
+.menu button:hover { background: color-mix(in oklab, var(--accent) 22%, transparent); }
+.menu button .mk { width: 12px; color: var(--accent); font-size: 11px; flex: none; }
+.menu .menu-head { font-size: 10px; color: var(--ink-3); padding: 5px 8px 5px; letter-spacing: .1em; }
+.menu .menu-sep { height: 1px; background: var(--line); margin: 4px 6px; }
+
+:where(button, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ── 표 공통 ──────────────────────────────────────────────────────── */
+table { width: 100%; border-collapse: separate; border-spacing: 0; }
+/* 칸 폭을 내용이 아니라 지정값이 정하게 한다 — 타임라인이 남는 폭을 전부 가져간다 */
+#rain-table { table-layout: fixed; }
+
+thead th {
+  position: sticky; top: 0; z-index: 2;
+  background: var(--panel);
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: .06em;
+  color: var(--ink-3);
+  text-align: right;
+  padding: 8px 6px 7px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+thead th:first-child, thead th.l { text-align: left; padding-left: 14px; }
+
+tbody td {
+  padding: 0 6px;
+  height: var(--rowh, 28px);
+  font-size: 14px;
+  text-align: right;
+  border-bottom: 1px solid var(--line-soft);
+  white-space: nowrap;
+}
+tbody tr:hover td { background: color-mix(in oklab, var(--accent) 7%, transparent); }
+tbody td.l { text-align: left; padding-left: 14px; }
+
+.sigun { font-weight: 600; }
+.station { color: var(--ink-2); font-size: 12px; }
+
+/* ── B+D 한 행 ─────────────────────────────────────────────────────
+   왼쪽부터 다우지점 · 누적막대(지금까지＋앞으로) · 강수 타임라인.
+   같은 줄에서 세 질문에 답한다 — 어디가, 얼마나, 지금 세지는 중인가. */
+td.dpc { width: 146px; padding-left: 14px; }
+.dp { display: inline-flex; align-items: baseline; gap: 3px; }
+.dp sup { font-size: .68em; color: var(--ink-2); font-weight: 500; }
+.dp .s { color: var(--ink); font-size: 15px; font-weight: 600; }
+
+/* 지표 전환 — 머리글이 곧 단추다 */
+th.metric-h { cursor: pointer; user-select: none; transition: color .16s; }
+th.metric-h:hover { color: var(--ink); }
+th.metric-h i { font-style: normal; margin-left: 5px; opacity: .5; font-size: 11px; }
+th.metric-h:hover i { opacity: 1; color: var(--accent); }
+tr[data-lv="watch"] .dp .s { color: color-mix(in oklab, var(--lv-watch) 52%, var(--ink)); }
+tr[data-lv="warn"]  .dp .s { color: color-mix(in oklab, var(--lv-warn) 52%, var(--ink)); }
+
+/* ── D. 누적 막대 — 지금까지 ＋ 앞으로 = 합계 ────────────────────── */
+td.acc { padding: 0 12px 0 6px; }
+.accwrap { display: flex; align-items: center; gap: 9px; }
+
+.abar {
+  position: relative;
+  flex: 1;
+  height: 22px;
+  border-radius: 5px;
+  background: var(--track);
+  overflow: hidden;
+}
+.abar { overflow: visible; }
+.seg { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; }
+.seg span { font-family: var(--mono); font-size: 12px; font-weight: 600; padding: 0 7px; white-space: nowrap; }
+/* 막대가 짧아 안에 못 넣을 때는 막대 전체가 끝난 자리에 적는다.
+   빗금 위에 겹쳐 쓰면 안 읽히므로 빈 트랙으로 내보낸다. */
+.barout {
+  position: absolute; top: 0; bottom: 0; z-index: 4;
+  display: flex; align-items: center; gap: 4px;
+  font-family: var(--mono); font-size: 12px; font-weight: 600;
+  white-space: nowrap; pointer-events: none;
+}
+.barout b { color: var(--ink-2); font-weight: 600; }
+.barout i { font-style: normal; color: var(--rain-5); }
+
+/* 실측 — 이미 온 비. 꽉 찬 색. 특보 시군은 막대가 흐른다. */
+.seg.obs { left: 0; z-index: 2; background: var(--rain-3); transition: width .5s cubic-bezier(.4,0,.2,1); }
+.seg.obs span { color: var(--on-bar); }
+/* 노랑 막대는 어느 테마에서든 밝다 — 글자는 늘 어둡게 */
+tr[data-lv="watch"] .seg.obs span { color: #2A1F02; }
+tr[data-lv="watch"] .seg.obs { background: var(--lv-watch); }
+tr[data-lv="warn"]  .seg.obs { background: var(--lv-warn); }
+.seg.obs::after {
+  content: ""; position: absolute; inset: 0;
+  background: repeating-linear-gradient(112deg, transparent 0 11px, rgb(255 255 255 / .16) 11px 22px);
+  background-size: 200% 100%;
+  opacity: 0;
+}
+tr[data-lv] .seg.obs::after { opacity: 1; animation: flow 5.6s linear infinite; }
+@keyframes flow { to { background-position: -200% 0; } }
+
+/* 예측 — 아직 안 온 비. 빗금 + 점선. 절대 실측보다 무겁게 그리지 않는다. */
+.seg.fc {
+  z-index: 1;
+  background:
+    repeating-linear-gradient(115deg, transparent 0 4px, color-mix(in oklab, var(--rain-5) 50%, transparent) 4px 8px),
+    color-mix(in oklab, var(--rain-4) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--rain-5) 45%, transparent);
+  transition: left .5s cubic-bezier(.4,0,.2,1), width .5s cubic-bezier(.4,0,.2,1);
+}
+.seg.fc span { color: var(--rain-6); }
+
+/* 특보 기준선 — 합계가 이 선을 넘으면 그게 곧 판단 근거다 */
+.th { position: absolute; top: -1px; bottom: -1px; width: 0; border-left: 1px dashed; }
+.th.w1 { border-color: color-mix(in oklab, var(--lv-watch) 70%, transparent); }
+.th.w2 { border-color: color-mix(in oklab, var(--lv-warn) 78%, transparent); }
+/* 기준선 숫자는 머리글에 한 번만 적는다 — 행마다 반복하면 표가 시끄럽다 */
+.thlab { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0; margin-left: 6px; }
+.thlab i { font-style: normal; }
+.thlab .w1 { color: var(--lv-watch); }
+.thlab .w2 { color: var(--lv-warn); }
+
+/* 합계 — 6시간 뒤 예상 총량. 이 행에서 가장 큰 숫자다. */
+/* 합계는 색조로도 읽힌다 — 크기는 색이, 기준 초과는 테두리가 진다.
+   두 가지를 같은 채널에 실으면 어느 쪽인지 알 수 없게 된다. */
+.tot {
+  font-family: var(--mono); font-size: 15px; font-weight: 600;
+  min-width: 62px; text-align: right; flex: none;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  padding: 2px 7px; border-radius: 5px;
+  background: var(--tot-bg, transparent);
+  box-shadow: var(--tot-ring, none);
+}
+td.totc { width: 96px; padding-right: 14px; }
+td.totc .tot { width: auto; display: block; }
+
+/* 합계 자리는 끌어서 옮긴다 — 막대 옆 ↔ 행 맨 오른쪽 */
+.grip {
+  display: inline-flex; align-items: center; gap: 4px;
+  cursor: grab; user-select: none;
+  padding: 1px 5px; border-radius: 4px;
+  color: var(--ink-3);
+}
+.grip:hover { background: var(--raised); color: var(--ink-2); }
+.grip:active, .grip.dragging { cursor: grabbing; background: color-mix(in oklab, var(--accent) 25%, var(--raised)); color: var(--ink); }
+.grip b { font-weight: 500; }
+.grip i { font-style: normal; font-size: 9px; letter-spacing: -1px; opacity: .7; }
+
+.tot i { font-style: normal; font-size: 10.5px; color: var(--ink-3); margin-left: 2px; }
+
+/* 기준 구간 표기 — 조정 막대가 없어져 머리글로 올라왔다 */
+.rangeval { font-family: var(--mono); font-size: 10.5px; color: var(--ink-3); white-space: nowrap; }
+.rangeval b { color: var(--ink-2); font-weight: 500; }
+
+/* ── 화면 꾸미기 ──────────────────────────────────────────────────
+   기관마다 글꼴·색이 다르고 벽면은 보는 거리도 다르다. 코드를 고치지 않고
+   CSS만 얹어 바꿀 수 있게 열어 둔다. 실서버에서는 이 내용을 파일로 두고
+   #user-css 에 렌더링하면 배포 없이 바뀐다. */
+.skin-box { width: min(760px, calc(100vw - 40px)); }
+
+.knobs {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 20px; padding: 14px 16px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.knobs label {
+  display: grid; grid-template-columns: 92px 1fr auto; align-items: center; gap: 10px;
+  font-size: 12.5px; color: var(--ink-2);
+}
+.knobs input[type="range"] { width: 100%; accent-color: var(--accent); }
+.knobs input[type="color"] { width: 100%; height: 24px; padding: 0; border: 1px solid var(--line); border-radius: 5px; background: none; cursor: pointer; }
+.knobs select {
+  width: 100%; font: inherit; font-size: 12px;
+  background: var(--raised); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 5px; padding: 4px 6px;
+}
+.knobs output { font-family: var(--mono); font-size: 11px; color: var(--ink-3); min-width: 58px; text-align: right; }
+
+.cssbox { padding: 12px 16px 14px; }
+.cssbox-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 7px; }
+.cssbox-head .hint { font-size: 10.5px; color: var(--ink-3); }
+#k-css {
+  width: 100%; height: 180px; resize: vertical;
+  font-family: var(--mono); font-size: 12px; line-height: 1.6;
+  color: var(--ink); background: var(--ground);
+  border: 1px solid var(--line); border-radius: var(--r);
+  padding: 10px 12px;
+}
+#k-css:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.skin-foot { display: flex; align-items: center; gap: 8px; }
+.sbtn {
+  font: inherit; font-size: 12.5px; font-weight: 500;
+  padding: 6px 14px; border-radius: 7px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--raised); color: var(--ink);
+}
+.sbtn:hover { background: var(--panel-2); }
+.sbtn.primary { border-color: color-mix(in oklab, var(--accent) 45%, var(--line)); background: color-mix(in oklab, var(--accent) 22%, var(--raised)); }
+.sbtn.ghost { background: transparent; color: var(--ink-3); }
+.sbtn.ghost:hover { color: var(--lv-fail); }
+.sbtn.file { display: inline-flex; align-items: center; }
+.skin-msg { font-size: 11.5px; color: var(--lv-ok); }
+
+/* ── 예측 분포 재생 ────────────────────────────────────────────────
+   그림이 판을 꽉 채우고, 조작은 마우스를 올렸을 때만 아래에서 떠오른다.
+   시각과 범례는 그림 위에 얹는다 — 따로 줄을 만들면 그림이 그만큼 작아진다. */
+.qpf-body { padding: 0; min-height: 0; }
+.qpf-stage {
+  position: relative; height: 100%; min-height: 0;
+  display: grid; place-items: center;
+  overflow: hidden; background: var(--panel-2);
+}
+/* 화각 — 원본 한 벌에서 배경 위치·배율만 바꿔 만든다.
+   비율이 안 맞는 전국 보기는 위아래를 덮어 채운다(위쪽은 대개 비어 있다). */
+.qpf-img {
+  width: 100%; height: 100%;
+  background-repeat: no-repeat;
+  background-color: #fff;
+  transition: background-size .35s cubic-bezier(.4,0,.2,1), background-position .35s cubic-bezier(.4,0,.2,1);
+}
+/* 배율·위치는 스크립트가 계산해 넣는다 — 경남이 항상 화면 가운데에 오도록
+   확대할수록 배경 위치를 다시 잡아야 하기 때문이다. */
+.qpf-map { width: 100%; height: 100%; }
+.qpf-map[hidden] { display: none; }
+
+/* 시각 — 늘 보인다. 이게 이 화면에서 가장 중요한 한 가지다. */
+.qpf-clock {
+  position: absolute; top: 10px; right: 10px;
+  display: inline-flex; align-items: baseline; gap: 7px;
+  padding: 5px 11px; border-radius: 999px;
+  background: color-mix(in oklab, var(--ground) 84%, transparent);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+}
+.qpf-clock b { font-family: var(--mono); font-size: 19px; font-weight: 600; letter-spacing: -.02em; color: var(--ink); }
+.qpf-clock i { font-style: normal; font-family: var(--mono); font-size: 11.5px; color: var(--ink-2); }
+
+/* 잘라 낸 화각에서는 원본 범례가 사라진다 — 오려 둔 것을 그림 위에 얹는다.
+   색계를 우리 램프로 흉내 내면 거짓말이 되므로 원본 그대로 쓴다. */
+/* 원본 범례는 세로로 길어 화면에 넣으면 20px 폭이 되어 숫자를 못 읽는다.
+   그래서 원본에서 색만 뽑아 가로로 다시 그린다 — 색은 기상청 것 그대로다. */
+.qpf-scale {
+  position: absolute; left: 10px; bottom: 10px;
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 6px 8px 5px; border-radius: 7px;
+  background: color-mix(in oklab, var(--ground) 86%, transparent);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+  transition: opacity .18s;
+}
+.qpf-stage:hover .qpf-scale { opacity: 0; }   /* 조작 막대가 올라올 때 비켜 준다 */
+.qpf-scale:empty { display: none; }
+.qpf-scale .bar { display: flex; height: 9px; border-radius: 2px; overflow: hidden; }
+.qpf-scale .bar i { display: block; width: 11px; height: 100%; }
+.qpf-scale .ticks { display: flex; font-family: var(--mono); font-size: 9px; color: var(--ink-2); }
+.qpf-scale .ticks span { text-align: center; }
+.qpf-scale .unit { font-family: var(--mono); font-size: 9px; color: var(--ink-3); margin-left: 4px; }
+.qpf-stage[data-crop="all"] .qpf-legend-img { display: none; }
+
+.qpf-status {
+  position: absolute; left: 12px; top: 10px;
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--mono); font-size: 10.5px; color: var(--ink-2);
+  background: color-mix(in oklab, var(--ground) 82%, transparent);
+  border: 1px solid var(--line-soft); border-radius: var(--r-sm);
+  padding: 4px 8px; max-width: calc(100% - 130px);
+  pointer-events: none;
+}
+.qpf-status:empty { display: none; }
+.qpf-status .bar { width: 70px; height: 4px; border-radius: 2px; background: var(--track); overflow: hidden; flex: none; }
+.qpf-status .bar i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .2s; }
+.qpf-status b { color: var(--ink); font-weight: 600; }
+.qpf-status.warn { color: var(--lv-fail); border-color: color-mix(in oklab, var(--lv-fail) 40%, var(--line)); }
+
+/* 조작 막대 — 평소엔 숨고, 판에 마우스를 올리면 떠오른다 */
+.qpf-bar {
+  position: absolute; left: 10px; right: 10px; bottom: 10px;
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--ground) 86%, transparent);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(8px);
+  opacity: 0; transform: translateY(8px);
+  transition: opacity .18s, transform .18s;
+  pointer-events: none;
+}
+.qpf-stage:hover .qpf-bar,
+.qpf-stage:focus-within .qpf-bar { opacity: 1; transform: none; pointer-events: auto; }
+
+.qpf-btn {
+  display: inline-grid; place-items: center;
+  width: 28px; height: 28px; flex: none;
+  border: 0; background: color-mix(in oklab, var(--accent) 24%, transparent);
+  color: var(--ink); border-radius: 7px; cursor: pointer;
+  transition: background .15s;
+}
+.qpf-btn:hover { background: color-mix(in oklab, var(--accent) 40%, transparent); }
+.qpf-btn.ghost { width: 24px; height: 24px; background: transparent; color: var(--ink-2); }
+.qpf-btn.ghost:hover { color: var(--ink); background: color-mix(in oklab, var(--ink) 12%, transparent); }
+
+.qpf-seek {
+  flex: 1; min-width: 0; height: 22px;
+  -webkit-appearance: none; appearance: none; background: transparent; cursor: pointer;
+}
+.qpf-seek::-webkit-slider-runnable-track {
+  height: 5px; border-radius: 3px;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 calc(100% / 35 - 1px), var(--line) calc(100% / 35 - 1px) calc(100% / 35)),
+    var(--track);
+}
+.qpf-seek::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 12px; height: 12px; margin-top: -3.5px;
+  border-radius: 50%; background: var(--accent);
+  border: 2px solid var(--panel); cursor: grab;
+}
+.qpf-seek::-moz-range-track { height: 5px; border-radius: 3px; background: var(--track); }
+.qpf-seek::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: var(--accent); border: 2px solid var(--panel); }
+
+.qpf-bar .chips { padding: 2px; }
+.qpf-bar .chips button { padding: 3px 8px; font-size: 11px; }
+@container (max-width: 420px) { #qpf-prev, #qpf-next { display: none; } }
+
+/* ── 예측 상위 시군 ───────────────────────────────────────────────
+   자막 칸과 같은 방식 — 곡선은 배경에 깔고 글자를 위에 얹는다. */
+/* 두 칸으로 나눠 담으면 한 줄의 위아래 폭이 두 배가 된다 — 곡선이 그만큼 읽힌다 */
+.fs-grid {
+  display: grid; grid-template-columns: repeat(var(--fscols, 2), minmax(0, 1fr));
+  gap: 1px; background: var(--line-soft);
+}
+.fs-cell {
+  position: relative; display: flex; align-items: baseline; gap: 7px;
+  padding: 0 12px; height: var(--fsh, 44px); overflow: hidden;
+  background: var(--panel);
+}
+.fs-cell > svg.spark { position: absolute; inset: 0; width: 100%; height: 100%; }
+.fs-cell > * { position: relative; z-index: 1; }
+.fs-cell i.rk {
+  font-family: var(--mono); font-size: 11.5px; font-weight: 600;
+  color: var(--ink-3); font-style: normal; width: 16px; flex: none;
+}
+.fs-cell.top i.rk { color: var(--accent); }
+.fs-cell .nm { font-size: 14px; font-weight: 600; }
+.fs-cell .nm small { font-size: .72em; color: var(--ink-3); font-weight: 500; margin-left: 4px; }
+.fs-cell em {
+  font-style: normal; font-family: var(--mono); font-size: 11.5px;
+  color: var(--accent); font-weight: 600; margin-left: auto; flex: none;
+}
+.fs-cell em s { text-decoration: none; color: var(--ink-3); font-weight: 400; font-size: .85em; }
+.fs-cell b { font-family: var(--mono); font-size: 14.5px; font-weight: 600; width: 42px; text-align: right; flex: none; }
+.fs-cell[data-lv="warn"]  .nm { color: color-mix(in oklab, var(--lv-warn) 52%, var(--ink)); }
+.fs-cell[data-lv="watch"] .nm { color: color-mix(in oklab, var(--lv-watch) 52%, var(--ink)); }
+
+/* ── 예측 순위 줄 ──────────────────────────────────────────────────
+   흐르는 자막은 지나간 순위를 다시 보려면 기다려야 한다. 두 줄로 펼쳐
+   한눈에 두면 기다릴 일이 없다. 몇 개를 펼칠지는 설정에서 고른다. */
+.ticker[hidden] { display: none; }
+.ticker {
+  display: flex; align-items: stretch;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+.tk-label {
+  flex: none;
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 0 12px;
+  font-size: 12.5px; font-weight: 600; color: var(--ink-2);
+  background: color-mix(in oklab, var(--accent) 14%, transparent);
+  border-right: 1px solid var(--line);
+  white-space: nowrap;
+}
+.tk-label svg { color: var(--accent); flex: none; }
+.tk-label b { font-family: var(--mono); color: var(--ink); font-size: 13.5px; }
+
+/* 칸 사이 1px 틈을 바탕색으로 비추면 선을 따로 그을 필요가 없다 */
+.tk-grid {
+  flex: 1; min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 6), minmax(0, 1fr));
+  gap: 1px;
+  background: var(--line-soft);
+}
+/* 예상 곡선은 칸 배경으로 깐다 — 옆에 두면 좁은 칸에서 글자와 자리를 다툰다 */
+.tk-item {
+  position: relative;
+  display: flex; align-items: baseline; gap: 6px;
+  padding: 7px 11px;
+  background: var(--panel);
+  font-size: 13.5px;
+  min-width: 0;
+  overflow: hidden;
+}
+.tk-item > svg.spark {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  pointer-events: none;
+}
+.tk-item > * { position: relative; z-index: 1; }
+.tk-item > .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.tk-item .nm sup { font-size: .7em; color: var(--ink-3); font-weight: 500; margin-right: 2px; }
+.tk-item i.rk {
+  font-family: var(--mono); font-size: 11.5px; font-weight: 600;
+  color: var(--ink-3); font-style: normal; min-width: 15px; flex: none;
+}
+.tk-item.top i.rk { color: var(--accent); }
+.tk-item b { font-family: var(--mono); font-size: 14px; color: var(--ink); margin-left: auto; flex: none; }
+.tk-item em {
+  font-style: normal; font-family: var(--mono); font-size: 11px;
+  color: var(--accent); flex: none; font-weight: 600;
+}
+.tk-item em s { text-decoration: none; color: var(--ink-3); font-weight: 400; font-size: .85em; }
+.tk-item.lv-warn  .nm { color: color-mix(in oklab, var(--lv-warn) 52%, var(--ink)); }
+.tk-item.lv-watch .nm { color: color-mix(in oklab, var(--lv-watch) 52%, var(--ink)); }
+
+@container (max-width: 1400px) { .tk-item em { display: none; } }
+
+/* ── A. 히트맵 칸 ─────────────────────────────────────────────────── */
+.cells { display: grid; grid-template-columns: repeat(var(--n), 1fr); gap: 2px; }
+.hc, .hh {
+  font-family: var(--mono); font-size: 13px; font-weight: 500;
+  text-align: center; line-height: calc(var(--rowh, 28px) - 8px); border-radius: 4px;
+  color: var(--ink); min-width: 0;
+}
+.hh { font-size: 11px; font-weight: 400; color: var(--ink-3); line-height: 14px; }
+.hh.fc { color: color-mix(in oklab, var(--accent) 62%, var(--ink-3)); }
+.hc.z { color: var(--ink-3); }
+.hc.empty { background: repeating-linear-gradient(135deg, transparent 0 3px, var(--line-soft) 3px 4px); opacity: .5; }
+/* 아직 안 찬 칸 — 칠해진 폭이 곧 경과 시간이다 */
+.hc.partial { outline: 1px dotted color-mix(in oklab, var(--ink) 45%, transparent); outline-offset: -1px; }
+.hc.fc { outline: 1px dashed color-mix(in oklab, var(--accent) 40%, transparent); outline-offset: -1px; }
+.nowedge { box-shadow: -3px 0 0 -1px var(--ink-2); }
+.hc.miss { color: var(--ink-3); background: repeating-linear-gradient(135deg, transparent 0 3px, var(--line-soft) 3px 4px); }
+.hc.fail { color: var(--lv-fail); background: color-mix(in oklab, var(--lv-fail) 14%, transparent); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--lv-fail) 40%, transparent); }
+
+/* ── B. 강수 타임라인 ──────────────────────────────────────────── */
+td.tl { padding: 0 12px 0 6px; }
+td.tl svg, th.tlh svg { display: block; width: 100%; }
+
+/* 지금 — 1분마다 갱신되는 칸. 숨쉬듯 뛴다. */
+.nowpulse { animation: ping 2.6s cubic-bezier(0,.6,.4,1) infinite; transform-origin: center; }
+@keyframes ping {
+  0%   { opacity: .55; r: 2.5; }
+  75%  { opacity: 0;   r: 8; }
+  100% { opacity: 0;   r: 8; }
+}
+/* 예측 빗금이 천천히 미래 쪽으로 흘러간다 */
+.drift { animation: drift 6s linear infinite; }
+@keyframes drift { to { transform: translateX(9.9px); } }
+
+.livedot {
+  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--lv-ok); margin-right: 5px; vertical-align: 1px;
+  animation: ping2 2.2s ease-out infinite;
+}
+@keyframes ping2 {
+  0%   { box-shadow: 0 0 0 0 color-mix(in oklab, var(--lv-ok) 60%, transparent); }
+  70%  { box-shadow: 0 0 0 6px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+tr.extra td.dpc { padding-left: 22px; }
+tr.extra .dp .s { color: var(--ink-2) !important; font-weight: 500; }
+.addmark { font-family: var(--mono); font-size: 10px; color: var(--ink-3); margin-right: 4px; }
+.dropx {
+  border: 0; background: transparent; color: var(--ink-3);
+  font: inherit; font-size: 11px; cursor: pointer; padding: 0 4px; margin-left: 3px; border-radius: 3px;
+}
+.dropx:hover { color: var(--lv-fail); background: color-mix(in oklab, var(--lv-fail) 14%, transparent); }
+
+/* 범례 — 특보 등급 이름은 여기 한 곳에만 적는다 */
+.lg { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--ink-2); white-space: nowrap; margin-right: 9px; vertical-align: -1px; }
+.lg .sw { width: 22px; height: 10px; border-radius: 3px; flex: none; }
+.lg .sw.watch {
+  background:
+    repeating-linear-gradient(112deg, transparent 0 5px, color-mix(in oklab, var(--lv-watch) 30%, transparent) 5px 10px),
+    linear-gradient(90deg, color-mix(in oklab, var(--lv-watch) 46%, transparent), color-mix(in oklab, var(--lv-watch) 20%, transparent));
+  box-shadow: inset -2px 0 0 var(--lv-watch);
+}
+.lg .sw.warn {
+  background:
+    repeating-linear-gradient(112deg, transparent 0 5px, color-mix(in oklab, var(--lv-warn) 36%, transparent) 5px 10px),
+    linear-gradient(90deg, color-mix(in oklab, var(--lv-warn) 55%, transparent), color-mix(in oklab, var(--lv-warn) 24%, transparent));
+  box-shadow: inset -2px 0 0 var(--lv-warn);
+}
+
+tr.extra td { background: color-mix(in oklab, var(--accent) 4%, transparent); }
+tr.extra .dp .s { color: var(--ink-2); font-weight: 500; }
+.addmark { position: relative; z-index: 1; font-family: var(--mono); font-size: 10px; color: var(--ink-3); margin-right: 5px; }
+.dropx {
+  position: relative; z-index: 1;
+  border: 0; background: transparent; color: var(--ink-3);
+  font: inherit; font-size: 11px; cursor: pointer; padding: 0 4px; margin-left: 4px; border-radius: 3px;
+}
+.dropx:hover { color: var(--lv-fail); background: color-mix(in oklab, var(--lv-fail) 14%, transparent); }
+
+/* 결측과 조회 실패를 서로 다르게, 그리고 0과도 다르게 보여준다 */
+
+/* 지표 전환·정렬이 일어난 것을 눈으로 알 수 있게 행이 순서대로 들어온다 */
+tbody.swap tr { animation: rowin .36s cubic-bezier(.2,.7,.3,1) both; animation-delay: calc(var(--i) * 13ms); }
+@keyframes rowin {
+  from { opacity: 0; transform: translateY(-5px) scaleY(.94); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* 우클릭 — 그 시군의 관측지점 목록에서 다우지점을 더 얹는다 */
+.ctx {
+  position: fixed; z-index: 80;
+  min-width: 208px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: 0 14px 40px rgb(0 0 0 / .6);
+  padding: 5px;
+  display: none;
+}
+.ctx.on { display: block; }
+.ctx .ctx-head {
+  font-size: 11px; color: var(--ink-3);
+  padding: 5px 9px 7px;
+  border-bottom: 1px solid var(--line-soft);
+  margin-bottom: 4px;
+  letter-spacing: .04em;
+}
+.ctx .ctx-head b { color: var(--ink); font-weight: 600; font-size: 12.5px; letter-spacing: 0; }
+.ctx button {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; text-align: left;
+  font: inherit; font-size: 12.5px;
+  color: var(--ink); background: transparent; border: 0;
+  padding: 5px 9px; border-radius: var(--r-sm); cursor: pointer;
+}
+.ctx button:hover { background: color-mix(in oklab, var(--accent) 18%, transparent); }
+.ctx button[disabled] { color: var(--ink-3); cursor: default; }
+.ctx button[disabled]:hover { background: transparent; }
+.ctx button .mk { font-family: var(--mono); font-size: 10.5px; width: 13px; color: var(--accent); flex: none; }
+.ctx button .amt { margin-left: auto; font-family: var(--mono); font-size: 11.5px; color: var(--ink-2); }
+.ctx .ctx-sep { height: 1px; background: var(--line); margin: 5px 6px; }
+.ctx .ctx-foot { font-size: 10.5px; color: var(--ink-3); padding: 6px 9px 3px; border-top: 1px solid var(--line-soft); margin-top: 4px; }
+
+.bar-spacer { flex: 1; }
+
+/* ── 하단 수집 상태 ───────────────────────────────────────────────── */
+.statusbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  font-size: 11.5px;
+  color: var(--ink-2);
+}
+.feed {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--mono); font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+}
+.feed .s { width: 6px; height: 6px; border-radius: 50%; background: var(--lv-ok); flex: none; }
+.feed.warnstate { border-color: color-mix(in oklab, var(--lv-fail) 45%, var(--line)); color: var(--lv-fail); }
+.feed.warnstate .s { background: var(--lv-fail); }
+.feed em { font-style: normal; color: var(--ink-3); }
+.spacer { flex: 1; }
+
+/* 특보 요약 — 눌러서 자세히 본다 */
+.wrns { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.wrn {
+  display: inline-flex; align-items: center; gap: 6px;
+  font: inherit; font-size: 11.5px; font-weight: 600;
+  padding: 3px 10px 3px 8px;
+  border: 0; border-radius: 999px; cursor: pointer;
+  white-space: nowrap;
+  transition: filter .16s;
+}
+.wrn:hover { filter: brightness(1.25); }
+.wrn::before { content: ""; width: 7px; height: 7px; border-radius: 2px; background: currentColor; flex: none; }
+.wrn em { font-style: normal; font-family: var(--mono); font-weight: 500; opacity: .75; font-size: 10.5px; }
+.wrn.warn   { color: var(--lv-warn);   background: color-mix(in oklab, var(--lv-warn) 15%, transparent);   box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--lv-warn) 38%, transparent); }
+.wrn.watch  { color: var(--lv-watch);  background: color-mix(in oklab, var(--lv-watch) 15%, transparent);  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--lv-watch) 38%, transparent); }
+.wrn.severe { color: var(--lv-severe); background: color-mix(in oklab, var(--lv-severe) 15%, transparent); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--lv-severe) 38%, transparent); }
+.wrn.pre    { color: var(--lv-pre);    background: color-mix(in oklab, var(--lv-pre) 15%, transparent);    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--lv-pre) 38%, transparent); }
+.wrn.none   { color: var(--lv-ok);     background: color-mix(in oklab, var(--lv-ok) 12%, transparent);     box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--lv-ok) 32%, transparent); }
+
+/* 특보 상세 팝업 */
+.modal {
+  position: fixed; inset: 0; z-index: 200;
+  display: grid; place-items: center;
+  background: color-mix(in oklab, var(--ground) 78%, transparent);
+  backdrop-filter: blur(3px);
+}
+.modal[hidden] { display: none; }
+.modal-box {
+  width: min(720px, calc(100vw - 40px));
+  max-height: calc(100vh - 80px);
+  display: grid; grid-template-rows: auto 1fr auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: 0 24px 70px rgb(0 0 0 / .55);
+  overflow: hidden;
+}
+.modal-box > header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.modal-box h3 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -.015em; }
+.modal-box > header .src { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--ink-3); }
+.modal-x {
+  border: 0; background: var(--raised); color: var(--ink-2);
+  width: 24px; height: 24px; border-radius: 6px; cursor: pointer;
+  font-size: 12px; line-height: 1; flex: none;
+}
+.modal-x:hover { background: color-mix(in oklab, var(--lv-fail) 22%, var(--raised)); color: var(--ink); }
+.modal-body { overflow: auto; padding: 4px 0 8px; }
+.modal-box > footer {
+  padding: 9px 16px 11px; border-top: 1px solid var(--line-soft);
+  font-size: 10.5px; color: var(--ink-3); line-height: 1.55;
+}
+.modal-box > footer b { color: var(--ink-2); font-weight: 500; }
+
+.wgroup { padding: 11px 16px 12px; border-bottom: 1px solid var(--line-soft); }
+.wgroup:last-child { border-bottom: 0; }
+.whead { display: flex; align-items: center; gap: 9px; margin-bottom: 7px; }
+.wcount { font-family: var(--mono); font-size: 11.5px; color: var(--ink-2); }
+.wtm { font-family: var(--mono); font-size: 10.5px; color: var(--ink-3); margin-left: auto; }
+.wregions { font-size: 13.5px; line-height: 1.65; }
+.wregions .rg + .rg::before { content: "·"; color: var(--ink-3); margin: 0 6px; }
+/* 세부구역은 시군명 뒤에 윗첨자로 접는다 — 시군명을 반복하지 않는다 */
+.wregions sup { font-size: .72em; color: var(--ink-2); font-weight: 500; margin-left: 1px; }
+.wnote { font-size: 11.5px; color: var(--ink-3); margin-top: 7px; padding-top: 6px; border-top: 1px dashed var(--line); }
+.wnote b { color: var(--lv-watch); font-weight: 600; }
+.budget { font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
+.budget b { color: var(--ink-2); font-weight: 500; }
+
+/* 갱신 순간의 스윕 — 화면 전체가 새로 그려졌다는 신호 */
+.sweep {
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: 50;
+  opacity: 0;
+  background: linear-gradient(100deg, transparent 40%, color-mix(in oklab, var(--accent) 16%, transparent) 50%, transparent 60%);
+  background-size: 300% 100%;
+}
+.sweep.run { animation: sweep .85s ease-out; }
+@keyframes sweep {
+  0%   { opacity: 1; background-position: 130% 0; }
+  100% { opacity: 0; background-position: -30% 0; }
+}
+
+/* 툴팁 */
+.tip {
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 7px 10px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  box-shadow: 0 8px 24px rgb(0 0 0 / .5);
+  opacity: 0;
+  transition: opacity .12s;
+  max-width: 240px;
+}
+.tip.on { opacity: 1; }
+.tip .k { color: var(--ink-3); font-size: 10.5px; letter-spacing: .06em; }
+.tip .v { font-family: var(--mono); font-weight: 600; font-size: 14px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+}
+</style>
+
+<!-- 기관별 CSS 주입 자리. 본 스타일 바로 뒤라 규칙을 덮어쓴다.
+     운영 서버에서는 이 태그 안에 사용자 CSS 파일 내용을 넣어 내려보내면 된다.
+     예) :root { --accent: #0F6FB5; --sans: "Pretendard", sans-serif; } -->
+<style id="user-css"></style>
+
+<header class="menubar">
+  <div class="mb-brand">
+    <img class="mb-mark" src="data:image/png;base64,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" alt="경상남도" width="18" height="18">
+    <b>경남 기상 대시보드</b>
+  </div>
+
+  <!-- 활성 창의 이름·설정·기준시각 — 맥 메뉴바처럼 앞창이 바뀌면 통째로 바뀐다 -->
+  <div class="mb-center">
+    <button class="mb-win" id="m-win" type="button" aria-haspopup="menu" aria-expanded="false">
+      <span id="mb-view">종합</span>
+      <svg class="chev" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <span class="mb-arrow">›</span>
+    <b class="mb-win-name" id="mb-title">강수 타임라인</b>
+    <span class="mb-panelmenus">
+      <button class="mb-item" id="m-range" type="button" data-owner="p-rain" aria-haspopup="menu" aria-expanded="false">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 6v12M20 6v12M7 12h10" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M14 9l3 3-3 3" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg><span id="lb-range">12시간</span><svg class="chev" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button class="mb-item" id="m-sort" type="button" data-owner="p-rain" aria-haspopup="menu" aria-expanded="false">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg><span id="lb-sort">관제순</span><svg class="chev" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button class="mb-item" id="m-val" type="button" data-owner="p-rain" aria-haspopup="menu" aria-expanded="false">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 4L7 20M17 4l-2 16M4 9h16M3 15h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span id="lb-val">봉우리만</span><svg class="chev" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button class="mb-item" id="m-view" type="button" data-owner="p-rain" aria-haspopup="menu" aria-expanded="false">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 16c3-1 4.5-8 7.5-8S15 16 18 16s3-2 3-2" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 20h18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity=".45"/></svg><span id="lb-view">타임라인</span><svg class="chev" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button class="mb-item" id="m-fc" type="button" data-owner="p-rain p-fcsig" aria-haspopup="menu" aria-expanded="false">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 18c3-1 4-9 8-9s5 6 8 6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="3 2.5"/><path d="M12 3v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span id="lb-fc">예측 6h</span><svg class="chev" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button class="mb-item" id="m-cnt" type="button" data-owner="p-fcsig" aria-haspopup="menu" aria-expanded="false">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg><span id="lb-cnt">12개</span><svg class="chev" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button class="mb-item" id="m-crop" type="button" data-owner="p-qpf" aria-haspopup="menu" aria-expanded="false">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 9V5h4M20 9V5h-4M4 15v4h4M20 15v4h-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span id="lb-crop">광역</span><svg class="chev" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button class="mb-item" id="m-speed" type="button" data-owner="p-qpf" aria-haspopup="menu" aria-expanded="false">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 20a8 8 0 1 1 8-8" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M12 12l4.5-3" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg><span id="lb-speed">1×</span><svg class="chev" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </span>
+    <span class="mb-meta" id="mb-meta"></span>
+  </div>
+
+  <div class="mb-right">
+      <button class="mb-item" id="m-look" type="button" aria-haspopup="menu" aria-expanded="false">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.8"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/></svg><span id="lb-look">표시</span><svg class="chev" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+
+    <span class="mb-sep"></span>
+
+      <button class="mb-item" id="m-period" type="button" aria-haspopup="menu" aria-expanded="false">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.8"/><path d="M12 7.5V12l3 1.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span id="lb-period">10분</span><svg class="chev" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+
+    <span class="mb-cd" title="다음 자동 갱신까지 남은 시간">
+      <svg class="ring" viewBox="0 0 38 38" aria-hidden="true">
+        <circle class="track" cx="19" cy="19" r="16"></circle>
+        <circle class="head" id="ring-head" cx="19" cy="19" r="16" stroke-dasharray="100.5" stroke-dashoffset="0"></circle>
+      </svg>
+      <b id="cd">06:37</b>
+    </span>
+
+    <button class="mb-item mb-icon" id="manual" type="button" title="지금 조회" aria-label="지금 조회">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M20 12a8 8 0 1 1-2.7-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M20 4v5h-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<div class="menu" id="menu" role="menu"></div>
+
+<div class="board">
+  <div class="row row-data" id="row-data" data-v="all">
+    <div class="col-left" id="col-left">
+      <section class="panel" id="p-qpf">
+        <header>
+          <h2>예측 분포 재생</h2>
+          <span class="basetime">발표 <b>14:10</b> · 10분 간격</span>
+          <span class="origin">API 이미지</span>
+          <span class="fetched">수집 <b>14:12</b> · 발표 시</span>
+          <span class="rangeval" id="qpf-when">＋10분 · <b>14:20</b></span>
+          <span class="src">nph-qpf_ana_img · qpf=B(융합)</span>
+        </header>
+        <div class="body qpf-body">
+          <div class="qpf-stage" id="qpf-stage">
+            <div class="qpf-img" id="qpf-img" role="img" aria-label="초단기예측 강수 분포"></div>
+            <svg class="qpf-map" id="qpf-map" viewBox="0 0 900 620" preserveAspectRatio="xMidYMid meet"
+                 role="img" aria-label="초단기 강수 예측 분포(대체 그림)" hidden></svg>
+
+            <!-- 그림 위에 얹는다 — 판을 따로 만들면 그림이 그만큼 작아진다 -->
+            <span class="qpf-clock"><b id="qpf-t">14:20</b><i id="qpf-ef">＋10분</i></span>
+            <div class="qpf-scale" id="qpf-scale" role="img" aria-label="강수강도 범례 mm/h"></div>
+            <div class="qpf-status" id="qpf-status"></div>
+
+            <div class="qpf-bar">
+              <button class="qpf-btn" id="qpf-play" type="button" aria-label="재생">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
+              </button>
+              <button class="qpf-btn ghost" id="qpf-prev" type="button" aria-label="이전 10분">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M15 5.5v13L6 12z"/><rect x="16.5" y="5.5" width="2.5" height="13" rx="1"/></svg>
+              </button>
+              <button class="qpf-btn ghost" id="qpf-next" type="button" aria-label="다음 10분">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9 5.5v13L18 12z"/><rect x="5" y="5.5" width="2.5" height="13" rx="1"/></svg>
+              </button>
+              <input class="qpf-seek" id="qpf-seek" type="range" min="0" max="35" value="0" step="1" aria-label="예측 시각">
+              <button class="qpf-btn ghost" id="qpf-out" type="button" aria-label="축소" title="축소">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="2"/><path d="M16 16l4.5 4.5M8.5 11h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              </button>
+              <button class="qpf-btn ghost" id="qpf-in" type="button" aria-label="확대" title="확대">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="2"/><path d="M16 16l4.5 4.5M8.5 11h5M11 8.5v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    <section class="panel" id="p-fcsig">
+      <header>
+        <h2>예측 상위 시군</h2>
+        <span class="basetime">발표 <b>14:10</b> → <b id="fs-span">＋6시간</b></span>
+        <span class="fetched">수집 <b>14:16</b> · 10분 주기</span>
+        <span class="src">nph-dfs_vsrt_grd · 읍면동 최대</span>
+      </header>
+      <div class="body">
+        <div class="fs-grid" id="fs-body"></div>
+      </div>
+    </section>
+    </div>
+
+    <section class="panel" id="p-rain">
+      <header>
+        <h2>강수 타임라인</h2>
+        <span class="basetime"><span class="livedot"></span>실측 <b>14:20</b> · 예측 <b>14:10</b> 발표</span>
+        <span class="origin db" id="rain-origin">DB 조회</span>
+        <span class="fetched">수집 <b>14:20</b> · 10분 주기</span>
+        <span class="rangeval" id="rangeval">02:00~<b>14:20</b> · 예측 ~20:00</span>
+        <span class="src">awsh.php · nph-aws2_min · nph-dfs_vsrt_grd</span>
+      </header>
+      <div class="body">
+        <table id="rain-table">
+          <thead><tr id="rain-head"></tr></thead>
+          <tbody id="rain-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <!-- ═══ 예측 순위 자막 — 종합 화면에서는 왼쪽 '예측 상위 시군'이 대신한다 ═══ -->
+  <div class="ticker" id="ticker">
+    <span class="tk-label">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M12 20a8 8 0 0 0 8-8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M12 20a8 8 0 0 1-8-8 8 8 0 0 1 8-8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".4"/>
+        <path d="M12 12l5-4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="12" cy="12" r="1.8" fill="currentColor"/>
+      </svg>
+      <span>초단기예측 <b id="tk-hours">6</b>h</span>
+    </span>
+    <div class="tk-grid" id="tk-grid"></div>
+  </div>
+
+  <!-- ═══ 하단 수집 상태 ═══ -->
+  <div class="statusbar">
+    <span class="micro" style="margin-right:2px">기상특보</span>
+    <span class="wrns" id="wrns"></span>
+  </div>
+</div>
+
+<div class="sweep" id="sweep"></div>
+<div class="tip" id="tip" role="status" aria-live="polite"></div>
+<div class="ctx" id="ctx" role="menu"></div>
+<div class="modal" id="skin" role="dialog" aria-modal="true" aria-labelledby="skin-t" hidden>
+  <div class="modal-box skin-box">
+    <header>
+      <h3 id="skin-t">화면 꾸미기</h3>
+      <span class="src">CSS는 #user-css 로 들어간다</span>
+      <button class="modal-x" id="skin-x" type="button" aria-label="닫기">✕</button>
+    </header>
+
+    <div class="modal-body skin-body">
+      <div class="knobs">
+        <label>전체 배율
+          <input type="range" id="k-zoom" min="80" max="150" step="5" value="100">
+          <output id="k-zoom-o">100%</output>
+        </label>
+        <label>강조색
+          <input type="color" id="k-accent" value="#2FA3DC">
+          <output id="k-accent-o">#2FA3DC</output>
+        </label>
+        <label>글꼴
+          <select id="k-font">
+            <option value="">IBM Plex Sans KR (기본)</option>
+            <option value="Pretendard">Pretendard</option>
+            <option value="Noto Sans KR">Noto Sans KR</option>
+            <option value="Apple SD Gothic Neo">Apple SD Gothic Neo</option>
+            <option value="Malgun Gothic">맑은 고딕</option>
+          </select>
+        </label>
+        <label>표 줄 간격
+          <input type="range" id="k-row" min="80" max="140" step="5" value="100">
+          <output id="k-row-o">100%</output>
+        </label>
+      </div>
+
+      <div class="cssbox">
+        <div class="cssbox-head">
+          <span class="micro">사용자 CSS</span>
+          <span class="hint">위 조절기가 여기에 규칙을 써 넣는다. 직접 고쳐도 된다.</span>
+        </div>
+        <textarea id="k-css" spellcheck="false" placeholder=":root { --accent: #0F6FB5; }"></textarea>
+      </div>
+    </div>
+
+    <footer class="skin-foot">
+      <button class="sbtn primary" id="k-apply" type="button">적용</button>
+      <button class="sbtn" id="k-copy" type="button">복사</button>
+      <label class="sbtn file">불러오기<input type="file" id="k-file" accept=".css,text/css" hidden></label>
+      <span class="spacer"></span>
+      <span class="skin-msg" id="k-msg"></span>
+      <button class="sbtn ghost" id="k-reset" type="button">초기화</button>
+    </footer>
+  </div>
+</div>
+
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-t" hidden>
+  <div class="modal-box">
+    <header>
+      <h3 id="modal-t">기상특보 현황</h3>
+      <span class="basetime">14:23 <b>현재 발효</b></span>
+      <span class="src">wrn_now_data.php</span>
+      <button class="modal-x" id="modal-x" type="button" aria-label="닫기">✕</button>
+    </header>
+    <div class="modal-body" id="modal-body"></div>
+    <footer>레벨 문자열은 API가 주는 <b>주의</b>·<b>경보</b>다(주의보 아님). 폭염은 <b>중대경보</b>까지 3단계.
+      집계는 발효 중인 것만 세고, 발효 예정은 따로 적는다.</footer>
+  </div>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════
+   초안용 표본 자료. 실제로는 서버가 수집해 SQLite에 넣은 값을 읽는다.
+   화면을 열 때 기상청을 부르지 않는다 — 수집과 표출을 분리한다.
+   ══════════════════════════════════════════════════════════════════ */
+
+// 관제순. 행정코드순도 가나다순도 아니다. 표는 늘 이 순서.
+// 관제순 — 행정코드순도 가나다순도 아니다. 표는 늘 이 순서가 기본.
+const ORDER = ["창원","진주","통영","사천","김해","밀양","거제","양산","의령",
+               "함안","창녕","고성","남해","하동","산청","함양","거창","합천"];
+
+// 시군의 다우지점(그 시군에서 가장 많이 온 지점) 곡선 — 00시부터 현재까지.
+// 마지막 칸은 정시가 아니라 매분자료로 보강한 14:20 값이다.
+/* ── 자료 — 전부 서버(DB)에서 온다 ───────────────────────────────
+   화면은 기상청을 직접 부르지 않는다. 수집기가 받아 SQLite에 넣은 것을 읽는다.
+   그래야 접속자가 몇이든 기상청 호출은 한 번이고, API가 죽어도 마지막 정상
+   자료가 화면에 남는다. */
+let HOURS = [];          // 칸 라벨 (마지막 칸은 매분 보강 시각)
+let SLOT_MIN = [];       // 각 칸의 축 위치(분) — 마지막 칸은 정시가 아니다
+let SLOTS = 0;
+let DAY_OF = [];         // 칸이 며칠째인지
+let DAYS = [];           // 날짜 라벨
+const SIG = {};          // { 시군: { stations: [{name, d[], f, prev}] } }
+let FCEMD = [], FC_HOURS = [];
+const FCSIG = {};
+let ALERTS = [];
+const ALERT_LV = {};
+
+const dayOf = i => DAY_OF[i] ?? 0;
+
+/* ── 서버에서 받아 채우기 ─────────────────────────────────────────── */
+async function getJson(path) {
+  const r = await fetch(path, { cache: "no-store" });
+  if (!r.ok) throw new Error(`${path} → ${r.status}`);
+  return r.json();
+}
+
+/* ⚠️ 실측 마지막 칸은 정시가 아니라 매분 보강값이다. 축을 칸 번호가 아니라
+   분으로 잡아야 "아직 1시간이 안 찼다"가 위치로 드러난다. */
+function buildAxis(labels) {
+  HOURS = labels.slice();
+  SLOTS = labels.length;
+  SLOT_MIN = []; DAY_OF = []; DAYS = [];
+  let day = 0, prev = -1;
+  labels.forEach((lb, i) => {
+    const hh = +lb.slice(0, 2);
+    if (i && hh < prev) day++;              // 시가 되감기면 날이 바뀐 것이다
+    prev = hh;
+    DAY_OF.push(day);
+    const mm = lb.length > 2 ? +lb.slice(3, 5) : 0;
+    SLOT_MIN.push(day * 1440 + hh * 60 + mm);
+  });
+  const d0 = new Date();
+  for (let k = 0; k <= day; k++) {
+    const d = new Date(d0); d.setDate(d.getDate() - (day - k));
+    DAYS.push(`${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+  }
+  NOWMIN = SLOTS > 1 ? Math.max(1, SLOT_MIN[SLOTS - 1] - SLOT_MIN[SLOTS - 2]) : 60;
+}
+
+async function loadRain() {
+  const j = await getJson(`/api/rain?hours=${rng().slots}`);
+  buildAxis(j.labels);
+  for (const k of Object.keys(SIG)) delete SIG[k];
+  for (const r of j.rows) {
+    (SIG[r.sigun] ??= { sigun: r.sigun, stations: [] }).stations.push({
+      name: r.name, prev: 0, f: 1, d: r.d,   // 서버가 결측을 null로 준다 — 0으로 바꾸지 않는다
+    });
+  }
+  document.querySelector("#p-rain header .basetime").innerHTML =
+    `<span class="livedot"></span>실측 <b>${j.minute_tm || j.base_hour}</b>`
+    + (j.minute_tm ? ` · 정시 ${j.base_hour}` : "");
+}
+
+async function loadForecast() {
+  const j = await getJson(`/api/forecast?hours=${fcHours}`);
+  FC_HOURS = j.labels;
+  FCEMD = j.emd.map(e => ({ emd: e.emd, sig: e.sigun, d: e.d }));
+  for (const k of Object.keys(FCSIG)) delete FCSIG[k];
+  for (const g of j.sigun) FCSIG[g.sigun] = { d: g.d, emd: g.emd };
+  const b = document.querySelector("#p-fcsig header .basetime");
+  if (b && j.tmfc)
+    b.innerHTML = `발표 <b>${j.tmfc.slice(8, 10)}:${j.tmfc.slice(10, 12)}</b> → <b id="fs-span">＋${fcHours}시간</b>`;
+}
+
+async function loadAlerts() {
+  const j = await getJson("/api/alerts");
+  const g = j.data || { groups: [], pending: [] };
+  ALERTS = g.groups.map(x => ({
+    lv: x.lv, name: x.name, sea: x.sea, tmfc: x.tmfc, spots: x.count,
+    regions: x.regions.map(r => [r, ""]), note: null,
+  }));
+  for (const k of Object.keys(ALERT_LV)) delete ALERT_LV[k];
+  for (const x of g.groups)
+    for (const sig of x.siguns || [])
+      if (x.lv === "warn" || !ALERT_LV[sig]) ALERT_LV[sig] = x.lv;
+  const later = (g.pending || []).filter(x => x.kind === "later");
+  if (later.length && ALERTS.length)
+    ALERTS[0].note = `발효 예정 <b>${later.length}건</b> — ${later.map(x => x.reg).join(", ")}`;
+}
+
+async function loadQpf() {
+  const j = await getJson("/api/qpf");
+  QPF_FRAMES = (j.frames || []).map(ef => `/api/qpf/${j.tmfc}/${ef}.png`);
+  QPF_N = QPF_FRAMES.length;
+  QPF_TM = j.tmfc || QPF_TM;
+  const seek = document.getElementById("qpf-seek");
+  seek.max = Math.max(0, QPF_N - 1);
+  if (qpfIdx >= QPF_N) qpfIdx = 0;
+}
+
+// 초단기예보 상위 읍면동. 값은 정수 mm로 양자화돼 온다(실제 응답 그대로).
+// 시군별 초단기예측(RN1) — 그 시군 읍면동 가운데 최대값을 대표로 쓴다.
+// 값이 정수 mm로 양자화돼 오는 것도 실제 응답 그대로다.
+// 읍면동 단위 예측 — 순위표에 쓴다. 시군 대표값은 이 가운데 최대다.
+/* ── 강수량 램프: 한 색, 단계별로 밝아진다 ───────────────────────── */
+const RAMP = [
+  [0.0,  "--rain-0"], [0.1, "--rain-1"], [1, "--rain-2"], [5, "--rain-3"],
+  [10,   "--rain-4"], [20,  "--rain-5"], [30, "--rain-6"], [50, "--rain-7"],
+];
+function rampVar(v) {
+  let hit = RAMP[0][1];
+  for (const [t, name] of RAMP) if (v >= t) hit = name;
+  return `var(${hit})`;
+}
+// 옅은 단계 위에서는 흰 글씨가, 밝은 단계 위에서는 어두운 글씨가 읽힌다
+// 값이 크면 칠이 진해진다(어두운 테마에서는 밝아진다) — 그때만 반대색 글자를 쓴다
+const inkOn = v => (v >= 10 ? "var(--on-fill)" : "var(--ink)");
+
+/* ── 강수 타임라인 표 ─────────────────────────────────────────────── */
+/* 서버에 넘길 시간 수. '당일'은 자정부터라 시각에 따라 길이가 달라진다.
+   호우 기준은 3시간 60/90, 12시간 110/180. 나머지는 대응 기준이 없어 비운다. */
+const today0 = () => new Date().getHours() + 1;
+const RANGE = [
+  { k: "3",  l: "3시간", get slots() { return 3; },             th: [60, 90]   },
+  { k: "6",  l: "6시간", get slots() { return 6; },             th: null       },
+  { k: "12", l: "12시간", get slots() { return 12; },           th: [110, 180] },
+  { k: "d1", l: "당일",  get slots() { return today0(); },      th: [110, 180] },
+  { k: "d2", l: "2일",   get slots() { return today0() + 24; }, th: null       },
+  { k: "d3", l: "3일",   get slots() { return today0() + 48; }, th: null       },
+];
+let rangeKey   = "12";
+let fcHours    = 6;         // 향후 예측 시간 — 3 또는 6
+let tkCount    = 12;        // 예측 순위 줄에 펼칠 읍면동 수
+const TK_ROWS  = 2;         // 두 줄로 나눠 담는다
+let metric     = "max";     // 'max' 다우지점 | 'avg' 시군 평균 | 'rep' 대표지점
+let perSigun   = 1;         // 시군당 몇 지점을 펼칠지
+let flat       = false;     // 시군을 무시하고 전 지점을 한 줄로 세울지
+let sortMode   = "order";   // 'order' 관제순 | 'acc' 누적순
+let showAll    = false;     // 타임라인에 모든 값을 적을지, 봉우리만 적을지
+let view       = "tl";
+let totalPos   = "right";   // 합계 자리: 'right' 행 맨 오른쪽 | 'bar' 막대 옆
+/* 패널마다 갱신 주기를 따로 둔다 — 자료가 올라오는 리듬이 다르기 때문이다.
+   ⚠️ 이 주기를 바꿔도 기상청 호출량은 변하지 않는다. 화면은 DB만 읽는다. */
+const FEEDS = {
+  rain:     { label: "강수량",   panel: "p-rain",   sec: 600, load: () => loadRain(),     after: () => drawRain(true) },
+  forecast: { label: "예측",     panel: "p-fcsig",  sec: 600, load: () => loadForecast(), after: () => { drawTicker(); drawFcSigun(); drawRain(false); } },
+  alerts:   { label: "특보",     panel: null,       sec: 60,  load: () => loadAlerts(),   after: () => { drawWrns(); drawRain(false); } },
+  qpf:      { label: "예측분포", panel: "p-qpf",    sec: 600, load: () => loadQpf(),      after: () => drawQpf() },
+};
+try {
+  const saved = JSON.parse(localStorage.getItem("gn-feeds") || "{}");
+  for (const k in FEEDS) if (saved[k]) FEEDS[k].sec = saved[k];
+} catch {}
+
+let left = 0, timer = null;   // 합계 자리: 'right' 행 맨 오른쪽 | 'bar' 막대 바로 옆      // 'tl' 타임라인(B+D) | 'heat' 히트맵(A+D)
+let TLW        = 660;       // 타임라인 실제 픽셀 폭 — 글자가 늘어나지 않게 1:1로 그린다
+let ROWH       = 28, FSH = 44;    // 남는 세로 공간만큼 행을 키운다
+const extra    = {};        // { 시군: [지점명…] } — 우클릭으로 더 얹은 다우지점
+
+const N   = () => SLOTS;
+const rng = () => RANGE.find(r => r.k === rangeKey);
+const cut = () => Math.max(0, SLOTS - rng().slots);
+
+// 결측·실패 칸은 더하지 않고 따로 센다. 0으로 더하면 과소평가가 사실처럼 읽힌다.
+function accOf(d) {
+  let sum = 0, bad = 0;
+  for (const v of d.slice(cut())) (typeof v === "number") ? (sum += v) : bad++;
+  return { sum: Math.round(sum * 10) / 10, bad };
+}
+/* 예측은 읍면동(≈5km 격자)마다 있다 — 지점이 놓인 격자의 값을 쓰는 것이 맞다.
+   실제로는 data/gyeongnam_grids.json 의 XY로 인덱스 (Y-1)*149+(X-1) 를 찾아 읽는다.
+   여기서는 그 매핑이 없어 시군 곡선을 지점의 격자 계수로 눌러 흉내 낸다.
+   ⚠️ RN1은 정수 mm로 양자화돼 오므로 흉내 낸 값도 같은 단계에 맞춘다. */
+/* 누적 강수량 색 단계. 시우량(mm/h)과 총량(mm)은 자릿수가 달라 같은 눈금을 못 쓴다. */
+const ACC_TONE = [[10, "--rain-1"], [30, "--rain-2"], [60, "--rain-3"], [90, "--rain-4"],
+                  [130, "--rain-5"], [180, "--rain-6"], [250, "--rain-7"]];
+
+const RN1_STEPS = [0, 5, 10, 20, 30, 50];
+const qRN1 = v => RN1_STEPS.reduce((a, b) => (Math.abs(b - v) < Math.abs(a - v) ? b : a));
+
+function fcFor(sig, f = 1) {
+  const base = FCSIG[sig] ? FCSIG[sig].d : [];
+  return base.slice(0, fcHours).map(v => qRN1(v * f));
+}
+const sumOf = a => a.reduce((x, y) => x + y, 0);
+/* 아직 안 받았거나 지점이 없는 시군이 있어도 그리기가 멈추면 안 된다 */
+const stationsOf = sig => SIG[sig]?.stations ?? [];
+const topStation = sig => stationsOf(sig).reduce((a, b) => (accOf(b.d).sum > accOf(a.d).sum ? b : a), null);
+
+/* 히트맵(A)에서만 칸을 묶는다. 타임라인(B)은 접지 않고 다 그린다 —
+   선으로 그리면 21칸도 읽히지만, 숫자 칸은 6개를 넘기면 못 읽는다. */
+function heatCols() {
+  const cols = [], from = cut(), tail = SLOTS - 6;
+  let i = from;
+  while (i < tail) {
+    const d = dayOf(i);
+    let j = i;
+    while (j < tail && dayOf(j) === d) j++;
+    // 하루를 통째로 묶으면 날짜로, 일부만 묶으면 시간 범위로 적는다
+    const whole = i % 24 === 0 && j - i >= 24;
+    cols.push({ kind: "obs", group: true, label: whole ? DAYS[d] : `${HOURS[i]}~${HOURS[j - 1]}`,
+                idx: Array.from({ length: j - i }, (_, k) => i + k) });
+    i = j;
+  }
+  for (; i < SLOTS; i++) cols.push({ kind: "obs", idx: [i], label: HOURS[i].slice(0, 2) });
+  FC_HOURS.slice(0, fcHours).forEach((h, j) => cols.push({ kind: "fc", idx: [j], label: h, first: j === 0 }));
+  return cols;
+}
+
+// 타임라인의 점 목록 — 실측 구간 전부 + 예측 6칸을 하나로 잇는다
+function tlPoints(row) {
+  const obs = row.d.slice(cut());
+  const fc  = row.fcd || [];
+  const mins = [];
+  for (let i = cut(); i < N(); i++) mins.push(obsMin(i));
+  for (let j = 0; j < fc.length; j++) mins.push(fcMin(j));
+  return { obs, fc, all: [...obs, ...fc], split: obs.length, mins };
+}
+
+/* 시군 평균 — 시각마다 유효한 지점만 평균한다. 제외한 지점 수를 함께 돌려준다.
+   ⚠️ 표본이다. 원본 프로젝트는 내부망에서 평균강수량을 직접 받아 온다. */
+function avgSeries(sig) {
+  const sts = stationsOf(sig), n = sts[0].d.length;
+  const d = [], bad = [];
+  for (let i = 0; i < n; i++) {
+    let sum = 0, ok = 0, out = 0;
+    for (const st of sts) {
+      const v = st.d[i];
+      if (typeof v === "number") { sum += v; ok++; } else out++;
+    }
+    d.push(ok ? Math.round((sum / ok) * 10) / 10 : null);
+    bad.push(out);
+  }
+  return { d, bad };
+}
+
+/* 화면에 그릴 행. 지점마다 자기 격자의 예측을 들고 간다. */
+function buildRows() {
+  if (metric === "avg")
+    return ORDER.filter(sig => stationsOf(sig).length).map(sig => {
+      const a = avgSeries(sig);
+      const mf = stationsOf(sig).reduce((t, x) => t + x.f, 0) / stationsOf(sig).length;
+      const fcd = fcFor(sig, mf);
+      return { sig, kind: "main", stn: `평균 ${stationsOf(sig).length}개소`,
+               d: a.d, bads: a.bad, ...accOf(a.d), fcd, fc: sumOf(fcd) };
+    });
+
+  if (metric === "rep")
+    return ORDER.filter(sig => stationsOf(sig).length).map(sig => {
+      const st = stationsOf(sig).find(x => x.name === REP[sig]) || stationsOf(sig)[0];
+      const fcd = fcFor(sig, st.f);
+      return { sig, kind: "main", stn: st.name, d: st.d, ...accOf(st.d), fcd, fc: sumOf(fcd) };
+    });
+
+  if (flat) {
+    const all = [];
+    for (const sig of ORDER)
+      for (const st of stationsOf(sig)) {
+        const fcd = fcFor(sig, st.f);
+        all.push({ sig, stn: st.name, d: st.d, ...accOf(st.d), fcd, fc: sumOf(fcd) });
+      }
+    all.sort((x, y) => y.sum - x.sum);
+    return all.slice(0, 20).map(r => ({ ...r, kind: "main" }));
+  }
+
+  const rows = [];
+  for (const sig of ORDER) {
+    if (!stationsOf(sig).length) continue;
+    const ranked = [...stationsOf(sig)].sort((x, y) => accOf(y.d).sum - accOf(x.d).sum);
+    const picks = ranked.slice(0, perSigun).map(x => x.name);
+    for (const name of (extra[sig] || [])) if (!picks.includes(name)) picks.push(name);
+    picks.forEach((name, k) => {
+      const st = stationsOf(sig).find(x => x.name === name);
+      if (!st) return;
+      const fcd = fcFor(sig, st.f);
+      rows.push({ sig, kind: k === 0 ? "main" : "extra", stn: st.name,
+                  d: st.d, ...accOf(st.d), fcd, fc: sumOf(fcd) });
+    });
+  }
+  if (sortMode === "acc") {
+    const mains = rows.filter(r => r.kind === "main").sort((x, y) => (y.sum + y.fc) - (x.sum + x.fc));
+    return mains.flatMap(m => [m, ...rows.filter(r => r.kind === "extra" && r.sig === m.sig)]);
+  }
+  return rows;
+}
+
+/* ── 타임라인 그리기 ──────────────────────────────────────────────── */
+const METRIC = { max: "다우지점", avg: "시군 평균", rep: "대표지점" };
+let TLH = 26, FS = 9;   // 값 글자는 행 높이를 따라 자란다
+const PADX = 5, TOP = 5, BOT = 2;
+
+/* ⚠️ 마지막 실측 칸은 아직 1시간이 안 찼다(정시 +20분).
+   축을 '칸 번호'가 아니라 '분'으로 잡으면 그 사실이 저절로 드러난다 —
+   13시와 14:20 사이가 다른 간격보다 좁게 그려진다. 억지 설명이 필요 없다. */
+let NOWMIN = 20;                                     // 마지막 칸이 담고 있는 분
+const obsMin = i => SLOT_MIN[i] ?? i * 60;
+// 예측은 마지막 실측 칸의 정시 다음 시각부터 1시간 간격
+const fcMin  = j => (SLOT_MIN[SLOTS - 1] ?? 0) - NOWMIN + (j + 1) * 60;
+
+let MINS = [], M0 = 0, M1 = 1;
+function setAxis(mins) { MINS = mins; M0 = mins[0]; M1 = mins[mins.length - 1] || M0 + 1; }
+const xM = m => (Number.isFinite(m) ? PADX + ((m - M0) / (M1 - M0 || 1)) * (TLW - PADX * 2) : PADX);
+const xAt = (i, n) => xM(MINS[i] !== undefined ? MINS[i] : M1);
+const yAt = (v, mx) => TOP + (1 - v / mx) * (TLH - TOP - BOT);
+
+const num = v => (typeof v === "number" ? v : 0);
+const ok  = v => typeof v === "number";
+
+/* ⚠️ 결측·실패 칸에서는 선을 끊는다. 0으로 이어 버리면 '비가 그쳤다'로 읽힌다 —
+   화면에서 저지르는 가장 비싼 거짓말이다. 끊긴 자리는 회색 세로 점선으로 남긴다. */
+function runs(vals, from, to) {
+  const out = [];
+  let s = null;
+  for (let i = from; i <= to; i++) {
+    if (ok(vals[i])) { if (s === null) s = i; }
+    else { if (s !== null && i - 1 > s) out.push([s, i - 1]); s = null; }
+  }
+  if (s !== null && to > s) out.push([s, to]);
+  return out;
+}
+function areaD(vals, from, to, mx, n) {
+  const pts = [];
+  for (let i = from; i <= to; i++) pts.push(`${xAt(i, n).toFixed(1)},${yAt(num(vals[i]), mx).toFixed(1)}`);
+  return `M${xAt(from, n).toFixed(1)},${TLH} L${pts.join(" L")} L${xAt(to, n).toFixed(1)},${TLH} Z`;
+}
+function lineD(vals, from, to, mx, n) {
+  const pts = [];
+  for (let i = from; i <= to; i++) pts.push(`${xAt(i, n).toFixed(1)},${yAt(num(vals[i]), mx).toFixed(1)}`);
+  return `M${pts.join(" L")}`;
+}
+const areaRuns = (v, f, t, mx, n) => runs(v, f, t).map(([a, b]) => areaD(v, a, b, mx, n)).join(" ");
+const lineRuns = (v, f, t, mx, n) => runs(v, f, t).map(([a, b]) => lineD(v, a, b, mx, n)).join(" ");
+function gapMarks(vals, from, to, n) {
+  let out = "";
+  for (let i = from; i <= to; i++) {
+    if (ok(vals[i])) continue;
+    const x = xAt(i, n).toFixed(1);
+    out += `<line x1="${x}" y1="2" x2="${x}" y2="${TLH}" stroke="${vals[i] === null ? "var(--ink-3)" : "var(--lv-fail)"}"
+      stroke-width="1.2" stroke-dasharray="2 2" opacity=".8"/>`;
+  }
+  return out;
+}
+
+// 자정 경계 — 여러 날을 이어 그릴 때 어디서 날이 바뀌는지 보이게 한다
+function midnights() {
+  let out = "";
+  for (let i = cut(); i < SLOTS; i++) {
+    if (i % 24 !== 0 || i === cut()) continue;
+    const x = xM(obsMin(i)).toFixed(1);
+    out += `<line x1="${x}" y1="0" x2="${x}" y2="${TLH}" stroke="var(--line)" stroke-width="1"/>`;
+  }
+  return out;
+}
+
+function timelineSvg(row, r, mx) {
+  const pt = tlPoints(row);
+  setAxis(pt.mins);
+  const all = pt.all, split = pt.split, n = all.length, hasFc = split < n;
+  const lv = ALERT_LV[row.sig];
+  const lvc = lv === "warn" ? "var(--lv-warn)" : lv === "watch" ? "var(--lv-watch)" : "var(--rain-4)";
+  const nowX = xAt(split - 1, n);
+  const lastV = all[split - 1];
+
+  // 진행 중인 1시간 — 정시부터 지금까지만 옅게 칠해 '아직 안 찬 칸'을 보여준다
+  const hourX = xM(obsMin(N() - 1) - NOWMIN);
+  const progress = `<rect x="${hourX.toFixed(1)}" y="0" width="${Math.max(1, nowX - hourX).toFixed(1)}" height="${TLH}"
+      fill="var(--ink)" opacity=".07"/>`;
+
+  // 이 페이스로 1시간을 채우면 어디까지 가는가 — 점선으로만, 값은 툴팁에
+  let pace = "";
+  if (ok(lastV) && lastV > 0) {
+    const pv = Math.min(lastV * (60 / NOWMIN), mx);
+    const py = yAt(pv, mx), ay = yAt(lastV, mx);
+    if (py < ay - 2) pace = `<line x1="${nowX.toFixed(1)}" y1="${ay.toFixed(1)}" x2="${nowX.toFixed(1)}" y2="${py.toFixed(1)}"
+        stroke="${lvc}" stroke-width="1" stroke-dasharray="1.5 2" opacity=".55"/>
+      <circle cx="${nowX.toFixed(1)}" cy="${py.toFixed(1)}" r="2" fill="none" stroke="${lvc}" stroke-width="1.2" opacity=".7"/>`;
+  }
+
+  const peakI = all.reduce((bi, v, i) => (num(v) > num(all[bi]) ? i : bi), 0);
+
+  /* ⚠️ 3일치를 그리면 점이 69개다. 전부 적으면 숫자가 겹쳐 못 읽는다.
+     봉우리를 먼저 자리 잡고, 나머지는 이미 놓인 라벨과 최소 간격이
+     확보될 때만 적는다 — 칸 수가 아니라 실제 픽셀로 판단한다. */
+  const GAP = FS * 3.4;
+  const placed = ok(all[peakI]) ? [xAt(peakI, n)] : [];
+  const keep = new Set([peakI]);
+  if (showAll) {
+    for (let i = 0; i < n; i++) {
+      if (i === peakI || !ok(all[i]) || all[i] < 1) continue;
+      const x = xAt(i, n);
+      if (placed.every(px => Math.abs(px - x) >= GAP)) { placed.push(x); keep.add(i); }
+    }
+  }
+
+  const labels = all.map((v, i) => {
+    if (!ok(v)) return "";
+    const isPeak = i === peakI;
+    if (!keep.has(i) || (!isPeak && v < 1)) return "";
+    const x = xAt(i, n), y = yAt(v, mx);
+    // 봉우리가 천장에 닿으면 숫자가 잘린다 — 그럴 땐 점 아래에 적는다
+    const above = y - 4 >= 9;
+    const ly = above ? y - 4 : Math.min(y + 9, TLH - 2);
+    const anchor = i === 0 ? "start" : i === n - 1 ? "end" : "middle";
+    return `<text x="${x.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="${anchor}"
+      font-family="IBM Plex Mono, monospace" font-size="${isPeak ? FS + 1.5 : FS}"
+      font-weight="${isPeak ? 600 : 500}" paint-order="stroke"
+      stroke="var(--panel)" stroke-width="3" stroke-linejoin="round"
+      fill="${i >= split ? "var(--rain-6)" : isPeak ? "var(--ink)" : "var(--ink-2)"}">${v}</text>`;
+  }).join("");
+
+  return `<svg viewBox="0 0 ${TLW} ${TLH}" width="100%" height="${TLH}" preserveAspectRatio="xMinYMid meet" role="img"
+      aria-label="${row.sig} ${row.stn} 시간강수강도 실측과 예측">
+    <defs>
+      <linearGradient id="og${r}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="${lvc}" stop-opacity=".88"/>
+        <stop offset="1" stop-color="${lvc}" stop-opacity=".24"/>
+      </linearGradient>
+      <linearGradient id="fg${r}" gradientUnits="userSpaceOnUse" x1="${nowX}" y1="0" x2="${TLW}" y2="0">
+        <stop offset="0" stop-color="var(--rain-4)" stop-opacity=".30"/>
+        <stop offset="1" stop-color="var(--rain-4)" stop-opacity=".04"/>
+      </linearGradient>
+      <pattern id="hp${r}" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+        <line x1="0" y1="0" x2="0" y2="7" stroke="var(--rain-5)" stroke-width="1.4" opacity=".30"/>
+      </pattern>
+      ${hasFc ? `<clipPath id="cp${r}"><path d="${areaD(all, split - 1, n - 1, mx, n)}"/></clipPath>` : ""}
+    </defs>
+
+    <line x1="0" y1="${TLH - .5}" x2="${TLW}" y2="${TLH - .5}" stroke="var(--line)" stroke-width="1"/>
+    ${midnights()}
+    ${progress}
+
+    <path d="${areaRuns(all, 0, split - 1, mx, n)}" fill="url(#og${r})"/>
+    <path d="${lineRuns(all, 0, split - 1, mx, n)}" fill="none" stroke="${lvc}" stroke-width="2" stroke-linejoin="round"/>
+    ${gapMarks(all, 0, split - 1, n)}
+
+    ${hasFc ? `
+    <path d="${areaD(all, split - 1, n - 1, mx, n)}" fill="url(#fg${r})"/>
+    <g clip-path="url(#cp${r})"><rect class="drift" x="-16" y="0" width="${TLW + 32}" height="${TLH}" fill="url(#hp${r})"/></g>
+    <path d="${lineD(all, split - 1, n - 1, mx, n)}" fill="none" stroke="var(--rain-5)" stroke-width="1.8"
+          stroke-dasharray="5 3.5" stroke-linejoin="round" opacity=".85"/>` : ""}
+
+    ${pace}
+    <line x1="${nowX.toFixed(1)}" y1="0" x2="${nowX.toFixed(1)}" y2="${TLH}" stroke="var(--ink)" stroke-width="1.1" opacity=".8"/>
+    <circle class="nowpulse" cx="${nowX.toFixed(1)}" cy="${yAt(num(lastV), mx).toFixed(1)}" r="3" fill="${lvc}"/>
+    <circle cx="${nowX.toFixed(1)}" cy="${yAt(num(lastV), mx).toFixed(1)}" r="3.2" fill="var(--panel)" stroke="${lvc}" stroke-width="1.9"/>
+    ${labels}
+  </svg>`;
+}
+
+/* ── 히트맵 칸 ────────────────────────────────────────────────────── */
+function heatCell(row, col) {
+  const fc = col.kind === "fc";
+  const src = fc ? (row.fcd || null) : row.d;
+  if (!src) return `<span class="hc empty"></span>`;
+
+  let v, bad = 0;
+  if (col.group) {
+    let sum = 0;
+    for (const i of col.idx) (typeof src[i] === "number") ? (sum += src[i]) : bad++;
+    if (bad === col.idx.length) return `<span class="hc miss">—</span>`;
+    v = Math.round(sum * 10) / 10;
+  } else {
+    v = src[col.idx[0]];
+    if (v === null)   return `<span class="hc miss" title="결측 — 관측값이 없다">—</span>`;
+    if (v === "fail") return `<span class="hc fail" title="조회 실패 — 값 없음이 아니다">✕</span>`;
+  }
+  const partial = !fc && !col.group && col.idx[0] === N() - 1;   // 아직 1시간이 안 찬 칸
+  let bg = v > 0 ? (fc ? `color-mix(in oklab, ${rampVar(v)} 62%, var(--panel))` : rampVar(v)) : "transparent";
+  if (partial && v > 0) {
+    const pct = Math.round((NOWMIN / 60) * 100);
+    bg = `linear-gradient(90deg, ${rampVar(v)} 0 ${pct}%, color-mix(in oklab, ${rampVar(v)} 26%, transparent) ${pct}%)`;
+  }
+  const fg = v > 0 ? (fc ? (v >= 20 ? "var(--on-fill)" : "") : (partial ? "var(--ink)" : inkOn(v))) : "";
+  return `<span class="hc${fc ? " fc" : ""}${partial ? " partial" : ""}${col.first ? " nowedge" : ""}${v ? "" : " z"}"
+    data-v="${v}" data-sigun="${row.sig}" data-stn="${fc ? FCSIG[row.sig].emd : row.stn}" data-hour="${col.label}"
+    style="background:${bg}${fg ? ";color:" + fg : ""}">${v.toFixed(1)}</span>`;
+}
+
+/* ── 한 행 = 다우지점 · 누적막대 · 타임라인 ──────────────────────── */
+function drawRain(animate) {
+  const rows = buildRows();
+  const mains = rows.filter(r => r.kind === "main");
+  const th = rng().th;
+
+  const maxTot = Math.max(...mains.map(r => r.sum + r.fc), 1);
+  const barMax = th ? Math.max(maxTot, th[1] * 1.06) : maxTot;
+
+  // 타임라인 세로 눈금은 전 시군 공통 — 행끼리 높이를 비교할 수 있어야 한다
+  let mx = 10;
+  for (const r of rows) for (const v of tlPoints(r).all) mx = Math.max(mx, num(v));
+
+  const cols = heatCols();
+  const grip = `<span class="grip" id="tot-grip" title="끌어서 합계 자리를 옮긴다"><i>⋮⋮</i><b>＋예상 ${fcHours}h</b></span>`;
+  const head = document.getElementById("rain-head");
+  head.innerHTML =
+    `<th class="l metric-h" id="metric-h" style="width:146px"
+        title="누르면 다우지점 → 시군 평균 → 대표지점 순으로 바뀐다">${METRIC[metric]}<i>⟳</i></th>` +
+    `<th class="l" style="width:${totalPos === "bar" ? 348 : 272}px">누적 ${rng().l}` +
+      (th ? `<span class="thlab">기준 <i class="w1">${th[0]}</i>/<i class="w2">${th[1]}</i></span>` : "") +
+      (totalPos === "bar" ? " " + grip : "") + "</th>" +
+    '<th class="l tlh" id="tl-head"></th>' +
+    (totalPos === "right" ? `<th class="totc" style="width:96px;text-align:right">${grip}</th>` : "");
+
+  // 타임라인 폭을 실제 픽셀로 재서 글자가 늘어나지 않게 1:1로 그린다
+  const cell = document.getElementById("tl-head");
+  const w = Math.max(320, Math.round(cell.getBoundingClientRect().width) - 18);
+  if (w !== TLW) TLW = w;
+
+  if (view === "tl") {
+    const mins = [];
+    for (let i = cut(); i < N(); i++) mins.push(obsMin(i));
+    for (let j = 0; j < fcHours; j++) mins.push(fcMin(j));
+    setAxis(mins);
+    const nObs = N() - cut();
+    // 지금·예측·자정을 먼저 자리 잡고, 나머지 눈금은 남는 자리에만 넣는다
+    const tGap = 30, tPlaced = [];
+    const must = i => i >= nObs || i === nObs - 1 || (cut() + i) % 24 === 0;
+    mins.forEach((m, i) => { if (must(i)) tPlaced.push(xM(m)); });
+    const tKeep = new Set();
+    mins.forEach((m, i) => {
+      if (must(i)) { tKeep.add(i); return; }
+      const x = xM(m);
+      if (tPlaced.every(px => Math.abs(px - x) >= tGap)) { tPlaced.push(x); tKeep.add(i); }
+    });
+    const ticks = mins.map((m, i) => {
+      const isFc = i >= nObs, isNow = i === nObs - 1;
+      const gi = cut() + i;
+      const isMid = !isFc && gi % 24 === 0;
+      if (!tKeep.has(i)) return "";
+      const lbl = isFc ? FC_HOURS[i - nObs]
+                : isNow ? HOURS[SLOTS - 1]
+                : isMid ? DAYS[dayOf(gi)]
+                : HOURS[gi].slice(0, 2);
+      return `<text x="${xM(m).toFixed(1)}" y="11" text-anchor="middle"
+        font-family="IBM Plex Mono, monospace" font-size="${isMid ? 10 : 11}"
+        font-weight="${isNow || isMid ? 600 : 400}"
+        fill="${isNow ? "var(--ink)" : isFc ? "color-mix(in oklab, var(--accent) 62%, var(--ink-3))"
+              : isMid ? "var(--ink-2)" : "var(--ink-3)"}">${lbl}</text>`;
+    }).join("");
+    const nowX = xM(mins[nObs - 1]);
+    cell.innerHTML = `<svg viewBox="0 0 ${TLW} 15" width="100%" height="15" preserveAspectRatio="xMinYMid meet">
+      ${ticks}
+      <line x1="${nowX.toFixed(1)}" y1="12.5" x2="${nowX.toFixed(1)}" y2="15" stroke="var(--ink)" stroke-width="1.1"/>
+    </svg>`;
+  } else {
+    cell.innerHTML = `<div class="cells" style="--n:${cols.length}">` +
+      cols.map(c => `<span class="hh${c.kind === "fc" ? " fc" : ""}${c.first ? " nowedge" : ""}">${c.label}</span>`).join("") + "</div>";
+  }
+
+  document.getElementById("rain-table").style.setProperty("--rowh", ROWH + "px");
+  const body = document.getElementById("rain-body");
+  body.innerHTML = rows.map((r, i) => {
+    const lv = ALERT_LV[r.sig];
+    const tot = Math.round((r.sum + r.fc) * 10) / 10;
+    const ow = (r.sum / barMax) * 100, fw = (r.fc / barMax) * 100;
+    // 누적량 색조 — 시우량 램프와 같은 색이되 단계가 다르다(총량은 단위가 크다)
+    const tone = ACC_TONE.reduce((a, [t, v]) => (tot >= t ? v : a), null);
+    const ring = th ? (tot >= th[1] ? "var(--lv-warn)" : tot >= th[0] ? "var(--lv-watch)" : null) : null;
+    const totStyle = `style="${tone ? `--tot-bg:var(${tone});color:${tot >= 90 ? "var(--on-fill)" : "var(--ink)"};` : ""}`
+      + `${ring ? `--tot-ring:inset 0 0 0 1.5px ${ring};` : ""}"`;
+
+    const marks = th ? th.map((t, k) => {
+      const l = (t / barMax) * 100;
+      return l > 99 ? "" : `<i class="th w${k + 1}" style="left:${l}%" data-l="${t}"></i>`;
+    }).join("") : "";
+
+    const oIn = ow > 21, fIn = fw > 14;
+    const outs = [];
+    if (!oIn) outs.push(`<b>${r.sum.toFixed(1)}</b>`);
+    if (r.fc && !fIn) outs.push(`<i>+${r.fc}</i>`);
+    const totHtml = `<span class="tot" ${totStyle}>${tot.toFixed(1)}${r.bad ? `<i>${r.bad}h</i>` : ""}</span>`;
+    const bar = `<div class="accwrap">
+      <div class="abar">
+        <div class="seg obs" style="width:${ow}%">${oIn ? `<span>${r.sum.toFixed(1)}</span>` : ""}</div>
+        ${r.fc ? `<div class="seg fc" style="left:${ow}%;width:${fw}%">${fIn ? `<span>+${r.fc}</span>` : ""}</div>` : ""}
+        ${outs.length ? `<span class="barout" style="left:calc(${(ow + fw).toFixed(1)}% + 6px)">${outs.join("")}</span>` : ""}
+        ${marks}
+      </div>
+      ${totalPos === "bar" ? totHtml : ""}
+    </div>`;
+
+    const third = view === "tl"
+      ? timelineSvg(r, i, mx)
+      : `<div class="cells" style="--n:${cols.length}">${cols.map(c => heatCell(r, c)).join("")}</div>`;
+
+    const drop = r.kind === "extra"
+      ? `<button class="dropx" data-drop="${r.sig}|${r.stn}" title="이 다우지점 빼기" aria-label="빼기">✕</button>` : "";
+
+    return `<tr style="--i:${i}" data-sigun="${r.sig}"${lv ? ` data-lv="${lv}"` : ""}${r.kind === "extra" ? ' class="extra"' : ""}>
+      <td class="l dpc">${r.kind === "extra" ? '<span class="addmark">└</span>' : ""}<span class="dp"><sup>${r.sig}</sup><span class="s">${r.stn}</span></span>${drop}</td>
+      <td class="acc">${bar}</td>
+      <td class="tl">${third}</td>
+      ${totalPos === "right" ? `<td class="totc">${totHtml}</td>` : ""}
+    </tr>`;
+  }).join("");
+
+  if (animate) { body.classList.remove("swap"); void body.offsetWidth; body.classList.add("swap"); }
+
+  // 폭과 높이를 실제로 재서 어긋나면 한 번만 고쳐 그린다.
+  // 표가 놓이기 전에 잰 값은 열 배분·스크롤바 때문에 빗나간다.
+  if (!drawRain.fixing) {
+    let again = false;
+    const probe = body.querySelector("td.tl");
+    if (probe) {
+      const w = Math.max(320, Math.round(probe.clientWidth) - 18);
+      if (Math.abs(w - TLW) > 3) { TLW = w; again = true; }
+    }
+    const box = document.querySelector("#p-rain .body");
+    const used = [...box.children].reduce((a, el) => a + el.offsetHeight, 0);
+    const per = Math.floor((box.clientHeight - used) / Math.max(1, rows.length));
+    const next = Math.max(22, Math.min(58, ROWH + per));
+    if (Math.abs(next - ROWH) >= 2) { ROWH = next; TLH = ROWH - 6; FS = Math.max(9, Math.round(TLH * 0.27)); again = true; }
+    // 폭과 높이가 함께 바뀌면 한 번으로는 안 맞는다. 최대 세 번까지만 다시 잰다.
+    if (again && (drawRain.tries = (drawRain.tries || 0) + 1) <= 3) {
+      drawRain.fixing = true; drawRain(false); drawRain.fixing = false;
+    }
+    if (!again) drawRain.tries = 0;
+  }
+}
+
+/* 합계 자리 옮기기 — 좌우로 끌면 막대 옆과 행 맨 오른쪽 사이를 오간다 */
+document.getElementById("rain-head").addEventListener("pointerdown", e => {
+  const g = e.target.closest("#tot-grip");
+  if (!g) return;
+  e.preventDefault();
+  const x0 = e.clientX;
+  g.classList.add("dragging");
+  g.setPointerCapture(e.pointerId);
+  const move = ev => {
+    const dx = ev.clientX - x0;
+    if (dx < -70 && totalPos !== "bar")   { totalPos = "bar";   drawRain(false); }
+    if (dx >  70 && totalPos !== "right") { totalPos = "right"; drawRain(false); }
+  };
+  const up = () => {
+    g.classList.remove("dragging");
+    removeEventListener("pointermove", move);
+    removeEventListener("pointerup", up);
+  };
+  addEventListener("pointermove", move);
+  addEventListener("pointerup", up);
+});
+
+/* ── 예측 순위 자막 ─────────────────────────────────────────────
+   ⚠️ 정렬은 시우량이 아니라 누적으로 한다. RN1이 정수 mm로 양자화돼
+   오기 때문에 시우량으로 줄 세우면 30·20에 동률이 쏟아진다. */
+/* 칸 배경에 깔리는 예상 곡선. 세로는 100 단위 좌표계로 잡고 늘려 쓴다 —
+   칸 크기가 설정에 따라 달라지므로 픽셀로 고정하지 않는다. */
+function sparkSvg(d, gmax, lv) {
+  const W = 100, H = 100, PAD = 6;
+  const x = i => (d.length < 2 ? W / 2 : (i / (d.length - 1)) * W);
+  const y = v => PAD + (1 - v / gmax) * (H - PAD * 2);
+  const pts = d.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" L");
+  const pk = d.indexOf(Math.max(...d));
+  const c = lv === "warn" ? "var(--lv-warn)" : lv === "watch" ? "var(--lv-watch)" : "var(--accent)";
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+    <path d="M0,${H} L${pts} L${W},${H} Z" fill="${c}" opacity=".13"/>
+    <path d="M${pts}" fill="none" stroke="${c}" stroke-width="2.2" stroke-opacity=".55"
+      stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+    <circle cx="${x(pk).toFixed(1)}" cy="${y(d[pk]).toFixed(1)}" r="3" fill="${c}" opacity=".8"
+      vector-effect="non-scaling-stroke"/>
+  </svg>`;
+}
+
+/* 시군 단위 예측 순위 — 그 시군 읍면동 최대값이 시군 대표다.
+   자막(읍면동)과 낟알 크기가 달라 서로를 대신하지 않는다. */
+function drawFcSigun() {
+  const rows = ORDER
+    .map(sig => {
+      const d = FCSIG[sig] ? FCSIG[sig].d.slice(0, fcHours) : [];
+      return { sig, emd: FCSIG[sig] ? FCSIG[sig].emd : "", d,
+               sum: d.reduce((a, b) => a + b, 0), peak: d.length ? Math.max(...d) : 0 };
+    })
+    .filter(r => r.sum > 0)
+    .sort((a, b) => b.sum - a.sum || b.peak - a.peak);
+
+  document.getElementById("fs-span").textContent = `＋${fcHours}시간`;
+  const gmax = Math.max(...rows.map(r => r.peak), 5);
+
+  const body = document.getElementById("fs-body");
+  const lines = Math.ceil(rows.length / 2);
+  body.style.setProperty("--fscols", 2);
+  body.innerHTML = rows.map((r, i) => {
+    const lv = ALERT_LV[r.sig];
+    return `<div class="fs-cell${i < 3 ? " top" : ""}"${lv ? ` data-lv="${lv}"` : ""}
+          title="${r.sig} · 최다 ${r.emd} · ${fcHours}시간 ${r.sum}mm">
+      ${sparkSvg(r.d, gmax, lv)}
+      <i class="rk">${i + 1}</i>
+      <span class="nm">${r.sig}<small>${r.emd}</small></span>
+      <em>${r.peak}<s>mm/h</s></em><b>${r.sum}</b>
+    </div>`;
+  }).join("");
+
+  // 남는 세로 공간만큼 줄을 키운다 — 두 칸이라 한 줄이 그만큼 두꺼워진다
+  body.style.setProperty("--fsh", FSH + "px");
+  if (!drawFcSigun.fixing) {
+    const box = document.querySelector("#p-fcsig .body");
+    const used = [...box.children].reduce((a, el) => a + el.offsetHeight, 0);
+    const per = Math.floor((box.clientHeight - used) / Math.max(1, lines));
+    const next = Math.max(30, Math.min(78, FSH + per));
+    if (Math.abs(next - FSH) >= 2) {
+      FSH = next;
+      drawFcSigun.fixing = true; drawFcSigun(); drawFcSigun.fixing = false;
+    }
+  }
+}
+
+function drawTicker() {
+  const rows = FCEMD
+    .map(f => { const d = f.d.slice(0, fcHours);
+                return { ...f, sum: d.reduce((a, b) => a + b, 0), peak: Math.max(...d) }; })
+    .filter(f => f.sum > 0)
+    .sort((a, b) => b.sum - a.sum || b.peak - a.peak);
+
+  document.getElementById("tk-hours").textContent = fcHours;
+
+  const show = tkCount === "all" ? rows.length : Math.min(+tkCount, rows.length);
+  const list = rows.slice(0, show);
+
+  // 칸이 좁아지면 줄을 늘려 한 칸의 가로를 지킨다
+  const rowsN = list.length > 14 ? 3 : 2;
+  const grid = document.getElementById("tk-grid");
+  grid.style.setProperty("--cols", Math.ceil(list.length / rowsN));
+
+  // 곡선은 칸마다 같은 자로 잰다 — 칸끼리 높이를 비교할 수 있어야 한다
+  const gmax = Math.max(...list.map(f => f.peak), 5);
+
+  grid.innerHTML = list.map((f, i) => {
+    const lv = ALERT_LV[f.sig];
+    const d = f.d.slice(0, fcHours);
+    return `<span class="tk-item${i < 3 ? " top" : ""}${lv ? " lv-" + lv : ""}"
+        title="${f.sig} ${f.emd} · 앞으로 ${fcHours}시간 ${f.sum}mm · 최대 시우량 ${f.peak}mm/h">
+      ${sparkSvg(d, gmax, lv)}
+      <i class="rk">${i + 1}</i>
+      <span class="nm"><sup>${f.sig}</sup>${f.emd}</span>
+      <em>${f.peak}<s>mm/h</s></em><b>${f.sum}</b></span>`;
+  }).join("");
+}
+
+/* ── 예측 분포 재생 ────────────────────────────────────────────────
+   ⚠️ 이 API는 지역 크롭이 안 된다 — stn·lon/lat을 줘도 전국 이미지를 준다.
+   운영 시에는 수집기가 전국을 받아 PIL로 경남만 잘라 두고, 화면은
+   /api/qpf/<tmfc>/<ef>.png 를 <img>로 읽는다. 크롭 박스는 소스별로 다르다
+   (QPF 835×820, 초단기 분포도 901×1551) — 하나로 쓰면 엉뚱한 데가 잘린다.
+
+   프레임은 10분 간격 36장(＋10분 ~ ＋360분). 여기서는 API를 부를 수 없어
+   같은 규칙으로 움직이는 강수역을 그려 재생 동작만 보인다. */
+let QPF_FRAMES = [], QPF_LEGEND = "";
+let QPF_N = 0;
+
+let qpfIdx = 0, qpfPlaying = false, qpfSpeed = 1, qpfTimer = null;
+
+/* 실제 호출 규격 — 운영 시 이 규칙으로 서버가 미리 받아 잘라 둔다.
+   ⚠️ 발표는 실측 +2~8분 뒤에 올라온다. 방금 시각을 넣으면 빈 이미지가 온다.
+   ⚠️ 36장을 한꺼번에 요청하면 중간이 통째로 실패한다(실측). 순차로 받을 것.
+   GET nph-qpf_ana_img?eva=1&tm=<발표>&qpf=B&ef=<10..360>&map=HR&grid=2&legend=1&size=1800 */
+let QPF_TM = "";
+
+const qpfEf = i => (i + 1) * 10;
+function qpfClock(i) {
+  const t = QPF_TM;
+  const d = new Date(+t.slice(0, 4), +t.slice(4, 6) - 1, +t.slice(6, 8), +t.slice(8, 10), +t.slice(10, 12));
+  d.setMinutes(d.getMinutes() + qpfEf(i));
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+/* ── 범례 ──────────────────────────────────────────────────────────
+   기상청 QPF 색계는 우리 청색 램프와 전혀 다르다. 흉내 내면 거짓말이 되므로
+   원본 범례 그림에서 색을 그대로 뽑아 쓴다. 22단계는 화면에서 균등 폭이다. */
+const QPF_SCALE = [0.1, 0.5, 1, 2, 3, 4, 5, 6, 8, 9, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 110];
+const QPF_TICKS = [0.1, 1, 5, 10, 20, 30, 50, 110];
+
+function buildScale() {
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement("canvas");
+    c.width = img.naturalWidth; c.height = img.naturalHeight;
+    const g = c.getContext("2d", { willReadFrequently: true });
+    g.drawImage(img, 0, 0);
+
+    // 색 띠가 있는 세로줄을 찾는다 — 가운데 높이에서 왼쪽부터 흰색이 아닌 곳
+    const mid = g.getImageData(0, Math.floor(c.height / 2), c.width, 1).data;
+    let cx = 6;
+    for (let x = 0; x < c.width; x++) {
+      const i = x * 4;
+      if (mid[i] < 245 || mid[i + 1] < 245 || mid[i + 2] < 245) { cx = x + 3; break; }
+    }
+
+    // 띠의 위아래 끝을 찾는다
+    const col = g.getImageData(cx, 0, 1, c.height).data;
+    const solid = y => { const i = y * 4; return col[i] < 245 || col[i + 1] < 245 || col[i + 2] < 245; };
+    let y0 = 0, y1 = c.height - 1;
+    while (y0 < c.height && !solid(y0)) y0++;
+    while (y1 > y0 && !solid(y1)) y1--;
+    if (y1 - y0 < 40) return;                       // 못 찾으면 조용히 접는다
+
+    // 아래가 약한 값이므로 뒤집어 담는다
+    const n = QPF_SCALE.length, h = (y1 - y0) / n, cols = [];
+    for (let k = n - 1; k >= 0; k--) {
+      const y = Math.round(y0 + h * (k + 0.5)), i = y * 4;
+      cols.push(`rgb(${col[i]},${col[i + 1]},${col[i + 2]})`);
+    }
+
+    const el = document.getElementById("qpf-scale");
+    el.innerHTML =
+      `<div class="bar">${cols.map(c2 => `<i style="background:${c2}"></i>`).join("")}</div>` +
+      `<div class="ticks">${QPF_SCALE.map(v =>
+        `<span style="width:11px">${QPF_TICKS.includes(v) ? v : ""}</span>`).join("")}<b class="unit">mm/h</b></div>`;
+  };
+  img.src = QPF_LEGEND;
+}
+buildScale();
+
+
+function qpfShow() {
+  const src = QPF_FRAMES[qpfIdx];
+  document.getElementById("qpf-img").style.backgroundImage = src ? `url("${src}")` : "none";
+}
+
+/* 그림 위 안내 한 줄. 비면 자리도 사라진다. */
+function qpfStatus(msg, warn) {
+  const el = document.getElementById("qpf-status");
+  if (!el) return;
+  el.className = "qpf-status" + (warn ? " warn" : "");
+  el.innerHTML = msg || "";
+}
+
+/* 그림은 서버가 미리 받아 경남만 잘라 둔 것을 읽는다 — 대체 그림은 없다.
+   프레임이 아직 없으면 안내만 띄우고 조용히 기다린다. */
+function drawQpf() {
+  qpfShow();
+  document.getElementById("qpf-t").textContent = qpfClock(qpfIdx);
+  document.getElementById("qpf-ef").textContent = `＋${qpfEf(qpfIdx)}분`;
+  document.getElementById("qpf-seek").value = qpfIdx;
+  const rv = document.querySelector("#p-qpf header .rangeval");
+  if (rv) rv.innerHTML = QPF_TM
+    ? `${QPF_TM.slice(4, 6)}-${QPF_TM.slice(6, 8)} <b>${QPF_TM.slice(8, 10)}:${QPF_TM.slice(10, 12)}</b> 발표 · ＋${qpfEf(qpfIdx)}분`
+    : "발표분 없음";
+  qpfStatus(QPF_N ? "" : "예측 분포를 아직 받지 못했다 — 수집기가 다음 발표분을 기다리는 중이다.");
+  if (view2 === "qpf") syncMeta();
+}
+
+function qpfStop() {
+  qpfPlaying = false;
+  clearInterval(qpfTimer);
+  document.getElementById("qpf-play").innerHTML =
+    '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>';
+}
+function qpfStart() {
+  qpfPlaying = true;
+  clearInterval(qpfTimer);
+  qpfTimer = setInterval(() => {
+    qpfIdx = (qpfIdx + 1) % QPF_N;
+    drawQpf();
+  }, 420 / qpfSpeed);
+  document.getElementById("qpf-play").innerHTML =
+    '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="5.5" width="3.5" height="13" rx="1"/><rect x="13.5" y="5.5" width="3.5" height="13" rx="1"/></svg>';
+}
+
+/* ── 화각·줌 ───────────────────────────────────────────────────────
+   판 크기는 그대로 두고 경남을 중심으로 확대·축소한다. 배경 위치를 %로 주면
+   확대 배율에 따라 같은 지점이 다른 자리로 가므로, 매번 다시 계산한다.
+   경남 중심은 원본(1835×1820)에서 가로 65.8% · 세로 53.4% 지점이다. */
+const GN_F = { x: 0.658, y: 0.534 }, IMG_R = 1820 / 1835;
+const CROPS = [["wide", "광역"], ["gn", "경남"], ["all", "전국"]];
+const CROP_Z = { wide: 2.0, gn: 3.8, all: 0 };   // 0이면 전체가 들어가는 배율로 맞춘다
+let qpfZoom = 2.0;
+try { qpfZoom = +(localStorage.getItem("gn-zoom") || 2.0) || 2.0; } catch {}
+
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+
+function fitZoom() {
+  const st = document.getElementById("qpf-stage");
+  const W = st.clientWidth || 1, H = st.clientHeight || 1;
+  return Math.min(1, H / (W * IMG_R));          // 세로가 짧으면 그만큼 줄여야 다 들어간다
+}
+
+function applyCrop(save) {
+  const st = document.getElementById("qpf-stage");
+  const img = document.getElementById("qpf-img");
+  const W = st.clientWidth || 1, H = st.clientHeight || 1;
+  const z = clamp(qpfZoom, fitZoom(), 6);
+  const IW = z * W, IH = IW * IMG_R;
+  const px = IW > W + 1 ? 100 * (GN_F.x * IW - W / 2) / (IW - W) : 50;
+  const py = IH > H + 1 ? 100 * (GN_F.y * IH - H / 2) / (IH - H) : 50;
+  img.style.backgroundSize = (z * 100).toFixed(1) + "% auto";
+  img.style.backgroundPosition = `${clamp(px, 0, 100).toFixed(1)}% ${clamp(py, 0, 100).toFixed(1)}%`;
+  if (save !== false) { try { localStorage.setItem("gn-zoom", String(z)); } catch {} }
+  const lb = document.getElementById("lb-crop");
+  if (lb) lb.textContent = z <= fitZoom() + .02 ? "전국" : z >= 3.4 ? "경남" : "광역";
+}
+
+const setZoom = z => { qpfZoom = clamp(z, fitZoom(), 6); applyCrop(); };
+
+document.getElementById("qpf-in").addEventListener("click", () => setZoom(qpfZoom * 1.25));
+document.getElementById("qpf-out").addEventListener("click", () => setZoom(qpfZoom / 1.25));
+document.getElementById("qpf-stage").addEventListener("wheel", e => {
+  e.preventDefault();
+  setZoom(qpfZoom * (e.deltaY > 0 ? 0.92 : 1.087));
+}, { passive: false });
+
+// 판 크기가 바뀌면 배율 계산의 전제가 달라진다
+new ResizeObserver(() => applyCrop(false)).observe(document.getElementById("qpf-stage"));
+
+document.getElementById("qpf-play").addEventListener("click", () => (qpfPlaying ? qpfStop() : qpfStart()));
+document.getElementById("qpf-prev").addEventListener("click", () => { qpfStop(); qpfIdx = (qpfIdx - 1 + QPF_N) % QPF_N; drawQpf(); });
+document.getElementById("qpf-next").addEventListener("click", () => { qpfStop(); qpfIdx = (qpfIdx + 1) % QPF_N; drawQpf(); });
+document.getElementById("qpf-seek").addEventListener("input", e => { qpfStop(); qpfIdx = +e.target.value; drawQpf(); });
+
+/* ── 창 전환 — 메뉴바 창 이름이 곧 전환 단추 ────────────────────── */
+const VIEWS = [
+  { k: "all",  l: "종합",          focus: "p-rain" },
+  { k: "rain", l: "강수 타임라인",  focus: "p-rain" },
+  { k: "qpf",  l: "예측 분포 재생", focus: "p-qpf"  },
+];
+let view2 = "all";
+
+function showView(k) {
+  view2 = k;
+  document.getElementById("row-data").dataset.v = k;
+  // 종합 화면에는 상위 시군 판이 있으므로 아래 자막을 겹쳐 놓지 않는다
+  document.getElementById("ticker").hidden = k === "all";
+  // 타임라인 전용 조정 단추는 표가 보이는 창에서만 쓴다
+  document.querySelectorAll("#m-range, #m-sort, #m-val, #m-view").forEach(b => {
+    b.style.display = k === "qpf" ? "none" : "";
+  });
+  if (k === "qpf" || k === "all") {
+    drawQpf(); applyCrop(false);
+  } else { qpfStop(); }
+  activate(document.getElementById(VIEWS.find(v => v.k === k).focus), true);
+  drawRain(false);
+  drawFcSigun();
+}
+
+/* 집계는 서버가 시군 수로 세어 준다. 해상은 시군 개념이 없어 개소를 쓴다. */
+const countLabel = a => `${a.spots}${a.sea ? "개소" : "개시군"}`;
+
+/* ── 기상특보 요약과 상세 ─────────────────────────────────────────── */
+function drawWrns() {
+  const box = document.getElementById("wrns");
+  if (!ALERTS.length) {
+    box.innerHTML = `<span class="wrn none">발효 중인 특보 없음</span>`;
+    return;
+  }
+  box.innerHTML = ALERTS.map((a, i) =>
+    `<button class="wrn ${a.lv}" type="button" data-w="${i}"
+       title="누르면 구체적인 특보 현황을 본다">${a.pre ? a.pre + " " + a.name : a.name}
+       ${countLabel(a)} <em>${a.tmfc}</em></button>`).join("");
+}
+
+const modal = document.getElementById("modal");
+function openWrn(focus) {
+  document.getElementById("modal-body").innerHTML = ALERTS.map((a, i) => `
+    <div class="wgroup"${i === focus ? ' style="background:color-mix(in oklab, var(--accent) 7%, transparent)"' : ""}>
+      <div class="whead">
+        <span class="wrn ${a.lv}" style="cursor:default">${a.pre ? a.pre + " " + a.name : a.name}</span>
+        <span class="wcount">${countLabel(a)}</span>
+        <span class="wtm">발표 ${a.tmfc}</span>
+      </div>
+      <div class="wregions">${a.regions.map(([r, sub]) =>
+        `<span class="rg">${r}${sub ? `<sup>${sub}</sup>` : ""}</span>`).join("")}</div>
+      ${a.note ? `<div class="wnote">${a.note}</div>` : ""}
+    </div>`).join("");
+  modal.hidden = false;
+}
+function closeWrn() { modal.hidden = true; }
+
+document.getElementById("wrns").addEventListener("click", e => {
+  const b = e.target.closest("[data-w]");
+  if (b) openWrn(+b.dataset.w);
+});
+document.getElementById("modal-x").addEventListener("click", closeWrn);
+modal.addEventListener("click", e => { if (e.target === modal) closeWrn(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") { closeWrn(); closeSkin(); } });
+
+/* ── 조작 ─────────────────────────────────────────────────────────── */
+/* 조정은 전부 메뉴바 아이콘에서 한다. 화면 가운데를 가로지르던 조정 막대를
+   없앴다 — 상황실 벽면에서는 아무도 만지지 않으므로 늘 떠 있을 이유가 없다. */
+const menuEl = document.getElementById("menu");
+let openBtn = null;
+
+function closeMenu() {
+  menuEl.classList.remove("on");
+  if (openBtn) openBtn.setAttribute("aria-expanded", "false");
+  openBtn = null;
+}
+
+function bindMenu(btnId, labelId, title, items, pick) {
+  const btn = document.getElementById(btnId);
+  const paint = () => {
+    if (!labelId) return;
+    const on = items().find(x => x.on);
+    if (on) document.getElementById(labelId).textContent = on.l;
+  };
+  btn.addEventListener("click", e => {
+    e.stopPropagation();
+    if (openBtn === btn) return closeMenu();
+    closeMenu();
+    openBtn = btn;
+    btn.setAttribute("aria-expanded", "true");
+    menuEl.innerHTML = (title ? `<div class="menu-head">${title}</div>` : "") +
+      items().map(it => it.head ? `<div class="menu-head">${it.head}</div>`
+        : it.sep ? `<div class="menu-sep"></div>`
+        : `<button type="button" role="menuitem" data-k="${it.k}">
+             <span class="mk">${it.on ? "✓" : ""}</span>${it.l}</button>`).join("");
+    menuEl.classList.add("on");
+    const r = btn.getBoundingClientRect(), m = menuEl.getBoundingClientRect();
+    menuEl.style.left = Math.min(r.left, innerWidth - m.width - 8) + "px";
+    menuEl.style.top = (r.bottom + 5) + "px";
+  });
+  menuEl.addEventListener("click", e => {
+    if (openBtn !== btn) return;
+    const b = e.target.closest("[data-k]");
+    if (!b) return;
+    pick(b.dataset.k);
+    paint();
+    closeMenu();
+  });
+  paint();
+}
+
+/* 기간 지정 — 시작 시각만 받아 지금까지로 잡는다. 서버에는 시간 수로 넘긴다. */
+function openCustomRange() {
+  const v = prompt("몇 시간 전부터 볼까요? (1~72)", String(rng().slots));
+  if (!v) return;
+  const n = Math.round(+v);
+  if (!Number.isFinite(n) || n < 1 || n > 72) { alert("1~72 사이 숫자를 넣으세요."); return; }
+  const cu = RANGE.find(r => r.k === "cu");
+  const row = { k: "cu", l: `${n}시간`, slots: n, th: null };
+  if (cu) Object.assign(cu, row); else RANGE.push(row);
+  rangeKey = "cu";
+  document.getElementById("lb-range").textContent = row.l;
+  pull("rain").then(paintRange);
+}
+
+function paintRange() {
+  const from = cut();
+  const day = dayOf(from) < 2 ? DAYS[dayOf(from)] + " " : "";
+  document.querySelector("#p-rain header .rangeval").innerHTML =
+    `${day}${HOURS[from]}:00~<b>${HOURS[SLOTS - 1]}</b> · 예측 <b>+${fcHours}h</b>`;
+  syncMeta();
+}
+
+bindMenu("m-range", "lb-range", "누적 구간",
+  () => RANGE.map(r => ({ k: r.k, l: r.l, on: r.k === rangeKey }))
+        .concat([{ k: "custom", l: "기간 지정…", on: false }]),
+  k => {
+    if (k === "custom") { openCustomRange(); return; }
+    rangeKey = k;
+    pull("rain").then(paintRange);
+  });
+
+bindMenu("m-fc", "lb-fc", "예측 구간",
+  () => [3, 6].map(h => ({ k: h, l: "예측 " + h + "h", on: h === fcHours })),
+  k => { fcHours = +k; pull("forecast").then(paintRange); });
+
+bindMenu("m-sort", "lb-sort", "정렬 기준",
+  () => [{ k: "order", l: "관제순", on: sortMode === "order" },
+         { k: "acc", l: "누적순", on: sortMode === "acc" }],
+  k => { sortMode = k; drawRain(true); });
+
+bindMenu("m-val", "lb-val", "타임라인 값 표기",
+  () => [{ k: "peak", l: "봉우리만", on: !showAll },
+         { k: "all", l: "전부", on: showAll }],
+  k => { showAll = k === "all"; drawRain(true); });
+
+bindMenu("m-view", "lb-view", "보기",
+  () => [{ k: "tl", l: "타임라인", on: view === "tl" },
+         { k: "heat", l: "히트맵", on: view === "heat" }],
+  k => { view = k; drawRain(true); });
+
+/* 테마 — 벽면 화면이라 OS 설정을 따라가지 않고, 고른 값만 기억한다 */
+let theme = "dark";
+try { theme = localStorage.getItem("gn-theme") || "dark"; } catch {}
+function applyTheme() {
+  document.documentElement.dataset.theme = theme;
+  try { localStorage.setItem("gn-theme", theme); } catch {}
+}
+applyTheme();
+
+bindMenu("m-look", null, "",
+  () => [
+    { head: "테마" },
+    { k: "t:dark",  l: "다크",   on: theme === "dark" },
+    { k: "t:light", l: "라이트", on: theme === "light" },
+    { sep: true },
+    { head: "종합 화면" },
+    { k: "p:right", l: "예측 패널 오른쪽", on: sidePos === "right" },
+    { k: "p:left",  l: "예측 패널 왼쪽",   on: sidePos === "left" },
+    { sep: true },
+    { k: "s:open", l: "화면 꾸미기…", on: false },
+  ],
+  k => {
+    const [kind, v] = k.split(":");
+    if (kind === "t") { theme = v; applyTheme(); drawRain(false); }
+    else if (kind === "p") { sidePos = v; applySide(); }
+    else if (kind === "s") openSkin();
+  });
+
+bindMenu("m-win", "mb-view", "창",
+  () => VIEWS.map(v => ({ k: v.k, l: v.l, on: v.k === view2 })),
+  k => showView(k));
+
+bindMenu("m-crop", "lb-crop", "화각",
+  () => CROPS.map(([k, l]) => ({ k, l,
+    on: (k === "all" && qpfZoom <= fitZoom() + .02) ||
+        (k === "gn" && qpfZoom >= 3.4) ||
+        (k === "wide" && qpfZoom > fitZoom() + .02 && qpfZoom < 3.4) })),
+  k => setZoom(CROP_Z[k] || fitZoom()));
+
+bindMenu("m-speed", "lb-speed", "재생 속도",
+  () => [0.5, 1, 2].map(v => ({ k: v, l: v + "×", on: v === qpfSpeed })),
+  k => { qpfSpeed = +k; if (qpfPlaying) qpfStart(); });
+
+bindMenu("m-cnt", "lb-cnt", "예상 순위 표시",
+  () => [6, 8, 12, 16, "all"].map(v => ({ k: v, l: v === "all" ? "전부" : v + "개", on: v === tkCount })),
+  k => { tkCount = k === "all" ? "all" : +k; drawTicker(); });
+
+/* 활성 창이 쓰는 자료의 주기를 바꾼다 — 맥 메뉴바가 앞창 설정을 보여주듯 */
+function activeFeed() {
+  const p = document.querySelector(".panel.active");
+  for (const k in FEEDS) if (FEEDS[k].panel === p?.id) return k;
+  return "rain";
+}
+bindMenu("m-period", "lb-period", "갱신 주기",
+  () => {
+    const f = FEEDS[activeFeed()];
+    return [{ head: f.label + " 자료" },
+      ...[60, 300, 600, 900, 1800].map(sec => ({
+        k: sec, l: sec < 60 ? sec + "초" : sec / 60 + "분", on: sec === f.sec }))];
+  },
+  k => {
+    FEEDS[activeFeed()].sec = +k;
+    try { localStorage.setItem("gn-feeds",
+      JSON.stringify(Object.fromEntries(Object.entries(FEEDS).map(([n, f]) => [n, f.sec])))); } catch {}
+    paintCd();
+  });
+
+/* ── 화면 꾸미기 ──────────────────────────────────────────────────
+   조절기는 CSS를 써 주는 도구일 뿐이고, 실제로 화면을 바꾸는 것은
+   #user-css 한 곳이다. 그래서 여기서 만든 것을 그대로
+   파일로 옮기면 실서버에서도 똑같이 동작한다. */
+const skin = document.getElementById("skin");
+const userCss = document.getElementById("user-css");
+const K = { zoom: 100, accent: "", font: "", row: 100, extra: "" };
+
+try { Object.assign(K, JSON.parse(localStorage.getItem("gn-skin") || "{}")); } catch {}
+
+function skinCss() {
+  const out = [];
+  if (K.accent) out.push(`:root { --accent: ${K.accent}; }`);
+  if (K.font)   out.push(`:root { --sans: "${K.font}", "IBM Plex Sans KR", system-ui, sans-serif; }`);
+  // 배율은 zoom으로 준다 — 글자·여백·그래프가 같은 비율로 커져 배치가 안 깨진다
+  if (K.zoom !== 100) out.push(`.menubar, .board, .statusbar { zoom: ${(K.zoom / 100).toFixed(2)}; }`);
+  if (K.row !== 100)  out.push(`tbody td { height: calc(var(--rowh, 28px) * ${(K.row / 100).toFixed(2)}); }`);
+  return out.join("\n");
+}
+
+function applySkin(save) {
+  userCss.textContent = [skinCss(), K.extra].filter(Boolean).join("\n\n");
+  if (save) { try { localStorage.setItem("gn-skin", JSON.stringify(K)); } catch {} }
+  // 배율이 바뀌면 판 크기가 달라지므로 표를 다시 잰다
+  drawRain(false); drawFcSigun();
+}
+
+function skinSync() {
+  document.getElementById("k-zoom").value = K.zoom;
+  document.getElementById("k-zoom-o").textContent = K.zoom + "%";
+  document.getElementById("k-row").value = K.row;
+  document.getElementById("k-row-o").textContent = K.row + "%";
+  document.getElementById("k-font").value = K.font;
+  const ac = K.accent || getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
+  document.getElementById("k-accent").value = /^#[0-9a-f]{6}$/i.test(ac) ? ac : "#2FA3DC";
+  document.getElementById("k-accent-o").textContent = K.accent || "기본";
+  document.getElementById("k-css").value = [skinCss(), K.extra].filter(Boolean).join("\n\n");
+}
+
+function skinMsg(t) {
+  const el = document.getElementById("k-msg");
+  el.textContent = t;
+  clearTimeout(skinMsg.t);
+  skinMsg.t = setTimeout(() => (el.textContent = ""), 2200);
+}
+
+function openSkin() { skinSync(); skin.hidden = false; }
+function closeSkin() { skin.hidden = true; }
+
+document.getElementById("skin-x").addEventListener("click", closeSkin);
+skin.addEventListener("click", e => { if (e.target === skin) closeSkin(); });
+
+const knob = (id, key, fmt) =>
+  document.getElementById(id).addEventListener("input", e => {
+    K[key] = key === "accent" || key === "font" ? e.target.value : +e.target.value;
+    if (fmt) document.getElementById(id + "-o").textContent = fmt(e.target.value);
+    applySkin(true); 
+    document.getElementById("k-css").value = [skinCss(), K.extra].filter(Boolean).join("\n\n");
+  });
+knob("k-zoom", "zoom", v => v + "%");
+knob("k-row", "row", v => v + "%");
+knob("k-accent", "accent", v => v);
+knob("k-font", "font");
+
+// 직접 고친 CSS는 조절기가 만든 부분 뒤에 붙는다 — 뒤에 있으니 앞을 덮어쓴다
+document.getElementById("k-apply").addEventListener("click", () => {
+  const txt = document.getElementById("k-css").value;
+  K.extra = txt.startsWith(skinCss()) ? txt.slice(skinCss().length).trim() : txt;
+  applySkin(true);
+  skinMsg("적용했습니다");
+});
+
+document.getElementById("k-copy").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(document.getElementById("k-css").value);
+    skinMsg("클립보드에 복사했습니다");
+  } catch {
+    document.getElementById("k-css").select();
+    skinMsg("직접 복사하세요 (⌘C)");
+  }
+});
+
+document.getElementById("k-file").addEventListener("change", e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    document.getElementById("k-css").value = r.result;
+    K.extra = r.result; K.zoom = 100; K.row = 100; K.accent = ""; K.font = "";
+    applySkin(true); skinSync();
+    skinMsg(f.name + " 불러왔습니다");
+  };
+  r.readAsText(f);
+  e.target.value = "";
+});
+
+document.getElementById("k-reset").addEventListener("click", () => {
+  Object.assign(K, { zoom: 100, accent: "", font: "", row: 100, extra: "" });
+  applySkin(true); skinSync();
+  skinMsg("기본값으로 되돌렸습니다");
+});
+
+/* 예측 패널을 왼쪽에 둘지 오른쪽에 둘지 — 상황실 자리 배치에 맞춘다 */
+let sidePos = "right";
+try { sidePos = localStorage.getItem("gn-side") || "right"; } catch {}
+function applySide() {
+  document.getElementById("row-data").dataset.side = sidePos;
+  try { localStorage.setItem("gn-side", sidePos); } catch {}
+  drawRain(false); drawFcSigun();
+}
+
+/* ── 우클릭 — 그 시군의 다우지점 더 얹기 ─────────────────────────── */
+const ctx = document.getElementById("ctx");
+
+function openCtx(sig, x, y) {
+  const opt = (k, l, on, kind = "chk") =>
+    `<button type="button" role="menuitem" data-opt="${k}">
+       <span class="mk">${on ? (kind === "chk" ? "✓" : "●") : ""}</span>${l}</button>`;
+
+  const options =
+    `<div class="ctx-head">다우지점 표기</div>` +
+    [1, 2, 3].map(n => opt("per:" + n, `시군당 ${n}개`, perSigun === n && !flat, "rad")).join("") +
+    opt("flat", "시군 무시 · 전 지점 순위", flat) +
+    `<div class="ctx-sep"></div>`;
+
+  const ranked = [...stationsOf(sig)].sort((a, b) => accOf(b.d).sum - accOf(a.d).sum);
+  const shown = ranked.slice(0, perSigun).map(x => x.name);
+  const added = extra[sig] || [];
+  const items = ranked.map(st => {
+    const auto = shown.includes(st.name), on = added.includes(st.name);
+    return `<button type="button" role="menuitem" data-add="${sig}|${st.name}"${auto ? " disabled" : ""}>
+        <span class="mk">${auto ? "★" : on ? "✓" : ""}</span>${st.name}
+        <span class="amt">${accOf(st.d).sum.toFixed(1)}</span>
+      </button>`;
+  }).join("");
+
+  ctx.innerHTML = options +
+    `<div class="ctx-head"><b>${sig}</b> · 지점 얹기</div>${items}
+    <div class="ctx-foot">★ 자동 선택 · 누르면 표에 얹거나 뺀다</div>`;
+  ctx.classList.add("on");
+  const r = ctx.getBoundingClientRect();
+  ctx.style.left = Math.min(x, innerWidth  - r.width  - 8) + "px";
+  ctx.style.top  = Math.min(y, innerHeight - r.height - 8) + "px";
+}
+
+document.getElementById("rain-body").addEventListener("contextmenu", e => {
+  const tr = e.target.closest("tr[data-sigun]");
+  if (!tr) return;
+  e.preventDefault();
+  openCtx(tr.dataset.sigun, e.clientX, e.clientY);
+});
+
+ctx.addEventListener("click", e => {
+  const o = e.target.closest("[data-opt]");
+  if (o) {
+    const k = o.dataset.opt;
+    if (k === "flat") flat = !flat;
+    else { perSigun = +k.split(":")[1]; flat = false; }
+    if (metric !== "max") metric = "max";   // 지점을 다루는 설정이므로 지표를 되돌린다
+    ctx.classList.remove("on");
+    drawRain(true);
+    return;
+  }
+  const b = e.target.closest("[data-add]");
+  if (!b) return;
+  const [sig, stn] = b.dataset.add.split("|");
+  const list = extra[sig] || (extra[sig] = []);
+  const at = list.indexOf(stn);
+  at >= 0 ? list.splice(at, 1) : list.push(stn);
+  ctx.classList.remove("on");
+  drawRain(true);
+});
+
+document.addEventListener("click", e => { if (!e.target.closest("#ctx")) ctx.classList.remove("on"); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") ctx.classList.remove("on"); });
+window.addEventListener("blur", () => ctx.classList.remove("on"));
+
+/* ── 갱신 주기 · 카운트다운 ───────────────────────────────────────── */
+const CIRC = 2 * Math.PI * 16;
+
+function paintCd() {
+  const f = FEEDS[activeFeed()];
+  const total = f.sec;
+  left = Math.max(0, Math.ceil((f.next - Date.now()) / 1000));
+  document.getElementById("lb-period").textContent = total < 60 ? total + "초" : total / 60 + "분";
+  document.getElementById("cd").textContent =
+    String(Math.floor(left / 60)).padStart(2, "0") + ":" + String(left % 60).padStart(2, "0");
+  document.getElementById("ring-head").setAttribute("stroke-dashoffset", (CIRC * (1 - left / total)).toFixed(1));
+}
+
+/* 자료마다 제 시각이 되면 그것만 다시 받는다 — 하나 때문에 넷을 다 부르지 않는다 */
+function tick() {
+  const now = Date.now();
+  for (const k in FEEDS) if (now >= FEEDS[k].next) pull(k, "자동");
+  paintCd();
+}
+function startTimer() {
+  const now = Date.now();
+  for (const k in FEEDS) FEEDS[k].next ??= now + FEEDS[k].sec * 1000;
+  clearInterval(timer);
+  timer = setInterval(tick, 1000);
+}
+
+/* 한 자료 받아오기. 받는 동안 그 판 테두리에 빛이 지나간다. */
+async function pull(kind, how) {
+  const f = FEEDS[kind];
+  if (f.busy) return;
+  f.busy = true;
+  f.next = Date.now() + f.sec * 1000;
+  const panel = f.panel && document.getElementById(f.panel);
+  if (panel) panel.dataset.busy = "1";
+  document.getElementById("manual").dataset.busy = "true";
+  try {
+    if (how === "수동") await fetch(`/api/refresh/${kind}`, { method: "POST" });
+    await f.load();
+    f.after();
+    setOrigin(kind, how === "수동" ? "API 직조회" : "DB 조회", true);
+  } catch (e) {
+    // ⚠️ 실패해도 화면의 마지막 정상 자료를 지우지 않는다. 기준시각만 낡음으로 표시한다.
+    setOrigin(kind, "조회 실패", false);
+    console.warn(kind, e);
+  } finally {
+    f.busy = false;
+    if (panel) delete panel.dataset.busy;
+    if (!Object.values(FEEDS).some(x => x.busy))
+      document.getElementById("manual").dataset.busy = "false";
+    paintCd();
+  }
+}
+
+function setOrigin(kind, text, ok) {
+  const el = document.querySelector("#p-rain header .origin");
+  if (kind === "rain" && el) {
+    el.textContent = text;
+    el.classList.toggle("db", ok && text !== "API 직조회");
+  }
+  const bt = document.querySelector((FEEDS[kind].panel ? `#${FEEDS[kind].panel}` : "#p-rain") + " header .basetime");
+  if (bt) bt.classList.toggle("stale", !ok);
+  syncMeta();
+}
+
+/* ── 갱신 ─────────────────────────────────────────────────────────── */
+function repaint() {
+  drawRain(); drawTicker(); drawFcSigun(); drawWrns();
+}
+
+function refreshAll(how) {
+  for (const k in FEEDS) pull(k, how);
+}
+
+/* 수동 조회 — 화면 전체에 스윕을 한 번 주고 네 자료를 모두 다시 받는다.
+   ⚠️ 주기와 무관하게 서버에 실제 수집을 시킨다(/api/refresh). 내부 캐시만
+   다시 읽으면 버튼을 눌러도 아무 일이 안 일어난다. */
+function refreshAll(how) {
+  const sweep = document.getElementById("sweep");
+  sweep.classList.remove("run"); void sweep.offsetWidth; sweep.classList.add("run");
+  for (const k in FEEDS) pull(k, how);
+}
+
+document.getElementById("manual").addEventListener("click", () => refreshAll("수동"));
+
+/* ── 활성 창 — 애플 메뉴바가 앞창 이름을 보여주는 방식 ─────────────
+   활성 패널의 머리글은 감추고, 제목과 기준시각·출처를 메뉴바로 올린다.
+   벽면에서는 기본값(다우지점 강수량)이 계속 떠 있고, 만지면 그 패널로 옮겨 간다. */
+const mbTitle = document.getElementById("mb-title");
+const mbMeta  = document.getElementById("mb-meta");
+
+function syncMeta() {
+  const panel = document.querySelector(".panel.active");
+  if (!panel) return;
+  mbTitle.textContent = panel.querySelector(":scope > header h2").textContent;
+  // 그 패널이 가진 설정만 가운데에 남긴다 — 맥에서 앞창이 바뀌면 메뉴가 바뀌듯이
+  document.querySelectorAll(".mb-panelmenus .mb-item").forEach(b => {
+    b.hidden = !(b.dataset.owner || "").split(" ").includes(panel.id);
+  });
+  const head = panel.querySelector(":scope > header");
+  mbMeta.replaceChildren(...[...head.children]
+    .filter(el => el.tagName !== "H2")
+    .map(el => {
+      const c = el.cloneNode(true);
+      c.removeAttribute("id");
+      c.querySelectorAll("[id]").forEach(x => x.removeAttribute("id"));
+      return c;
+    }));
+}
+
+function activate(panel, force) {
+  if (!panel || (!force && panel.classList.contains("active"))) return;
+  if (!force && panel.offsetParent === null) return;   // 안 보이는 판은 앞창이 못 된다
+  document.querySelectorAll(".panel").forEach(p => p.classList.toggle("active", p === panel));
+  syncMeta();
+}
+
+document.querySelectorAll(".panel").forEach(p => {
+  p.addEventListener("pointerdown", () => activate(p));
+});
+activate(document.getElementById("p-rain"));
+
+/* ── 셀 툴팁 ──────────────────────────────────────────────────────── */
+const tip = document.getElementById("tip");
+document.addEventListener("mouseover", e => {
+  const c = e.target.closest(".hc[data-v]");
+  if (!c) return;
+  const pv = +c.dataset.v;
+  const part = c.classList.contains("partial");
+  tip.innerHTML = `<div class="k">${c.dataset.sigun} · ${c.dataset.stn}</div>
+    <div class="v">${pv.toFixed(1)} mm</div>
+    <div class="k">${part ? `${HOURS[N() - 1]} · 최근 ${NOWMIN}분 (1시간 페이스 ${(pv * 60 / NOWMIN).toFixed(0)}mm/h)` : c.dataset.hour + " 시간대"}</div>`;
+  tip.classList.add("on");
+});
+document.addEventListener("mousemove", e => {
+  if (!tip.classList.contains("on")) return;
+  tip.style.left = Math.min(e.clientX + 14, innerWidth - 250) + "px";
+  tip.style.top = (e.clientY + 18) + "px";
+});
+document.addEventListener("mouseout", e => {
+  if (e.target.closest(".hc[data-v]")) tip.classList.remove("on");
+});
+
+/* 타임라인 위에서 값 읽기 — 선 그래프에는 숫자가 다 없으므로 */
+document.getElementById("rain-body").addEventListener("mousemove", e => {
+  const td = e.target.closest("td.tl");
+  const tr = e.target.closest("tr[data-sigun]");
+  if (!td || !tr || view !== "tl") return;
+  const svg = td.querySelector("svg");
+  if (!svg) return;
+  const sig = tr.dataset.sigun;
+  const row = buildRows().find(r => r.sig === sig && r.stn === tr.querySelector(".dp .s").textContent);
+  if (!row) return;
+  const { all, split } = tlPoints(row);
+  const b = svg.getBoundingClientRect();
+  const i = Math.min(Math.max(Math.round(((e.clientX - b.left) / b.width) * (all.length - 1)), 0), all.length - 1);
+  const isFc = i >= split;
+  const hour = isFc ? FC_HOURS[i - split] : HOURS[cut() + i];
+  const v = all[i];
+  const part = !isFc && cut() + i === N() - 1;
+  tip.innerHTML = `<div class="k">${sig} ${isFc ? (FCSIG[sig] ? FCSIG[sig].emd : "") + " · 예측" : row.stn + " · 실측"}</div>
+    <div class="v">${typeof v === "number" ? v.toFixed(1) : v === null ? "결측" : "조회실패"} ${typeof v === "number" ? "mm" : ""}</div>
+    <div class="k">${part ? `최근 ${NOWMIN}분 · 아직 1시간이 안 찼다 (페이스 ${(num(v) * 60 / NOWMIN).toFixed(0)}mm/h)`
+      : isFc ? hour + "시 예상 · 1시간" : hour + "시 · 1시간"}</div>`;
+  tip.classList.add("on");
+  tip.style.left = Math.min(e.clientX + 14, innerWidth - 210) + "px";
+  tip.style.top = (e.clientY + 18) + "px";
+});
+document.getElementById("rain-body").addEventListener("mouseleave", () => tip.classList.remove("on"));
+
+/* ── 시작 ─────────────────────────────────────────────────────────
+   자료를 먼저 받고 그리기 시작한다. 표본 자료가 없으므로 빈 화면에서 출발해
+   첫 응답이 오는 대로 채워진다. */
+applySide(); applySkin(false); showView('all');
+
+(async () => {
+  await Promise.allSettled([loadRain(), loadForecast(), loadAlerts(), loadQpf()]);
+  paintRange(); repaint(); drawWrns(); drawQpf(); applyCrop(false);
+  startTimer(); paintCd();
+})();
+</script>
+
