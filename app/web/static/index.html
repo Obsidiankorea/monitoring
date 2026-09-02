@@ -663,8 +663,21 @@ td.totc .tot { width: auto; display: block; }
 .qpf-scale .unit { font-family: var(--mono); font-size: 9px; color: var(--ink-3); margin-left: 4px; }
 .qpf-stage[data-crop="all"] .qpf-legend-img { display: none; }
 
+/* 어느 발표분을 보고 있는지 — 그림 왼쪽 위에 작게 */
+.qpf-tag {
+  position: absolute; left: 10px; top: 10px;
+  font-family: var(--mono); font-size: 11px; font-weight: 500;
+  color: var(--ink-2);
+  padding: 3px 8px; border-radius: 999px;
+  background: color-mix(in oklab, var(--ground) 84%, transparent);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+}
+.qpf-tag:empty { display: none; }
+
 .qpf-status {
-  position: absolute; left: 12px; top: 10px;
+  position: absolute; left: 12px; top: 40px;
   display: flex; align-items: center; gap: 8px;
   font-family: var(--mono); font-size: 10.5px; color: var(--ink-2);
   background: color-mix(in oklab, var(--ground) 82%, transparent);
@@ -1185,6 +1198,7 @@ tbody.swap tr { animation: rowin .36s cubic-bezier(.2,.7,.3,1) both; animation-d
                  role="img" aria-label="초단기 강수 예측 분포(대체 그림)" hidden></svg>
 
             <!-- 그림 위에 얹는다 — 판을 따로 만들면 그림이 그만큼 작아진다 -->
+            <span class="qpf-tag" id="qpf-tag"></span>
             <span class="qpf-clock"><b id="qpf-t">14:20</b><i id="qpf-ef">＋10분</i></span>
             <div class="qpf-scale" id="qpf-scale" role="img" aria-label="강수강도 범례 mm/h"></div>
             <div class="qpf-status" id="qpf-status"></div>
@@ -2130,6 +2144,7 @@ let QPF_EFS = [];
 const qpfEf = i => QPF_EFS[i] ?? (i + 1) * 10;
 function qpfClock(i) {
   const t = QPF_TM;
+  if (!t || t.length < 12 || !QPF_N) return "—";
   const d = new Date(+t.slice(0, 4), +t.slice(4, 6) - 1, +t.slice(6, 8), +t.slice(8, 10), +t.slice(10, 12));
   d.setMinutes(d.getMinutes() + qpfEf(i));
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
@@ -2201,7 +2216,11 @@ function qpfStatus(msg, warn) {
 function drawQpf() {
   qpfShow();
   document.getElementById("qpf-t").textContent = qpfClock(qpfIdx);
-  document.getElementById("qpf-ef").textContent = `＋${qpfEf(qpfIdx)}분`;
+  document.getElementById("qpf-ef").textContent = QPF_N ? `＋${qpfEf(qpfIdx)}분` : "";
+  // 언제 발표된 자료를 보고 있는지 — 그림 위에 작게 늘 붙여 둔다
+  const tag = document.getElementById("qpf-tag");
+  if (tag) tag.textContent = QPF_TM && QPF_TM.length >= 12
+    ? `발표 ${QPF_TM.slice(8, 10)}:${QPF_TM.slice(10, 12)}` : "";
   document.getElementById("qpf-seek").value = qpfIdx;
   const rv = document.querySelector("#p-qpf header .rangeval");
   if (rv) rv.innerHTML = QPF_TM

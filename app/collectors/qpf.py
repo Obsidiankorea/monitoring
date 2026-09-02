@@ -108,6 +108,86 @@ async def latest_stamp() -> str:
     return _stamp(await _one(future, 10, 600))
 
 
+async def _is_blank_slot(tmfc: str, ef: int, size: int) -> bool:
+    """그 발표분의 그림이 준비됐는지 한 장으로 확인한다."""
+    _, blank = _crop(await _one(tmfc, ef, size))
+    return blank
+
+
+async def _download(tmfc: str, efs: list[int], c: dict, at: str) -> tuple[int, int, list]:
+    """한 발표분을 내려받는다 → (저장, 빈그림, 실패)."""
+    outdir = CACHE / "qpf" / tmfc
+    outdir.mkdir(parents=True, exist_ok=True)
+    with db.tx() as con:
+        have = {r["ef"] for r in con.execute("SELECT ef FROM qpf_frame WHERE tmfc=?", (tmfc,))}
+
+    saved, blanks, failed = 0, 0, []
+    for ef in efs:
+        if ef in have:
+            continue
+        for attempt in range(2):
+            try:
+                raw, blank = _crop(await _one(tmfc, ef, c["size"]))
+                if blank:
+                    blanks += 1
+                    break                  # 빈 그림은 저장하지 않는다
+                path = outdir / f"{ef:03d}.png"
+                path.write_bytes(raw)
+                with db.tx() as con:
+                    con.execute(
+                        "INSERT OR REPLACE INTO qpf_frame(tmfc, ef, path, bytes, fetched_at) VALUES(?,?,?,?,?)",
+                        (tmfc, ef, str(path.relative_to(CACHE)), len(raw), at))
+                saved += 1
+                break
+            except KmaError as e:
+                # ⚠️ 한꺼번에 던지면 중간이 통째로 실패한다(실측: ef 190~240 누락).
+                if attempt:
+                    failed.append(f"ef={ef}: {e}")
+                else:
+                    await asyncio.sleep(0.4)
+    return saved, blanks, failed
+
+
+def _prune(keep: int) -> None:
+    """오래된 발표분 정리 — 캐시가 무한히 자라지 않게."""
+    with db.tx() as con:
+        olds = [r["tmfc"] for r in con.execute(
+            "SELECT DISTINCT tmfc FROM qpf_frame ORDER BY tmfc DESC")][keep:]
+        for old in olds:
+            con.execute("DELETE FROM qpf_frame WHERE tmfc=?", (old,))
+            d = CACHE / "qpf" / old
+            if d.exists():
+                for f in d.iterdir():
+                    f.unlink()
+                d.rmdir()
+
+
+async def backfill(now: datetime, c: dict, at: str, tries: int = 6) -> dict:
+    """화면에 아무것도 없을 때 뒤로 물러나며 그림이 있는 발표분을 찾아 받는다.
+
+    ⚠️ 스탬프가 바뀌었다고 그림이 준비된 것은 아니다 — 실측으로 19:30 발표는
+       모든 ef가 빈 그림이었고 19:20 이전은 정상이었다. 최신에 매달리며 빈 화면을
+       오래 두느니, 있는 것 중 가장 최근 것을 보여주는 편이 낫다.
+    """
+    efs = frame_efs(c)
+    slot = _slot(now)
+    for back in range(1, tries + 1):
+        tmfc = (slot - timedelta(minutes=10 * back)).strftime("%Y%m%d%H%M")
+        try:
+            if await _is_blank_slot(tmfc, efs[0], c["size"]):
+                continue
+        except KmaError:
+            continue
+        saved, blanks, failed = await _download(tmfc, efs, c, at)
+        if saved:
+            _prune(int(c.get("keep", KEEP_DEFAULT)))
+            log.info("qpf 최신분이 아직이라 %s 를 대신 받았다 — %d장", tmfc[8:12], saved)
+            db.log_collect("qpf", True, at, f"발표 {tmfc[8:12]}(대체) · {saved}장")
+            return {"tmfc": tmfc, "saved": saved, "fallback": True}
+    db.log_collect("qpf", False, at, "받을 수 있는 발표분이 없다")
+    return {"tmfc": None, "saved": 0, "skipped": "받을 수 있는 발표분이 없다"}
+
+
 async def collect(now: datetime | None = None, force: bool = False) -> dict:
     """발표가 났는지 먼저 보고, 난 것만 내려받는다."""
     now = now or datetime.now()
@@ -151,59 +231,25 @@ async def collect(now: datetime | None = None, force: bool = False) -> dict:
         db.note_publish(tmfc, at, round(elapsed, 1))
         log.info("발표 %s 확인 (정시+%.0f분) — %d장 내려받는다", tmfc[8:12], elapsed, len(efs))
 
-    outdir = CACHE / "qpf" / tmfc
-    outdir.mkdir(parents=True, exist_ok=True)
+    saved, blanks, failed = await _download(tmfc, efs, c, at)
+    _prune(int(c.get("keep", KEEP_DEFAULT)))
 
-    saved, failed, blanks = 0, [], 0
-    for ef in efs:
-        if ef in have:
-            continue
-        for attempt in range(2):
-            try:
-                raw, blank = _crop(await _one(tmfc, ef, c["size"]))
-                if blank:
-                    blanks += 1
-                    break                  # 빈 그림은 저장하지 않는다
-                path = outdir / f"{ef:03d}.png"
-                path.write_bytes(raw)
-                with db.tx() as con:
-                    con.execute(
-                        "INSERT OR REPLACE INTO qpf_frame(tmfc, ef, path, bytes, fetched_at) VALUES(?,?,?,?,?)",
-                        (tmfc, ef, str(path.relative_to(CACHE)), len(raw), at))
-                saved += 1
-                break
-            except KmaError as e:
-                # ⚠️ 한꺼번에 던지면 중간이 통째로 실패한다(실측: ef 190~240 누락).
-                #    한 번 쉬고 다시 시도한다.
-                if attempt:
-                    failed.append(f"ef={ef}: {e}")
-                else:
-                    await asyncio.sleep(0.4)
-
-    # 오래된 발표분 정리 — 캐시가 무한히 자라지 않게
-    with db.tx() as con:
-        olds = [r["tmfc"] for r in con.execute(
-            "SELECT DISTINCT tmfc FROM qpf_frame ORDER BY tmfc DESC")][int(c.get("keep", KEEP_DEFAULT)):]
-        for old in olds:
-            con.execute("DELETE FROM qpf_frame WHERE tmfc=?", (old,))
-            d = CACHE / "qpf" / old
-            if d.exists():
-                for f in d.iterdir():
-                    f.unlink()
-                d.rmdir()
-
-    # 한 장도 못 건졌으면 아직 올라오는 중이다 — 발표를 못 본 것으로 되돌려 다시 시도한다
+    # 한 장도 못 건졌으면 그림이 아직 올라오는 중이다 —
+    # 발표를 못 본 것으로 되돌려 다음 주기에 다시 시도한다
     if saved == 0 and blanks:
         db.put_setting("qpf_stamp", "")
         with db.tx() as con:
             con.execute("DELETE FROM qpf_publish WHERE tmfc=?", (tmfc,))
-        log.info("qpf %s 그림이 아직 비어 있다 — 다음 주기에 다시 받는다", tmfc)
+            n = con.execute("SELECT COUNT(*) c FROM qpf_frame").fetchone()["c"]
+        log.info("qpf %s 그림이 아직 비어 있다", tmfc)
+        if n == 0:
+            # 보여줄 것이 하나도 없다 — 빈 화면을 두느니 있는 것 중 최신을 받는다
+            return await backfill(now, c, at)
         db.log_collect("qpf", False, at, f"발표 {tmfc[8:12]} · 그림 준비 중")
         return {"tmfc": tmfc, "saved": 0, "skipped": "그림 준비 중"}
 
-    ok = saved > 0 or bool(have)
-    db.log_collect("qpf", ok, at, f"발표 {tmfc[8:12]} · {saved}/{len(efs)}장"
-                                  + (f" · 빈 그림 {blanks}" if blanks else "")
-                                  + (f" · 실패 {len(failed)}" if failed else ""))
+    db.log_collect("qpf", saved > 0, at, f"발표 {tmfc[8:12]} · {saved}/{len(efs)}장"
+                                        + (f" · 빈 그림 {blanks}" if blanks else "")
+                                        + (f" · 실패 {len(failed)}" if failed else ""))
     return {"tmfc": tmfc, "saved": saved, "frames": len(efs),
             "blank": blanks, "failed": failed}
