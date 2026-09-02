@@ -42,8 +42,7 @@ def rain(hours: int = 12, now: datetime | None = None) -> dict:
         minute: dict[str, float | None] = {}
         if minute_tm:
             base_day = {r["stn"]: r["rn_day"] for r in con.execute(
-                "SELECT stn, rn_day FROM obs_hourly WHERE tm=? AND quality='ok'", (slots[-2],))
-            } if len(slots) > 1 else {}
+                "SELECT stn, rn_day FROM obs_hourly WHERE tm=? AND quality='ok'", (slots[-1],))}
             for r in con.execute(
                 "SELECT stn, rn_day, quality FROM obs_minute WHERE tm=?", (minute_tm,)
             ):
@@ -52,15 +51,18 @@ def rain(hours: int = 12, now: datetime | None = None) -> dict:
                 minute[r["stn"]] = (round(cur - b, 1) if r["quality"] == "ok"
                                     and b is not None and cur is not None and cur >= b else None)
 
+    # ⚠️ 매분 보강값으로 마지막 정시 칸을 덮으면 그 한 시간이 통째로 사라진다.
+    #    칸을 하나 더 붙여야 '정시까지'와 '정시 이후 지금까지'가 둘 다 남는다.
     labels = [s[11:13] for s in slots]
-    if minute_tm:
-        labels[-1] = minute_tm[11:16]
+    partial = bool(minute_tm and minute_tm[11:16] > slots[-1][11:16])
+    if partial:
+        labels.append(minute_tm[11:16])
 
     out = []
     for stn, name in STN_NAME.items():
         vals = [series.get(stn, {}).get(s) for s in slots]
-        if minute_tm and stn in minute:
-            vals[-1] = minute[stn]
+        if partial:
+            vals.append(minute.get(stn))
         ok = [v for v in vals if v is not None]
         out.append({
             "stn": stn, "name": name, "sigun": STN_SIGUN[stn],
@@ -72,7 +74,8 @@ def rain(hours: int = 12, now: datetime | None = None) -> dict:
 
     return {
         "labels": labels, "hours": hours,
-        "base_hour": slots[-1][11:16], "minute_tm": minute_tm[11:16] if minute_tm else None,
+        "base_hour": slots[-1][11:16],
+        "minute_tm": minute_tm[11:16] if partial else None,
         "rows": out,
     }
 

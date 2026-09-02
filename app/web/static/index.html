@@ -282,6 +282,8 @@ body {
 .mb-mark { flex: none; display: block; }
 .mb-brand b { font-size: 12.5px; font-weight: 600; letter-spacing: -.01em; white-space: nowrap; }
 .mb-arrow { color: var(--ink-3); font-size: 13px; flex: none; }
+/* 눈금 줄이 세로 글자를 자르지 않게 */
+th.tlh { overflow: visible; }
 /* 창 이름이 곧 창 전환 단추다 — 맥에서 앞창을 바꾸는 것과 같은 자리 */
 .mb-win {
   display: inline-flex; align-items: center; gap: 5px;
@@ -855,6 +857,12 @@ td.totc .tot { width: auto; display: block; }
 
 /* ── B. 강수 타임라인 ──────────────────────────────────────────── */
 td.tl { padding: 0 12px 0 6px; }
+/* 봉우리 숫자가 위아래 행으로 살짝 넘어간다 — 잘리지 않게 */
+td.tl svg { overflow: visible; }
+#rain-table tbody tr:first-child td, #rain-table tbody tr:last-child td { position: relative; }
+#rain-body { --pad-edge: 6px; }
+#rain-table tbody tr:first-child td.tl svg { margin-top: var(--pad-edge); }
+#rain-table tbody tr:last-child td.tl svg { margin-bottom: var(--pad-edge); }
 td.tl svg, th.tlh svg { display: block; width: 100%; }
 
 /* 지금 — 1분마다 갱신되는 칸. 숨쉬듯 뛴다. */
@@ -1897,35 +1905,42 @@ function drawRain(animate) {
     for (let j = 0; j < fcHours; j++) mins.push(fcMin(j));
     setAxis(mins);
     const nObs = N() - cut();
-    // 지금·예측·자정을 먼저 자리 잡고, 나머지 눈금은 남는 자리에만 넣는다
-    const tGap = 30, tPlaced = [];
-    const must = i => i >= nObs || i === nObs - 1 || (cut() + i) % 24 === 0;
-    mins.forEach((m, i) => { if (must(i)) tPlaced.push(xM(m)); });
+    const nowX = xM(mins[nObs - 1]);
+
+    /* '지금'은 가로 눈금 줄에 두면 옆 눈금과 겹친다. 세로선 위에 세워 붙인다 —
+       자리를 안 먹고, 선 위에 있으니 어디를 가리키는지도 분명하다. */
+    const NOW_W = 14;                       // 세로 글자가 차지하는 폭
+    const tGap = 30, tPlaced = [nowX];
+    const must = i => i >= nObs || (cut() + i) % 24 === 0;
+    mins.forEach((m, i) => { if (must(i) && i !== nObs - 1) tPlaced.push(xM(m)); });
     const tKeep = new Set();
     mins.forEach((m, i) => {
-      if (must(i)) { tKeep.add(i); return; }
+      if (i === nObs - 1) return;           // 지금은 따로 그린다
       const x = xM(m);
+      if (must(i)) { tKeep.add(i); return; }
       if (tPlaced.every(px => Math.abs(px - x) >= tGap)) { tPlaced.push(x); tKeep.add(i); }
     });
     const ticks = mins.map((m, i) => {
-      const isFc = i >= nObs, isNow = i === nObs - 1;
-      const gi = cut() + i;
-      const isMid = !isFc && gi % 24 === 0;
       if (!tKeep.has(i)) return "";
-      const lbl = isFc ? FC_HOURS[i - nObs]
-                : isNow ? HOURS[SLOTS - 1]
-                : isMid ? DAYS[dayOf(gi)]
-                : HOURS[gi].slice(0, 2);
-      return `<text x="${xM(m).toFixed(1)}" y="11" text-anchor="middle"
+      const isFc = i >= nObs, gi = cut() + i;
+      const isMid = !isFc && gi % 24 === 0;
+      const x = xM(m);
+      // 지금 표시와 겹칠 자리는 비운다
+      if (Math.abs(x - nowX) < NOW_W) return "";
+      const lbl = isFc ? FC_HOURS[i - nObs] : isMid ? DAYS[dayOf(gi)] : HOURS[gi].slice(0, 2);
+      return `<text x="${x.toFixed(1)}" y="11" text-anchor="middle"
         font-family="IBM Plex Mono, monospace" font-size="${isMid ? 10 : 11}"
-        font-weight="${isNow || isMid ? 600 : 400}"
-        fill="${isNow ? "var(--ink)" : isFc ? "color-mix(in oklab, var(--accent) 62%, var(--ink-3))"
+        font-weight="${isMid ? 600 : 400}"
+        fill="${isFc ? "color-mix(in oklab, var(--accent) 62%, var(--ink-3))"
               : isMid ? "var(--ink-2)" : "var(--ink-3)"}">${lbl}</text>`;
     }).join("");
-    const nowX = xM(mins[nObs - 1]);
-    cell.innerHTML = `<svg viewBox="0 0 ${TLW} 15" width="100%" height="15" preserveAspectRatio="xMinYMid meet">
+
+    cell.innerHTML = `<svg viewBox="0 0 ${TLW} 15" width="100%" height="15" preserveAspectRatio="xMinYMid meet" overflow="visible">
       ${ticks}
-      <line x1="${nowX.toFixed(1)}" y1="12.5" x2="${nowX.toFixed(1)}" y2="15" stroke="var(--ink)" stroke-width="1.1"/>
+      <text x="${(nowX + 4).toFixed(1)}" y="13" transform="rotate(-90 ${(nowX + 4).toFixed(1)} 13)"
+        font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600"
+        fill="var(--ink)">${HOURS[SLOTS - 1]}</text>
+      <line x1="${nowX.toFixed(1)}" y1="1" x2="${nowX.toFixed(1)}" y2="15" stroke="var(--ink)" stroke-width="1.1"/>
     </svg>`;
   } else {
     cell.innerHTML = `<div class="cells" style="--n:${cols.length}">` +
