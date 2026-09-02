@@ -51,16 +51,27 @@ def _slot(now: datetime) -> datetime:
     return t - timedelta(minutes=t.minute % 10)
 
 
-def _crop(raw: bytes) -> bytes:
+def _crop(raw: bytes) -> tuple[bytes, bool]:
+    """경남만 잘라 낸다. 두 번째 값은 '빈 그림인가'.
+
+    ⚠️ 발표가 났다고 그림이 바로 올라오는 것은 아니다. 막 올라오는 중에는
+       완전히 빈 이미지가 온다(실측: 원본 1835×1820이 1,429바이트, 색 1개).
+       그걸 저장하면 화면이 하얗게 뜨고, 다음 발표까지 그대로 남는다.
+       빈 것은 저장하지 않고 다음 주기에 다시 받는다.
+    """
     try:
         from PIL import Image
     except ImportError:
-        return raw                        # PIL이 없으면 전국 그대로 둔다
+        return raw, False                 # PIL이 없으면 판별도 못 한다
     im = Image.open(BytesIO(raw))
     box = tuple(min(v, s) for v, s in zip(CROP, (im.width, im.height) * 2))
+    cut = im.crop(box)
+    # 해안선이 그려진 정상 그림은 색이 수십 가지다. 두 가지 이하면 빈 그림이다.
+    cols = cut.convert("RGB").getcolors(maxcolors=8)
+    blank = cols is not None and len(cols) <= 2
     out = BytesIO()
-    im.crop(box).save(out, format="PNG", optimize=True)
-    return out.getvalue()
+    cut.save(out, format="PNG", optimize=True)
+    return out.getvalue(), blank
 
 
 async def _one(tmfc: str, ef: int, size: int) -> bytes:
@@ -143,13 +154,16 @@ async def collect(now: datetime | None = None, force: bool = False) -> dict:
     outdir = CACHE / "qpf" / tmfc
     outdir.mkdir(parents=True, exist_ok=True)
 
-    saved, failed = 0, []
+    saved, failed, blanks = 0, [], 0
     for ef in efs:
         if ef in have:
             continue
         for attempt in range(2):
             try:
-                raw = _crop(await _one(tmfc, ef, c["size"]))
+                raw, blank = _crop(await _one(tmfc, ef, c["size"]))
+                if blank:
+                    blanks += 1
+                    break                  # 빈 그림은 저장하지 않는다
                 path = outdir / f"{ef:03d}.png"
                 path.write_bytes(raw)
                 with db.tx() as con:
@@ -178,7 +192,18 @@ async def collect(now: datetime | None = None, force: bool = False) -> dict:
                     f.unlink()
                 d.rmdir()
 
+    # 한 장도 못 건졌으면 아직 올라오는 중이다 — 발표를 못 본 것으로 되돌려 다시 시도한다
+    if saved == 0 and blanks:
+        db.put_setting("qpf_stamp", "")
+        with db.tx() as con:
+            con.execute("DELETE FROM qpf_publish WHERE tmfc=?", (tmfc,))
+        log.info("qpf %s 그림이 아직 비어 있다 — 다음 주기에 다시 받는다", tmfc)
+        db.log_collect("qpf", False, at, f"발표 {tmfc[8:12]} · 그림 준비 중")
+        return {"tmfc": tmfc, "saved": 0, "skipped": "그림 준비 중"}
+
     ok = saved > 0 or bool(have)
     db.log_collect("qpf", ok, at, f"발표 {tmfc[8:12]} · {saved}/{len(efs)}장"
+                                  + (f" · 빈 그림 {blanks}" if blanks else "")
                                   + (f" · 실패 {len(failed)}" if failed else ""))
-    return {"tmfc": tmfc, "saved": saved, "frames": len(efs), "failed": failed}
+    return {"tmfc": tmfc, "saved": saved, "frames": len(efs),
+            "blank": blanks, "failed": failed}

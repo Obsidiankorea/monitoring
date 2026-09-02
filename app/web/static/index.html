@@ -297,7 +297,7 @@ body {
 .mb-meta { display: flex; align-items: center; gap: 7px; min-width: 0; margin-left: 4px; }
 .mb-meta .basetime { font-size: 10.5px; padding: 1px 6px; background: transparent; border-color: var(--line); }
 .mb-meta .origin { font-size: 9.5px; padding: 1px 6px; }
-.mb-meta .src { margin-left: 2px; font-size: 9.5px; }
+.mb-meta .src { display: none; }
 
 /* 언제 받아 온 자료인지 — 판을 고르면 그 판 것이 뜬다 */
 .fetched {
@@ -305,6 +305,7 @@ body {
   white-space: nowrap;
 }
 .fetched b { color: var(--ink-2); font-weight: 500; }
+.fetched.stale b { color: var(--lv-fail); }
 @media (max-width: 1320px) { .mb-meta .fetched { display: none; } }
 
 /* 좁아지면 뒤쪽부터 접는다 — 기준시각은 마지막까지 남긴다(F1.3) */
@@ -362,13 +363,19 @@ body {
 
 .mb-sep { width: 1px; height: 15px; background: var(--line); margin: 0 3px; flex: none; }
 
-/* 남은 시간 — 링 하나로 줄였다. 숫자는 겹쳐 두지 않고 옆에 작게. */
-.mb-cd { display: inline-flex; align-items: center; gap: 6px; padding: 0 4px 0 2px; }
-.ring { width: 15px; height: 15px; flex: none; transform: rotate(-90deg); }
-.ring circle { fill: none; stroke-width: 2.4; }
-.ring .track { stroke: var(--line); }
-.ring .head  { stroke: var(--accent); stroke-linecap: round; transition: stroke-dashoffset .95s linear; }
-.mb-cd b { font-family: var(--mono); font-size: 11.5px; font-weight: 500; color: var(--ink-3); }
+/* 언제 받았고 언제 기준인지 — 남은 시간보다 이게 먼저 알고 싶은 것이다.
+   앞창을 바꾸면 그 판의 값으로 바뀐다. */
+.mb-when {
+  display: inline-flex; align-items: center; gap: 9px;
+  padding: 2px 9px; border-radius: 999px;
+  background: var(--raised); border: 1px solid var(--line);
+  white-space: nowrap;
+}
+.mb-when span { font-size: 10.5px; color: var(--ink-3); }
+.mb-when b { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--ink); margin-left: 3px; }
+.mb-when .w2 b { color: var(--accent); }
+.mb-when.stale b { color: var(--lv-fail); }
+@media (max-width: 1240px) { .mb-when .w1 { display: none; } }
 
 
 /* 메뉴바에서 내려오는 작은 메뉴 */
@@ -1143,12 +1150,9 @@ tbody.swap tr { animation: rowin .36s cubic-bezier(.2,.7,.3,1) both; animation-d
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.8"/><path d="M12 7.5V12l3 1.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span id="lb-period">10분</span><svg class="chev" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
 
-    <span class="mb-cd" title="다음 자동 갱신까지 남은 시간">
-      <svg class="ring" viewBox="0 0 38 38" aria-hidden="true">
-        <circle class="track" cx="19" cy="19" r="16"></circle>
-        <circle class="head" id="ring-head" cx="19" cy="19" r="16" stroke-dasharray="100.5" stroke-dashoffset="0"></circle>
-      </svg>
-      <b id="cd">06:37</b>
+    <span class="mb-when" id="mb-when" title="이 판의 자료를 언제 받았고, 언제 기준인지">
+      <span class="w1">조회 <b id="w-got">—</b></span>
+      <span class="w2">기준 <b id="w-base">—</b></span>
     </span>
 
     <button class="mb-item mb-icon" id="manual" type="button" title="지금 조회" aria-label="지금 조회">
@@ -1168,9 +1172,9 @@ tbody.swap tr { animation: rowin .36s cubic-bezier(.2,.7,.3,1) both; animation-d
       <section class="panel" id="p-qpf">
         <header>
           <h2>예측 분포 재생</h2>
-          <span class="basetime">발표 <b>14:10</b> · 10분 간격</span>
+          <span class="basetime" id="qpf-base">발표 —</span>
           <span class="origin">API 이미지</span>
-          <span class="fetched">수집 <b>14:12</b> · 발표 시</span>
+          <span class="fetched" data-kind="qpf"></span>
           <span class="rangeval" id="qpf-when">＋10분 · <b>14:20</b></span>
           <span class="src">nph-qpf_ana_img · qpf=B(융합)</span>
         </header>
@@ -1210,8 +1214,8 @@ tbody.swap tr { animation: rowin .36s cubic-bezier(.2,.7,.3,1) both; animation-d
     <section class="panel" id="p-fcsig">
       <header>
         <h2>예측 상위 시군</h2>
-        <span class="basetime">발표 <b>14:10</b> → <b id="fs-span">＋6시간</b></span>
-        <span class="fetched">수집 <b>14:16</b> · 10분 주기</span>
+        <span class="basetime">발표 <b>—</b> → <b id="fs-span">＋6시간</b></span>
+        <span class="fetched" data-kind="forecast"></span>
         <span class="src">nph-dfs_vsrt_grd · 읍면동 최대</span>
       </header>
       <div class="body">
@@ -1223,9 +1227,9 @@ tbody.swap tr { animation: rowin .36s cubic-bezier(.2,.7,.3,1) both; animation-d
     <section class="panel" id="p-rain">
       <header>
         <h2>강수 타임라인</h2>
-        <span class="basetime"><span class="livedot"></span>실측 <b>14:20</b> · 예측 <b>14:10</b> 발표</span>
+        <span class="basetime"><span class="livedot"></span>실측 <b>—</b></span>
         <span class="origin db" id="rain-origin">DB 조회</span>
-        <span class="fetched">수집 <b>14:20</b> · 10분 주기</span>
+        <span class="fetched" data-kind="rain"></span>
         <span class="rangeval" id="rangeval">02:00~<b>14:20</b> · 예측 ~20:00</span>
         <span class="src">awsh.php · nph-aws2_min · nph-dfs_vsrt_grd</span>
       </header>
@@ -1398,6 +1402,7 @@ async function loadRain() {
       name: r.name, prev: 0, f: 1, d: r.d,   // 서버가 결측을 null로 준다 — 0으로 바꾸지 않는다
     });
   }
+  FEEDS.rain.base = (j.minute_tm || j.base_hour) + " 실측";
   document.querySelector("#p-rain header .basetime").innerHTML =
     `<span class="livedot"></span>실측 <b>${j.minute_tm || j.base_hour}</b>`
     + (j.minute_tm ? ` · 정시 ${j.base_hour}` : "");
@@ -1409,6 +1414,7 @@ async function loadForecast() {
   FCEMD = j.emd.map(e => ({ emd: e.emd, sig: e.sigun, d: e.d }));
   for (const k of Object.keys(FCSIG)) delete FCSIG[k];
   for (const g of j.sigun) FCSIG[g.sigun] = { d: g.d, emd: g.emd };
+  if (j.tmfc) FEEDS.forecast.base = `${j.tmfc.slice(8, 10)}:${j.tmfc.slice(10, 12)} 발표`;
   const b = document.querySelector("#p-fcsig header .basetime");
   if (b && j.tmfc)
     b.innerHTML = `발표 <b>${j.tmfc.slice(8, 10)}:${j.tmfc.slice(10, 12)}</b> → <b id="fs-span">＋${fcHours}시간</b>`;
@@ -1416,6 +1422,7 @@ async function loadForecast() {
 
 async function loadAlerts() {
   const j = await getJson("/api/alerts");
+  FEEDS.alerts.base = (j.base_time || "").slice(11, 16) + " 현재";
   const g = j.data || { groups: [], pending: [] };
   ALERTS = g.groups.map(x => ({
     lv: x.lv, name: x.name, sea: x.sea, tmfc: x.tmfc, spots: x.count,
@@ -1430,11 +1437,33 @@ async function loadAlerts() {
     ALERTS[0].note = `발효 예정 <b>${later.length}건</b> — ${later.map(x => x.reg).join(", ")}`;
 }
 
+/* 수집기가 언제 성공했는지는 서버만 안다 — 화면이 받은 시각과 다르다. */
+async function loadStatus() {
+  const j = await getJson("/api/status");
+  for (const el of document.querySelectorAll(".fetched")) {
+    const k = el.dataset.kind, c = (j.collect || {})[k];
+    const every = (j.intervals || {})[k];
+    const per = every ? (every < 60 ? every + "초" : every / 60 + "분") : "";
+    el.innerHTML = c && c.ok_at
+      ? `수집 <b>${c.ok_at.slice(11, 16)}</b>${per ? " · " + per + " 주기" : ""}`
+      : `수집 <b>—</b>`;
+    el.classList.toggle("stale", !!(c && !c.ok));
+  }
+  syncMeta();
+}
+
 async function loadQpf() {
   const j = await getJson("/api/qpf");
-  QPF_FRAMES = (j.frames || []).map(ef => `/api/qpf/${j.tmfc}/${ef}.png`);
+  QPF_EFS = j.frames || [];
+  QPF_FRAMES = QPF_EFS.map(ef => `/api/qpf/${j.tmfc}/${ef}.png`);
   QPF_N = QPF_FRAMES.length;
   QPF_TM = j.tmfc || QPF_TM;
+  if (j.tmfc) {
+    FEEDS.qpf.base = `${j.tmfc.slice(8, 10)}:${j.tmfc.slice(10, 12)} 발표`;
+    const el = document.getElementById("qpf-base");
+    if (el) el.innerHTML = `발표 <b>${j.tmfc.slice(8, 10)}:${j.tmfc.slice(10, 12)}</b>`
+      + (QPF_EFS.length > 1 ? ` · ${QPF_EFS[1] - QPF_EFS[0]}분 간격` : "");
+  }
   const seek = document.getElementById("qpf-seek");
   seek.max = Math.max(0, QPF_N - 1);
   if (qpfIdx >= QPF_N) qpfIdx = 0;
@@ -2097,7 +2126,8 @@ let qpfIdx = 0, qpfPlaying = false, qpfSpeed = 1, qpfTimer = null;
    GET nph-qpf_ana_img?eva=1&tm=<발표>&qpf=B&ef=<10..360>&map=HR&grid=2&legend=1&size=1800 */
 let QPF_TM = "";
 
-const qpfEf = i => (i + 1) * 10;
+let QPF_EFS = [];
+const qpfEf = i => QPF_EFS[i] ?? (i + 1) * 10;
 function qpfClock(i) {
   const t = QPF_TM;
   const d = new Date(+t.slice(0, 4), +t.slice(4, 6) - 1, +t.slice(6, 8), +t.slice(8, 10), +t.slice(10, 12));
@@ -2739,14 +2769,17 @@ window.addEventListener("blur", () => ctx.classList.remove("on"));
 /* ── 갱신 주기 · 카운트다운 ───────────────────────────────────────── */
 const CIRC = 2 * Math.PI * 16;
 
+/* 앞창의 자료를 언제 받았고(조회) 언제 기준인지(기준)를 우상단에 적는다.
+   남은 시간보다 이게 먼저 알고 싶은 값이다. */
 function paintCd() {
-  const f = FEEDS[activeFeed()];
-  const total = f.sec;
-  left = Math.max(0, Math.ceil((f.next - Date.now()) / 1000));
-  document.getElementById("lb-period").textContent = total < 60 ? total + "초" : total / 60 + "분";
-  document.getElementById("cd").textContent =
-    String(Math.floor(left / 60)).padStart(2, "0") + ":" + String(left % 60).padStart(2, "0");
-  document.getElementById("ring-head").setAttribute("stroke-dashoffset", (CIRC * (1 - left / total)).toFixed(1));
+  const k = activeFeed(), f = FEEDS[k];
+  document.getElementById("lb-period").textContent = f.sec < 60 ? f.sec + "초" : f.sec / 60 + "분";
+  const box = document.getElementById("mb-when");
+  document.getElementById("w-got").textContent = f.got || "—";
+  document.getElementById("w-base").textContent = f.base || "—";
+  box.classList.toggle("stale", f.failed === true);
+  box.title = `${FEEDS[k].label} · ${f.sec < 60 ? f.sec + "초" : f.sec / 60 + "분"}마다 갱신`
+    + (f.failed ? " · 마지막 조회 실패" : "");
 }
 
 /* 자료마다 제 시각이 되면 그것만 다시 받는다 — 하나 때문에 넷을 다 부르지 않는다 */
@@ -2775,9 +2808,13 @@ async function pull(kind, how) {
     if (how === "수동") await fetch(`/api/refresh/${kind}?force=true`, { method: "POST" });
     await f.load();
     f.after();
+    f.got = new Date().toTimeString().slice(0, 5);
+    f.failed = false;
+    loadStatus().catch(() => {});
     setOrigin(kind, how === "수동" ? "API 직조회" : "DB 조회", true);
   } catch (e) {
-    // ⚠️ 실패해도 화면의 마지막 정상 자료를 지우지 않는다. 기준시각만 낡음으로 표시한다.
+    // ⚠️ 실패해도 화면의 마지막 정상 자료를 지우지 않는다. 낡았다는 표시만 한다.
+    f.failed = true;
     setOrigin(kind, "조회 실패", false);
     console.warn(kind, e);
   } finally {
@@ -2834,6 +2871,7 @@ function syncMeta() {
   document.querySelectorAll(".mb-panelmenus .mb-item").forEach(b => {
     b.hidden = !(b.dataset.owner || "").split(" ").includes(panel.id);
   });
+  if (typeof paintCd === "function") paintCd();
   const head = panel.querySelector(":scope > header");
   mbMeta.replaceChildren(...[...head.children]
     .filter(el => el.tagName !== "H2")
@@ -2911,7 +2949,9 @@ document.getElementById("rain-body").addEventListener("mouseleave", () => tip.cl
 applySide(); applySkin(false); showView('all');
 
 (async () => {
-  await Promise.allSettled([loadRain(), loadForecast(), loadAlerts(), loadQpf(), loadSettings()]);
+  await Promise.allSettled([loadRain(), loadForecast(), loadAlerts(), loadQpf(), loadSettings(), loadStatus()]);
+  const t0 = new Date().toTimeString().slice(0, 5);
+  for (const k in FEEDS) FEEDS[k].got ??= t0;
   paintRange(); repaint(); drawWrns(); drawQpf(); applyCrop(false);
   startTimer(); paintCd();
 })();
