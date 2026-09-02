@@ -116,3 +116,14 @@ async def api_refresh(kind: str):
 
 if STATIC.exists():
     app.mount("/", StaticFiles(directory=STATIC, html=True), name="static")
+
+
+if __name__ == "__main__":
+    # 포트는 PORT 환경변수를 따른다 — 없으면 8000.
+    # 하드코딩하면 이미 쓰는 포트와 부딪힌다.
+    import os
+
+    import uvicorn
+
+    uvicorn.run("app.main:app", host=os.environ.get("HOST", "127.0.0.1"),
+                port=int(os.environ.get("PORT", "8000")))

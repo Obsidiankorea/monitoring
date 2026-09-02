@@ -3,15 +3,32 @@
 경상남도 18개 시군의 강수·특보·초단기예측을 한 화면에 표출하는 재난상황실 대시보드.
 맥미니 상주 서버 하나로 수집·저장·표출을 모두 한다.
 
-## 빠른 시작
+## 실행
+
+폴더째 옮겨 놓고 실행 파일 하나만 누르면 된다. 가상환경 생성·의존성 설치·키 배치·
+포트 찾기·브라우저 열기를 알아서 한다.
+
+| | |
+|---|---|
+| **맥** | `run.command` 더블클릭 (또는 터미널에서 `./run.command`) |
+| **윈도** | `run.bat` 더블클릭 |
+
+처음 실행은 의존성을 받느라 1~2분, 뜬 뒤에도 자료를 받느라 화면이 채워지기까지
+10~40초 걸린다. 받아 둔 것은 `data/` 에 남으므로 두 번째부터는 바로 뜬다.
+
+포트를 바꾸려면 `PORT=9000 ./run.command`, 다른 기기에서도 보려면 `HOST=0.0.0.0`.
+포트가 이미 쓰이고 있으면 다음 빈 포트를 알아서 찾는다 — **수집기가 둘 돌면
+기상청 호출이 두 배가 되므로** 같은 포트에 겹쳐 띄우지 않는다.
+
+### 직접 띄우기
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-cp handoff-mac/config/api_keys.txt config/          # 기상청 키 (저장소에 안 올라감)
-.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+mkdir -p config && cp handoff-mac/config/api_keys.txt config/   # 키는 저장소에 없다
+.venv/bin/python -m app.main
 ```
 
-브라우저에서 `http://localhost:8000`.
+윈도는 `.venv\Scripts\python.exe -m app.main`.
 
 ## 구조 — 수집과 표출을 분리한다
 
