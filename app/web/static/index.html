@@ -856,7 +856,7 @@ td.totc .tot { width: auto; display: block; }
 }
 .hh { font-size: 11px; font-weight: 400; color: var(--ink-3); line-height: 14px; }
 .hh.fc { color: color-mix(in oklab, var(--accent) 62%, var(--ink-3)); }
-.hc.z { color: var(--ink-3); }
+.hc.z { color: color-mix(in oklab, var(--ink-3) 55%, transparent); }
 .hc.empty { background: repeating-linear-gradient(135deg, transparent 0 3px, var(--line-soft) 3px 4px); opacity: .5; }
 /* 아직 안 찬 칸 — 칠해진 폭이 곧 경과 시간이다 */
 .hc.partial { outline: 1px dotted color-mix(in oklab, var(--ink) 45%, transparent); outline-offset: -1px; }
@@ -1896,9 +1896,12 @@ function heatCell(row, col) {
     bg = `linear-gradient(90deg, ${rampVar(v)} 0 ${pct}%, color-mix(in oklab, ${rampVar(v)} 26%, transparent) ${pct}%)`;
   }
   const fg = v > 0 ? (fc ? (v >= 20 ? "var(--on-fill)" : "") : (partial ? "var(--ink)" : inkOn(v))) : "";
+  /* 무강수는 숫자로 적지 않는다 — 0.0이 화면을 덮으면 실제로 온 칸이 묻힌다.
+     결측('—' + 빗금 바탕)과 글자는 같아도 바탕이 달라 구분된다. */
+  const txt = v > 0 ? v.toFixed(1) : "—";
   return `<span class="hc${fc ? " fc" : ""}${partial ? " partial" : ""}${col.first ? " nowedge" : ""}${v ? "" : " z"}"
     data-v="${v}" data-sigun="${row.sig}" data-stn="${fc ? FCSIG[row.sig].emd : row.stn}" data-hour="${col.label}"
-    style="background:${bg}${fg ? ";color:" + fg : ""}">${v.toFixed(1)}</span>`;
+    style="background:${bg}${fg ? ";color:" + fg : ""}">${txt}</span>`;
 }
 
 /* ── 한 행 = 다우지점 · 누적막대 · 타임라인 ──────────────────────── */

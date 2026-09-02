@@ -18,6 +18,11 @@ log = logging.getLogger("collect.rain")
 
 GN_STN = {s["stn"] for s in stations()}
 
+# 값이 하나도 없는 정시를 몇 시간까지 다시 물어볼 것인가.
+# ⚠️ 이게 없으면 정시 직후(HH:00~HH:09)에 한 번 비어 온 시각이 영영 빈 채로 굳는다.
+#    실측: 18·19·20시가 전부 '결측'으로 남았는데 기상청에는 19시 3.5mm가 있었다.
+RETRY_HOURS = 6
+
 
 def _hour_slots(now: datetime, back: int) -> list[datetime]:
     top = now.replace(minute=0, second=0, microsecond=0)
@@ -62,11 +67,18 @@ async def collect(now: datetime | None = None, back_hours: int = 26) -> dict:
     at = now.strftime("%Y-%m-%d %H:%M")
     filled, failed = 0, []
 
-    # 이미 있는 정시는 다시 부르지 않는다 — 같은 자료를 두 번 받을 이유가 없다
+    # 이미 '쓸 값이 든' 정시는 다시 부르지 않는다.
+    # ⚠️ '한 줄이라도 저장됐는가'로 판정하면 안 된다. 정시 직후에는 아직 자료가
+    #    올라오지 않아 전부 결측으로 저장되는데, 그걸 완료로 치면 영영 빈 채로 굳는다.
+    #    값이 하나도 없는 시각은 RETRY_HOURS 안이면 다시 물어본다.
     with db.tx() as con:
         have = {r["tm"] for r in con.execute(
-            "SELECT tm FROM obs_hourly WHERE tm >= ? GROUP BY tm",
+            "SELECT tm FROM obs_hourly WHERE tm >= ? GROUP BY tm HAVING SUM(quality='ok') > 0",
             ((now - timedelta(hours=back_hours)).strftime("%Y-%m-%d %H:00"),))}
+        old = {r["tm"] for r in con.execute(
+            "SELECT tm FROM obs_hourly WHERE tm < ? GROUP BY tm",
+            ((now - timedelta(hours=RETRY_HOURS)).strftime("%Y-%m-%d %H:00"),))}
+    have |= old        # 오래된 결측은 진짜 결측이다. 계속 물어봐야 소용없다.
 
     for slot in _hour_slots(now, back_hours):
         tm = slot.strftime("%Y-%m-%d %H:00")
@@ -77,6 +89,10 @@ async def collect(now: datetime | None = None, back_hours: int = 26) -> dict:
         except KmaError as e:
             # ⚠️ 실패를 '자료 없음'으로 저장하지 않는다. 다음 주기에 다시 시도한다.
             failed.append(f"{tm}: {e}")
+            continue
+
+        if not rows:
+            # 그 시각 자료가 아직 안 올라왔다. 결측으로 굳히지 말고 다음 주기에 다시.
             continue
 
         with db.tx() as con:
