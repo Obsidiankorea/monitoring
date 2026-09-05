@@ -5,10 +5,14 @@
 
 여기 담긴 것은 전부 옆 프로그램(`code/bangjae/bangjae.py`)에서 실측으로 배운 것이다.
 
-⚠️ **로그인이 필요하다(2026-08-29 부터).** 그런데 로그인 안 된 요청에 서버가
+⚠️ **로그인이 필요할 때가 있다(2026-08-29 부터).** 그런데 로그인 안 된 요청에 서버가
    로그인 화면이 아니라 **HTTP 200 + `[]`** 를 준다. 그래서 '빈 배열'을
    '자료 없음'으로 보면 안 되고 **로그인 신호로** 봐야 한다(그걸 놓쳐서 엉뚱한
    데서 `KeyError` 로 터진 적이 있다).
+⚠️ **계정이 없다고 미리 건너뛰지 않는다.** 부르는 자리에 따라 로그인 없이도 그대로
+   온다 — 상황실 내부망 PC 에서 실측(2026-09-05): `dt090/list3` 18개 시군,
+   `dt096/list` 532줄이 계정 없이 왔다. 계정 유무로 앞에서 막으면 **되는 곳에서도
+   안 된다.** 그래서 일단 부르고, `[]` 가 올 때만 로그인한다.
 ⚠️ 세션 쿠키 이름이 `JSESSIONID` 가 아니라 **`PLATFORM3_JSESSIONID`** 다.
 ⚠️ `dt090/list3` 하나가 붐빌 때 20초 가까이 걸린다. 타임아웃을 넉넉히 준다.
 """
@@ -25,7 +29,7 @@ from pathlib import Path
 
 import httpx
 
-from .config import KEYS
+from .config import KEYS, VERIFY_SSL
 
 log = logging.getLogger("bangjae")
 
@@ -132,6 +136,7 @@ def credentials() -> tuple[str, str] | None:
 
 
 def available() -> bool:
+    """계정이 있는가. **수집을 막는 데 쓰지 않는다** — 위 설명 참고."""
     return credentials() is not None
 
 
@@ -139,8 +144,12 @@ class Client:
     """세션 하나를 들고 여러 번 부른다. 로그인은 필요할 때만."""
 
     def __init__(self) -> None:
-        self._c = httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT,
-                                    follow_redirects=True)
+        # 연결만 짧게 끊는다 — 내부망 밖에서 부르면 이 IP가 응답을 안 해 60초를 통째로
+        # 기다린다(수집 주기가 10분인데 한 번이 2분을 먹는다).
+        # verify: 내부망 장비가 인증서를 갈아 끼운다(config.DISABLE_SSL_VERIFICATION).
+        self._c = httpx.AsyncClient(base_url=BASE, follow_redirects=True,
+                                    verify=VERIFY_SSL,
+                                    timeout=httpx.Timeout(TIMEOUT, connect=5.0))
 
     async def aclose(self) -> None:
         await self._c.aclose()

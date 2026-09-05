@@ -4,8 +4,21 @@
   "configurations": [
     {
       "name": "dashboard",
+      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeArgs": [
+        "-m",
+        "app.main"
+      ],
+      "port": 8000
+    },
+    {
+      "name": "dashboard-mac",
       "runtimeExecutable": ".venv/bin/python",
-      "runtimeArgs": ["-m", "app.main"]
+      "runtimeArgs": [
+        "-m",
+        "app.main"
+      ],
+      "port": 8000
     }
   ]
 }

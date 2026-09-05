@@ -11,6 +11,13 @@
 
 시각은 `bangjae.as_of()` 규칙을 따른다 — 06:47 이면 **07시로 조회**하고(지금까지 온
 비를 포함시키려고) **06:42 로 저장**한다. 거기 설명을 보라.
+
+⚠️ **계정이 없어도 부른다.** 예전에는 계정이 없으면 한 발도 안 떼고 건너뛰었는데,
+   상황실 내부망 PC 에서는 로그인 없이도 자료가 그대로 온다. 그래서 화면이 늘
+   `스방 안 됨→기상청` 으로 물러서 있었다 — 서버는 멀쩡했고 부르지를 않았다.
+   로그인이 실제로 필요한 자리에서는 `[]` 가 오고, 그때 `Client.get()` 이 로그인한다.
+   계정도 없으면 그제야 '조회 실패'로 남는다(건너뜀이 아니라 실패로 적어야
+   `/api/status` 에서 왜 비었는지 보인다).
 """
 from __future__ import annotations
 
@@ -18,7 +25,7 @@ import logging
 from datetime import datetime, timedelta
 
 from .. import db
-from ..bangjae import BangjaeError, Client, as_of, available
+from ..bangjae import BangjaeError, Client, as_of
 
 log = logging.getLogger("collect.bangjae")
 
@@ -42,11 +49,6 @@ async def collect(now: datetime | None = None, days: int | None = None) -> dict:
     at = now.strftime("%Y-%m-%d %H:%M")
     기준, to_time = as_of(now)
     tm = 기준.strftime("%Y-%m-%d %H:%M")
-
-    if not available():
-        # 계정이 없으면 **조용히 건너뛴다**. 이 자료는 곁가지라 없다고 화면이 죽으면 안 된다.
-        db.log_collect("bangjae", False, at, "스방 계정 없음 — 건너뜀")
-        return {"skipped": "no-credentials"}
 
     fr = (now - timedelta(days=max(1, days) - 1)).strftime("%Y%m%d")
     to = now.strftime("%Y%m%d")
