@@ -8,7 +8,11 @@
 ⚠️ 누적을 낼 때 칸을 그냥 더하면 3배가 된다. 1시간 구간마다 한 번씩만 더한다.
 ⚠️ 아직 안 나온 tmfc를 주면 최신 발표분으로 대체해 돌려준다.
 ⚠️ 발표분을 고정해 읽으면 막 올라오는 중에 빈 격자가 오기도 한다.
-   0이 나오면 tmfc 없이 최신분으로 한 번 더 확인한다(pitfalls ★3).
+   그때는 **직전 발표분**으로 한 번 더 확인한다(pitfalls ★3).
+   ⚠️ 예전에는 tmfc 를 빼고 다시 불렀는데, 지금 그 형태는 서버가 거절한다
+      (`# input variable error (-1)`). 그물이 있는 줄 알았는데 없었다 —
+      실측: 14:41 에 1430 발표분이 아직 -99 뿐이라 물러섰다가 빈손으로 와서
+      여섯 구간이 통째로 '격자 매칭 없음'이 됐다.
 """
 from __future__ import annotations
 
@@ -88,8 +92,12 @@ async def collect(now: datetime | None = None) -> dict:
         try:
             vals = await _grid(tmfc, tmef)
             if not vals or max(vals) <= -90:
-                # 막 올라오는 중일 수 있다 — 최신분으로 한 번 더 확인한다
-                vals = await _grid(None, tmef)
+                # 막 올라오는 중일 수 있다 — 직전 발표분으로 한 번 더 확인한다.
+                # (tmfc 를 빼고 부르면 서버가 거절한다. 위 주석 참고)
+                prev = (base - timedelta(minutes=10)).strftime("%Y%m%d%H%M")
+                alt = await _grid(prev, tmef)
+                if alt and max(alt) > -90:
+                    vals = alt
         except KmaError as e:
             failed.append(f"{tmef}: {e}")
             continue
