@@ -704,6 +704,14 @@ td.totc .tot { width: auto; display: block; }
 }
 .knobs input[type="range"] { width: 100%; accent-color: var(--accent); }
 .knobs input[type="color"] { width: 100%; height: 24px; padding: 0; border: 1px solid var(--line); border-radius: 5px; background: none; cursor: pointer; }
+.knobs .pick { display: flex; gap: 5px; align-items: center; min-width: 0; }
+.knobs .pick input[type="color"] { flex: 1; }
+.knobs .pick .auto {
+  flex: none; width: 20px; height: 24px; padding: 0; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 5px;
+  background: var(--raised); color: var(--ink-3); font: inherit; font-size: 10px;
+}
+.knobs .pick .auto:hover { color: var(--ink); background: var(--panel-2); }
 .knobs select {
   width: 100%; font: inherit; font-size: 12px;
   background: var(--raised); color: var(--ink);
@@ -1532,6 +1540,20 @@ tbody.swap tr { animation: rowin .36s cubic-bezier(.2,.7,.3,1) both; animation-d
         <label>표 줄 간격
           <input type="range" id="k-row" min="80" max="140" step="5" value="100">
           <output id="k-row-o">100%</output>
+        </label>
+        <label title="판과 바탕이 얼마나 갈라져 보이는지. 모니터마다 크게 다르다.">판 대비
+          <input type="range" id="k-contrast" min="0" max="100" step="5" value="0">
+          <output id="k-contrast-o">기본</output>
+        </label>
+        <label>바탕색
+          <span class="pick"><input type="color" id="k-ground"><button type="button"
+            class="auto" id="k-ground-x" title="자동으로 되돌리기">✕</button></span>
+          <output id="k-ground-o">자동</output>
+        </label>
+        <label>판 색
+          <span class="pick"><input type="color" id="k-panelc"><button type="button"
+            class="auto" id="k-panelc-x" title="자동으로 되돌리기">✕</button></span>
+          <output id="k-panelc-o">자동</output>
         </label>
       </div>
 
@@ -3267,7 +3289,12 @@ bindMenu("m-look", null, "",
   ],
   k => {
     const [kind, v] = k.split(":");
-    if (kind === "t") { theme = v; applyTheme(); drawRain(false); }
+    if (kind === "t") {
+      theme = v; applyTheme();
+      applySkin(true);          // 판 대비는 테마마다 기준색이 다르다
+      if (!prefs.hidden) skinSync();
+      drawRain(false);
+    }
     else if (kind === "p") { sidePos = v; applySide(); }
     else if (kind === "s") openPrefs(v === "open" ? "look" : v);
   });
@@ -3401,12 +3428,76 @@ bindMenu("m-period", "lb-period", "",
    파일로 옮기면 실서버에서도 똑같이 동작한다. */
 const skin = document.getElementById("skin");
 const userCss = document.getElementById("user-css");
-const K = { zoom: 100, accent: "", font: "", row: 100, extra: "" };
+const K = { zoom: 100, accent: "", font: "", row: 100, extra: "",
+            // 판과 바탕의 대비. 0이면 아래 THEME_BASE 그대로.
+            contrast: 0, ground: "", panelc: "" };
+
+/* ── 판 대비 ────────────────────────────────────────────────────────
+   ⚠️ 같은 색이 모니터마다 다르게 보인다. 맥에서는 바탕 #090D13 과
+      판 #111823 이 또렷이 갈라지는데, 흔한 윈도 모니터에서는 둘 다
+      '까만색'으로 뭉개져 판의 경계가 사라진다. 감마와 색역이 달라서다.
+      코드에 한 값을 박아 두면 어느 한쪽에서는 반드시 틀린다 —
+      그래서 보는 사람이 자기 화면에서 맞추도록 열어 둔다.
+
+   대비를 올리면 바탕을 어둡게 밀어내고, 판은 아주 조금만 들어 올린다.
+   판을 크게 밝히지 않는 까닭은 글자가 그 위에 얹히기 때문이다 —
+   본문 대비가 같이 흔들린다. 실측: 판을 끝까지 들어도 #E8EEF6 글자의
+   명암비는 15.5:1 → 13:1 로, 기준(7:1)보다 한참 위다. 그래서 이만큼은 든다.
+   테두리(--line)도 같이 세워야 경계가 실제로 보인다.
+   밝은 테마는 판이 이미 흰색이라 더 들 곳이 없어 바탕만 민다. */
+const THEME_BASE = {
+  dark:  { ground: "#090D13", panel: "#111823", panel2: "#18202C",
+           raised: "#1E2836", line: "#222D3C", away: "#000000", lineTo: "#5C6D80" },
+  light: { ground: "#EEF2F7", panel: "#FFFFFF", panel2: "#F5F8FC",
+           raised: "#E8EEF6", line: "#D3DCE7", away: "#9AACC2", lineTo: "#8A9BB0" },
+};
+
+const _hex = h => {
+  const v = String(h || "").replace("#", "");
+  const t = v.length === 3 ? v.split("").map(c => c + c).join("") : v;
+  return [0, 2, 4].map(i => parseInt(t.slice(i, i + 2), 16) || 0);
+};
+const _hx = n => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, "0");
+/* 두 색을 t(0~1)만큼 섞는다. sRGB 에서 바로 섞는다 — 어두운 쪽 미세한 차이를
+   다루는 일이라, 감각적으로 예측 가능한 쪽이 낫다. */
+const mixHex = (a, b, t) => {
+  const A = _hex(a), B = _hex(b);
+  return "#" + [0, 1, 2].map(i => _hx(A[i] + (B[i] - A[i]) * t)).join("");
+};
+
+/* 지금 설정으로 만들어지는 색들. 미리보기·CSS 생성이 같은 함수를 쓴다. */
+function skinTones() {
+  const b = THEME_BASE[theme] || THEME_BASE.dark;
+  const c = Math.max(0, Math.min(100, +K.contrast || 0)) / 100;
+  const ground = K.ground || mixHex(b.ground, b.away, c * 0.85);
+  // 밝은 테마의 판은 이미 흰색이다 — 더 들 곳이 없다
+  const lift = theme === "light" ? 0 : c * 0.075;
+  const up = theme === "light" ? "#000000" : "#FFFFFF";
+  const panel = K.panelc || mixHex(b.panel, up, lift);
+  const step = (from, to) => mixHex(panel, to, from);
+  return {
+    ground, panel,
+    // 판 계열은 판 색을 기준으로 다시 세운다 — 직접 고른 색과 따로 놀면 안 된다
+    /* ⚠️ 판 계열을 판 색에서 늘 계산하면 **대비 0에서도 기본값이 안 나온다.**
+       기본 토큰들이 판 색을 그냥 밝힌 값이 아니라 색조가 조금씩 다르기 때문이다
+       (실측: 계산하면 #1E2836 이 #222832 로 나왔다 — 눈에 띄게 다르다).
+       그래서 판 색을 직접 고르지 않았으면 **기본 토큰을 같은 만큼만 들어 올린다.**
+       0이면 손대지 않은 것과 완전히 같다. */
+    panel2: K.panelc ? step(0.035, up) : mixHex(b.panel2, up, lift),
+    raised: K.panelc ? step(0.075, up) : mixHex(b.raised, up, lift),
+    line: mixHex(b.line, b.lineTo, c * 0.5),
+  };
+}
 
 try { Object.assign(K, JSON.parse(localStorage.getItem("gn-skin") || "{}")); } catch {}
 
 function skinCss() {
   const out = [];
+  if (K.contrast || K.ground || K.panelc) {
+    const t = skinTones();
+    out.push(`:root {\n  --ground: ${t.ground};\n  --panel: ${t.panel};`
+      + `\n  --panel-2: ${t.panel2};\n  --raised: ${t.raised};\n  --line: ${t.line};\n}`);
+  }
   if (K.accent) out.push(`:root { --accent: ${K.accent}; }`);
   if (K.font)   out.push(`:root { --sans: "${K.font}", "IBM Plex Sans KR", system-ui, sans-serif; }`);
   // 배율은 zoom으로 준다 — 글자·여백·그래프가 같은 비율로 커져 배치가 안 깨진다
@@ -3431,6 +3522,13 @@ function skinSync() {
   const ac = K.accent || getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
   document.getElementById("k-accent").value = /^#[0-9a-f]{6}$/i.test(ac) ? ac : "#2FA3DC";
   document.getElementById("k-accent-o").textContent = K.accent || "기본";
+  const t = skinTones();
+  document.getElementById("k-contrast").value = K.contrast || 0;
+  document.getElementById("k-contrast-o").textContent = K.contrast ? "＋" + K.contrast : "기본";
+  document.getElementById("k-ground").value = t.ground;
+  document.getElementById("k-ground-o").textContent = K.ground || "자동";
+  document.getElementById("k-panelc").value = t.panel;
+  document.getElementById("k-panelc-o").textContent = K.panelc || "자동";
   document.getElementById("k-css").value = [skinCss(), K.extra].filter(Boolean).join("\n\n");
 }
 
@@ -3635,9 +3733,10 @@ document.getElementById("pf-clean").addEventListener("click", async e => {
   finally { e.target.disabled = false; }
 });
 
+const TEXT_KNOBS = new Set(["accent", "font", "ground", "panelc"]);
 const knob = (id, key, fmt) =>
   document.getElementById(id).addEventListener("input", e => {
-    K[key] = key === "accent" || key === "font" ? e.target.value : +e.target.value;
+    K[key] = TEXT_KNOBS.has(key) ? e.target.value : +e.target.value;
     if (fmt) document.getElementById(id + "-o").textContent = fmt(e.target.value);
     applySkin(true); 
     document.getElementById("k-css").value = [skinCss(), K.extra].filter(Boolean).join("\n\n");
@@ -3646,6 +3745,18 @@ knob("k-zoom", "zoom", v => v + "%");
 knob("k-row", "row", v => v + "%");
 knob("k-accent", "accent", v => v);
 knob("k-font", "font");
+knob("k-contrast", "contrast", v => (+v ? "＋" + v : "기본"));
+knob("k-ground", "ground", v => v);
+knob("k-panelc", "panelc", v => v);
+
+/* 색을 '자동'으로 되돌리기 — 색 고르개는 비울 수가 없어서 단추를 따로 둔다 */
+for (const [btn, key] of [["k-ground-x", "ground"], ["k-panelc-x", "panelc"]]) {
+  document.getElementById(btn).addEventListener("click", () => {
+    K[key] = "";
+    applySkin(true);
+    skinSync();
+  });
+}
 
 // 직접 고친 CSS는 조절기가 만든 부분 뒤에 붙는다 — 뒤에 있으니 앞을 덮어쓴다
 document.getElementById("k-apply").addEventListener("click", () => {
@@ -3680,7 +3791,8 @@ document.getElementById("k-file").addEventListener("change", e => {
 });
 
 document.getElementById("k-reset").addEventListener("click", () => {
-  Object.assign(K, { zoom: 100, accent: "", font: "", row: 100, extra: "" });
+  Object.assign(K, { zoom: 100, accent: "", font: "", row: 100, extra: "",
+                     contrast: 0, ground: "", panelc: "" });
   applySkin(true); skinSync();
   skinMsg("기본값으로 되돌렸습니다");
 });
