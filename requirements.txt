@@ -4,3 +4,7 @@ httpx>=0.28
 apscheduler>=3.10
 python-dotenv>=1.0
 pillow>=11.0
+
+# 윈도에서만 — 옆 bangjae 프로그램이 DPAPI 로 잠가 둔 스방 계정을 읽는 데 쓴다.
+# 없으면 config/api_keys.txt 의 BANGJAE_ID/BANGJAE_PW 를 쓴다(맥은 이쪽).
+pywin32>=306; sys_platform == "win32"

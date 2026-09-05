@@ -18,8 +18,8 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import db, queries
-from .collectors import alerts, forecast, qpf, rain
+from . import db, demo, maint, queries
+from .collectors import alerts, bangjae_rain, forecast, qpf, rain
 from .config import CACHE, INTERVALS, POLL_DEFAULT
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
@@ -31,7 +31,9 @@ log = logging.getLogger("main")
 STATIC = Path(__file__).parent / "web" / "static"
 
 COLLECTORS = {"rain": rain.collect, "forecast": forecast.collect,
-              "alerts": alerts.collect, "qpf": qpf.collect}
+              "alerts": alerts.collect, "qpf": qpf.collect,
+              # 스방은 기상청과 **다른 서버**라 따로 돈다(계정 없으면 조용히 건너뜀)
+              "bangjae": bangjae_rain.collect}
 
 # 한 자료를 두 번 동시에 받지 않게 — 주기가 겹치거나 수동 조회가 끼어들 수 있다
 _locks = {k: asyncio.Lock() for k in COLLECTORS}
@@ -52,6 +54,13 @@ async def run_one(kind: str, force: bool = False) -> dict:
             return {"ok": False, "kind": kind, "error": str(e)}
 
 
+async def _nightly() -> None:
+    if not maint.cfg().get("auto", True):
+        return
+    res = await asyncio.to_thread(maint.cleanup)
+    log.info("정리: %s · %.1fMB 회수", res["removed"], res["freed_bytes"] / 1048576)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.init()
@@ -60,6 +69,9 @@ async def lifespan(app: FastAPI):
     for kind, sec in db.get_setting("intervals", INTERVALS).items():
         sched.add_job(run_one, "interval", seconds=sec, args=[kind],
                       id=kind, max_instances=1, coalesce=True)
+    # 하루 한 번 묵은 자료 치우기 — 안 하면 DB 와 이미지 캐시가 계속 자란다
+    sched.add_job(_nightly, "cron", hour=4, minute=20, id="maint",
+                  max_instances=1, coalesce=True)
     sched.start()
     # 뜨자마자 한 번씩 받아 둔다 — 빈 화면으로 시작하지 않게
     for kind in COLLECTORS:
@@ -75,13 +87,33 @@ app = FastAPI(title="경남 기상 대시보드", lifespan=lifespan)
 
 
 @app.get("/api/rain")
-async def api_rain(hours: int = Query(12, ge=1, le=72)):
-    return queries.rain(hours)
+async def api_rain(hours: int = Query(12, ge=1, le=72),
+                   src: str = Query("kma", pattern="^(kma|bangjae)$")):
+    """지점별 강수량. `src=bangjae` 면 스방 265개소.
+
+    화면이 더 긴 구간을 고르면 그만큼 과거를 채운다.
+    ⚠️ 그 전에는 26시간 앞이 영원히 비어 있었다 — '2일'을 골라도 그래프 왼쪽이
+       통째로 빈 채였다. 여기서 깊이를 올리고 곧바로 한 번 받아 온다.
+    """
+    grew = rain.want_depth(hours)
+    out = queries.rain(hours, src=src)
+    # 빈 시각이 있으면 지금 채운다. 이미 받는 중이면 겹쳐 부르지 않는다.
+    kind = "bangjae" if src == "bangjae" else "rain"
+    if (grew or out.get("missing")) and not _locks[kind].locked():
+        asyncio.create_task(run_one(kind))
+        out["filling"] = True
+    return out
 
 
 @app.get("/api/forecast")
 async def api_forecast(hours: int = Query(6, ge=1, le=6)):
     return queries.forecast(hours)
+
+
+@app.get("/api/minute")
+async def api_minute(n: int = Query(8, ge=1, le=20)):
+    """지금 가장 세게 오는 곳 — 15분·60분 강수량 상위. 기상청 매분자료만 쓴다."""
+    return queries.minute_top(n)
 
 
 @app.get("/api/alerts")
@@ -102,6 +134,51 @@ async def api_qpf_frame(tmfc: str, ef: int):
     # 프레임은 한 번 만들어지면 바뀌지 않는다 — 오래 캐시해도 된다
     return FileResponse(p, media_type="image/png",
                         headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/api/bangjae")
+async def api_bangjae():
+    """스방 시군별 평균 강수량. 기상청 값과 관측망이 달라 따로 준다."""
+    return JSONResponse(queries.bangjae_rain())
+
+
+@app.get("/api/storage")
+async def api_storage():
+    """DB·이미지가 얼마나 쌓였는지. 설정창의 '저장공간'이 이걸 그대로 보여 준다."""
+    return maint.usage()
+
+
+@app.post("/api/storage/cleanup")
+async def api_storage_cleanup(days: int | None = None):
+    """보관 기간이 지난 자료를 지운다. ⚠️ 되돌릴 수 없다."""
+    return await asyncio.to_thread(maint.cleanup, days)
+
+
+@app.put("/api/settings/retention")
+async def api_settings_retention(body: dict):
+    try:
+        return {"retention": maint.put_cfg(body)}
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@app.get("/api/demo")
+async def api_demo_list():
+    return {"cases": demo.listing()}
+
+
+@app.get("/api/demo/{slug}")
+async def api_demo_get(slug: str):
+    """담아 둔 사례. 아직 없으면 그 자리에서 받아 만든다."""
+    b = demo.load(slug)
+    if b is None:
+        if slug not in demo.CASES:
+            raise HTTPException(404, f"모르는 사례: {slug}")
+        try:
+            b = await demo.build(slug)
+        except Exception as e:                       # noqa: BLE001
+            raise HTTPException(503, f"사례를 만들 수 없다: {e}") from e
+    return JSONResponse(b)
 
 
 @app.get("/api/status")
@@ -161,6 +238,21 @@ async def api_refresh(kind: str, force: bool = False):
     일어나지 않는다(pitfalls ★3). 여기서는 항상 수집기를 직접 부른다.
     """
     return await run_one(kind, force=force)
+
+
+@app.middleware("http")
+async def no_cache_html(request, call_next):
+    """화면 파일은 캐시하지 않는다.
+
+    ⚠️ 고친 화면이 안 나온다는 말이 실제로 있었다 — 브라우저가 index.html 을
+       메모리 캐시에서 그냥 꺼내 쓰느라 서버까지 오지도 않았다.
+       벽면에 걸어 두고 몇 주씩 안 닫는 화면이라 더 그렇다.
+    """
+    resp = await call_next(request)
+    ct = resp.headers.get("content-type", "")
+    if ct.startswith("text/html"):
+        resp.headers["Cache-Control"] = "no-cache, must-revalidate"
+    return resp
 
 
 if STATIC.exists():

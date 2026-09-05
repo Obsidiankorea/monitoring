@@ -9,7 +9,7 @@ import logging
 
 import httpx
 
-from .config import HTTP_RETRY, HTTP_TIMEOUT, KMA_HOST, ORG_API_KEY
+from .config import HTTP_RETRY, HTTP_TIMEOUT, KMA_HOST, ORG_API_KEY, VERIFY_SSL
 
 log = logging.getLogger("kma")
 
@@ -40,7 +40,9 @@ async def fetch_bytes(path: str, params: dict) -> bytes:
 
     for attempt in range(HTTP_RETRY + 1):
         try:
-            async with httpx.AsyncClient(timeout=HTTP_TIMEOUT, follow_redirects=True) as c:
+            # verify=False 는 내부망 프록시 때문이다(config.DISABLE_SSL_VERIFICATION 참고).
+            async with httpx.AsyncClient(timeout=HTTP_TIMEOUT, follow_redirects=True,
+                                         verify=VERIFY_SSL) as c:
                 r = await c.get(_url(path), params=q)
                 r.raise_for_status()
                 body = r.content

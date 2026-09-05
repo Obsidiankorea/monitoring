@@ -52,7 +52,41 @@ CREATE TABLE IF NOT EXISTS fcst_rn1 (
 );
 CREATE INDEX IF NOT EXISTS idx_fcst ON fcst_rn1(tmfc, tmef);
 
+-- 스방(경남 스마트 통합 방재시스템) 시군별 **평균** 강수량.
+-- ⚠️ 기상청 대표지점 값(obs_hourly)과 **뜻이 다르다** — 관측망이 달라 값도 다르다.
+--    그래서 같은 표에 섞지 않고 따로 쌓는다. 화면에서도 출처를 밝혀야 한다.
+-- 스방이 주는 건 '기간 누적'이라 기간(fr~to, hour)을 같이 남긴다.
+CREATE TABLE IF NOT EXISTS bangjae_rain (
+  tm         TEXT NOT NULL,           -- 'YYYY-MM-DD HH:MM' **자료가 담고 있는** 시각
+  sigun      TEXT NOT NULL,           -- '창원시' 꼴(스방 표기 그대로)
+  mm         REAL NOT NULL,           -- 그 기간 시군 평균 강수량
+  daw_name   TEXT,                    -- 그 시군 다우지점 이름(비 안 오면 NULL)
+  daw_mm     REAL,                    -- 다우지점 강수량
+  fr         TEXT NOT NULL,           -- 기간 시작 'YYYYMMDD'
+  to_date    TEXT NOT NULL,           -- 기간 끝
+  hour       INTEGER NOT NULL,        -- 조회에 쓴 toTime(0~23)
+  fetched_at TEXT NOT NULL,
+  PRIMARY KEY (tm, sigun)
+);
+CREATE INDEX IF NOT EXISTS idx_bj_tm ON bangjae_rain(tm);
+
 -- 자료 스냅샷(특보처럼 통째로 저장하는 것). payload는 정규화된 JSON.
+-- 스방 지점별 **시간강우량**(dt096). 기상청 obs_hourly 와 나란히 놓고 쓴다.
+-- ⚠️ tm 은 **스방 시각 그대로**다. 스방의 'H시'는 H:00~H:59(앞으로 한 시간),
+--    기상청의 'H시'는 (H-1):00~H:00(뒤로 한 시간)이라 **한 칸 어긋난다.**
+--    맞춰 끼우는 일은 읽을 때(queries) 한다 — 여기서 미리 밀어 두면
+--    나중에 원본이 뭐였는지 알 수 없게 된다.
+CREATE TABLE IF NOT EXISTS bangjae_hourly (
+  tm         TEXT NOT NULL,           -- 'YYYY-MM-DD HH:00' (스방 시각)
+  stn        TEXT NOT NULL,           -- 스방 장치코드 lnk_id. 기상청 지점은 그 지점번호가 그대로 온다
+  name       TEXT NOT NULL,
+  sigun      TEXT NOT NULL,           -- 관제순 짧은 이름('창원')으로 맞춰 넣는다
+  mm         REAL,                    -- 결측은 NULL. 무강수 0.0 과 다르다
+  fetched_at TEXT NOT NULL,
+  PRIMARY KEY (tm, stn)
+);
+CREATE INDEX IF NOT EXISTS idx_bjh_tm ON bangjae_hourly(tm);
+
 CREATE TABLE IF NOT EXISTS snapshot (
   kind       TEXT NOT NULL,            -- 'alerts'
   base_time  TEXT NOT NULL,
@@ -108,10 +142,25 @@ def tx() -> Iterator[sqlite3.Connection]:
         con.close()
 
 
+# 이미 만들어진 표에 뒤늦게 붙인 칸. CREATE TABLE IF NOT EXISTS 로는 안 늘어난다.
+# (칸, 형) — 없으면 ALTER 로 붙인다. 있으면 조용히 넘어간다.
+_ADDED_COLUMNS = {
+    "bangjae_rain": [("daw_name", "TEXT"), ("daw_mm", "REAL")],
+    # 15분 강수량 — '지금 어디에 쏟아지고 있나'는 이 값이 제일 빨리 말해 준다.
+    # 60분치는 이미 지나간 한 시간을 담고 있어 한 박자 늦다.
+    "obs_minute": [("rn_15m", "REAL")],
+}
+
+
 def init() -> None:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with tx() as con:
         con.executescript(SCHEMA)
+        for table, cols in _ADDED_COLUMNS.items():
+            have = {r[1] for r in con.execute(f"PRAGMA table_info({table})")}
+            for name, typ in cols:
+                if name not in have:
+                    con.execute(f"ALTER TABLE {table} ADD COLUMN {name} {typ}")
 
 
 def log_collect(kind: str, ok: bool, at: str, detail: str = "") -> None:

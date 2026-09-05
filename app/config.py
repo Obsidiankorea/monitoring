@@ -28,7 +28,9 @@ def _load_keys() -> dict[str, str]:
                 continue
             k, _, v = line.partition("=")
             out[k.strip()] = v.strip()
-    for k in ("ORG_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"):
+    for k in ("ORG_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
+              "DISABLE_SSL_VERIFICATION", "BANGJAE_ID", "BANGJAE_PW",
+              "BANGJAE_BASE"):
         if os.environ.get(k):
             out[k] = os.environ[k]
     return out
@@ -47,11 +49,13 @@ INTERVALS = {
     "forecast": 600,
     "qpf": 60,          # 발표를 놓치지 않으려면 자주 깨야 한다.
                         # 다만 감시 구간 밖에서는 기상청을 부르지 않는다.
+    "bangjae": 600,     # 스방 시군 평균. 기상청과 다른 서버라 따로 돈다.
 }
 
 # 화면이 폴링하는 기본 주기(초). 패널마다 따로 두고 화면에서 바꾼다.
 # ⚠️ 이 값을 바꿔도 기상청 호출량은 변하지 않는다 — 화면은 DB만 읽는다.
-POLL_DEFAULT = {"rain": 600, "forecast": 600, "alerts": 60, "qpf": 600}
+POLL_DEFAULT = {"rain": 600, "forecast": 600, "alerts": 60, "qpf": 600,
+                "bangjae": 600}
 
 # ── 예측 분포 이미지 — 호출량을 여기서 조절한다 ───────────────────────
 # 한 발표분의 장수 = ceil(최대 선행시간 / 간격).
@@ -70,5 +74,22 @@ QPF = {
 
 HTTP_TIMEOUT = 30.0   # 기상청은 타임아웃이 잦다
 HTTP_RETRY = 1        # 재시도는 1회까지. 밀리면 복구 시 알림이 쏟아진다.
+
+# ── TLS 인증서 검증 ───────────────────────────────────────────────────
+# ⚠️ **내부망에서는 꺼야 한다.** 기관 프록시가 인증서를 자기 것으로 갈아 끼워서
+#    체인에 self-signed 가 섞인다(실측: verify=True → CERTIFICATE_VERIFY_FAILED,
+#    verify=False → 200). 옆 프로젝트(재난상황보고서·bangjae)도 같은 이유로 끈다.
+#    바깥망에서 쓰거나 사내 CA 를 신뢰 저장소에 넣었다면 아래를 0 으로 바꾼다.
+#      config/api_keys.txt 에  DISABLE_SSL_VERIFICATION=0
+#      또는 환경변수        DISABLE_SSL_VERIFICATION=0
+def _flag(name: str, default: bool) -> bool:
+    v = os.environ.get(name, KEYS.get(name))
+    if v is None:
+        return default
+    return str(v).strip().lower() not in ("0", "false", "no", "off", "")
+
+
+DISABLE_SSL_VERIFICATION = _flag("DISABLE_SSL_VERIFICATION", True)
+VERIFY_SSL = not DISABLE_SSL_VERIFICATION
 
 CACHE.mkdir(parents=True, exist_ok=True)

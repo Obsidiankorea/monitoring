@@ -23,6 +23,26 @@ GN_STN = {s["stn"] for s in stations()}
 #    실측: 18·19·20시가 전부 '결측'으로 남았는데 기상청에는 19시 3.5mm가 있었다.
 RETRY_HOURS = 6
 
+# 화면이 요구한 만큼만 과거를 채운다. 기본 26시간, 화면이 더 긴 구간을 고르면
+# 그만큼 늘어난다(줄지는 않는다 — 이미 받아 둔 과거를 버릴 이유가 없다).
+# ⚠️ 이게 없으면 '2일'을 골라도 26시간 앞은 영원히 빈 채로 남는다. 실제로 그랬다.
+DEPTH_DEFAULT = 26
+DEPTH_MAX = 96
+
+
+def depth() -> int:
+    return int(db.get_setting("rain_depth", DEPTH_DEFAULT))
+
+
+def want_depth(hours: int) -> bool:
+    """화면이 요구한 구간을 보관 깊이에 반영한다. 늘어났으면 True."""
+    cur, want = depth(), min(DEPTH_MAX, max(1, int(hours)) + 2)   # 여유 2시간
+    if want <= cur:
+        return False
+    db.put_setting("rain_depth", want)
+    log.info("보관 깊이 %d → %d시간", cur, want)
+    return True
+
 
 def _hour_slots(now: datetime, back: int) -> list[datetime]:
     top = now.replace(minute=0, second=0, microsecond=0)
@@ -57,15 +77,20 @@ async def fetch_minute(at: datetime) -> dict[str, dict]:
                 return None
             return None if f <= -50 else f
 
-        out[p[1]] = {"rn_60m": v(11), "rn_day": v(13)}
+        out[p[1]] = {"rn_15m": v(10), "rn_60m": v(11), "rn_day": v(13)}
     return out
 
 
-async def collect(now: datetime | None = None, back_hours: int = 26) -> dict:
-    """정시 자료를 채우고, 마지막 정시 이후 구간을 매분자료로 보강한다."""
+async def collect(now: datetime | None = None, back_hours: int | None = None) -> dict:
+    """정시 자료를 채우고, 마지막 정시 이후 구간을 매분자료로 보강한다.
+
+    `back_hours` 를 주지 않으면 보관 깊이 설정을 따른다. 이미 값이 든 시각은
+    건너뛰므로, 깊이를 늘린 직후 한 번만 실제로 과거를 받아 온다.
+    """
     now = now or datetime.now()
+    back_hours = int(back_hours or depth())
     at = now.strftime("%Y-%m-%d %H:%M")
-    filled, failed = 0, []
+    filled, blank, failed = 0, 0, []
 
     # 이미 '쓸 값이 든' 정시는 다시 부르지 않는다.
     # ⚠️ '한 줄이라도 저장됐는가'로 판정하면 안 된다. 정시 직후에는 아직 자료가
@@ -91,9 +116,14 @@ async def collect(now: datetime | None = None, back_hours: int = 26) -> dict:
             failed.append(f"{tm}: {e}")
             continue
 
-        if not rows:
-            # 그 시각 자료가 아직 안 올라왔다. 결측으로 굳히지 말고 다음 주기에 다시.
+        if not rows and slot >= now - timedelta(hours=RETRY_HOURS):
+            # 최근이면 아직 안 올라온 것이다. 결측으로 굳히지 말고 다음 주기에 다시.
             continue
+        if not rows:
+            # ⚠️ 오래된 시각이 비어 오면 기상청에 그 자료가 **없는** 것이다.
+            #    그냥 넘기면 행이 하나도 안 남아 매 주기마다 영영 다시 묻는다.
+            #    결측으로 적어 둬야 `old` 가 잡아 준다.
+            blank += 1
 
         with db.tx() as con:
             for stn in GN_STN:
@@ -117,13 +147,17 @@ async def collect(now: datetime | None = None, back_hours: int = 26) -> dict:
                 for stn, r in rows.items():
                     con.execute(
                         """INSERT OR REPLACE INTO obs_minute
-                           (stn, tm, rn_60m, rn_day, quality, fetched_at) VALUES(?,?,?,?,?,?)""",
-                        (stn, minute_at, r["rn_60m"], r["rn_day"],
+                           (stn, tm, rn_15m, rn_60m, rn_day, quality, fetched_at)
+                           VALUES(?,?,?,?,?,?,?)""",
+                        (stn, minute_at, r["rn_15m"], r["rn_60m"], r["rn_day"],
                          "ok" if r["rn_60m"] is not None else "missing", at))
     except KmaError as e:
         failed.append(f"매분자료: {e}")
 
     ok = filled > 0 or minute_at is not None
-    db.log_collect("rain", ok, at, f"정시 {filled}건 · 보강 {minute_at or '없음'}"
-                                   + (f" · 실패 {len(failed)}" if failed else ""))
-    return {"filled": filled, "minute_at": minute_at, "failed": failed}
+    db.log_collect("rain", ok, at,
+                   f"정시 {filled}건 · 보강 {minute_at or '없음'} · 깊이 {back_hours}h"
+                   + (f" · 빈시각 {blank}" if blank else "")
+                   + (f" · 실패 {len(failed)}" if failed else ""))
+    return {"filled": filled, "blank": blank, "minute_at": minute_at,
+            "depth": back_hours, "failed": failed}
