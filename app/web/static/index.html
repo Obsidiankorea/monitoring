@@ -181,12 +181,14 @@ body {
 .col-left { display: grid; grid-template-rows: minmax(0, 1.3fr) minmax(0, 1fr); gap: 10px; min-height: 0; }
 .row-data[data-v="rain"] #col-left,
 .row-data[data-v="qpf"] #p-fcsig,
+.row-data[data-v="qpf"] #p-min,
 .row-data[data-v="qpf"] #p-rain { display: none; }
 /* 재생만 볼 때는 왼쪽 열이 한 칸이 된다 — 안 그러면 빈 칸이 자리를 잡고 있는다 */
 .row-data[data-v="qpf"] #col-left { grid-template-rows: minmax(0, 1fr); }
 
 /* 예측 패널을 오른쪽에 둘 때는 열 순서만 바꾼다 — 마크업은 그대로다 */
 .row-data[data-side="right"] #col-left { order: 2; }
+.panel[hidden] { display: none !important; }
 .panel.active { border-color: color-mix(in oklab, var(--accent) 34%, var(--line)); }
 
 .panel {
@@ -448,6 +450,11 @@ tbody td.l { text-align: left; padding-left: 14px; }
 td.dpc { width: 146px; padding-left: 14px; }
 .dp { display: inline-flex; align-items: baseline; gap: 3px; }
 .dp sup { font-size: .68em; color: var(--ink-2); font-weight: 500; }
+/* 시군 평균 — 개소 수는 시군명 뒤 윗첨자. 눌러서 지점별로 펼쳐 볼 수 있다. */
+.dp.avg { cursor: pointer; border-radius: 5px; padding: 0 3px; margin-left: -3px; }
+.dp.avg:hover { background: var(--raised); }
+.dp.avg:hover .s { text-decoration: underline; text-underline-offset: 3px; }
+.dp.avg sup { color: var(--accent); font-weight: 600; }
 .dp .s { color: var(--ink); font-size: 15px; font-weight: 600; }
 
 /* 지표 전환 — 머리글이 곧 단추다 */
@@ -525,15 +532,13 @@ tr[data-lv] .seg.obs::after { opacity: 1; animation: flow 5.6s linear infinite; 
 /* 합계는 색조로도 읽힌다 — 크기는 색이, 기준 초과는 테두리가 진다.
    두 가지를 같은 채널에 실으면 어느 쪽인지 알 수 없게 된다. */
 .tot {
-  font-family: var(--mono); font-size: 15px; font-weight: 600;
-  min-width: 62px; text-align: right; flex: none;
-  color: var(--ink);
+  font-family: var(--mono); font-size: 13.5px; font-weight: 600;
+  min-width: 44px; text-align: right; flex: none;
+  color: var(--ink-2);
   font-variant-numeric: tabular-nums;
-  padding: 2px 7px; border-radius: 5px;
-  background: var(--tot-bg, transparent);
-  box-shadow: var(--tot-ring, none);
+  padding: 2px 3px;
 }
-td.totc { width: 96px; padding-right: 14px; }
+td.totc { width: 62px; padding-right: 12px; }
 td.totc .tot { width: auto; display: block; }
 
 /* 합계 자리는 끌어서 옮긴다 — 막대 옆 ↔ 행 맨 오른쪽 */
@@ -558,7 +563,135 @@ td.totc .tot { width: auto; display: block; }
    기관마다 글꼴·색이 다르고 벽면은 보는 거리도 다르다. 코드를 고치지 않고
    CSS만 얹어 바꿀 수 있게 열어 둔다. 실서버에서는 이 내용을 파일로 두고
    #user-css 에 렌더링하면 배포 없이 바뀐다. */
+/* 스방 자료로 보는 중이라는 표시 — 기상청과 값이 다른 이유가 여기 있다 */
+.srcmark {
+  font-style: normal; font-size: 9px; margin-left: 4px; padding: 0 3px;
+  border-radius: 3px; vertical-align: 1px; font-weight: 600;
+  background: color-mix(in oklab, var(--accent) 24%, transparent); color: var(--accent);
+}
+.srcmark.fell {
+  background: color-mix(in oklab, var(--lv-warn) 26%, transparent); color: var(--lv-warn);
+}
+/* 지금 오는 비 — 두 칸(15분·60분)을 나란히 */
+.mn-head { display: flex; align-items: center; gap: 6px; }
+/* 15분 표기 토글 — 같은 값의 다른 표기라 자료를 다시 받지 않는다 */
+.mn-tog {
+  display: inline-flex; border: 1px solid var(--line); border-radius: 5px;
+  overflow: hidden; flex: none;
+}
+.mn-tog button {
+  border: 0; background: transparent; color: var(--ink-3); cursor: pointer;
+  font: inherit; font-size: 9.5px; font-weight: 600; line-height: 1;
+  padding: 3px 5px;
+}
+.mn-tog button + button { border-left: 1px solid var(--line); }
+.mn-tog button:hover { background: var(--raised); color: var(--ink-2); }
+.mn-tog button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent, #fff); }
+.mn-head > i { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mn-body { display: flex; gap: 0; padding: 0; overflow: hidden; }
+.mn-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.mn-col + .mn-col { border-left: 1px solid var(--line); }
+.mn-head {
+  padding: 5px 10px 4px; font-size: 11px; font-weight: 600; color: var(--ink-2);
+  background: var(--panel); border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; z-index: 1;
+}
+.mn-head i { font-style: normal; font-weight: 400; color: var(--ink-3); margin-left: 5px; font-size: 10px; }
+.mn-list { flex: 1; overflow: auto; }
+.mn-row {
+  display: flex; align-items: center; gap: 7px; padding: 3px 10px;
+  border-top: 1px solid color-mix(in oklab, var(--line) 55%, transparent);
+}
+.mn-row:first-child { border-top: 0; }
+.mn-row .nm { flex: 0 0 78px; font-size: 11.5px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mn-row .nm sup { font-size: .72em; color: var(--ink-3); margin-right: 2px; }
+.mn-row .g { flex: 1; height: 9px; background: var(--raised); border-radius: 3px; overflow: hidden; }
+.mn-row .g i { display: block; height: 100%; border-radius: 3px; background: var(--accent); }
+.mn-row .v { flex: 0 0 42px; text-align: right; font-family: var(--mono); font-size: 11.5px; color: var(--ink-2); }
+.mn-row.zero { opacity: .42; }
+.mn-empty { padding: 14px 10px; font-size: 11.5px; color: var(--ink-3); }
+
+/* 시군 지점별 목록 */
+.stlist { display: flex; flex-direction: column; }
+.strow {
+  display: flex; align-items: center; gap: 10px; padding: 5px 16px;
+  border-top: 1px solid var(--line); font-size: 12.5px;
+}
+.strow:first-child { border-top: 0; }
+.strow .n { flex: 0 0 92px; color: var(--ink); font-weight: 500; }
+.strow .g { flex: 1; height: 8px; background: var(--raised); border-radius: 4px; overflow: hidden; }
+.strow .g i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+.strow .v { flex: 0 0 68px; text-align: right; font-family: var(--mono); font-size: 12px; }
+.strow.off { opacity: .45; }
+/* 눈금을 꺾은 자국 — 이 뒤로는 눌러 그렸다는 표시 */
+.abar .brk {
+  position: absolute; top: -2px; bottom: -2px; width: 11px; margin-left: -5.5px;
+  background: var(--panel); pointer-events: auto; z-index: 3;
+  clip-path: polygon(45% 0, 0 20%, 45% 40%, 0 60%, 45% 80%, 0 100%,
+                     55% 100%, 100% 80%, 55% 60%, 100% 40%, 55% 20%, 100% 0);
+}
+
+.strow.off .v { font-size: 10.5px; color: var(--ink-3); }
 .skin-box { width: min(760px, calc(100vw - 40px)); }
+
+/* 전역 설정창 — 왼쪽 갈피, 오른쪽 내용. 갈피는 계속 늘어난다. */
+.prefs-box { width: min(900px, calc(100vw - 40px)); }
+.prefs-wrap { display: flex; min-height: 380px; max-height: min(72vh, 620px); }
+.prefs-rail {
+  flex: 0 0 148px; border-right: 1px solid var(--line);
+  padding: 8px 6px; display: flex; flex-direction: column; gap: 2px;
+  background: color-mix(in oklab, var(--raised) 55%, transparent);
+}
+.prefs-rail button {
+  display: flex; align-items: center; gap: 7px; width: 100%;
+  padding: 7px 9px; border: 0; border-radius: 7px; cursor: pointer;
+  background: transparent; color: var(--ink-2); font: inherit; font-size: 12.5px; text-align: left;
+}
+.prefs-rail button:hover { background: var(--raised); color: var(--ink); }
+.prefs-rail button[aria-selected="true"] { background: var(--accent); color: var(--on-accent, #fff); }
+.prefs-pane { flex: 1; overflow: auto; padding: 12px 16px 16px; }
+.prefs-pane[hidden] { display: none; }
+.prefs-pane h4 { margin: 0 0 3px; font-size: 13px; font-weight: 600; }
+.prefs-pane p.note { margin: 0 0 12px; font-size: 11.5px; color: var(--ink-3); line-height: 1.55; }
+.prefs-row {
+  display: flex; align-items: center; gap: 10px; padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+.prefs-row:first-of-type { border-top: 0; }
+.prefs-row > .lbl { flex: 0 0 132px; font-size: 12px; color: var(--ink-2); }
+.prefs-row > .val { flex: 1; font-size: 12px; }
+.prefs-row .hint { font-size: 11px; color: var(--ink-3); }
+.demo-card {
+  display: flex; align-items: center; gap: 10px; padding: 10px;
+  border: 1px solid var(--line); border-radius: 9px; margin-bottom: 8px;
+  background: var(--raised);
+}
+.demo-card b { font-size: 12.5px; }
+.demo-card .d { flex: 1; }
+.demo-card .n { font-size: 11px; color: var(--ink-3); margin-top: 2px; line-height: 1.5; }
+.demo-card.fake { border-color: color-mix(in oklab, var(--lv-warn) 55%, var(--line)); }
+.tagx {
+  font-size: 10px; padding: 1px 5px; border-radius: 4px; font-weight: 600;
+  background: color-mix(in oklab, var(--lv-warn) 26%, transparent); color: var(--lv-warn);
+}
+.bar { height: 7px; border-radius: 4px; background: var(--raised); overflow: hidden; display: flex; }
+.bar i { display: block; height: 100%; }
+.bar i.db  { background: var(--accent); }
+.bar i.img { background: var(--lv-warn); }
+/* 데모 중임을 화면 어디서나 알 수 있게 — 실황으로 착각하면 안 된다 */
+.demobar {
+  display: flex; align-items: center; gap: 9px; padding: 4px 12px;
+  background: color-mix(in oklab, var(--lv-warn) 20%, var(--raised));
+  border-bottom: 1px solid color-mix(in oklab, var(--lv-warn) 45%, var(--line));
+  font-size: 11.5px; color: var(--ink);
+}
+.demobar[hidden] { display: none; }
+.demobar b { font-weight: 600; }
+.demobar .sp { flex: 1; }
+.demobar button {
+  border: 1px solid var(--line); background: var(--raised); color: var(--ink);
+  border-radius: 6px; padding: 2px 9px; font: inherit; font-size: 11px; cursor: pointer;
+}
 
 .knobs {
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1159,6 +1292,9 @@ tbody.swap tr { animation: rowin .36s cubic-bezier(.2,.7,.3,1) both; animation-d
       <button class="mb-item" id="m-range" type="button" data-owner="p-rain" aria-haspopup="menu" aria-expanded="false">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 6v12M20 6v12M7 12h10" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M14 9l3 3-3 3" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg><span id="lb-range">12시간</span><svg class="chev" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
+      <button class="mb-item" id="m-src" type="button" data-owner="p-rain" aria-haspopup="menu" aria-expanded="false" title="강수량 자료원">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><ellipse cx="12" cy="6" rx="7.5" ry="3" stroke="currentColor" stroke-width="1.8"/><path d="M4.5 6v6c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3V6" stroke="currentColor" stroke-width="1.8"/><path d="M4.5 12v6c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-6" stroke="currentColor" stroke-width="1.8"/></svg><span id="lb-src">기상청 AWS</span><svg class="chev" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
       <button class="mb-item" id="m-sort" type="button" data-owner="p-rain" aria-haspopup="menu" aria-expanded="false">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg><span id="lb-sort">관제순</span><svg class="chev" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
@@ -1209,6 +1345,13 @@ tbody.swap tr { animation: rowin .36s cubic-bezier(.2,.7,.3,1) both; animation-d
       <span class="w2">기준 <b id="w-base">—</b></span>
     </span>
 
+    <button class="mb-item mb-icon" id="m-prefs" type="button" title="설정 (Ctrl+,)" aria-label="설정">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="3.2" stroke="currentColor" stroke-width="1.9"/>
+        <path d="M12 3.2v2.2M12 18.6v2.2M20.8 12h-2.2M5.4 12H3.2M18.2 5.8l-1.6 1.6M7.4 16.6l-1.6 1.6M18.2 18.2l-1.6-1.6M7.4 7.4L5.8 5.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+      </svg>
+    </button>
+
     <button class="mb-item mb-icon" id="manual" type="button" title="지금 조회" aria-label="지금 조회">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path d="M20 12a8 8 0 1 1-2.7-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -1219,6 +1362,15 @@ tbody.swap tr { animation: rowin .36s cubic-bezier(.2,.7,.3,1) both; animation-d
 </header>
 
 <div class="menu" id="menu" role="menu"></div>
+
+<!-- 데모를 보는 중임을 계속 알린다. 실황으로 착각하면 판단이 뒤집힌다. -->
+<div class="demobar" id="demobar" hidden>
+  <b id="demo-title">데모</b>
+  <span id="demo-note"></span>
+  <span class="sp"></span>
+  <span id="demo-span" class="micro"></span>
+  <button type="button" id="demo-off">실황으로 돌아가기</button>
+</div>
 
 <div class="board">
   <div class="row row-data" id="row-data" data-v="all">
@@ -1281,6 +1433,26 @@ tbody.swap tr { animation: rowin .36s cubic-bezier(.2,.7,.3,1) both; animation-d
       <div class="body">
         <div class="fs-axis" id="fs-axis"></div>
           <div class="fs-grid" id="fs-body"></div>
+      </div>
+    </section>
+
+    <!-- 우측 아래 자리는 둘 중 하나가 쓴다(설정 → 종합 화면 구성) -->
+    <section class="panel" id="p-min" hidden>
+      <header>
+        <h2>지금 오는 비</h2>
+        <span class="basetime">기준 <b id="mn-tm">—</b></span>
+        <span class="fetched" data-kind="rain"></span>
+        <span class="src">nph-aws2_min · 기상청 매분자료</span>
+      </header>
+      <div class="body mn-body">
+        <div class="mn-col">
+          <div class="mn-head">15분 <i>그 15분에 내린 ㎜</i></div>
+          <div class="mn-list" id="mn-15"></div>
+        </div>
+        <div class="mn-col">
+          <div class="mn-head">60분 <i>지난 한 시간 ㎜</i></div>
+          <div class="mn-list" id="mn-60"></div>
+        </div>
       </div>
     </section>
     </div>
@@ -1383,6 +1555,150 @@ tbody.swap tr { animation: rowin .36s cubic-bezier(.2,.7,.3,1) both; animation-d
   </div>
 </div>
 
+<!-- 전역 설정 — Ctrl+, 로 연다. 갈피는 계속 늘어날 자리다. -->
+<div class="modal" id="prefs" role="dialog" aria-modal="true" aria-labelledby="prefs-t" hidden>
+  <div class="modal-box prefs-box">
+    <header>
+      <h3 id="prefs-t">설정</h3>
+      <span class="src">Ctrl+,</span>
+      <button class="modal-x" id="prefs-x" type="button" aria-label="닫기">✕</button>
+    </header>
+    <div class="prefs-wrap">
+      <nav class="prefs-rail" id="prefs-rail" role="tablist" aria-label="설정 갈피">
+        <button type="button" role="tab" data-t="look" aria-selected="true">화면 꾸미기</button>
+        <button type="button" role="tab" data-t="layout" aria-selected="false">종합 화면</button>
+        <button type="button" role="tab" data-t="data" aria-selected="false">자료</button>
+        <button type="button" role="tab" data-t="demo" aria-selected="false">데모 시연</button>
+        <button type="button" role="tab" data-t="disk" aria-selected="false">저장공간</button>
+      </nav>
+
+      <div class="prefs-pane" id="pane-look" role="tabpanel">
+        <h4>화면 꾸미기</h4>
+        <p class="note">조절기는 CSS를 써 주는 도구일 뿐이다. 실제로 화면을 바꾸는 것은
+          <b>#user-css</b> 한 곳이라, 여기서 만든 것을 그대로 파일로 옮기면 실서버에서도 똑같이 된다.</p>
+        <div id="skin-slot"></div>
+      </div>
+
+      <div class="prefs-pane" id="pane-layout" role="tabpanel" hidden>
+        <h4>종합 화면 구성</h4>
+        <p class="note">종합 화면은 왼쪽에 강수 타임라인, 오른쪽 위에 예측 분포 재생,
+          <b>오른쪽 아래</b>에 한 판이 더 들어간다. 그 자리에 무엇을 놓을지 고른다.</p>
+        <div class="prefs-row">
+          <span class="lbl">오른쪽 아래</span>
+          <span class="val">
+            <select id="pf-slot">
+              <option value="fcsig">예측 상위 시군</option>
+              <option value="min">지금 오는 비 (15분 · 60분)</option>
+            </select>
+          </span>
+        </div>
+        <div class="prefs-row">
+          <span class="lbl">예측 패널 자리</span>
+          <span class="val">
+            <select id="pf-side">
+              <option value="right">오른쪽</option>
+              <option value="left">왼쪽</option>
+            </select>
+          </span>
+        </div>
+        <h4 style="margin-top:16px">지금 오는 비</h4>
+        <p class="note"><b>기상청 매분자료만 쓴다</b>(스방에는 분 단위가 없다).
+          왼쪽 칸이 15분 강수량, 오른쪽 칸이 60분 강수량이다. 15분치를 앞에 두는 까닭은
+          그게 제일 빠르기 때문이다 — 60분치는 이미 지나간 한 시간을 담고 있어서
+          막 쏟아지기 시작한 곳을 한 박자 늦게 알린다.</p>
+        <div class="prefs-row">
+          <span class="lbl">한 칸에 몇 곳</span>
+          <span class="val">
+            <select id="pf-mncount">
+              <option value="4">4곳</option><option value="6">6곳</option>
+              <option value="8">8곳</option><option value="10">10곳</option>
+              <option value="12">12곳</option><option value="16">16곳</option>
+            </select>
+            <span class="hint">많이 온 순으로 세운다</span>
+          </span>
+        </div>
+      </div>
+
+      <div class="prefs-pane" id="pane-data" role="tabpanel" hidden>
+        <h4>자료원</h4>
+        <p class="note">두 관측망은 <b>다른 것을 재고 있다.</b> 기상청은 시군 대표지점 한 곳,
+          스방은 경남 자체 AWS까지 합친 265개소다. 다우지점 후보가 다섯 배라
+          <b>스방 쪽이 훨씬 촘촘하다</b> — 고성 학림 500.5㎜를 기상청 AWS는 아예 못 본다.</p>
+        <p class="note"><b>다우지점과 시군 평균은 스방에서 가져온다.</b> 기상청 56개소로
+          다우지점을 고르면 창녕 계성 28.5㎜ 같은 값을 아예 못 보고, 평균을 내면 창원이
+          5개소·진주가 3개소라 시군 평균이라고 부를 수 없다.
+          대표지점만 기상청이다 — 그건 기상청 관측망의 개념이라서다.
+          스방이 멈췄을 때만 아래에서 기상청으로 고정한다.</p>
+        <div class="prefs-row">
+          <span class="lbl">강수량 자료원</span>
+          <span class="val">
+            <select id="pf-src">
+              <option value="auto">지표에 맞춰 자동 (권장)</option>
+              <option value="kma">기상청 AWS 56개소로 고정</option>
+              <option value="bangjae">스방 265개소로 고정</option>
+            </select>
+            <span class="hint" id="pf-src-n"></span>
+          </span>
+        </div>
+        <div class="prefs-row">
+          <span class="lbl">표시 지표</span>
+          <span class="val">
+            <select id="pf-metric">
+              <option value="rep">대표지점</option>
+              <option value="max">다우지점</option>
+              <option value="avg">시군 평균</option>
+            </select>
+            <span class="hint">표 머리글을 눌러도 바뀐다</span>
+          </span>
+        </div>
+        <div class="prefs-row">
+          <span class="lbl">보관 깊이</span>
+          <span class="val"><span class="hint" id="pf-depth">—</span></span>
+        </div>
+      </div>
+
+      <div class="prefs-pane" id="pane-demo" role="tabpanel" hidden>
+        <h4>데모 시연</h4>
+        <p class="note">비가 안 오는 날에는 화면이 온통 0.0 이라 무엇을 보여 주는 화면인지 알 수 없다.
+          실제로 호우가 내렸던 때를 그대로 되돌려 띄운다. <b>강수량은 실측</b>이다.
+          다만 기상청 특보 이력 API는 이 키로 403 이라 과거 발표 내역을 받을 수 없어,
+          <b>특보는 담긴 강수량에 호우 기준(3시간 60/90㎜, 12시간 110/180㎜)을 적용해 산출</b>한다.</p>
+        <div id="pf-demos"></div>
+      </div>
+
+      <div class="prefs-pane" id="pane-disk" role="tabpanel" hidden>
+        <h4>저장공간</h4>
+        <p class="note">자료는 두 군데에 쌓인다 — SQLite 파일 하나와 예측 분포 이미지 캐시다.
+          <b>이미지가 훨씬 빨리 자란다</b>(한 발표분이 수십 장, 10분마다 새 발표분).</p>
+        <div id="pf-usage"></div>
+        <div class="prefs-row">
+          <span class="lbl">관측·예측 보관</span>
+          <span class="val">
+            <select id="pf-keep">
+              <option value="3">3일</option><option value="7">7일</option>
+              <option value="14">14일</option><option value="30">30일</option>
+              <option value="60">60일</option><option value="90">90일</option>
+              <option value="0">지우지 않음</option>
+            </select>
+            <span class="hint">지난 자료를 이 기간만 남긴다</span>
+          </span>
+        </div>
+        <div class="prefs-row">
+          <span class="lbl">자동 정리</span>
+          <span class="val"><label><input type="checkbox" id="pf-auto"> 매일 새벽 4시 20분에 정리</label></span>
+        </div>
+        <div class="prefs-row">
+          <span class="lbl"></span>
+          <span class="val">
+            <button class="sbtn" id="pf-clean" type="button">지금 정리</button>
+            <span class="hint" id="pf-clean-msg">되돌릴 수 없다. 오늘 것은 어떤 설정에서도 남긴다.</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-t" hidden>
   <div class="modal-box">
     <header>
@@ -1457,8 +1773,24 @@ function buildAxis(labels) {
   NOWMIN = SLOTS > 1 ? Math.max(1, SLOT_MIN[SLOTS - 1] - SLOT_MIN[SLOTS - 2]) : 60;
 }
 
+let fillTries = 0;          // 과거를 채우는 중이면 몇 번 더 물어볼지
+
 async function loadRain() {
-  const j = await getJson(`/api/rain?hours=${rng().slots}`);
+  let j;
+  if (DEMO) { j = DEMO.rain; srcKey = "bangjae"; srcFell = false; }
+  else {
+    const want = srcWanted();
+    j = await getJson(`/api/rain?hours=${rng().slots}&src=${want}`);
+    /* ⚠️ 스방이 멈췄거나 계정이 없으면 빈 응답이 온다. 그대로 그리면 화면이
+       통째로 빈다 — 기상청으로 물러서고, 물러섰다는 사실을 화면에 남긴다. */
+    srcFell = false;
+    if (want === "bangjae" && !(j.rows || []).length) {
+      j = await getJson(`/api/rain?hours=${rng().slots}&src=kma`);
+      srcFell = true;
+    }
+    srcKey = j.src || want;
+  }
+  SRCLABEL = j.src_label || "";
   buildAxis(j.labels);
   for (const k of Object.keys(SIG)) delete SIG[k];
   for (const r of j.rows) {
@@ -1472,10 +1804,25 @@ async function loadRain() {
   document.querySelector("#p-rain header .basetime").innerHTML =
     `<span class="livedot"></span>실측 <b>${j.minute_tm || j.base_hour}</b>`
     + (j.minute_tm ? ` · 정시 ${j.base_hour}` : "");
+
+  /* 서버가 아직 못 받아 온 시각이 있으면 곧 다시 묻는다.
+     ⚠️ '2일'을 골라도 26시간 앞이 영영 비어 있던 일이 실제로 있었다.
+        이제 서버가 그 자리에서 채우므로, 화면은 채워질 때까지 몇 번만 더 본다. */
+  if (!DEMO && (j.filling || j.missing)) {
+    if (fillTries++ < 8) setTimeout(() => pull("rain").then(paintRange), 5000);
+  } else fillTries = 0;
 }
 
 async function loadForecast() {
-  const j = await getJson(`/api/forecast?hours=${fcHours}`);
+  /* 데모에 그때 발표된 예측이 담겨 있으면 그걸 쓴다(격자 API 는 지난 발표분도
+     내준다). 안 담긴 사례라면 **비운다** — 오늘 예측을 8월 자료 옆에 붙이면
+     통째로 거짓말이 된다. */
+  if (DEMO && !DEMO.forecast) {
+    FC_HOURS = []; FCEMD = [];
+    for (const k of Object.keys(FCSIG)) delete FCSIG[k];
+    return;
+  }
+  const j = DEMO ? DEMO.forecast : await getJson(`/api/forecast?hours=${fcHours}`);
   FC_HOURS = j.labels;
   FCEMD = j.emd.map(e => ({ emd: e.emd, sig: e.sigun, d: e.d }));
   for (const k of Object.keys(FCSIG)) delete FCSIG[k];
@@ -1486,8 +1833,96 @@ async function loadForecast() {
     b.innerHTML = `발표 <b>${j.tmfc.slice(8, 10)}:${j.tmfc.slice(10, 12)}</b> → <b id="fs-span">＋${fcHours}시간</b>`;
 }
 
+/* 15분치와 60분치는 크기가 다른 값이다 — 같은 눈금으로 색을 칠하면
+   15분에 8㎜(=시간당 32㎜의 기세)가 옅은 색으로 묻힌다. 단계를 따로 둔다. */
+const MN_STEPS = { 15: [0.5, 2, 5, 8, 12, 18, 25], 60: [1, 5, 10, 20, 30, 50, 70] };
+const mnColor = (mm, kind) => {
+  const st = MN_STEPS[kind] || MN_STEPS[60];
+  let k = 0;
+  st.forEach((t, i) => { if (mm >= t) k = i + 1; });
+  return k ? `var(--rain-${Math.min(7, k)})` : "var(--ink-3)";
+};
+
+let MIN15 = [], MIN60 = [], MIN_TM = null, MIN_T15 = null, MIN_T60 = null;
+let mnCount = 8;                        // 한 칸에 몇 줄 세울지
+try { mnCount = +(localStorage.getItem("gn-mncount") || 8) || 8; } catch {}
+/* 15분치를 그대로 볼지, 시간당으로 환산(×4)해 볼지.
+   ⚠️ 둘은 **같은 값의 다른 표기**다. 15분에 8㎜는 '시간당 32㎜의 기세'라는 뜻이지
+      한 시간에 32㎜가 온다는 말이 아니다 — 그 기세가 이어질 때의 값이다.
+      환산해서 봐야 60분치·특보 기준(시간당 ㎜)과 같은 자로 견줄 수 있고,
+      그대로 봐야 실제로 떨어진 양을 안다. 그래서 눌러서 오간다. */
+let mn15x4 = false;
+try { mn15x4 = localStorage.getItem("gn-mn15x4") === "1"; } catch {}
+
+async function loadMinute() {
+  /* ⚠️ 기상청 매분자료만 쓴다. 스방에는 분 단위가 없다 —
+     '지금 쏟아지는 곳'은 15분치라야 알 수 있고 그건 기상청에만 있다. */
+  if (DEMO) {                       // 데모에는 분 단위가 없다. 지금 값을 섞지 않는다.
+    MIN_TM = null; MIN15 = []; MIN60 = []; MIN_T15 = MIN_T60 = null;
+    return;
+  }
+  const j = await getJson(`/api/minute?n=${mnCount}`);
+  MIN_TM = j.tm; MIN15 = j.r15 || []; MIN60 = j.r60 || [];
+  MIN_T15 = j.tm15; MIN_T60 = j.tm60;
+}
+
+function drawMinute() {
+  const el = document.getElementById("mn-tm");
+  if (el) el.textContent = MIN_TM || "—";
+  // 두 값의 기준 시각이 다를 수 있다 — 다를 때만 각 칸에 적는다
+  const h15 = document.querySelector('#p-min .mn-col:first-child .mn-head');
+  const h60 = document.querySelector('#p-min .mn-col:last-child .mn-head');
+  if (h15) h15.innerHTML = `15분`
+    + `<span class="mn-tog" role="group" aria-label="15분 표기">`
+    +   `<button type="button" data-x4="0" aria-pressed="${!mn15x4}">그대로</button>`
+    +   `<button type="button" data-x4="1" aria-pressed="${mn15x4}">×4</button>`
+    + `</span>`
+    + `<i>${mn15x4 ? "시간당 환산 ㎜/h" : "그 15분에 내린 ㎜"}${
+      MIN_T15 && MIN_T15 !== MIN_TM ? ` · ${MIN_T15}` : ""}</i>`;
+  if (h60) h60.innerHTML = `60분 <i>지난 한 시간 ㎜${
+    MIN_T60 && MIN_T60 !== MIN_TM ? ` · ${MIN_T60}` : ""}</i>`;
+  const paint = (id, rows, kind) => {
+    const box = document.getElementById(id);
+    if (!box) return;
+    // 15분 칸을 ×4로 보면 그 값은 이제 '시간당 ㎜'다 — 색 단계도 60분 것을 쓴다
+    const x4 = kind === 15 && mn15x4;
+    const val = v => (x4 ? v * 4 : v);
+    const tone = x4 ? 60 : kind;
+    if (!rows.length) {
+      box.innerHTML = `<div class="mn-empty">${DEMO
+        ? "데모에는 분 단위 자료가 없다 — 그때의 매분자료는 남아 있지 않다."
+        : "자료를 아직 받지 못했다."}</div>`;
+      return;
+    }
+    // 막대는 그 칸 안에서만 견준다 — 15분치와 60분치는 크기가 다른 값이다
+    const mx = Math.max(...rows.map(r => r.mm), 0.5);
+    box.innerHTML = rows.map(r => `
+      <div class="mn-row${r.mm > 0 ? "" : " zero"}" title="${r.sigun} ${r.name} — 15분 ${
+        r.mm.toFixed(1)}㎜${kind === 15 ? ` (시간당 ${(r.mm * 4).toFixed(1)}㎜의 기세)` : ""}">
+        <span class="nm"><sup>${r.sigun}</sup>${r.name}</span>
+        <span class="g"><i style="width:${(r.mm / mx * 100).toFixed(1)}%;background:${
+          mnColor(val(r.mm), tone)}"></i></span>
+        <span class="v">${val(r.mm).toFixed(1)}</span>
+      </div>`).join("");
+  };
+  paint("mn-15", MIN15, 15);
+  paint("mn-60", MIN60, 60);
+}
+
+/* 15분 표기 토글 — '그대로 ↔ ×4(시간당 환산)'.
+   자료를 다시 받지 않는다. 같은 값의 표기만 바꾸는 일이다. */
+document.addEventListener("click", e => {
+  const b = e.target.closest("#p-min .mn-tog button");
+  if (!b) return;
+  const want = b.dataset.x4 === "1";
+  if (want === mn15x4) return;
+  mn15x4 = want;
+  try { localStorage.setItem("gn-mn15x4", mn15x4 ? "1" : "0"); } catch {}
+  drawMinute();
+});
+
 async function loadAlerts() {
-  const j = await getJson("/api/alerts");
+  const j = DEMO ? DEMO.alerts : await getJson("/api/alerts");
   FEEDS.alerts.base = (j.base_time || "").slice(11, 16) + " 현재";
   const g = j.data || { groups: [], pending: [] };
   ALERTS = g.groups.map(x => ({
@@ -1534,6 +1969,14 @@ async function loadQpf() {
   seek.max = Math.max(0, QPF_N - 1);
   if (qpfIdx >= QPF_N) qpfIdx = 0;
   qpfPreload();
+
+  /* 벽면에 걸어 두는 화면이라 **켜면 바로 돌아야 한다.** 아무도 재생을 눌러
+     주지 않는다. 첫 발표분이 들어온 순간 한 번만 스스로 시작하고, 그 뒤로
+     사용자가 멈췄으면 다시 켜지 않는다(자동 갱신 때마다 되살아나면 성가시다). */
+  if (!qpfAutoPlayed && QPF_N > 1) {
+    qpfAutoPlayed = true;
+    qpfStart();
+  }
 }
 
 // 초단기예보 상위 읍면동. 값은 정수 mm로 양자화돼 온다(실제 응답 그대로).
@@ -1574,11 +2017,38 @@ let tkCount    = 12;        // 예측 순위 줄에 펼칠 읍면동 수
 const TK_ROWS  = 2;         // 두 줄로 나눠 담는다
 let metric     = "rep";     // 'rep' 대표지점 | 'max' 다우지점 | 'avg' 시군 평균
 try { metric = localStorage.getItem("gn-metric") || "rep"; } catch {}
+/* 강수량 자료원. 'kma' 기상청 AWS 56개소 | 'bangjae' 스방 265개소.
+   ⚠️ 같은 시각이라도 뜻이 다르다 — 스방 'H시'는 H:00~H:59, 기상청은 (H-1):00~H:00.
+      맞춰 끼우는 일은 서버가 한다(queries._rain_bangjae). 화면은 칸만 그린다.
+
+   기본은 **지표가 자료원을 정한다**(srcMode='auto').
+
+     대표지점  → 기상청. '시군 대표지점'은 기상청 관측망의 개념이다.
+     다우지점  → 스방.   후보가 56 대 265 다. 기상청 56개소로 고르면
+                         창녕 계성 28.5㎜ 같은 값을 **아예 못 본다.**
+     시군 평균 → 스방.   265개소 평균이라야 스방이 스스로 내는 '평균강수량'과
+                         같아진다(거창 6.50 vs 6.5, 합천 3.83 vs 3.9).
+                         기상청 56개소로 평균 내면 창원이 5개소, 진주가 3개소다 —
+                         그건 시군 평균이라고 부를 수 없다.
+
+   설정 → 자료에서 한쪽으로 고정할 수도 있다(스방이 멈췄을 때 쓴다). */
+let srcMode = "auto";
+try { srcMode = localStorage.getItem("gn-srcmode") || "auto"; } catch {}
+let srcKey = "kma";              // 지금 실제로 받아 온 자료원
+let srcFell = false;             // 스방을 못 받아 기상청으로 물러섰는가
+
+const srcWanted = () => (srcMode !== "auto" ? srcMode
+                       : (metric === "rep" ? "kma" : "bangjae"));
+let SRCLABEL = "";          // 서버가 준 자료원 이름('스방 265개소')
+let DEMO = null;            // 데모를 보는 중이면 그 꾸러미
 let perSigun   = 1;         // 시군당 몇 지점을 펼칠지
 let flat       = false;     // 시군을 무시하고 전 지점을 한 줄로 세울지
 let sortMode   = "order";   // 'order' 관제순 | 'acc' 누적순
 let showAll    = false;     // 타임라인에 모든 값을 적을지, 봉우리만 적을지
 let view       = "tl";
+/* 종합 화면 우측 아래 자리에 무엇을 놓을지. 'fcsig' 예측 상위 시군 | 'min' 지금 오는 비 */
+let slotBR = "fcsig";
+try { slotBR = localStorage.getItem("gn-slotbr") || "fcsig"; } catch {}
 let totalPos   = "right";   // 합계 자리: 'right' 행 맨 오른쪽 | 'bar' 막대 옆
 /* 패널마다 갱신 주기를 따로 둔다 — 자료가 올라오는 리듬이 다르기 때문이다.
    ⚠️ 이 주기를 바꿔도 기상청 호출량은 변하지 않는다. 화면은 DB만 읽는다. */
@@ -1587,6 +2057,8 @@ const FEEDS = {
   forecast: { label: "예측",     panel: "p-fcsig",  sec: 600, load: () => loadForecast(), after: () => { drawTicker(); drawFcSigun(); drawRain(false); } },
   alerts:   { label: "특보",     panel: null,       sec: 60,  load: () => loadAlerts(),   after: () => { drawWrns(); drawRain(false); } },
   qpf:      { label: "예측분포", panel: "p-qpf",    sec: 600, load: () => loadQpf(),      after: () => drawQpf() },
+  // 매분자료는 강수량 수집기가 이미 받아 둔 것을 읽기만 한다(기상청 호출이 늘지 않는다)
+  minute:   { label: "지금비",   panel: "p-min",   sec: 60,  load: () => loadMinute(),   after: () => drawMinute() },
 };
 try {
   const saved = JSON.parse(localStorage.getItem("gn-feeds") || "{}");
@@ -1688,9 +2160,12 @@ function buildRows() {
   if (metric === "avg")
     return ORDER.filter(sig => stationsOf(sig).length).map(sig => {
       const a = avgSeries(sig);
-      const mf = stationsOf(sig).reduce((t, x) => t + x.f, 0) / stationsOf(sig).length;
+      const n = stationsOf(sig).length;
+      const mf = stationsOf(sig).reduce((t, x) => t + x.f, 0) / n;
       const fcd = fcFor(sig, mf);
-      return { sig, kind: "main", stn: `평균 ${stationsOf(sig).length}개소`,
+      // 이름 자리는 `창원²³` 뿐이다. '평균 23개소'를 크게 적으면 시군을 못 읽는다 —
+      // 줄을 찾는 눈은 시군을 본다. 몇 개소인지는 윗첨자로 딸려 가면 충분하다.
+      return { sig, kind: "main", stn: sig, sup: n, avg: true,
                d: a.d, bads: a.bad, ...accOf(a.d), fcd, fc: sumOf(fcd) };
     });
 
@@ -1938,8 +2413,27 @@ function drawRain(animate) {
   const mains = rows.filter(r => r.kind === "main");
   const th = rng().th;
 
-  const maxTot = Math.max(...mains.map(r => r.sum + r.fc), 1);
-  const barMax = th ? Math.max(maxTot, th[1] * 1.06) : maxTot;
+  /* 누적 막대 눈금 — **늘 실제 값에 맞춘다.**
+     ⚠️ 전에는 특보 기준(110/180㎜)까지 눈금을 늘려 놨다. 그러면 6.8㎜가 온 날은
+        막대가 3%밖에 안 차 아무것도 못 읽고, 600㎜가 오면 넘쳐 버린다.
+        기준선은 그 눈금 안에 들어올 때만 긋는다 — 밖이면 그을 자리가 없다.
+
+     한 시군만 유독 길면 나머지가 다 뭉개진다. 그때는 눈금을 한 번 꺾어
+     (broken axis) 뒷부분을 압축하고, 꺾인 자리에 물결 자국을 남긴다. */
+  const tots = mains.map(r => r.sum + r.fc).sort((a, b) => b - a);
+  const maxTot = Math.max(tots[0] || 0, 0.1);
+  const second = tots[1] || 0;
+  const KNEE_AT = 0.72;                 // 꺾이는 자리(막대 폭의 몇 %)
+  const knee = second * 1.15;
+  const broken = second > 0 && maxTot > knee * 2.2;
+  const barMax = maxTot;
+  /* 값 → 막대 폭(%). 꺾은 눈금이면 앞은 넉넉히, 뒤는 눌러서 담는다. */
+  const xOf = v => {
+    const x = Math.max(0, v);
+    if (!broken) return (x / barMax) * 100;
+    return x <= knee ? (x / knee) * KNEE_AT * 100
+                     : (KNEE_AT + (x - knee) / (maxTot - knee) * (1 - KNEE_AT)) * 100;
+  };
 
   // 타임라인 세로 눈금은 전 시군 공통 — 행끼리 높이를 비교할 수 있어야 한다
   let mx = 10;
@@ -1950,12 +2444,16 @@ function drawRain(animate) {
   const head = document.getElementById("rain-head");
   head.innerHTML =
     `<th class="l metric-h" id="metric-h" style="width:146px"
-        title="누르면 대표지점 ↔ 다우지점으로 바뀐다">${METRIC[metric]}<i>⟳</i></th>` +
-    `<th class="l" style="width:${totalPos === "bar" ? 348 : 272}px">누적 ${rng().l}` +
-      (th ? `<span class="thlab">기준 <i class="w1">${th[0]}</i>/<i class="w2">${th[1]}</i></span>` : "") +
+        title="누르면 대표지점 → 다우지점 → 시군 평균 순으로 바뀐다">${METRIC[metric]}<i>⟳</i><em class="srcmark${
+          srcFell ? " fell" : ""}">${srcFell ? "스방 안 됨→기상청"
+            : srcKey === "bangjae" ? "스방 265" : "기상청 56"}</em></th>` +
+    `<th class="l" style="width:${totalPos === "bar" ? 330 : 290}px">누적 ${rng().l}` +
+      // 눈금 밖이면 기준 자체를 적지 않는다. 그을 선이 없는데 이름만 남으면 군더더기다.
+      (th && th[0] <= maxTot
+        ? `<span class="thlab">기준 <i class="w1">${th[0]}</i>/<i class="w2">${th[1]}</i></span>` : "") +
       (totalPos === "bar" ? " " + grip : "") + "</th>" +
     '<th class="l tlh" id="tl-head"></th>' +
-    (totalPos === "right" ? `<th class="totc" style="width:96px;text-align:right">${grip}</th>` : "");
+    (totalPos === "right" ? `<th class="totc" style="width:62px;text-align:right">${grip}</th>` : "");
 
   // 타임라인 폭을 실제 픽셀로 재서 글자가 늘어나지 않게 1:1로 그린다
   const cell = document.getElementById("tl-head");
@@ -2020,23 +2518,29 @@ function drawRain(animate) {
   body.innerHTML = rows.map((r, i) => {
     const lv = ALERT_LV[r.sig];
     const tot = Math.round((r.sum + r.fc) * 10) / 10;
-    const ow = (r.sum / barMax) * 100, fw = (r.fc / barMax) * 100;
+    const ow = xOf(r.sum), fw = xOf(r.sum + r.fc) - ow;
     // 누적량 색조 — 시우량 램프와 같은 색이되 단계가 다르다(총량은 단위가 크다)
-    const tone = ACC_TONE.reduce((a, [t, v]) => (tot >= t ? v : a), null);
-    const ring = th ? (tot >= th[1] ? "var(--lv-warn)" : tot >= th[0] ? "var(--lv-watch)" : null) : null;
-    const totStyle = `style="${tone ? `--tot-bg:var(${tone});color:${tot >= 90 ? "var(--on-fill)" : "var(--ink)"};` : ""}`
-      + `${ring ? `--tot-ring:inset 0 0 0 1.5px ${ring};` : ""}"`;
+    /* 합계는 **숫자만** 적는다. 예전엔 값에 따라 칸을 색으로 채우고 특보 기준을
+       넘으면 테두리까지 둘렀는데, 옆의 막대가 이미 같은 말을 하고 있어서
+       한 화면에서 같은 사실을 세 번 강조하는 꼴이었다. 눈이 거기로만 끌린다. */
+    const totStyle = "";
 
-    const marks = th ? th.map((t, k) => {
-      const l = (t / barMax) * 100;
-      return l > 99 ? "" : `<i class="th w${k + 1}" style="left:${l}%" data-l="${t}"></i>`;
-    }).join("") : "";
+    // 기준선은 눈금 안에 들어올 때만. 밖이면 그어 봐야 막대 끝에 붙어 거짓말이 된다.
+    const marks = (th ? th.map((t, k) => {
+      const l = xOf(t);
+      return l > 98 ? "" : `<i class="th w${k + 1}" style="left:${l}%" data-l="${t}"></i>`;
+    }).join("") : "")
+      // 눈금을 꺾은 자리 — 이 뒤로는 압축되어 있다는 자국
+      + (broken && r.sum + r.fc > knee
+         ? `<i class="brk" style="left:${(KNEE_AT * 100).toFixed(1)}%" title="여기서 눈금을 꺾었다 — 뒤쪽은 눌러 그린다"></i>` : "");
 
     const oIn = ow > 21, fIn = fw > 14;
     const outs = [];
     if (!oIn) outs.push(`<b>${r.sum.toFixed(1)}</b>`);
     if (r.fc && !fIn) outs.push(`<i>+${r.fc}</i>`);
-    const totHtml = `<span class="tot" ${totStyle}>${tot.toFixed(1)}${r.bad ? `<i>${r.bad}h</i>` : ""}</span>`;
+    // 결측 시간 수(`1h`)는 여기 적지 않는다 — 값인지 단위인지 읽히지 않았다.
+    // 알아야 할 때는 줄에 마우스를 올리면 나온다.
+    const totHtml = `<span class="tot"${r.bad ? ` title="${r.bad}시간은 자료가 없어 빼고 더했다"` : ""}>${tot.toFixed(1)}</span>`;
     const bar = `<div class="accwrap">
       <div class="abar">
         <div class="seg obs" style="width:${ow}%">${oIn ? `<span>${r.sum.toFixed(1)}</span>` : ""}</div>
@@ -2055,7 +2559,10 @@ function drawRain(animate) {
       ? `<button class="dropx" data-drop="${r.sig}|${r.stn}" title="이 다우지점 빼기" aria-label="빼기">✕</button>` : "";
 
     return `<tr style="--i:${i}" data-sigun="${r.sig}"${lv ? ` data-lv="${lv}"` : ""}${r.kind === "extra" ? ' class="extra"' : ""}>
-      <td class="l dpc">${r.kind === "extra" ? '<span class="addmark">└</span>' : ""}<span class="dp"><sup>${r.sig}</sup><span class="s">${r.stn}</span></span>${drop}</td>
+      <td class="l dpc">${r.kind === "extra" ? '<span class="addmark">└</span>' : ""}<span class="dp${
+        r.avg ? " avg" : ""}"${r.avg ? ` role="button" tabindex="0" title="누르면 ${r.sig} 지점별 강수량"` : ""}>${
+        r.avg ? `<span class="s">${r.stn}</span><sup>${r.sup}</sup>`
+              : `<sup>${r.sig}</sup><span class="s">${r.stn}</span>`}</span>${drop}</td>
       <td class="acc">${bar}</td>
       <td class="tl">${third}</td>
       ${totalPos === "right" ? `<td class="totc">${totHtml}</td>` : ""}
@@ -2103,14 +2610,24 @@ function placeNowLine() {
 }
 addEventListener("resize", () => placeNowLine());
 
-/* 지표 바꾸기 — 머리글을 누르면 대표지점 ↔ 다우지점.
-   ⚠️ 시군 평균은 내부망에서 원본 API로 직접 받는다. 여기서는 돌리지 않는다. */
-const MCYCLE = ["rep", "max"];
+/* 지표 바꾸기 — 머리글을 누르면 대표지점 → 다우지점 → 시군 평균 → 다시.
+   시군 평균은 그 자료원의 지점을 시각마다 평균한 값이다. 스방을 고르면
+   265개소 평균이 되어 스방이 스스로 내는 '평균강수량'과 같아진다
+   (실측 대조: 거창 6.50 vs 스방 6.5, 합천 3.83 vs 3.9). */
+const MCYCLE = ["rep", "max", "avg"];
+function setMetric(v) {
+  const before = srcWanted();
+  metric = v;
+  try { localStorage.setItem("gn-metric", metric); } catch {}
+  const sel = document.getElementById("pf-metric");
+  if (sel) sel.value = metric;
+  // 지표가 자료원을 정하므로, 관측망이 바뀌면 다시 받아야 한다
+  if (!DEMO && srcWanted() !== before) { fillTries = 0; pull("rain").then(paintRange); }
+  else drawRain(true);
+}
 document.getElementById("rain-head").addEventListener("click", e => {
   if (!e.target.closest(".metric-h")) return;
-  metric = MCYCLE[(MCYCLE.indexOf(metric) + 1) % MCYCLE.length];
-  try { localStorage.setItem("gn-metric", metric); } catch {}
-  drawRain(true);
+  setMetric(MCYCLE[(MCYCLE.indexOf(metric) + 1) % MCYCLE.length]);
 });
 
 /* 합계 자리 옮기기 — 좌우로 끌면 막대 옆과 행 맨 오른쪽 사이를 오간다 */
@@ -2402,6 +2919,8 @@ function drawQpf() {
   if (view2 === "qpf") syncMeta();
 }
 
+let qpfAutoPlayed = false;      // 처음 한 번만 스스로 재생한다
+
 function qpfStop() {
   qpfPlaying = false;
   clearInterval(qpfTimer);
@@ -2560,7 +3079,22 @@ function drawWrns() {
 }
 
 const modal = document.getElementById("modal");
+
+/* 이 창은 특보와 시군 지점 목록이 함께 쓴다. 머리·꼬리를 통째로 다시 써야
+   앞서 연 창의 설명이 남아 엉뚱한 자료를 가리키지 않는다. */
+function modalHead(title, base, src) {
+  document.getElementById("modal-t").textContent = title;
+  document.querySelector("#modal .basetime").innerHTML = base;
+  document.querySelector("#modal .src").textContent = src;
+}
+
 function openWrn(focus) {
+  modalHead("기상특보 현황",
+    `${(FEEDS.alerts.base || "").replace(" 현재", "")} <b>현재 발효</b>`,
+    "wrn_now_data.php");
+  document.querySelector("#modal footer").innerHTML =
+    `레벨 문자열은 API가 주는 <b>주의</b>·<b>경보</b>다(주의보 아님). 폭염은 <b>중대경보</b>까지 3단계.
+     집계는 발효 중인 것만 세고, 발효 예정은 따로 적는다.`;
   document.getElementById("modal-body").innerHTML = ALERTS.map((a, i) => `
     <div class="wgroup"${i === focus ? ' style="background:color-mix(in oklab, var(--accent) 7%, transparent)"' : ""}>
       <div class="whead">
@@ -2645,6 +3179,7 @@ function openCustomRange() {
 }
 
 function paintRange() {
+  paintSrcLabel();
   const from = cut();
   const day = dayOf(from) < 2 ? DAYS[dayOf(from)] + " " : "";
   document.querySelector("#p-rain header .rangeval").innerHTML =
@@ -2664,6 +3199,33 @@ bindMenu("m-range", "lb-range", "누적 구간",
 bindMenu("m-fc", "lb-fc", "예측 구간",
   () => [3, 6].map(h => ({ k: h, l: "예측 " + h + "h", on: h === fcHours })),
   k => { fcHours = +k; pull("forecast").then(paintRange); });
+
+/* 자료원 — 같은 화면을 다른 관측망으로 다시 그린다 */
+function setSrc(v) {
+  if (v === srcMode) return;
+  srcMode = v;
+  try { localStorage.setItem("gn-srcmode", srcMode); } catch {}
+  const sel = document.getElementById("pf-src");
+  if (sel) sel.value = srcMode;
+  fillTries = 0;
+  pull("rain").then(paintRange);
+}
+
+const SRCLB = { auto: "지표 따라", kma: "기상청 고정", bangjae: "스방 고정" };
+function paintSrcLabel() {
+  const el = document.getElementById("lb-src");
+  if (!el) return;
+  el.textContent = srcMode === "auto"
+    ? (srcKey === "bangjae" ? "스방" : "기상청") + (srcFell ? " (물러섬)" : "")
+    : SRCLB[srcMode];
+}
+
+bindMenu("m-src", null, "강수량 자료원",
+  () => [{ k: "auto", l: "지표에 맞춰 자동", on: srcMode === "auto" },
+         { head: "고정" },
+         { k: "kma", l: "기상청 AWS 56개소", on: srcMode === "kma" },
+         { k: "bangjae", l: "스방 265개소", on: srcMode === "bangjae" }],
+  k => setSrc(k));
 
 bindMenu("m-sort", "lb-sort", "정렬 기준",
   () => [{ k: "order", l: "관제순", on: sortMode === "order" },
@@ -2700,13 +3262,34 @@ bindMenu("m-look", null, "",
     { k: "p:left",  l: "예측 패널 왼쪽",   on: sidePos === "left" },
     { sep: true },
     { k: "s:open", l: "화면 꾸미기…", on: false },
+    { k: "s:demo", l: "데모 시연…", on: false },
+    { k: "s:disk", l: "저장공간…", on: false },
   ],
   k => {
     const [kind, v] = k.split(":");
     if (kind === "t") { theme = v; applyTheme(); drawRain(false); }
     else if (kind === "p") { sidePos = v; applySide(); }
-    else if (kind === "s") openSkin();
+    else if (kind === "s") openPrefs(v === "open" ? "look" : v);
   });
+
+function applySlot() {
+  const fc = document.getElementById("p-fcsig"), mn = document.getElementById("p-min");
+  if (!fc || !mn) return;
+  fc.hidden = slotBR !== "fcsig";
+  mn.hidden = slotBR !== "min";
+  // 숨긴 판이 앞창으로 잡혀 있으면 메뉴바가 없는 판의 설정을 보여 준다
+  if (document.querySelector(".panel.active")?.hidden)
+    activate(document.getElementById("p-rain"), true);
+  if (slotBR === "min") { pull("minute").catch(() => {}); }
+}
+
+function setSlot(v) {
+  slotBR = v;
+  try { localStorage.setItem("gn-slotbr", slotBR); } catch {}
+  const sel = document.getElementById("pf-slot");
+  if (sel) sel.value = slotBR;
+  applySlot();
+}
 
 bindMenu("m-win", "mb-view", "창",
   () => VIEWS.map(v => ({ k: v.k, l: v.l, on: v.k === view2 })),
@@ -2858,11 +3441,199 @@ function skinMsg(t) {
   skinMsg.t = setTimeout(() => (el.textContent = ""), 2200);
 }
 
-function openSkin() { skinSync(); skin.hidden = false; }
-function closeSkin() { skin.hidden = true; }
+/* 꾸미기 화면은 설정창 안으로 들어갔다. 조절기 DOM 을 그대로 옮겨 담아
+   기존 동작(#user-css 에 쓰기)은 하나도 건드리지 않는다. */
+(function moveSkinIntoPrefs() {
+  const slot = document.getElementById("skin-slot");
+  const body = skin.querySelector(".skin-body");
+  const foot = skin.querySelector(".skin-foot");
+  if (slot && body) { slot.append(body); if (foot) slot.append(foot); }
+  skin.remove();
+})();
 
-document.getElementById("skin-x").addEventListener("click", closeSkin);
-skin.addEventListener("click", e => { if (e.target === skin) closeSkin(); });
+function openSkin() { openPrefs("look"); }
+function closeSkin() { closePrefs(); }
+
+/* ══════════════════════════════════════════════════════════════════
+   전역 설정창 — Ctrl+, 로 연다.
+   ⚠️ Win+, 는 **윈도우가 먼저 가로챈다**(바탕화면 미리보기). 브라우저까지
+      오지 않으므로 눌러도 아무 일이 없다. 그래서 Ctrl+, 를 쓴다.
+      혹시 오는 환경을 위해 Meta+, 도 함께 받는다.
+   ══════════════════════════════════════════════════════════════════ */
+const prefs = document.getElementById("prefs");
+
+function openPrefs(tab) {
+  skinSync();
+  if (tab) showPrefsTab(tab);
+  prefs.hidden = false;
+  syncPrefs();
+}
+function closePrefs() { prefs.hidden = true; }
+
+function showPrefsTab(t) {
+  document.querySelectorAll("#prefs-rail button").forEach(b =>
+    b.setAttribute("aria-selected", String(b.dataset.t === t)));
+  ["look", "layout", "data", "demo", "disk"].forEach(k =>
+    document.getElementById("pane-" + k).hidden = (k !== t));
+  if (t === "demo") loadDemoList();
+  if (t === "disk") loadUsage();
+}
+
+document.getElementById("prefs-rail").addEventListener("click", e => {
+  const b = e.target.closest("[data-t]");
+  if (b) showPrefsTab(b.dataset.t);
+});
+document.getElementById("prefs-x").addEventListener("click", closePrefs);
+prefs.addEventListener("click", e => { if (e.target === prefs) closePrefs(); });
+document.getElementById("m-prefs").addEventListener("click", () => openPrefs());
+
+addEventListener("keydown", e => {
+  if (e.key === "," && (e.ctrlKey || e.metaKey) && !e.altKey) {
+    e.preventDefault();
+    prefs.hidden ? openPrefs() : closePrefs();
+  }
+  if (e.key === "Escape" && !prefs.hidden) closePrefs();
+});
+
+/* 설정창을 열 때마다 지금 상태를 그대로 비춘다 */
+function syncPrefs() {
+  document.getElementById("pf-src").value = srcMode;
+  document.getElementById("pf-slot").value = slotBR;
+  document.getElementById("pf-side").value = sidePos;
+  document.getElementById("pf-mncount").value = String(mnCount);
+  document.getElementById("pf-metric").value = metric;
+  document.getElementById("pf-src-n").textContent = SRCLABEL ? "현재 " + SRCLABEL : "";
+  const d = document.getElementById("pf-depth");
+  if (d) d.textContent = "화면이 고른 구간(" + rng().l + ")만큼 서버가 과거를 채운다";
+}
+document.getElementById("pf-src").addEventListener("change", e => setSrc(e.target.value));
+document.getElementById("pf-slot").addEventListener("change", e => setSlot(e.target.value));
+document.getElementById("pf-side").addEventListener("change", e => { sidePos = e.target.value; applySide(); });
+document.getElementById("pf-mncount").addEventListener("change", e => {
+  mnCount = +e.target.value;
+  try { localStorage.setItem("gn-mncount", mnCount); } catch {}
+  pull("minute").catch(() => {});
+});
+document.getElementById("pf-metric").addEventListener("change", e => setMetric(e.target.value));
+
+/* ── 데모 시연 ─────────────────────────────────────────────────── */
+const fmtMB = b => (b >= 1048576 ? (b / 1048576).toFixed(1) + "MB"
+                                 : Math.max(1, Math.round(b / 1024)) + "KB");
+
+async function loadDemoList() {
+  const box = document.getElementById("pf-demos");
+  box.innerHTML = `<p class="note">불러오는 중…</p>`;
+  try {
+    const j = await getJson("/api/demo");
+    box.innerHTML = j.cases.map(c => `
+      <div class="demo-card${c.fake ? " fake" : ""}">
+        <div class="d">
+          <b>${c.title}</b>${c.fake ? ` <span class="tagx">가상</span>` : ""}
+          <div class="n">${c.note}</div>
+        </div>
+        <button class="sbtn primary" data-demo="${c.slug}" type="button">띄우기</button>
+      </div>`).join("")
+      + (DEMO ? `<button class="sbtn ghost" id="pf-demo-off" type="button">실황으로 돌아가기</button>` : "");
+  } catch (e) {
+    box.innerHTML = `<p class="note">사례 목록을 못 받았다: ${e.message}</p>`;
+  }
+}
+
+document.getElementById("pf-demos").addEventListener("click", async e => {
+  if (e.target.id === "pf-demo-off") return demoOff();
+  const b = e.target.closest("[data-demo]");
+  if (!b) return;
+  b.disabled = true; b.textContent = "받는 중…";
+  try { await demoOn(b.dataset.demo); closePrefs(); }
+  catch (err) { b.disabled = false; b.textContent = "띄우기"; alert("데모를 못 띄웠다: " + err.message); }
+});
+
+async function demoOn(slug) {
+  const j = await getJson("/api/demo/" + slug);
+  DEMO = j;
+  const bar = document.getElementById("demobar");
+  document.getElementById("demo-title").textContent = j.title;
+  document.getElementById("demo-note").innerHTML =
+    (j.fake ? `<span class="tagx">가상</span> ` : "") + j.note
+    + ` · 특보는 <b>산출</b>(발표 내역 아님)`
+    + (j.forecast ? ` · 예측은 그때 <b>실제 발표분</b>` : " · 예측은 비운다");
+  document.getElementById("demo-span").textContent = j.span.join(" ~ ");
+  bar.hidden = false;
+  // 데모는 담긴 칸 수가 곧 구간이다. 사용자가 고른 구간을 그대로 쓰면 자료가 빈다.
+  const cu = RANGE.find(r => r.k === "cu");
+  const row = { k: "cu", l: "데모 " + j.rain.hours + "시간", slots: j.rain.hours, th: [110, 180] };
+  if (cu) Object.assign(cu, row); else RANGE.push(row);
+  rangeKey = "cu";
+  document.getElementById("lb-range").textContent = row.l;
+  await loadRain(); await loadAlerts(); await loadForecast();
+  drawRain(true); drawWrns(); drawFcSigun(); drawTicker(); paintRange();
+}
+
+function demoOff() {
+  DEMO = null;
+  pull("forecast");
+  document.getElementById("demobar").hidden = true;
+  rangeKey = "12";
+  document.getElementById("lb-range").textContent = rng().l;
+  pull("rain").then(paintRange);
+  pull("alerts");
+  closePrefs();
+}
+document.getElementById("demo-off").addEventListener("click", demoOff);
+
+/* ── 저장공간 ──────────────────────────────────────────────────── */
+async function loadUsage() {
+  const box = document.getElementById("pf-usage");
+  box.innerHTML = `<p class="note">재는 중…</p>`;
+  try {
+    const u = await getJson("/api/storage");
+    const tot = Math.max(1, u.total_bytes);
+    box.innerHTML = `
+      <div class="prefs-row"><span class="lbl">합계</span><span class="val">
+        <b>${fmtMB(u.total_bytes)}</b>
+        <div class="bar" style="margin-top:5px">
+          <i class="db" style="width:${(u.db_bytes / tot * 100).toFixed(1)}%"></i>
+          <i class="img" style="width:${(u.img_bytes / tot * 100).toFixed(1)}%"></i>
+        </div>
+        <div class="hint" style="margin-top:4px">
+          DB ${fmtMB(u.db_bytes)} · 예측 이미지 ${fmtMB(u.img_bytes)}
+          (${u.img_files}장 / 발표분 ${u.qpf_tmfc})
+        </div>
+      </span></div>` +
+      u.tables.map(t => `<div class="prefs-row"><span class="lbl">${t.table}</span>
+        <span class="val">${t.rows.toLocaleString()}줄
+        ${t.span ? `<span class="hint"> · ${t.span[0]} ~ ${t.span[1]}</span>` : ""}</span></div>`).join("");
+    document.getElementById("pf-keep").value = String(u.retention.obs_days);
+    document.getElementById("pf-auto").checked = !!u.retention.auto;
+  } catch (e) {
+    box.innerHTML = `<p class="note">저장공간을 못 읽었다: ${e.message}</p>`;
+  }
+}
+
+async function putRetention(body) {
+  await fetch("/api/settings/retention", {
+    method: "PUT", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+document.getElementById("pf-keep").addEventListener("change", e =>
+  putRetention({ obs_days: +e.target.value }));
+document.getElementById("pf-auto").addEventListener("change", e =>
+  putRetention({ auto: e.target.checked }));
+
+document.getElementById("pf-clean").addEventListener("click", async e => {
+  const days = +document.getElementById("pf-keep").value;
+  const msg = document.getElementById("pf-clean-msg");
+  if (!confirm(days ? days + "일보다 오래된 자료를 지운다. 되돌릴 수 없다."
+                    : "보관 기간이 '지우지 않음'이라 묵은 이미지만 치운다. 계속할까?")) return;
+  e.target.disabled = true; msg.textContent = "정리하는 중…";
+  try {
+    const r = await fetch("/api/storage/cleanup", { method: "POST" }).then(x => x.json());
+    msg.textContent = fmtMB(r.freed_bytes) + " 회수 · " + fmtMB(r.after) + " 남음";
+    loadUsage();
+  } catch (err) { msg.textContent = "정리 실패: " + err.message; }
+  finally { e.target.disabled = false; }
+});
 
 const knob = (id, key, fmt) =>
   document.getElementById(id).addEventListener("input", e => {
@@ -2922,6 +3693,49 @@ function applySide() {
   try { localStorage.setItem("gn-side", sidePos); } catch {}
   drawRain(false); drawFcSigun();
 }
+
+/* ── 시군 평균에서 시군을 누르면 지점별로 펼친다 ──────────────────
+   평균 한 숫자만 보면 '어디서 그렇게 왔나'를 알 수 없다. 같은 기간의
+   지점별 강수량을 많이 온 순으로 늘어놓는다. */
+function openSigunStations(sig) {
+  const sts = [...stationsOf(sig)]
+    .map(st => ({ name: st.name, ...accOf(st.d) }))
+    .sort((a, b) => b.sum - a.sum);
+  const 값있음 = sts.filter(x => x.bad < N() - cut());
+  const mx = Math.max(1, ...값있음.map(x => x.sum));
+  const 평균 = 값있음.length
+    ? Math.round(값있음.reduce((t, x) => t + x.sum, 0) / 값있음.length * 10) / 10 : 0;
+
+  modalHead(`${sig} 지점별 강수량`,
+    `${HOURS[cut()]}시 ~ <b>${HOURS[SLOTS - 1]}</b> · 누적 ${rng().l}`,
+    srcKey === "bangjae" ? "스방 265개소" : "기상청 AWS");
+  document.getElementById("modal-body").innerHTML =
+    `<div class="stlist">` + sts.map(x => `
+      <div class="strow${x.bad >= N() - cut() ? " off" : ""}">
+        <span class="n">${x.name}</span>
+        <span class="g"><i style="width:${(x.sum / mx * 100).toFixed(1)}%"></i></span>
+        <span class="v">${x.bad >= N() - cut() ? "자료 없음" : x.sum.toFixed(1)}</span>
+      </div>`).join("") + `</div>`;
+  document.querySelector("#modal footer").innerHTML =
+    `${sts.length}개소 중 <b>${값있음.length}개소</b>가 자료를 준다. `
+    + `그 ${값있음.length}개소의 평균이 <b>${평균.toFixed(1)}㎜</b> — 표에 적힌 값이다. `
+    + `결측을 0으로 더하지 않으므로 자료를 안 주는 지점은 평균에서 빠진다.`;
+  modal.hidden = false;
+}
+
+document.getElementById("rain-body").addEventListener("click", e => {
+  const el = e.target.closest(".dp.avg");
+  if (!el) return;
+  const tr = el.closest("tr");
+  if (tr) openSigunStations(tr.dataset.sigun);
+});
+document.getElementById("rain-body").addEventListener("keydown", e => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const el = e.target.closest(".dp.avg");
+  if (!el) return;
+  e.preventDefault();
+  openSigunStations(el.closest("tr").dataset.sigun);
+});
 
 /* ── 우클릭 — 그 시군의 다우지점 더 얹기 ─────────────────────────── */
 const ctx = document.getElementById("ctx");
@@ -3179,7 +3993,7 @@ document.getElementById("rain-body").addEventListener("mouseleave", () => tip.cl
 /* ── 시작 ─────────────────────────────────────────────────────────
    자료를 먼저 받고 그리기 시작한다. 표본 자료가 없으므로 빈 화면에서 출발해
    첫 응답이 오는 대로 채워진다. */
-applySide(); applySkin(false); showView('all');
+applySide(); applySlot(); applySkin(false); showView('all');
 
 (async () => {
   await Promise.allSettled([loadRain(), loadForecast(), loadAlerts(), loadQpf(), loadSettings(), loadStatus()]);
