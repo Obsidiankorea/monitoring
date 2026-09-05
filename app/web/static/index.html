@@ -41,6 +41,19 @@
   --rain-6:      #96DBF6;
   --rain-7:      #D7F0FC;
 
+  /* 묶음 칸(여러 시간을 합친 칸) 전용 램프 — **시우량과 색조를 달리한다.**
+     ⚠️ 같은 청색으로 칠하면 눈이 두 값을 같은 자로 잰 것으로 읽는다. 23시간
+        합계 64.5㎜가 1시간 50㎜와 나란히 최고 단계로 앉아 있었다. 색조가
+        다르면 '다른 자로 잰 값'이라는 것이 읽기 전에 보인다. */
+  --acc-0:       #172420;
+  --acc-1:       #17403A;
+  --acc-2:       #16645A;
+  --acc-3:       #178C7C;
+  --acc-4:       #1FB09B;
+  --acc-5:       #4FCDB9;
+  --acc-6:       #8CE2D3;
+  --acc-7:       #CFF4EC;
+
   /* 예약색 — 특보 등급 전용. 계열 색으로 재사용하지 않는다.
      항상 글자 라벨과 함께 나간다(색만으로 뜻을 지지 않는다). */
   --lv-watch:    #E8B23A;  /* 주의보 */
@@ -89,6 +102,15 @@
   --rain-5:      #1B6698;
   --rain-6:      #0E4A73;
   --rain-7:      #073050;
+
+  --acc-0:       #F0F8F6;
+  --acc-1:       #D8F0EA;
+  --acc-2:       #AEDFD4;
+  --acc-3:       #74C3B3;
+  --acc-4:       #1E9A85;
+  --acc-5:       #147364;
+  --acc-6:       #0B5449;
+  --acc-7:       #06372F;
 
   --lv-watch:    #C08400;
   --lv-warn:     #CF3320;
@@ -520,13 +542,15 @@ tr[data-lv] .seg.obs::after { opacity: 1; animation: flow 5.6s linear infinite; 
 
 /* 특보 기준선 — 합계가 이 선을 넘으면 그게 곧 판단 근거다 */
 .th { position: absolute; top: -1px; bottom: -1px; width: 0; border-left: 1px dashed; }
-.th.w1 { border-color: color-mix(in oklab, var(--lv-watch) 70%, transparent); }
-.th.w2 { border-color: color-mix(in oklab, var(--lv-warn) 78%, transparent); }
+/* ⚠️ 예전에는 주의보·경보 예약색으로 그었다. 이제 이 두 줄은 특보 기준이 아니라
+   그 시각 분포에서 뽑은 중앙값·상위 25% 다 — 특보 색을 쓰면 거짓말이 된다. */
+.th.w1 { border-color: color-mix(in oklab, var(--ink-2) 66%, transparent); }
+.th.w2 { border-color: color-mix(in oklab, var(--ink) 80%, transparent); }
 /* 기준선 숫자는 머리글에 한 번만 적는다 — 행마다 반복하면 표가 시끄럽다 */
 .thlab { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0; margin-left: 6px; }
 .thlab i { font-style: normal; }
-.thlab .w1 { color: var(--lv-watch); }
-.thlab .w2 { color: var(--lv-warn); }
+.thlab .w1 { color: var(--ink-2); }
+.thlab .w2 { color: var(--ink); }
 
 /* 합계 — 6시간 뒤 예상 총량. 이 행에서 가장 큰 숫자다. */
 /* 합계는 색조로도 읽힌다 — 크기는 색이, 기준 초과는 테두리가 진다.
@@ -1004,6 +1028,8 @@ td.totc .tot { width: auto; display: block; }
 }
 .hh { font-size: 11px; font-weight: 400; color: var(--ink-3); line-height: 14px; }
 .hh.fc { color: color-mix(in oklab, var(--accent) 62%, var(--ink-3)); }
+/* 묶음 칸 머리글 — 칸과 같은 색조로 '여기는 다른 눈금'임을 알린다 */
+.hh.grp { color: color-mix(in oklab, var(--acc-5) 70%, var(--ink-3)); }
 .hc.z { color: color-mix(in oklab, var(--ink-3) 55%, transparent); }
 .hc.empty { background: repeating-linear-gradient(135deg, transparent 0 3px, var(--line-soft) 3px 4px); opacity: .5; }
 /* 아직 안 찬 칸 — 칠해진 폭이 곧 경과 시간이다 */
@@ -2021,15 +2047,18 @@ const inkOn = v => (v >= 10 ? "var(--on-fill)" : "var(--ink)");
 
 /* ── 강수 타임라인 표 ─────────────────────────────────────────────── */
 /* 서버에 넘길 시간 수. '당일'은 자정부터라 시각에 따라 길이가 달라진다.
-   호우 기준은 3시간 60/90, 12시간 110/180. 나머지는 대응 기준이 없어 비운다. */
+   ⚠️ 예전에는 구간마다 호우특보 기준(3시간 60/90, 12시간 110/180)을 달고 다녔다.
+      막대의 점선을 그 값에 긋기 위해서였는데, 이제 점선은 그때그때 시군 분포에서
+      뽑는다(drawRain 의 quant). 고정값은 지웠다 — 남겨 두면 안 쓰는 기준이
+      코드에 남아 다음 사람이 그걸 믿는다. */
 const today0 = () => new Date().getHours() + 1;
 const RANGE = [
-  { k: "3",  l: "3시간", get slots() { return 3; },             th: [60, 90]   },
-  { k: "6",  l: "6시간", get slots() { return 6; },             th: null       },
-  { k: "12", l: "12시간", get slots() { return 12; },           th: [110, 180] },
-  { k: "d1", l: "당일",  get slots() { return today0(); },      th: [110, 180] },
-  { k: "d2", l: "2일",   get slots() { return today0() + 24; }, th: null       },
-  { k: "d3", l: "3일",   get slots() { return today0() + 48; }, th: null       },
+  { k: "3",  l: "3시간", get slots() { return 3; }             },
+  { k: "6",  l: "6시간", get slots() { return 6; }             },
+  { k: "12", l: "12시간", get slots() { return 12; }           },
+  { k: "d1", l: "당일",  get slots() { return today0(); }      },
+  { k: "d2", l: "2일",   get slots() { return today0() + 24; } },
+  { k: "d3", l: "3일",   get slots() { return today0() + 48; } },
 ];
 let rangeKey   = "12";
 let fcHours    = 6;         // 향후 예측 시간 — 3 또는 6
@@ -2106,9 +2135,35 @@ function accOf(d) {
    실제로는 data/gyeongnam_grids.json 의 XY로 인덱스 (Y-1)*149+(X-1) 를 찾아 읽는다.
    여기서는 그 매핑이 없어 시군 곡선을 지점의 격자 계수로 눌러 흉내 낸다.
    ⚠️ RN1은 정수 mm로 양자화돼 오므로 흉내 낸 값도 같은 단계에 맞춘다. */
-/* 누적 강수량 색 단계. 시우량(mm/h)과 총량(mm)은 자릿수가 달라 같은 눈금을 못 쓴다. */
-const ACC_TONE = [[10, "--rain-1"], [30, "--rain-2"], [60, "--rain-3"], [90, "--rain-4"],
-                  [130, "--rain-5"], [180, "--rain-6"], [250, "--rain-7"]];
+/* ── 묶음 칸(여러 시간을 합친 칸) 눈금 ────────────────────────────────
+   ⚠️ **1시간 칸과 같은 자를 쓰면 안 된다.** 히트맵은 지난 시간을 `01~23` 처럼
+      묶어 한 칸에 담는데, 그 칸을 시우량 램프로 칠하면 23시간 합계 64.5㎜가
+      1시간 50㎜와 똑같은 최고 단계가 된다. 오래 묶을수록 무조건 진해지는
+      바이어스다 — 색이 '많이 왔다'가 아니라 '오래 묶었다'를 말하게 된다.
+      그래서 ① 색조를 달리하고(`--acc-*`) ② 눈금도 따로 잡는다.
+
+   눈금은 **묶음 길이마다 따로, 그때 화면에 있는 실제 값에서** 잡는다.
+   고정 기준을 박아 두면 어느 쪽이든 뭉개진다 — 900㎜ 온 날에는 전부 최고
+   단계로, 5㎜ 온 날에는 전부 0단계로. 강수량은 그만큼 유동적이다.
+
+   ⚠️ 길이가 다른 두 묶음(23시간·6시간)은 **각자 제 눈금**을 쓴다. 한 눈금에
+      얹으면 긴 쪽이 늘 이긴다. 칸은 세로로 읽는 것이다 — '이 구간에서 어느
+      시군이 두드러지나'. 길이가 다른 칸끼리 가로로 견주는 일은 원래 없다.
+   ⚠️ 바닥은 둔다. 0.5㎜를 최고 단계로 칠할 수는 없다. */
+const ACC_FRAC  = [0.02, 0.08, 0.18, 0.32, 0.50, 0.72, 0.88];
+const ACC_FLOOR = 10;         // 이보다 적게 온 구간은 눈금을 더 좁히지 않는다
+let   ACC_MAX   = {};         // { 묶은 시간 수: 그 길이 칸들의 최대값 }
+
+const accTop = n => Math.max(ACC_MAX[n] || 0, ACC_FLOOR);
+function accVar(v, n) {
+  const top = accTop(n);
+  let hit = "--acc-0";
+  ACC_FRAC.forEach((f, i) => { if (v >= f * top) hit = `--acc-${i + 1}`; });
+  return `var(${hit})`;
+}
+/* 밝은 단계 위에서는 반대색 글자를 쓴다. 시우량 램프가 4단계(10㎜)에서 뒤집는 것과
+   같은 자리에서 뒤집는다 — 한 단계 늦추면 --acc-4 위에 흰 글씨가 얹혀 2.4:1 이 된다. */
+const inkOnAcc = (v, n) => (v >= ACC_FRAC[3] * accTop(n) ? "var(--on-fill)" : "var(--ink)");
 
 const RN1_STEPS = [0, 5, 10, 20, 30, 50];
 const qRN1 = v => RN1_STEPS.reduce((a, b) => (Math.abs(b - v) < Math.abs(a - v) ? b : a));
@@ -2413,18 +2468,26 @@ function heatCell(row, col) {
     if (v === "fail") return `<span class="hc fail" title="조회 실패 — 값 없음이 아니다">✕</span>`;
   }
   const partial = !fc && !col.group && col.idx[0] === N() - 1;   // 아직 1시간이 안 찬 칸
-  let bg = v > 0 ? (fc ? `color-mix(in oklab, ${rampVar(v)} 62%, var(--panel))` : rampVar(v)) : "transparent";
+  const gn = col.group ? col.idx.length : 0;      // 몇 시간을 묶은 칸인가
+  // 묶음 칸은 시우량 램프를 쓰지 않는다 — 색조도 눈금도 따로다(ACC_FRAC 설명)
+  let bg = v > 0 ? (gn ? accVar(v, gn)
+                       : fc ? `color-mix(in oklab, ${rampVar(v)} 62%, var(--panel))`
+                            : rampVar(v))
+                 : "transparent";
   // 마지막 칸은 정시부터 지금까지만 담는다 — 칠한 폭이 곧 경과 시간이다
   if (partial && v > 0) {
     const pct = Math.round((NOWMIN / 60) * 100);
     bg = `linear-gradient(90deg, ${rampVar(v)} 0 ${pct}%, color-mix(in oklab, ${rampVar(v)} 26%, transparent) ${pct}%)`;
   }
-  const fg = v > 0 ? (fc ? (v >= 20 ? "var(--on-fill)" : "") : (partial ? "var(--ink)" : inkOn(v))) : "";
+  const fg = v > 0 ? (gn ? inkOnAcc(v, gn)
+                     : fc ? (v >= 20 ? "var(--on-fill)" : "")
+                          : (partial ? "var(--ink)" : inkOn(v))) : "";
   /* 무강수는 숫자로 적지 않는다 — 0.0이 화면을 덮으면 실제로 온 칸이 묻힌다.
      결측('—' + 빗금 바탕)과 글자는 같아도 바탕이 달라 구분된다. */
   const txt = v > 0 ? v.toFixed(1) : "—";
-  return `<span class="hc${fc ? " fc" : ""}${partial ? " partial" : ""}${col.first ? " nowedge" : ""}${v ? "" : " z"}"
+  return `<span class="hc${fc ? " fc" : ""}${gn ? " grp" : ""}${partial ? " partial" : ""}${col.first ? " nowedge" : ""}${v ? "" : " z"}"
     data-v="${v}" data-sigun="${row.sig}" data-stn="${fc ? FCSIG[row.sig].emd : row.stn}" data-hour="${col.label}"
+    ${gn ? `data-acc="${gn}"` : ""}
     ${partial && typeof row.m60 === "number" ? `data-m60="${row.m60}"` : ""}
     style="background:${bg}${fg ? ";color:" + fg : ""}">${txt}</span>`;
 }
@@ -2433,8 +2496,6 @@ function heatCell(row, col) {
 function drawRain(animate) {
   const rows = buildRows();
   const mains = rows.filter(r => r.kind === "main");
-  const th = rng().th;
-
   /* 누적 막대 눈금 — **늘 실제 값에 맞춘다.**
      ⚠️ 전에는 특보 기준(110/180㎜)까지 눈금을 늘려 놨다. 그러면 6.8㎜가 온 날은
         막대가 3%밖에 안 차 아무것도 못 읽고, 600㎜가 오면 넘쳐 버린다.
@@ -2444,6 +2505,25 @@ function drawRain(animate) {
      (broken axis) 뒷부분을 압축하고, 꺾인 자리에 물결 자국을 남긴다. */
   const tots = mains.map(r => r.sum + r.fc).sort((a, b) => b - a);
   const maxTot = Math.max(tots[0] || 0, 0.1);
+
+  /* ── 점선 두 줄 — **실제 값에서 뽑는다** ────────────────────────────
+     ⚠️ 예전에는 호우특보 12시간 기준(110/180)이 박혀 있었다. 강수량은 그보다
+        훨씬 유동적이다. 900㎜ 온 날에는 두 줄이 막대 왼쪽 끝(12%·20%)에
+        나란히 붙어 어느 시군도 가르지 못했고, 5㎜ 온 날에는 눈금 밖이라
+        아예 그리지 못했다. 어느 쪽이든 '기준'이 하는 일이 없었다.
+
+     그래서 그 시각 시군 분포에서 **중앙값**과 **상위 25%**(75분위)를 뽑는다.
+     5㎜ 오는 날에도 900㎜ 오는 날에도 늘 눈금 안에 있고, 늘 같은 것을 말한다 —
+     '이 시군이 도 전체에서 어디쯤인가'.
+     ⚠️ 특보 예약색(주의보 노랑·경보 빨강)으로 긋지 않는다. 특보 기준이 아니다. */
+  const quant = p => {                       // tots 는 내림차순
+    if (!tots.length) return 0;
+    return tots[Math.min(tots.length - 1, Math.floor(tots.length * p))];
+  };
+  const qMid = quant(0.5), qHi = quant(0.25);
+  // 아무 데도 안 온 날에는 긋지 않는다 — 0 자리에 두 줄이 겹쳐 봐야 읽을 것이 없다
+  const th = qHi > 0 ? [qMid, qHi] : null;
+  const THL = ["중앙", "상위25%"];
   const second = tots[1] || 0;
   const KNEE_AT = 0.72;                 // 꺾이는 자리(막대 폭의 몇 %)
   const knee = second * 1.15;
@@ -2462,6 +2542,21 @@ function drawRain(animate) {
   for (const r of rows) for (const v of tlPoints(r).all) mx = Math.max(mx, num(v));
 
   const cols = heatCols();
+
+  /* 묶음 칸 눈금 — 화면에 실제로 그려질 값에서, **묶음 길이마다 따로** 잡는다.
+     drawRain 이 돌 때마다 다시 잡는다. 구간을 바꾸면 묶는 길이가 달라지고,
+     비가 오면 최대값이 달라지기 때문이다. */
+  ACC_MAX = {};
+  for (const c of cols) {
+    if (!c.group) continue;
+    const n = c.idx.length;
+    for (const r of rows) {
+      let sum = 0, bad = 0;
+      for (const i of c.idx) (typeof r.d?.[i] === "number") ? (sum += r.d[i]) : bad++;
+      if (bad === n) continue;                    // 통째로 결측인 칸은 세지 않는다
+      ACC_MAX[n] = Math.max(ACC_MAX[n] || 0, sum);
+    }
+  }
   const grip = `<span class="grip" id="tot-grip" title="끌어서 합계 자리를 옮긴다"><i>⋮⋮</i><b>＋예상 ${fcHours}h</b></span>`;
   const head = document.getElementById("rain-head");
   head.innerHTML =
@@ -2470,9 +2565,11 @@ function drawRain(animate) {
           srcFell ? " fell" : ""}">${srcFell ? "스방 안 됨→기상청"
             : srcKey === "bangjae" ? "스방 265" : "기상청 56"}</em></th>` +
     `<th class="l" style="width:${totalPos === "bar" ? 330 : 290}px">누적 ${rng().l}` +
-      // 눈금 밖이면 기준 자체를 적지 않는다. 그을 선이 없는데 이름만 남으면 군더더기다.
-      (th && th[0] <= maxTot
-        ? `<span class="thlab">기준 <i class="w1">${th[0]}</i>/<i class="w2">${th[1]}</i></span>` : "") +
+      // 그을 선이 없으면 이름도 적지 않는다.
+      (th
+        ? `<span class="thlab" title="특보 기준이 아니다 — 지금 화면에 있는 ${mains.length}개 시군 누적값의 중앙값과 상위 25%다. 값이 바뀌면 두 줄도 함께 움직인다.">${
+            th[0] > 0 ? `${THL[0]} <i class="w1">${th[0].toFixed(1)}</i> · ` : ""}${
+            THL[1]} <i class="w2">${th[1].toFixed(1)}</i></span>` : "") +
       (totalPos === "bar" ? " " + grip : "") + "</th>" +
     '<th class="l tlh" id="tl-head"></th>' +
     (totalPos === "right" ? `<th class="totc" style="width:62px;text-align:right">${grip}</th>` : "");
@@ -2532,7 +2629,10 @@ function drawRain(animate) {
     </svg>`;
   } else {
     cell.innerHTML = `<div class="cells" style="--n:${cols.length}">` +
-      cols.map(c => `<span class="hh${c.kind === "fc" ? " fc" : ""}${c.first ? " nowedge" : ""}">${c.label}</span>`).join("") + "</div>";
+      cols.map(c => `<span class="hh${c.kind === "fc" ? " fc" : ""}${c.group ? " grp" : ""}${
+        c.first ? " nowedge" : ""}"${c.group
+          ? ` title="${c.idx.length}시간을 합친 칸 — 1시간 칸과 눈금도 색조도 다르다"` : ""
+        }>${c.label}</span>`).join("") + "</div>";
   }
 
   document.getElementById("rain-table").style.setProperty("--rowh", ROWH + "px");
@@ -2547,10 +2647,11 @@ function drawRain(animate) {
        한 화면에서 같은 사실을 세 번 강조하는 꼴이었다. 눈이 거기로만 끌린다. */
     const totStyle = "";
 
-    // 기준선은 눈금 안에 들어올 때만. 밖이면 그어 봐야 막대 끝에 붙어 거짓말이 된다.
+    // 0 자리에는 긋지 않는다(절반 넘는 시군이 무강수인 날 중앙값이 0이다).
     const marks = (th ? th.map((t, k) => {
       const l = xOf(t);
-      return l > 98 ? "" : `<i class="th w${k + 1}" style="left:${l}%" data-l="${t}"></i>`;
+      return (t <= 0 || l > 98) ? "" : `<i class="th w${k + 1}" style="left:${l}%"
+        title="${THL[k]} ${t.toFixed(1)}mm" data-l="${t}"></i>`;
     }).join("") : "")
       // 눈금을 꺾은 자리 — 이 뒤로는 압축되어 있다는 자국
       + (broken && r.sum + r.fc > knee
@@ -3193,7 +3294,7 @@ function openCustomRange() {
   const n = Math.round(+v);
   if (!Number.isFinite(n) || n < 1 || n > 72) { alert("1~72 사이 숫자를 넣으세요."); return; }
   const cu = RANGE.find(r => r.k === "cu");
-  const row = { k: "cu", l: `${n}시간`, slots: n, th: null };
+  const row = { k: "cu", l: `${n}시간`, slots: n };
   if (cu) Object.assign(cu, row); else RANGE.push(row);
   rangeKey = "cu";
   document.getElementById("lb-range").textContent = row.l;
@@ -3659,7 +3760,7 @@ async function demoOn(slug) {
   bar.hidden = false;
   // 데모는 담긴 칸 수가 곧 구간이다. 사용자가 고른 구간을 그대로 쓰면 자료가 빈다.
   const cu = RANGE.find(r => r.k === "cu");
-  const row = { k: "cu", l: "데모 " + j.rain.hours + "시간", slots: j.rain.hours, th: [110, 180] };
+  const row = { k: "cu", l: "데모 " + j.rain.hours + "시간", slots: j.rain.hours };
   if (cu) Object.assign(cu, row); else RANGE.push(row);
   rangeKey = "cu";
   document.getElementById("lb-range").textContent = row.l;
@@ -4063,7 +4164,8 @@ document.addEventListener("mouseover", e => {
   const part = c.classList.contains("partial");
   tip.innerHTML = `<div class="k">${c.dataset.sigun} · ${c.dataset.stn}</div>
     <div class="v">${pv.toFixed(1)} mm</div>
-    <div class="k">${part ? partLabel(c.dataset.m60) : c.dataset.hour + " 시간대"}</div>`;
+    <div class="k">${c.dataset.acc ? `${c.dataset.hour} · ${c.dataset.acc}시간 합계`
+                    : part ? partLabel(c.dataset.m60) : c.dataset.hour + " 시간대"}</div>`;
   tip.classList.add("on");
 });
 document.addEventListener("mousemove", e => {
