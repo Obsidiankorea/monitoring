@@ -70,5 +70,18 @@ rem 서버가 응답하면 브라우저를 연다
 start "" /b powershell -NoProfile -Command ^
   "1..60 | %%{ Start-Sleep 1; try { Invoke-WebRequest -UseBasicParsing '%URL%/api/status' -TimeoutSec 2 | Out-Null; Start-Process '%URL%'; break } catch {} }"
 
+rem -- 4. 서버 --------------------------------------------------------
+rem 화면에서 [업데이트]로 새 코드를 받으면 서버가 종료 코드 42로 스스로 끝난다.
+rem 그때만 다시 띄운다. 다른 코드로 끝나면(닫기·오류) 그대로 멈춘다 —
+rem 오류로 죽는 서버를 무한히 되살리면 무엇이 잘못됐는지 알 수가 없다.
+:runserver
 "%PY%" -m app.main
+if errorlevel 43 goto done
+if errorlevel 42 (
+  echo.
+  echo [*] 업데이트를 반영해 다시 띄웁니다
+  echo.
+  goto runserver
+)
+:done
 pause

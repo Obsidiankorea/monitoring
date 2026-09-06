@@ -694,6 +694,11 @@ td.totc .tot { width: auto; display: block; }
 .demo-card .d { flex: 1; }
 .demo-card .n { font-size: 11px; color: var(--ink-3); margin-top: 2px; line-height: 1.5; }
 .demo-card.fake { border-color: color-mix(in oklab, var(--lv-warn) 55%, var(--line)); }
+.warnx { color: var(--lv-warn); font-weight: 600; }
+.prefs-row code {
+  font-family: var(--mono); font-size: 11.5px; color: var(--ink);
+  background: var(--raised); padding: 1px 5px; border-radius: 4px;
+}
 .tagx {
   font-size: 10px; padding: 1px 5px; border-radius: 4px; font-weight: 600;
   background: color-mix(in oklab, var(--lv-warn) 26%, transparent); color: var(--lv-warn);
@@ -1659,6 +1664,7 @@ tbody.swap tr { animation: rowin .36s cubic-bezier(.2,.7,.3,1) both; animation-d
         <button type="button" role="tab" data-t="data" aria-selected="false">자료</button>
         <button type="button" role="tab" data-t="demo" aria-selected="false">데모 시연</button>
         <button type="button" role="tab" data-t="disk" aria-selected="false">저장공간</button>
+        <button type="button" role="tab" data-t="up" aria-selected="false">업데이트</button>
       </nav>
 
       <div class="prefs-pane" id="pane-look" role="tabpanel">
@@ -1753,6 +1759,15 @@ tbody.swap tr { animation: rowin .36s cubic-bezier(.2,.7,.3,1) both; animation-d
           다만 기상청 특보 이력 API는 이 키로 403 이라 과거 발표 내역을 받을 수 없어,
           <b>특보는 담긴 강수량에 호우 기준(3시간 60/90㎜, 12시간 110/180㎜)을 적용해 산출</b>한다.</p>
         <div id="pf-demos"></div>
+      </div>
+
+      <div class="prefs-pane" id="pane-up" role="tabpanel" hidden>
+        <h4>업데이트</h4>
+        <p class="note">배포처는 GitHub 하나다. 이 폴더가 저장소를 내려받은 것이면
+          여기서 최신 코드를 받을 수 있다(<b>git pull</b>).
+          ⚠️ 이 PC 에서 파일을 손댔으면 <b>받지 않는다</b> — 억지로 합치다 어중간한
+          상태로 남는 것보다, 안 받고 이유를 알리는 편이 낫다.</p>
+        <div id="pf-up"></div>
       </div>
 
       <div class="prefs-pane" id="pane-disk" role="tabpanel" hidden>
@@ -3726,10 +3741,11 @@ function closePrefs() { prefs.hidden = true; }
 function showPrefsTab(t) {
   document.querySelectorAll("#prefs-rail button").forEach(b =>
     b.setAttribute("aria-selected", String(b.dataset.t === t)));
-  ["look", "layout", "data", "demo", "disk"].forEach(k =>
+  ["look", "layout", "data", "demo", "disk", "up"].forEach(k =>
     document.getElementById("pane-" + k).hidden = (k !== t));
   if (t === "demo") loadDemoList();
   if (t === "disk") loadUsage();
+  if (t === "up") loadUpdate();
 }
 
 document.getElementById("prefs-rail").addEventListener("click", e => {
@@ -3833,6 +3849,84 @@ function demoOff() {
   closePrefs();
 }
 document.getElementById("demo-off").addEventListener("click", demoOff);
+
+/* ── 업데이트 ──────────────────────────────────────────────────────
+   ⚠️ 확인 실패를 '최신'으로 읽지 않는다. 모르는 것과 최신은 다르다 —
+      인터넷이 막힌 내부망 PC 에서 '최신입니다'라고 적으면 거짓말이 된다. */
+async function loadUpdate(check = true) {
+  const box = document.getElementById("pf-up");
+  box.innerHTML = `<p class="note">${check ? "확인하는 중…" : "읽는 중…"}</p>`;
+  let u;
+  try { u = await getJson(`/api/update?check=${check}`); }
+  catch (e) { box.innerHTML = `<p class="note">확인하지 못했다: ${e.message}</p>`; return; }
+
+  if (!u.available) {
+    box.innerHTML = `<p class="note">${u.reason || "업데이트를 쓸 수 없다"}</p>`;
+    return;
+  }
+  const h = u.here || {};
+  const rows = [
+    ["지금 버전", `<code>${h.sha || "—"}</code> <span class="hint">${h.at || ""}</span>
+                  <div class="hint" style="margin-top:3px">${h.subject || ""}</div>`],
+  ];
+  if (u.error) {
+    rows.push(["확인", `<span class="warnx">확인 실패</span>
+      <div class="hint" style="margin-top:3px">${u.error}</div>`]);
+  } else if (u.behind) {
+    rows.push(["새 버전", `<b>${u.behind}개</b> 밀려 있다
+      <div class="hint" style="margin-top:4px">${(u.incoming || []).map(l =>
+        `<div>· ${l.replace(/</g, "&lt;")}</div>`).join("")}</div>`]);
+  } else {
+    rows.push(["상태", `최신이다 <span class="hint">${u.checked_at || ""} 확인</span>`]);
+  }
+  if (u.dirty)
+    rows.push(["주의", `<span class="warnx">이 PC 에서 손댄 파일이 있다</span>
+      <div class="hint" style="margin-top:3px">그대로면 받기가 실패한다.
+      손댄 것을 되돌리거나 그대로 두고 쓴다.</div>`]);
+  if (u.ahead)
+    rows.push(["", `<span class="hint">이 PC 에만 있는 커밋이 ${u.ahead}개 있다</span>`]);
+
+  box.innerHTML = rows.map(([k, v]) =>
+    `<div class="prefs-row"><span class="lbl">${k}</span><span class="val">${v}</span></div>`).join("")
+    + `<div class="prefs-row"><span class="lbl"></span><span class="val">
+        <button class="sbtn" id="pf-up-check" type="button">다시 확인</button>
+        <button class="sbtn primary" id="pf-up-pull" type="button"${
+          u.behind && !u.error ? "" : " disabled"}>지금 받기</button>
+        <span class="hint" id="pf-up-msg"></span>
+      </span></div>`;
+}
+
+document.getElementById("pf-up").addEventListener("click", async e => {
+  if (e.target.id === "pf-up-check") return loadUpdate(true);
+  if (e.target.id !== "pf-up-pull") return;
+  const msg = document.getElementById("pf-up-msg");
+  e.target.disabled = true; msg.textContent = "받는 중…";
+  let r;
+  try { r = await fetch("/api/update/pull", { method: "POST" }).then(x => x.json()); }
+  catch (err) { msg.textContent = "받지 못했다: " + err.message; return; }
+
+  if (!r.ok) { msg.innerHTML = `<span class="warnx">${r.error || "받지 못했다"}</span>`; return; }
+  if (!r.changed.length) { msg.textContent = r.note || "이미 최신이다"; return; }
+
+  msg.textContent = `${r.changed.length}개 파일을 받았다`;
+  /* 화면만 바뀌었으면 새로고침이면 되고, 파이썬이 바뀌었으면 서버를 다시 띄워야 한다.
+     ⚠️ 스크립트로 띄우지 않았으면 다시 안 살아난다 — 그래서 먼저 물어본다. */
+  if (!r.restart) {
+    if (confirm("화면이 바뀌었습니다. 새로고침할까요?")) location.reload();
+    return;
+  }
+  if (!confirm("서버 코드가 바뀌었습니다. 지금 서버를 다시 띄울까요?\n\n"
+             + "(run.bat / run.command 로 띄운 경우에만 자동으로 다시 살아납니다.\n"
+             + " 직접 실행 중이라면 손으로 다시 띄우세요.)")) return;
+  msg.textContent = "다시 띄우는 중…";
+  try { await fetch("/api/update/restart", { method: "POST" }); } catch {}
+  // 다시 뜰 때까지 기다렸다가 새로고침한다
+  for (let i = 0; i < 40; i++) {
+    await new Promise(r2 => setTimeout(r2, 1000));
+    try { await fetch("/api/status", { cache: "no-store" }); location.reload(); return; } catch {}
+  }
+  msg.innerHTML = `<span class="warnx">다시 뜨지 않았다 — 창을 확인하세요</span>`;
+});
 
 /* ── 저장공간 ──────────────────────────────────────────────────── */
 async function loadUsage() {

@@ -61,4 +61,14 @@ echo
     curl -sf -o /dev/null "$URL/api/status" && { open "$URL"; break; }
   done ) &
 
-PORT="$PORT" HOST="$HOST" exec "$PY" -m app.main
+# 화면에서 [업데이트]로 새 코드를 받으면 서버가 종료 코드 42로 스스로 끝난다.
+# 그때만 다시 띄운다. 다른 코드로 끝나면(닫기·오류) 그대로 멈춘다 —
+# 오류로 죽는 서버를 무한히 되살리면 무엇이 잘못됐는지 알 수가 없다.
+while true; do
+  PORT="$PORT" HOST="$HOST" "$PY" -m app.main
+  code=$?
+  [ "$code" = "42" ] || exit "$code"
+  echo
+  echo "[*] 업데이트를 반영해 다시 띄웁니다"
+  echo
+done

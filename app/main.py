@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -18,7 +19,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import db, demo, maint, queries
+from . import db, demo, maint, queries, update
 from .collectors import alerts, bangjae_rain, forecast, qpf, rain
 from .config import CACHE, INTERVALS, POLL_DEFAULT
 
@@ -29,6 +30,9 @@ logging.getLogger("collect.qpf").setLevel(logging.DEBUG)
 log = logging.getLogger("main")
 
 STATIC = Path(__file__).parent / "web" / "static"
+
+#: 이 코드로 끝나면 실행 스크립트가 다시 띄운다. 다른 코드면 그냥 끝난다.
+RESTART_CODE = 42
 
 COLLECTORS = {"rain": rain.collect, "forecast": forecast.collect,
               "alerts": alerts.collect, "qpf": qpf.collect,
@@ -190,6 +194,35 @@ async def api_demo_get(slug: str):
     return JSONResponse(b)
 
 
+@app.get("/api/update")
+async def api_update(check: bool = True):
+    """지금 버전과 원격에 새 것이 있는지. `check=false` 면 원격을 부르지 않는다."""
+    return await asyncio.to_thread(update.status, check)
+
+
+@app.post("/api/update/pull")
+async def api_update_pull():
+    """GitHub 에서 받아 온다. ⚠️ `--ff-only` — 손댄 파일이 있으면 실패한다."""
+    return await asyncio.to_thread(update.pull)
+
+
+@app.post("/api/update/restart")
+async def api_update_restart():
+    """스스로 끝난다. 실행 스크립트(run.bat/run.command)가 다시 띄운다.
+
+    ⚠️ 파이썬 코드가 바뀌면 프로세스를 다시 띄워야 반영된다. 화면만 바뀌었으면
+       새로고침으로 충분하니 여기까지 오지 않는다.
+    ⚠️ 스크립트로 띄우지 않았으면 그냥 꺼진다 — 그래서 화면이 먼저 물어본다.
+    """
+    async def bye():
+        await asyncio.sleep(0.4)          # 응답을 먼저 보내고 끊는다
+        log.info("업데이트 반영을 위해 종료한다(코드 %d)", RESTART_CODE)
+        os._exit(RESTART_CODE)
+
+    asyncio.create_task(bye())
+    return {"ok": True, "code": RESTART_CODE}
+
+
 @app.get("/api/status")
 async def api_status():
     return {"collect": queries.status(), "poll": POLL_DEFAULT,
@@ -271,8 +304,6 @@ if STATIC.exists():
 if __name__ == "__main__":
     # 포트는 PORT 환경변수를 따른다 — 없으면 8000.
     # 하드코딩하면 이미 쓰는 포트와 부딪힌다.
-    import os
-
     import uvicorn
 
     uvicorn.run("app.main:app", host=os.environ.get("HOST", "127.0.0.1"),
