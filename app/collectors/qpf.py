@@ -34,6 +34,61 @@ SCAN_BACK = 9          # 가진 것이 없을 때 거슬러 훑을 슬롯 수(90
 #    하나로 쓰면 엉뚱한 데가 잘린다 — 소스별로 따로 둔다.
 CROP = (660, 560, 660 + 950, 560 + 800)
 
+# ── 범례 ──────────────────────────────────────────────────────────────
+# 원본 그림 오른쪽 끝에 세로 색 띠가 있다(legend=1 로 받는다). 경남만 잘라 내면
+# 그 띠가 통째로 날아가므로, 자르기 전에 색을 뽑아 따로 남긴다.
+#
+# ⚠️ 색을 흉내 내지 않는다. 기상청 QPF 색계는 우리 청색 램프와 전혀 달라서
+#    비슷하게 칠하면 거짓말이 된다. 원본에서 그대로 뽑는다.
+# ⚠️ 경계값은 원본 범례에 **찍힌 대로** 옮겨 적었다. 그림 속 글자라 뽑아낼 수가
+#    없다. 앞의 0.1 이 두 번 나오는 것도 기상청 범례가 그렇게 찍는다 —
+#    우리 오타가 아니다. 그래서 화면에는 눈금을 띄엄띄엄만 적는다.
+LEGEND_X = 1803        # 색 띠가 지나는 세로줄(size=1800 응답 기준)
+LEGEND_BOUNDS = [0.1, 0.1, 0.5, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+                 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 110]
+
+
+def _legend(im) -> dict | None:
+    """세로 색 띠에서 단계별 색을 뽑는다. 약한 쪽이 아래이므로 뒤집어 담는다."""
+    if im.width <= LEGEND_X:
+        return None
+    px = im.convert("RGB").load()
+    x = LEGEND_X
+    # 같은 색이 이어지는 구간을 센다. 흰 배경과 테두리는 버린다.
+    runs, prev = [], None
+    for y in range(im.height):
+        c = px[x, y]
+        if prev is not None and c == prev[0]:
+            prev[1] += 1
+        else:
+            prev = [c, 1]
+            runs.append(prev)
+    bands = [r for r in runs if r[1] >= 20]
+    if len(bands) < len(LEGEND_BOUNDS):
+        return None                       # 띠를 못 찾았다 — 조용히 접는다
+    # 위가 센 값이다. 아래(약함)부터 담되 맨 아래 흰 칸(무강수)은 뺀다.
+    cols = [c for c, _ in reversed(bands)]
+    white = lambda c: c[0] > 245 and c[1] > 245 and c[2] > 245
+    while cols and white(cols[0]):
+        cols.pop(0)
+    cols = cols[:len(LEGEND_BOUNDS)]
+    if len(cols) < len(LEGEND_BOUNDS):
+        return None
+    return {"colors": ["#%02x%02x%02x" % c for c in cols],
+            "bounds": LEGEND_BOUNDS, "unit": "mm/h"}
+
+
+#: 한 번 뽑으면 바뀌지 않는다. 재시작하면 DB 에서 되살린다.
+_legend_cache: dict = {}
+
+
+def legend() -> dict | None:
+    if not _legend_cache.get("colors"):
+        saved = db.get_setting("qpf_legend", None)
+        if saved:
+            _legend_cache.update(saved)
+    return dict(_legend_cache) if _legend_cache.get("colors") else None
+
 
 def cfg() -> dict:
     """설정은 DB가 이긴다 — 화면에서 바꾼 값이 재시작해도 남는다."""
@@ -64,6 +119,15 @@ def _crop(raw: bytes) -> tuple[bytes, bool]:
     except ImportError:
         return raw, False                 # PIL이 없으면 판별도 못 한다
     im = Image.open(BytesIO(raw))
+    # 자르기 전에 범례를 챙긴다 — 자르고 나면 색 띠가 없다
+    if not _legend_cache.get("colors"):
+        try:
+            lg = _legend(im)
+            if lg:
+                _legend_cache.update(lg)
+                db.put_setting("qpf_legend", lg)
+        except Exception as e:                       # noqa: BLE001
+            log.warning("범례를 못 뽑았다: %s", e)
     box = tuple(min(v, s) for v, s in zip(CROP, (im.width, im.height) * 2))
     cut = im.crop(box)
     # 해안선이 그려진 정상 그림은 색이 수십 가지다. 두 가지 이하면 빈 그림이다.

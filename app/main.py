@@ -126,6 +126,15 @@ async def api_qpf():
     return queries.qpf_frames()
 
 
+@app.get("/api/qpf/legend")
+async def api_qpf_legend():
+    """예측 분포 범례 — 색은 기상청 원본 그림에서 그대로 뽑은 것이다."""
+    lg = qpf.legend()
+    if not lg:
+        raise HTTPException(404, "아직 범례를 뽑지 못했다")
+    return lg
+
+
 @app.get("/api/qpf/{tmfc}/{ef}.png")
 async def api_qpf_frame(tmfc: str, ef: int):
     p = CACHE / "qpf" / tmfc / f"{ef:03d}.png"
