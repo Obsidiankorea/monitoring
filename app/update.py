@@ -62,8 +62,11 @@ def status(fetch: bool = True) -> dict:
     out = {"available": True, "here": _head(), "dirty": False,
            "behind": 0, "ahead": 0, "checked_at": None, "error": None}
 
-    _, st = _git("status", "--porcelain", timeout=8)
+    # ⚠️ **추적 중인** 파일이 바뀐 것만 센다. 새로 생긴 파일(로그·내보낸 그림 따위)은
+    #    받기를 막지 않는데, 그걸 '손댔다'고 적으면 멀쩡한 PC 마다 경고가 뜬다.
+    _, st = _git("status", "--porcelain", "--untracked-files=no", timeout=8)
     out["dirty"] = bool(st.strip())
+    out["dirty_files"] = [l[3:] for l in st.splitlines() if l.strip()][:8]
 
     if fetch:
         code, msg = _git("fetch", "--quiet", "origin")

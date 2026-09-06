@@ -3880,9 +3880,11 @@ async function loadUpdate(check = true) {
     rows.push(["상태", `최신이다 <span class="hint">${u.checked_at || ""} 확인</span>`]);
   }
   if (u.dirty)
-    rows.push(["주의", `<span class="warnx">이 PC 에서 손댄 파일이 있다</span>
-      <div class="hint" style="margin-top:3px">그대로면 받기가 실패한다.
-      손댄 것을 되돌리거나 그대로 두고 쓴다.</div>`]);
+    rows.push(["주의", `<span class="warnx">이 PC 에서 고친 파일이 있다</span>
+      <div class="hint" style="margin-top:3px">${(u.dirty_files || []).map(f =>
+        `<div>· ${f}</div>`).join("")}
+      새 버전이 <b>같은 파일</b>을 건드리면 받기가 실패한다. 고친 것을 되돌리거나
+      그대로 두고 쓴다.</div>`]);
   if (u.ahead)
     rows.push(["", `<span class="hint">이 PC 에만 있는 커밋이 ${u.ahead}개 있다</span>`]);
 
