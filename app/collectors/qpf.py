@@ -34,6 +34,15 @@ SCAN_BACK = 9          # 가진 것이 없을 때 거슬러 훑을 슬롯 수(90
 #    하나로 쓰면 엉뚱한 데가 잘린다 — 소스별로 따로 둔다.
 CROP = (660, 560, 660 + 950, 560 + 800)
 
+# 잘라 낸 박스 안의 **해안선(검정) 픽셀**이 이보다 적으면 아직 안 올라온 그림이다.
+# 실측: 올라온 그림은 비가 오든 안 오든 늘 30,925px(해안선은 비 위에 그려진다),
+#       안 올라온 그림은 0px — (240,240,240) 한 색으로 꽉 찬 950×800 이 온다.
+# ⚠️ '바탕이 아닌 픽셀'로 세면 안 된다. 안 올라온 그림의 바탕이 240 이고
+#    올라온 그림의 바탕은 250 이라, 240 을 바탕으로 안 치면 76만 픽셀이
+#    통째로 '내용'으로 잡힌다(실측: 그래서 191바이트 단색 그림 18장을 저장했다).
+COAST_RGB_MAX = 120        # 이보다 어두우면 해안선으로 센다
+COAST_MIN = 1000
+
 # ── 범례 ──────────────────────────────────────────────────────────────
 # 원본 그림 오른쪽 끝에 세로 색 띠가 있다(legend=1 로 받는다). 경남만 잘라 내면
 # 그 띠가 통째로 날아가므로, 자르기 전에 색을 뽑아 따로 남긴다.
@@ -107,12 +116,27 @@ def _slot(now: datetime) -> datetime:
 
 
 def _crop(raw: bytes) -> tuple[bytes, bool]:
-    """경남만 잘라 낸다. 두 번째 값은 '빈 그림인가'.
+    """경남만 잘라 낸다. 두 번째 값은 '**아직 안 올라온** 그림인가'.
 
     ⚠️ 발표가 났다고 그림이 바로 올라오는 것은 아니다. 막 올라오는 중에는
-       완전히 빈 이미지가 온다(실측: 원본 1835×1820이 1,429바이트, 색 1개).
+       아무것도 없는 이미지가 온다(실측: 원본 1835×1820이 1,429바이트, 색 1개).
        그걸 저장하면 화면이 하얗게 뜨고, 다음 발표까지 그대로 남는다.
-       빈 것은 저장하지 않고 다음 주기에 다시 받는다.
+       안 올라온 것은 저장하지 않고 다음 주기에 다시 받는다.
+
+    ⚠️ **'비가 안 오는 그림'과 헷갈리면 안 된다.** 예전에는 색이 두 가지 이하면
+       빈 그림으로 봤는데, **경남에 비가 없는 정상 그림이 딱 두 가지 색**이다 —
+       바탕 (250,250,250) 과 해안선 (0,0,0). 실측(2026-09-17 09:10 발표):
+
+           ef= 10  색 11가지   ← 비가 조금 온다
+           ef=180  색  2가지   ← 3시간 뒤엔 비가 없다. **정상 그림이다**
+
+       그래서 비가 안 오면 수집이 통째로 멎었다. 열흘(9.7.~9.17.) 동안 화면에
+       9.7. 11:50 발표분이 그대로 걸려 있었다. 발표 훑기가 '비 없는 슬롯'을
+       '아직 안 올라온 슬롯'으로 읽고 첫 걸음에서 멈췄기 때문이다.
+
+       판정은 **해안선이 그려졌는가**로 한다. 올라온 그림에는 경남 박스 안에
+       늘 3만 픽셀 넘는 해안선이 있고(실측 30,925px — 그림마다 같다),
+       안 올라온 그림에는 하나도 없다.
     """
     try:
         from PIL import Image
@@ -130,12 +154,16 @@ def _crop(raw: bytes) -> tuple[bytes, bool]:
             log.warning("범례를 못 뽑았다: %s", e)
     box = tuple(min(v, s) for v, s in zip(CROP, (im.width, im.height) * 2))
     cut = im.crop(box)
-    # 해안선이 그려진 정상 그림은 색이 수십 가지다. 두 가지 이하면 빈 그림이다.
-    cols = cut.convert("RGB").getcolors(maxcolors=8)
-    blank = cols is not None and len(cols) <= 2
+    # 해안선이 그려졌는지 센다. 해안선조차 없으면 아직 안 올라온 것이다.
+    cols = cut.convert("RGB").getcolors(maxcolors=1 << 16)
+    if cols is None:
+        notyet = False                    # 색이 6만 가지를 넘는다 — 그림이 없을 리 없다
+    else:
+        coast = sum(n for n, c in cols if max(c) < COAST_RGB_MAX)
+        notyet = coast < COAST_MIN
     out = BytesIO()
     cut.save(out, format="PNG", optimize=True)
-    return out.getvalue(), blank
+    return out.getvalue(), notyet
 
 
 async def _one(tmfc: str, ef: int, size: int) -> bytes:
@@ -147,14 +175,23 @@ async def _one(tmfc: str, ef: int, size: int) -> bytes:
     })
 
 
-async def _is_blank_slot(tmfc: str, ef: int, size: int) -> bool:
-    """그 발표분의 그림이 준비됐는지 한 장으로 확인한다."""
-    _, blank = _crop(await _one(tmfc, ef, size))
-    return blank
+async def _not_yet(tmfc: str, ef: int, size: int) -> bool:
+    """그 발표분의 그림이 **올라왔는지** 한 장으로 확인한다(아직이면 True).
+
+    ⚠️ '비가 오는지'를 묻는 것이 아니다. 비가 한 방울도 없어도 해안선은 그려진다.
+    """
+    _, notyet = _crop(await _one(tmfc, ef, size))
+    return notyet
 
 
 async def _download(tmfc: str, efs: list[int], c: dict, at: str) -> tuple[int, int, list]:
-    """한 발표분을 내려받는다 → (저장, 빈그림, 실패)."""
+    """한 발표분을 내려받는다 → (저장, 아직안올라옴, 실패).
+
+    ⚠️ **비가 없는 프레임도 저장한다.** '앞으로 3시간 비 없음'은 빈손이 아니라
+       정보다. 예전에는 이걸 버려서 한 발표분이 18장을 채우지 못했고
+       (실측: 9.7. 11:50 발표가 ef 10~110 열한 장뿐), 그 탓에 '다 받았다'
+       판정이 영영 안 서서 매 주기마다 같은 발표분을 다시 받으러 갔다.
+    """
     outdir = CACHE / "qpf" / tmfc
     outdir.mkdir(parents=True, exist_ok=True)
     with db.tx() as con:
@@ -166,10 +203,10 @@ async def _download(tmfc: str, efs: list[int], c: dict, at: str) -> tuple[int, i
             continue
         for attempt in range(2):
             try:
-                raw, blank = _crop(await _one(tmfc, ef, c["size"]))
-                if blank:
+                raw, notyet = _crop(await _one(tmfc, ef, c["size"]))
+                if notyet:
                     blanks += 1
-                    break                  # 빈 그림은 저장하지 않는다
+                    break                  # 아직 안 올라왔다. 다음 주기에 다시 받는다
                 path = outdir / f"{ef:03d}.png"
                 path.write_bytes(raw)
                 with db.tx() as con:
@@ -224,10 +261,15 @@ async def collect(now: datetime | None = None, force: bool = False) -> dict:
     cur = _slot(now)
 
     last = _last_have()
-    if last:
-        start = datetime.strptime(last, "%Y%m%d%H%M") + timedelta(minutes=10)
-    else:
-        start = cur - timedelta(minutes=10 * SCAN_BACK)   # 처음이면 이만큼 거슬러 훑는다
+    floor = cur - timedelta(minutes=10 * SCAN_BACK)       # 아무리 낡았어도 여기서부터
+    start = (datetime.strptime(last, "%Y%m%d%H%M") + timedelta(minutes=10)) if last else floor
+
+    # ⚠️ **가진 것이 낡았다고 그 자리에서부터 걷지 않는다.** 앱이 며칠 꺼져 있으면
+    #    start 가 며칠 전이 되는데, 그러면 ① 따라잡는 데만 호출이 슬롯 수만큼 든다
+    #    (열흘이면 1,440번) ② 중간에 한 슬롯이라도 안 올라온 것으로 읽히면 거기서
+    #    끊겨 **영영 못 따라잡는다.** 실측: 9.7. 11:50 에 걸린 채 열흘을 보냈다.
+    #    건너뛴 구간은 어차피 쓸 데가 없다 — 지난 예측은 지나간 예측이다.
+    start = max(start, floor)
 
     # 앞으로 훑으며 그림이 있는 마지막 슬롯을 찾는다. 빈 것이 나오면 거기서 멈춘다.
     newest, probes = None, 0
@@ -236,7 +278,7 @@ async def collect(now: datetime | None = None, force: bool = False) -> dict:
         tmfc = t.strftime("%Y%m%d%H%M")
         probes += 1
         try:
-            if await _is_blank_slot(tmfc, efs[0], c["size"]):
+            if await _not_yet(tmfc, efs[0], c["size"]):
                 break
         except KmaError as e:
             db.log_collect("qpf", False, at, f"확인 실패: {e}")

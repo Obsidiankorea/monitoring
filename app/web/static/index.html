@@ -220,6 +220,10 @@ body {
 .panel.active { border-color: color-mix(in oklab, var(--accent) 34%, var(--line)); }
 
 .panel {
+  /* 판마다 글자 배율을 따로 갖는다. 우클릭 메뉴에서 바꾸고 localStorage 에 남는다.
+     ⚠️ 판 안에서만 쓰는 글자에만 태운다. 메뉴바·설정창까지 따라 커지면
+        벽에 걸린 화면에서 정작 자료가 들어갈 자리를 잡아먹는다. */
+  --fs: 1;
   container-type: inline-size;
   background: var(--panel);
   border: 1px solid var(--line);
@@ -243,7 +247,7 @@ body {
 
 .panel > header h2 {
   margin: 0;
-  font-size: 15px;
+  font-size: calc(15px * var(--fs, 1));
   font-weight: 600;
   letter-spacing: -.01em;
   text-wrap: balance;
@@ -251,7 +255,7 @@ body {
 
 .panel > header .src {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: calc(10px * var(--fs, 1));
   color: var(--ink-3);
   margin-left: auto;
   letter-spacing: 0;
@@ -262,7 +266,7 @@ body {
 /* 기준시각 — F1.3. 모든 자료 옆에 반드시 붙는다 */
 .basetime {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: calc(11px * var(--fs, 1));
   font-weight: 500;
   color: var(--ink-2);
   padding: 2px 7px;
@@ -276,7 +280,7 @@ body {
 
 /* 자료 출처 배지 — API 직조회인지 DB 조회인지 구분해 보여준다 */
 .origin {
-  font-size: 10px;
+  font-size: calc(10px * var(--fs, 1));
   font-weight: 600;
   letter-spacing: .06em;
   padding: 2px 7px;
@@ -333,7 +337,7 @@ th.tlh { overflow: visible; }
 
 /* 언제 받아 온 자료인지 — 판을 고르면 그 판 것이 뜬다 */
 .fetched {
-  font-family: var(--mono); font-size: 10.5px; color: var(--ink-3);
+  font-family: var(--mono); font-size: calc(10.5px * var(--fs, 1)); color: var(--ink-3);
   white-space: nowrap;
 }
 .fetched b { color: var(--ink-2); font-weight: 500; }
@@ -447,7 +451,7 @@ table { width: 100%; border-collapse: separate; border-spacing: 0; }
 thead th {
   position: sticky; top: 0; z-index: 2;
   background: var(--panel);
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--fs, 1));
   font-weight: 500;
   letter-spacing: .06em;
   color: var(--ink-3);
@@ -461,7 +465,7 @@ thead th:first-child, thead th.l { text-align: left; padding-left: 14px; }
 tbody td {
   padding: 0 6px;
   height: var(--rowh, 28px);
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
   text-align: right;
   border-bottom: 1px solid var(--line-soft);
   white-space: nowrap;
@@ -470,7 +474,7 @@ tbody tr:hover td { background: color-mix(in oklab, var(--accent) 7%, transparen
 tbody td.l { text-align: left; padding-left: 14px; }
 
 .sigun { font-weight: 600; }
-.station { color: var(--ink-2); font-size: 12px; }
+.station { color: var(--ink-2); font-size: calc(12px * var(--fs, 1)); }
 
 /* ── B+D 한 행 ─────────────────────────────────────────────────────
    왼쪽부터 다우지점 · 누적막대(지금까지＋앞으로) · 강수 타임라인.
@@ -483,12 +487,12 @@ td.dpc { width: 146px; padding-left: 14px; }
 .dp.avg:hover { background: var(--raised); }
 .dp.avg:hover .s { text-decoration: underline; text-underline-offset: 3px; }
 .dp.avg sup { color: var(--accent); font-weight: 600; }
-.dp .s { color: var(--ink); font-size: 15px; font-weight: 600; }
+.dp .s { color: var(--ink); font-size: calc(15px * var(--fs, 1)); font-weight: 600; }
 
 /* 지표 전환 — 머리글이 곧 단추다 */
 th.metric-h { cursor: pointer; user-select: none; transition: color .16s; }
 th.metric-h:hover { color: var(--ink); }
-th.metric-h i { font-style: normal; margin-left: 5px; opacity: .5; font-size: 11px; }
+th.metric-h i { font-style: normal; margin-left: 5px; opacity: .5; font-size: calc(11px * var(--fs, 1)); }
 th.metric-h:hover i { opacity: 1; color: var(--accent); }
 tr[data-lv="watch"] .dp .s { color: color-mix(in oklab, var(--lv-watch) 52%, var(--ink)); }
 tr[data-lv="warn"]  .dp .s { color: color-mix(in oklab, var(--lv-warn) 52%, var(--ink)); }
@@ -507,13 +511,13 @@ td.acc { padding: 0 12px 0 6px; }
 }
 .abar { overflow: visible; }
 .seg { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; }
-.seg span { font-family: var(--mono); font-size: 12px; font-weight: 600; padding: 0 7px; white-space: nowrap; }
+.seg span { font-family: var(--mono); font-size: calc(12px * var(--fs, 1)); font-weight: 600; padding: 0 7px; white-space: nowrap; }
 /* 막대가 짧아 안에 못 넣을 때는 막대 전체가 끝난 자리에 적는다.
    빗금 위에 겹쳐 쓰면 안 읽히므로 빈 트랙으로 내보낸다. */
 .barout {
   position: absolute; top: 0; bottom: 0; z-index: 4;
   display: flex; align-items: center; gap: 4px;
-  font-family: var(--mono); font-size: 12px; font-weight: 600;
+  font-family: var(--mono); font-size: calc(12px * var(--fs, 1)); font-weight: 600;
   white-space: nowrap; pointer-events: none;
 }
 .barout b { color: var(--ink-2); font-weight: 600; }
@@ -553,7 +557,7 @@ tr[data-lv] .seg.obs::after { opacity: 1; animation: flow 5.6s linear infinite; 
 .th.w1 { border-color: color-mix(in oklab, var(--ink-2) 66%, transparent); }
 .th.w2 { border-color: color-mix(in oklab, var(--ink) 80%, transparent); }
 /* 기준선 숫자는 머리글에 한 번만 적는다 — 행마다 반복하면 표가 시끄럽다 */
-.thlab { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0; margin-left: 6px; }
+.thlab { font-family: var(--mono); font-size: calc(10.5px * var(--fs, 1)); letter-spacing: 0; margin-left: 6px; }
 .thlab i { font-style: normal; }
 .thlab .w1 { color: var(--ink-2); }
 .thlab .w2 { color: var(--ink); }
@@ -562,7 +566,7 @@ tr[data-lv] .seg.obs::after { opacity: 1; animation: flow 5.6s linear infinite; 
 /* 합계는 색조로도 읽힌다 — 크기는 색이, 기준 초과는 테두리가 진다.
    두 가지를 같은 채널에 실으면 어느 쪽인지 알 수 없게 된다. */
 .tot {
-  font-family: var(--mono); font-size: 13.5px; font-weight: 600;
+  font-family: var(--mono); font-size: calc(13.5px * var(--fs, 1)); font-weight: 600;
   min-width: 44px; text-align: right; flex: none;
   color: var(--ink-2);
   font-variant-numeric: tabular-nums;
@@ -581,12 +585,12 @@ td.totc .tot { width: auto; display: block; }
 .grip:hover { background: var(--raised); color: var(--ink-2); }
 .grip:active, .grip.dragging { cursor: grabbing; background: color-mix(in oklab, var(--accent) 25%, var(--raised)); color: var(--ink); }
 .grip b { font-weight: 500; }
-.grip i { font-style: normal; font-size: 9px; letter-spacing: -1px; opacity: .7; }
+.grip i { font-style: normal; font-size: calc(9px * var(--fs, 1)); letter-spacing: -1px; opacity: .7; }
 
-.tot i { font-style: normal; font-size: 10.5px; color: var(--ink-3); margin-left: 2px; }
+.tot i { font-style: normal; font-size: calc(10.5px * var(--fs, 1)); color: var(--ink-3); margin-left: 2px; }
 
 /* 기준 구간 표기 — 조정 막대가 없어져 머리글로 올라왔다 */
-.rangeval { font-family: var(--mono); font-size: 10.5px; color: var(--ink-3); white-space: nowrap; }
+.rangeval { font-family: var(--mono); font-size: calc(10.5px * var(--fs, 1)); color: var(--ink-3); white-space: nowrap; }
 .rangeval b { color: var(--ink-2); font-weight: 500; }
 
 /* ── 화면 꾸미기 ──────────────────────────────────────────────────
@@ -595,7 +599,7 @@ td.totc .tot { width: auto; display: block; }
    #user-css 에 렌더링하면 배포 없이 바뀐다. */
 /* 스방 자료로 보는 중이라는 표시 — 기상청과 값이 다른 이유가 여기 있다 */
 .srcmark {
-  font-style: normal; font-size: 9px; margin-left: 4px; padding: 0 3px;
+  font-style: normal; font-size: calc(9px * var(--fs, 1)); margin-left: 4px; padding: 0 3px;
   border-radius: 3px; vertical-align: 1px; font-weight: 600;
   background: color-mix(in oklab, var(--accent) 24%, transparent); color: var(--accent);
 }
@@ -611,7 +615,7 @@ td.totc .tot { width: auto; display: block; }
 }
 .mn-tog button {
   border: 0; background: transparent; color: var(--ink-3); cursor: pointer;
-  font: inherit; font-size: 9.5px; font-weight: 600; line-height: 1;
+  font: inherit; font-size: calc(9.5px * var(--fs, 1)); font-weight: 600; line-height: 1;
   padding: 3px 5px;
 }
 .mn-tog button + button { border-left: 1px solid var(--line); }
@@ -622,24 +626,24 @@ td.totc .tot { width: auto; display: block; }
 .mn-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .mn-col + .mn-col { border-left: 1px solid var(--line); }
 .mn-head {
-  padding: 5px 10px 4px; font-size: 11px; font-weight: 600; color: var(--ink-2);
+  padding: 5px 10px 4px; font-size: calc(11px * var(--fs, 1)); font-weight: 600; color: var(--ink-2);
   background: var(--panel); border-bottom: 1px solid var(--line);
   position: sticky; top: 0; z-index: 1;
 }
-.mn-head i { font-style: normal; font-weight: 400; color: var(--ink-3); margin-left: 5px; font-size: 10px; }
+.mn-head i { font-style: normal; font-weight: 400; color: var(--ink-3); margin-left: 5px; font-size: calc(10px * var(--fs, 1)); }
 .mn-list { flex: 1; overflow: auto; }
 .mn-row {
   display: flex; align-items: center; gap: 7px; padding: 3px 10px;
   border-top: 1px solid color-mix(in oklab, var(--line) 55%, transparent);
 }
 .mn-row:first-child { border-top: 0; }
-.mn-row .nm { flex: 0 0 78px; font-size: 11.5px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mn-row .nm { flex: 0 0 78px; font-size: calc(11.5px * var(--fs, 1)); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mn-row .nm sup { font-size: .72em; color: var(--ink-3); margin-right: 2px; }
 .mn-row .g { flex: 1; height: 9px; background: var(--raised); border-radius: 3px; overflow: hidden; }
 .mn-row .g i { display: block; height: 100%; border-radius: 3px; background: var(--accent); }
-.mn-row .v { flex: 0 0 42px; text-align: right; font-family: var(--mono); font-size: 11.5px; color: var(--ink-2); }
+.mn-row .v { flex: 0 0 42px; text-align: right; font-family: var(--mono); font-size: calc(11.5px * var(--fs, 1)); color: var(--ink-2); }
 .mn-row.zero { opacity: .42; }
-.mn-empty { padding: 14px 10px; font-size: 11.5px; color: var(--ink-3); }
+.mn-empty { padding: 14px 10px; font-size: calc(11.5px * var(--fs, 1)); color: var(--ink-3); }
 
 /* 시군 지점별 목록 */
 .stlist { display: flex; flex-direction: column; }
@@ -824,8 +828,8 @@ td.totc .tot { width: auto; display: block; }
   backdrop-filter: blur(6px);
   pointer-events: none;
 }
-.qpf-clock b { font-family: var(--mono); font-size: 19px; font-weight: 600; letter-spacing: -.02em; color: var(--ink); }
-.qpf-clock i { font-style: normal; font-family: var(--mono); font-size: 11.5px; color: var(--ink-2); }
+.qpf-clock b { font-family: var(--mono); font-size: calc(19px * var(--fs, 1)); font-weight: 600; letter-spacing: -.02em; color: var(--ink); }
+.qpf-clock i { font-style: normal; font-family: var(--mono); font-size: calc(11.5px * var(--fs, 1)); color: var(--ink-2); }
 
 /* 잘라 낸 화각에서는 원본 범례가 사라진다 — 오려 둔 것을 그림 위에 얹는다.
    색계를 우리 램프로 흉내 내면 거짓말이 되므로 원본 그대로 쓴다. */
@@ -858,7 +862,7 @@ td.totc .tot { width: auto; display: block; }
               0 0 0 4px var(--line);
 }
 .qpf-scale .bar i { display: block; width: 100%; }
-.qpf-scale .ticks { font-family: var(--mono); font-size: 9px; color: var(--ink-2); }
+.qpf-scale .ticks { font-family: var(--mono); font-size: calc(9px * var(--fs, 1)); color: var(--ink-2); }
 /* ⚠️ 눈금과 단위를 상자 안에 넣으면 '110' 과 'mm/h' 폭만큼 상자가 벌어져,
    색 띠 열 개 폭짜리 범례가 지도를 한 뼘이나 가린다. 상자는 **색 띠에만** 맞추고
    글자는 밖으로 흘려보낸다 — 지도 위에 얹혀도 그림자로 읽힌다. */
@@ -876,12 +880,12 @@ td.totc .tot { width: auto; display: block; }
 }
 .qpf-scale .ticks span:last-child { transform: none; }   /* 맨 아래는 잘리지 않게 */
 .qpf-scale .unit {
-  font-family: var(--mono); font-size: 9px; font-weight: 600; color: #0B1017;
+  font-family: var(--mono); font-size: calc(9px * var(--fs, 1)); font-weight: 600; color: #0B1017;
   white-space: nowrap; margin-bottom: 5px; margin-right: -2px;
   text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 1px 2px #fff;
 }
 .qpf-scale .none {
-  font-size: 10px; font-weight: 600; color: #0B1017; max-width: 150px; text-align: right;
+  font-size: calc(10px * var(--fs, 1)); font-weight: 600; color: #0B1017; max-width: 150px; text-align: right;
   text-shadow: 0 0 3px #fff, 0 0 3px #fff;
 }
 .qpf-stage[data-crop="all"] .qpf-legend-img { display: none; }
@@ -889,7 +893,7 @@ td.totc .tot { width: auto; display: block; }
 /* 어느 발표분을 보고 있는지 — 그림 왼쪽 위에 작게 */
 .qpf-tag {
   position: absolute; left: 10px; top: 10px;
-  font-family: var(--mono); font-size: 11px; font-weight: 500;
+  font-family: var(--mono); font-size: calc(11px * var(--fs, 1)); font-weight: 500;
   color: var(--ink-2);
   padding: 3px 8px; border-radius: 999px;
   background: color-mix(in oklab, var(--ground) 84%, transparent);
@@ -902,7 +906,7 @@ td.totc .tot { width: auto; display: block; }
 .qpf-status {
   position: absolute; left: 12px; top: 40px;
   display: flex; align-items: center; gap: 8px;
-  font-family: var(--mono); font-size: 10.5px; color: var(--ink-2);
+  font-family: var(--mono); font-size: calc(10.5px * var(--fs, 1)); color: var(--ink-2);
   background: color-mix(in oklab, var(--ground) 82%, transparent);
   border: 1px solid var(--line-soft); border-radius: var(--r-sm);
   padding: 4px 8px; max-width: calc(100% - 130px);
@@ -961,7 +965,7 @@ td.totc .tot { width: auto; display: block; }
 .qpf-seek::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: var(--accent); border: 2px solid var(--panel); }
 
 .qpf-bar .chips { padding: 2px; }
-.qpf-bar .chips button { padding: 3px 8px; font-size: 11px; }
+.qpf-bar .chips button { padding: 3px 8px; font-size: calc(11px * var(--fs, 1)); }
 @container (max-width: 420px) { #qpf-prev, #qpf-next { display: none; } }
 
 /* ── 예측 상위 시군 ───────────────────────────────────────────────
@@ -974,7 +978,7 @@ td.totc .tot { width: auto; display: block; }
   border-bottom: 1px solid var(--line-soft);
 }
 .fs-axis > div { display: flex; justify-content: space-between; padding: 5px 12px 4px; background: var(--panel); }
-.fs-axis span { font-family: var(--mono); font-size: 9.5px; color: var(--ink-3); letter-spacing: -.02em; }
+.fs-axis span { font-family: var(--mono); font-size: calc(9.5px * var(--fs, 1)); color: var(--ink-3); letter-spacing: -.02em; }
 .fs-axis span:first-child { color: var(--ink-2); }
 
 .fs-grid {
@@ -989,18 +993,18 @@ td.totc .tot { width: auto; display: block; }
 .fs-cell > svg.spark { position: absolute; inset: 0; width: 100%; height: 100%; }
 .fs-cell > * { position: relative; z-index: 1; }
 .fs-cell i.rk {
-  font-family: var(--mono); font-size: 11.5px; font-weight: 600;
+  font-family: var(--mono); font-size: calc(11.5px * var(--fs, 1)); font-weight: 600;
   color: var(--ink-3); font-style: normal; width: 16px; flex: none;
 }
 .fs-cell.top i.rk { color: var(--accent); }
-.fs-cell .nm { font-size: 14px; font-weight: 600; }
+.fs-cell .nm { font-size: calc(14px * var(--fs, 1)); font-weight: 600; }
 .fs-cell .nm small { font-size: .72em; color: var(--ink-3); font-weight: 500; margin-left: 4px; }
 .fs-cell em {
-  font-style: normal; font-family: var(--mono); font-size: 11.5px;
+  font-style: normal; font-family: var(--mono); font-size: calc(11.5px * var(--fs, 1));
   color: var(--accent); font-weight: 600; margin-left: auto; flex: none;
 }
 .fs-cell em s { text-decoration: none; color: var(--ink-3); font-weight: 400; font-size: .85em; }
-.fs-cell b { font-family: var(--mono); font-size: 14.5px; font-weight: 600; width: 42px; text-align: right; flex: none; }
+.fs-cell b { font-family: var(--mono); font-size: calc(14.5px * var(--fs, 1)); font-weight: 600; width: 42px; text-align: right; flex: none; }
 .fs-cell[data-lv="warn"]  .nm { color: color-mix(in oklab, var(--lv-warn) 52%, var(--ink)); }
 .fs-cell[data-lv="watch"] .nm { color: color-mix(in oklab, var(--lv-watch) 52%, var(--ink)); }
 
@@ -1071,11 +1075,11 @@ td.totc .tot { width: auto; display: block; }
 /* ── A. 히트맵 칸 ─────────────────────────────────────────────────── */
 .cells { display: grid; grid-template-columns: repeat(var(--n), 1fr); gap: 2px; }
 .hc, .hh {
-  font-family: var(--mono); font-size: 13px; font-weight: 500;
+  font-family: var(--mono); font-size: calc(13px * var(--fs, 1)); font-weight: 500;
   text-align: center; line-height: calc(var(--rowh, 28px) - 8px); border-radius: 4px;
   color: var(--ink); min-width: 0;
 }
-.hh { font-size: 11px; font-weight: 400; color: var(--ink-3); line-height: 14px; }
+.hh { font-size: calc(11px * var(--fs, 1)); font-weight: 400; color: var(--ink-3); line-height: 14px; }
 .hh.fc { color: color-mix(in oklab, var(--accent) 62%, var(--ink-3)); }
 /* 묶음 칸 머리글 — 칸과 같은 색조로 '여기는 다른 눈금'임을 알린다 */
 .hh.grp { color: color-mix(in oklab, var(--acc-5) 70%, var(--ink-3)); }
@@ -1135,15 +1139,15 @@ td.tl svg, th.tlh svg { display: block; width: 100%; }
 
 tr.extra td.dpc { padding-left: 22px; }
 tr.extra .dp .s { color: var(--ink-2) !important; font-weight: 500; }
-.addmark { font-family: var(--mono); font-size: 10px; color: var(--ink-3); margin-right: 4px; }
+.addmark { font-family: var(--mono); font-size: calc(10px * var(--fs, 1)); color: var(--ink-3); margin-right: 4px; }
 .dropx {
   border: 0; background: transparent; color: var(--ink-3);
-  font: inherit; font-size: 11px; cursor: pointer; padding: 0 4px; margin-left: 3px; border-radius: 3px;
+  font: inherit; font-size: calc(11px * var(--fs, 1)); cursor: pointer; padding: 0 4px; margin-left: 3px; border-radius: 3px;
 }
 .dropx:hover { color: var(--lv-fail); background: color-mix(in oklab, var(--lv-fail) 14%, transparent); }
 
 /* 범례 — 특보 등급 이름은 여기 한 곳에만 적는다 */
-.lg { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--ink-2); white-space: nowrap; margin-right: 9px; vertical-align: -1px; }
+.lg { display: inline-flex; align-items: center; gap: 5px; font-size: calc(10.5px * var(--fs, 1)); color: var(--ink-2); white-space: nowrap; margin-right: 9px; vertical-align: -1px; }
 .lg .sw { width: 22px; height: 10px; border-radius: 3px; flex: none; }
 .lg .sw.watch {
   background:
@@ -1160,11 +1164,11 @@ tr.extra .dp .s { color: var(--ink-2) !important; font-weight: 500; }
 
 tr.extra td { background: color-mix(in oklab, var(--accent) 4%, transparent); }
 tr.extra .dp .s { color: var(--ink-2); font-weight: 500; }
-.addmark { position: relative; z-index: 1; font-family: var(--mono); font-size: 10px; color: var(--ink-3); margin-right: 5px; }
+.addmark { position: relative; z-index: 1; font-family: var(--mono); font-size: calc(10px * var(--fs, 1)); color: var(--ink-3); margin-right: 5px; }
 .dropx {
   position: relative; z-index: 1;
   border: 0; background: transparent; color: var(--ink-3);
-  font: inherit; font-size: 11px; cursor: pointer; padding: 0 4px; margin-left: 4px; border-radius: 3px;
+  font: inherit; font-size: calc(11px * var(--fs, 1)); cursor: pointer; padding: 0 4px; margin-left: 4px; border-radius: 3px;
 }
 .dropx:hover { color: var(--lv-fail); background: color-mix(in oklab, var(--lv-fail) 14%, transparent); }
 
@@ -1211,6 +1215,44 @@ tbody.swap tr { animation: rowin .36s cubic-bezier(.2,.7,.3,1) both; animation-d
 .ctx button .amt { margin-left: auto; font-family: var(--mono); font-size: 11.5px; color: var(--ink-2); }
 .ctx .ctx-sep { height: 1px; background: var(--line); margin: 5px 6px; }
 .ctx .ctx-foot { font-size: 10.5px; color: var(--ink-3); padding: 6px 9px 3px; border-top: 1px solid var(--line-soft); margin-top: 4px; }
+
+/* 글자 크기 줄 — 눌러도 메뉴를 닫지 않는다. 벽에 걸린 화면을 보면서 맞춰야 한다. */
+.ctx .ctx-fs { display: flex; align-items: center; gap: 4px; padding: 1px 6px 5px; }
+.ctx .ctx-fs button {
+  width: 30px; justify-content: center; padding: 4px 0;
+  font-family: var(--mono); font-size: 13px;
+  border: 1px solid var(--line); border-radius: 5px;
+}
+.ctx .ctx-fs button.rst { width: 27px; font-size: 12px; color: var(--ink-2); }
+.ctx .ctx-fs output {
+  flex: 1; text-align: center;
+  font-family: var(--mono); font-size: 12px; color: var(--ink-2);
+}
+
+/* ── 편집모드 ──────────────────────────────────────────────────────
+   켜져 있다는 것이 한눈에 보여야 한다. 상황실 화면은 늘 켜져 있어서,
+   편집 중인 줄 모르고 지나가면 우클릭이 딴 일을 한다. */
+.mb-item.edit.on {
+  background: color-mix(in oklab, var(--accent) 26%, transparent);
+  color: var(--ink);
+}
+body.editing .panel { cursor: context-menu; }
+/* 만질 수 있는 모음에 마우스를 올리면 테두리로 알린다 */
+body.editing :is(#p-rain th.metric-h, #p-rain thead th.l, #p-rain thead th.totc,
+                 #p-rain td.dpc, #p-rain td.acc, #p-rain td.tl, #p-rain td.totc,
+                 #p-qpf > header, #p-qpf .qpf-clock, #p-qpf .qpf-tag, #p-qpf .qpf-scale,
+                 #p-fcsig > header, #p-fcsig .fs-axis, #p-fcsig .fs-grid,
+                 #p-min > header, #p-min .mn-head, #p-min .mn-list):hover {
+  outline: 1px dashed color-mix(in oklab, var(--accent) 70%, transparent);
+  outline-offset: -1px;
+}
+/* ⚠️ `.panel::after` 는 이미 '갱신 중' 띠가 쓴다(inset: 0). 거기에 배지를 얹으면
+   inset 이 그대로 남아 판만 한 타원이 된다 — 실제로 그렇게 됐다.
+   편집 중이라는 것은 메뉴바 딱지와 판 테두리로 충분히 알린다. */
+body.editing .panel {
+  border-color: color-mix(in oklab, var(--accent) 55%, var(--line));
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 20%, transparent);
+}
 
 .bar-spacer { flex: 1; }
 
@@ -1352,6 +1394,9 @@ tbody.swap tr { animation: rowin .36s cubic-bezier(.2,.7,.3,1) both; animation-d
 }
 </style>
 
+<!-- 모음별 글자 배율이 규칙으로 쌓이는 자리(편집모드에서 쓴다). 비어 있는 것이 기본. -->
+<style id="fs-css"></style>
+
 <!-- 기관별 CSS 주입 자리. 본 스타일 바로 뒤라 규칙을 덮어쓴다.
      운영 서버에서는 이 태그 안에 사용자 CSS 파일 내용을 넣어 내려보내면 된다.
      예) :root { --accent: #0F6FB5; --sans: "Pretendard", sans-serif; } -->
@@ -1410,6 +1455,11 @@ tbody.swap tr { animation: rowin .36s cubic-bezier(.2,.7,.3,1) both; animation-d
       </button>
       <button class="mb-item" id="m-speed" type="button" data-owner="p-qpf" aria-haspopup="menu" aria-expanded="false">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 20a8 8 0 1 1 8-8" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M12 12l4.5-3" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg><span id="lb-speed">1×</span><svg class="chev" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button class="mb-item edit" id="m-edit" type="button" aria-pressed="false"
+              data-owner="p-rain p-qpf p-fcsig p-min"
+              title="켜면 판 안의 글자 모음을 우클릭해 크기를 바꾼다">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 20h4L19 9a2.5 2.5 0 0 0-3.5-3.5L4.5 16.5 4 20z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 7l3 3" stroke="currentColor" stroke-width="1.8"/></svg><span id="lb-edit">편집</span>
       </button>
     </span>
     <span class="mb-meta" id="mb-meta"></span>
@@ -2468,7 +2518,7 @@ function timelineSvg(row, r, mx) {
     const ly = above ? y - 4 : Math.min(y + 9, TLH - 2);
     const anchor = i === 0 ? "start" : i === n - 1 ? "end" : "middle";
     return `<text x="${x.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="${anchor}"
-      font-family="IBM Plex Mono, monospace" font-size="${isPeak ? FS + 1.5 : FS}"
+      font-family="IBM Plex Mono, monospace" font-size="${((isPeak ? FS + 1.5 : FS) * fsg("p-rain", "cell")).toFixed(1)}"
       font-weight="${isPeak ? 600 : 500}" paint-order="stroke"
       stroke="var(--panel)" stroke-width="3" stroke-linejoin="round"
       fill="${i >= split ? "var(--rain-6)" : isPeak ? "var(--ink)" : "var(--ink-2)"}">${v}</text>`;
@@ -2654,7 +2704,7 @@ function drawRain(animate) {
     /* '지금'은 눈금 줄에 끼워 넣지 않는다 — 옆 시각을 가리거나 자기가 잘린다.
        한 층 위에 따로 줄을 내주고, 바로 아래 삼각형으로 선을 가리킨다. */
     const NOW_W = 11;                       // 삼각형이 차지하는 폭
-    const tGap = 30, tPlaced = [nowX];
+    const tGap = 30 * fsg("p-rain", "hax"), tPlaced = [nowX];
     const must = i => i >= nObs || (cut() + i) % 24 === 0;
     mins.forEach((m, i) => { if (must(i) && i !== nObs - 1) tPlaced.push(xM(m)); });
     const tKeep = new Set();
@@ -2673,7 +2723,7 @@ function drawRain(animate) {
       if (Math.abs(x - nowX) < NOW_W) return "";
       const lbl = isFc ? FC_HOURS[i - nObs] : isMid ? DAYS[dayOf(gi)] : HOURS[gi].slice(0, 2);
       return `<text x="${x.toFixed(1)}" y="37" text-anchor="middle"
-        font-family="IBM Plex Mono, monospace" font-size="${isMid ? 10 : 11}"
+        font-family="IBM Plex Mono, monospace" font-size="${((isMid ? 10 : 11) * fsg("p-rain", "hax")).toFixed(1)}"
         font-weight="${isMid ? 600 : 400}"
         fill="${isFc ? "color-mix(in oklab, var(--accent) 62%, var(--ink-3))"
               : isMid ? "var(--ink-2)" : "var(--ink-3)"}">${lbl}</text>`;
@@ -2684,7 +2734,7 @@ function drawRain(animate) {
     cell.innerHTML = `<svg viewBox="0 0 ${TLW} 42" width="100%" height="42" preserveAspectRatio="xMinYMid meet">
       ${ticks}
       <text x="${lx.toFixed(1)}" y="12" text-anchor="middle"
-        font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600"
+        font-family="IBM Plex Mono, monospace" font-size="${(12 * fsg("p-rain", "hax")).toFixed(1)}" font-weight="600"
         letter-spacing="1.1" fill="var(--ink)">${HOURS[SLOTS - 1]}</text>
       <path d="M${(nowX - 4).toFixed(1)} 16 L${(nowX + 4).toFixed(1)} 16 L${nowX.toFixed(1)} 21 Z"
         fill="var(--ink)"/>
@@ -2771,7 +2821,10 @@ function drawRain(animate) {
     const box = document.querySelector("#p-rain .body");
     const used = [...box.children].reduce((a, el) => a + el.offsetHeight, 0);
     const per = Math.floor((box.clientHeight - used) / Math.max(1, rows.length));
-    const next = Math.max(22, Math.min(58, ROWH + per));
+    // 글자를 키우면 22px 줄에서 잘린다. 바닥과 천장을 배율만큼 함께 올린다.
+    // 줄 안에 여러 모음이 있으므로 그 가운데 제일 큰 것을 따른다.
+    const f = Math.max(...["name", "acc", "cell", "tot"].map(k => fsg("p-rain", k)));
+    const next = Math.max(Math.round(22 * f), Math.min(Math.round(58 * f), ROWH + per));
     if (Math.abs(next - ROWH) >= 2) { ROWH = next; TLH = ROWH - 6; FS = Math.max(9, Math.round(TLH * 0.27)); again = true; }
     // 폭과 높이가 함께 바뀌면 한 번으로는 안 맞는다. 최대 세 번까지만 다시 잰다.
     if (again && (drawRain.tries = (drawRain.tries || 0) + 1) <= 3) {
@@ -4106,8 +4159,129 @@ document.getElementById("rain-body").addEventListener("keydown", e => {
   openSigunStations(el.closest("tr").dataset.sigun);
 });
 
+/* ── 글자 크기 — 판이 아니라 **모음**마다 ─────────────────────────
+   벽에 걸린 화면에서 키우고 싶은 것은 판 전체가 아니라 **그 안의 한 덩어리**다.
+   지점 이름만 키우고 싶을 때가 있고, 시간별 숫자만 키우고 싶을 때가 있다.
+   판을 통째로 키우면 자리를 먹어 오히려 줄 수가 줄어든다.
+
+   ⚠️ **편집모드에서만 바뀐다.** 상황실 화면은 늘 켜져 있고 사람이 지나가며
+      건드린다. 평소 우클릭은 하던 일(지점 얹기)을 그대로 해야 한다.
+      편집모드는 메뉴바 맨 오른쪽 `편집` 에서 켜고 끈다.
+
+   중첩은 안쪽이 이긴다 — `판 전체` 를 1.2 로 두고 `지점 이름` 만 1.5 로 둘 수 있다. */
+const FS_MIN = 0.7, FS_MAX = 2.2, FS_STEP = 0.1;
+const PANEL_NAME = { "p-rain": "강수 타임라인", "p-qpf": "예측 분포 재생",
+                     "p-fcsig": "예측 상위 시군", "p-min": "지금 오는 비" };
+
+/* [열쇠, 이름, 선택자] — 아래로 갈수록 좁다. 우클릭한 자리는 **아래에서부터** 찾는다. */
+const FS_GROUPS = {
+  "p-rain": [
+    ["all",  "판 전체",       "#p-rain"],
+    ["hmet", "지표 머리글",    "#p-rain th.metric-h"],
+    ["hacc", "누적 머리글",    "#p-rain thead th.l:not(.metric-h):not(.tlh)"],
+    ["hax",  "시각 눈금",      "#p-rain #tl-head"],
+    ["htot", "합계 머리글",    "#p-rain thead th.totc"],
+    ["name", "지점 이름",      "#p-rain td.dpc"],
+    ["acc",  "누적 막대 숫자",  "#p-rain td.acc"],
+    ["cell", "시간별 숫자",    "#p-rain td.tl"],
+    ["tot",  "합계 숫자",      "#p-rain td.totc"],
+  ],
+  "p-qpf": [
+    ["all",   "판 전체",   "#p-qpf"],
+    ["head",  "판 머리글", "#p-qpf > header"],
+    ["clock", "시각 시계", "#p-qpf .qpf-clock"],
+    ["tag",   "발표 딱지", "#p-qpf .qpf-tag"],
+    ["lg",    "범례",      "#p-qpf .qpf-scale"],
+  ],
+  "p-fcsig": [
+    ["all",  "판 전체",   "#p-fcsig"],
+    ["head", "판 머리글", "#p-fcsig > header"],
+    ["axis", "시각 눈금", "#p-fcsig .fs-axis"],
+    ["cell", "시군 칸",   "#p-fcsig .fs-grid"],
+  ],
+  "p-min": [
+    ["all",   "판 전체",   "#p-min"],
+    ["head",  "판 머리글", "#p-min > header"],
+    ["chead", "칸 머리글", "#p-min .mn-head"],
+    ["row",   "지점 줄",   "#p-min .mn-list"],
+  ],
+};
+
+let FSG = {};
+try { FSG = JSON.parse(localStorage.getItem("gn-fsg") || "{}") || {}; } catch {}
+let editing = false;
+
+/* 그 모음의 배율. 따로 정한 것이 없으면 판 전체 값을 따른다. */
+const fsg = (pid, k) => +FSG[`${pid}.${k}`] || +FSG[`${pid}.all`] || 1;
+const fsRaw = (pid, k) => +FSG[`${pid}.${k}`] || 1;
+
+/* 규칙을 통째로 다시 쓴다. 인라인 style 로는 안 된다 — 표는 그릴 때마다
+   innerHTML 이 통째로 갈려서 얹어 둔 style 이 날아간다. */
+function paintFsCss() {
+  const out = [];
+  for (const pid in FS_GROUPS)
+    for (const [k, , sel] of FS_GROUPS[pid]) {
+      const v = +FSG[`${pid}.${k}`];
+      if (v && v !== 1) out.push(`${sel} { --fs: ${v}; }`);
+    }
+  document.getElementById("fs-css").textContent = out.join(String.fromCharCode(10));
+}
+
+function setFsg(pid, k, v) {
+  const n = Math.round(clamp(v, FS_MIN, FS_MAX) * 100) / 100;
+  if (n === 1) delete FSG[`${pid}.${k}`]; else FSG[`${pid}.${k}`] = n;
+  try { localStorage.setItem("gn-fsg", JSON.stringify(FSG)); } catch {}
+  paintFsCss();
+  // ⚠️ 타임라인은 글자를 **SVG 안에도** 그린다. CSS만 바꾸면 눈금·봉우리 숫자가
+  //    혼자 그대로 남는다. 그리는 판은 다시 그린다.
+  if (pid === "p-rain")  drawRain(false);
+  if (pid === "p-fcsig") drawFcSigun();
+  if (pid === "p-min")   drawMinute();
+  const out = ctx.querySelector(`output[data-fsout]`);
+  if (out) out.textContent = Math.round(fsRaw(pid, k) * 100) + "%";
+}
+
+/* 우클릭한 자리가 어느 모음인가 — 좁은 것부터 찾는다. */
+function fsHit(el, pid) {
+  const gs = FS_GROUPS[pid] || [];
+  for (let i = gs.length - 1; i >= 0; i--)
+    if (el.closest(gs[i][2])) return gs[i];
+  return null;
+}
+
+function fsRow(pid, g) {
+  const [k, name] = g;
+  return `<div class="ctx-head">글자 크기 · <b>${name}</b></div>
+    <div class="ctx-fs">
+      <button type="button" data-fs="${pid}|${k}|-" title="작게" aria-label="작게">－</button>
+      <output data-fsout="${pid}.${k}">${Math.round(fsRaw(pid, k) * 100)}%</output>
+      <button type="button" data-fs="${pid}|${k}|+" title="크게" aria-label="크게">＋</button>
+      <button type="button" class="rst" data-fs="${pid}|${k}|0" title="기본으로" aria-label="기본으로">↺</button>
+    </div>`;
+}
+
+/* ── 편집모드 ─────────────────────────────────────────────────────── */
+function setEditing(on) {
+  editing = !!on;
+  document.body.classList.toggle("editing", editing);
+  const b = document.getElementById("m-edit");
+  if (b) {
+    b.classList.toggle("on", editing);
+    b.setAttribute("aria-pressed", String(editing));
+    document.getElementById("lb-edit").textContent = editing ? "편집 중" : "편집";
+  }
+  if (!editing) ctx.classList.remove("on");
+}
+
 /* ── 우클릭 — 그 시군의 다우지점 더 얹기 ─────────────────────────── */
 const ctx = document.getElementById("ctx");
+
+function placeCtx(x, y) {
+  ctx.classList.add("on");
+  const r = ctx.getBoundingClientRect();
+  ctx.style.left = Math.min(x, innerWidth  - r.width  - 8) + "px";
+  ctx.style.top  = Math.min(y, innerHeight - r.height - 8) + "px";
+}
 
 function openCtx(sig, x, y) {
   const opt = (k, l, on, kind = "chk") =>
@@ -4134,20 +4308,40 @@ function openCtx(sig, x, y) {
   ctx.innerHTML = options +
     `<div class="ctx-head"><b>${sig}</b> · 지점 얹기</div>${items}
     <div class="ctx-foot">★ 자동 선택 · 누르면 표에 얹거나 뺀다</div>`;
-  ctx.classList.add("on");
-  const r = ctx.getBoundingClientRect();
-  ctx.style.left = Math.min(x, innerWidth  - r.width  - 8) + "px";
-  ctx.style.top  = Math.min(y, innerHeight - r.height - 8) + "px";
+  placeCtx(x, y);
 }
 
 document.getElementById("rain-body").addEventListener("contextmenu", e => {
+  if (editing) return;                       // 편집 중에는 아래 모음 메뉴가 맡는다
   const tr = e.target.closest("tr[data-sigun]");
   if (!tr) return;
   e.preventDefault();
   openCtx(tr.dataset.sigun, e.clientX, e.clientY);
 });
 
+/* 편집모드 우클릭 — 그 자리의 글자 모음을 집는다. 판 어디서나 된다. */
+document.addEventListener("contextmenu", e => {
+  if (!editing) return;
+  const panel = e.target.closest(".panel");
+  if (!panel || !FS_GROUPS[panel.id]) return;
+  const g = fsHit(e.target, panel.id);
+  if (!g) return;
+  e.preventDefault();
+  activate(panel);
+  ctx.innerHTML = fsRow(panel.id, g) +
+    `<div class="ctx-foot">${PANEL_NAME[panel.id]} · ＋－ 로 맞춘다<br>
+      좁은 자리를 누르면 그 모음만, 빈 자리를 누르면 판 전체</div>`;
+  placeCtx(e.clientX, e.clientY);
+});
+
 ctx.addEventListener("click", e => {
+  // 글자 크기는 **메뉴를 닫지 않는다** — 커지는 것을 보면서 맞춰야 하기 때문이다
+  const f = e.target.closest("[data-fs]");
+  if (f) {
+    const [pid, k, op] = f.dataset.fs.split("|");
+    setFsg(pid, k, op === "0" ? 1 : fsRaw(pid, k) + (op === "+" ? FS_STEP : -FS_STEP));
+    return;
+  }
   const o = e.target.closest("[data-opt]");
   if (o) {
     const k = o.dataset.opt;
@@ -4264,6 +4458,10 @@ function refreshAll(how) {
 
 document.getElementById("manual").addEventListener("click", () => refreshAll("수동"));
 
+document.getElementById("m-edit").addEventListener("click", () => setEditing(!editing));
+// 편집모드는 화면을 만지는 모드다. 나갈 길을 늘 하나 열어 둔다.
+document.addEventListener("keydown", e => { if (e.key === "Escape" && editing) setEditing(false); });
+
 /* ── 활성 창 — 애플 메뉴바가 앞창 이름을 보여주는 방식 ─────────────
    활성 패널의 머리글은 감추고, 제목과 기준시각·출처를 메뉴바로 올린다.
    벽면에서는 기본값(다우지점 강수량)이 계속 떠 있고, 만지면 그 패널로 옮겨 간다. */
@@ -4363,7 +4561,7 @@ document.getElementById("rain-body").addEventListener("mouseleave", () => tip.cl
 /* ── 시작 ─────────────────────────────────────────────────────────
    자료를 먼저 받고 그리기 시작한다. 표본 자료가 없으므로 빈 화면에서 출발해
    첫 응답이 오는 대로 채워진다. */
-applySide(); applySlot(); applySkin(false); showView('all');
+applySide(); applySlot(); applySkin(false); paintFsCss(); showView('all');
 
 (async () => {
   await Promise.allSettled([loadRain(), loadForecast(), loadAlerts(), loadQpf(), loadSettings(), loadStatus()]);
