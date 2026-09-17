@@ -1237,15 +1237,10 @@ tbody.swap tr { animation: rowin .36s cubic-bezier(.2,.7,.3,1) both; animation-d
   color: var(--ink);
 }
 body.editing .panel { cursor: context-menu; }
-/* 만질 수 있는 모음에 마우스를 올리면 테두리로 알린다 */
-body.editing :is(#p-rain th.metric-h, #p-rain thead th.l, #p-rain thead th.totc,
-                 #p-rain td.dpc, #p-rain td.acc, #p-rain td.tl, #p-rain td.totc,
-                 #p-qpf > header, #p-qpf .qpf-clock, #p-qpf .qpf-tag, #p-qpf .qpf-scale,
-                 #p-fcsig > header, #p-fcsig .fs-axis, #p-fcsig .fs-grid,
-                 #p-min > header, #p-min .mn-head, #p-min .mn-list):hover {
-  outline: 1px dashed color-mix(in oklab, var(--accent) 70%, transparent);
-  outline-offset: -1px;
-}
+/* ⚠️ 테두리를 `:hover` 로 두면 **마우스 밑 한 칸만** 감싼다. 실제로는 그 열이
+   통째로 바뀌는데 화면은 한 시군만 바뀔 것처럼 말한다 — 실제로 그렇게 읽혔다.
+   그래서 지금 걸린 모음을 body[data-hot] 에 적어 두고, 그 모음 **전부**를
+   물들인다. 규칙은 fs-css 가 묶음 표에서 만들어 깐다(paintFsCss). */
 /* ⚠️ `.panel::after` 는 이미 '갱신 중' 띠가 쓴다(inset: 0). 거기에 배지를 얹으면
    inset 이 그대로 남아 판만 한 타원이 된다 — 실제로 그렇게 됐다.
    편집 중이라는 것은 메뉴바 딱지와 판 테두리로 충분히 알린다. */
@@ -2518,7 +2513,7 @@ function timelineSvg(row, r, mx) {
     const ly = above ? y - 4 : Math.min(y + 9, TLH - 2);
     const anchor = i === 0 ? "start" : i === n - 1 ? "end" : "middle";
     return `<text x="${x.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="${anchor}"
-      font-family="IBM Plex Mono, monospace" font-size="${((isPeak ? FS + 1.5 : FS) * fsg("p-rain", "cell")).toFixed(1)}"
+      font-family="IBM Plex Mono, monospace" font-size="${((isPeak ? FS + 1.5 : FS) * fsg("p-rain", "ctl")).toFixed(1)}"
       font-weight="${isPeak ? 600 : 500}" paint-order="stroke"
       stroke="var(--panel)" stroke-width="3" stroke-linejoin="round"
       fill="${i >= split ? "var(--rain-6)" : isPeak ? "var(--ink)" : "var(--ink-2)"}">${v}</text>`;
@@ -2704,7 +2699,7 @@ function drawRain(animate) {
     /* '지금'은 눈금 줄에 끼워 넣지 않는다 — 옆 시각을 가리거나 자기가 잘린다.
        한 층 위에 따로 줄을 내주고, 바로 아래 삼각형으로 선을 가리킨다. */
     const NOW_W = 11;                       // 삼각형이 차지하는 폭
-    const tGap = 30 * fsg("p-rain", "hax"), tPlaced = [nowX];
+    const tGap = 30 * fsg("p-rain", "ctl"), tPlaced = [nowX];
     const must = i => i >= nObs || (cut() + i) % 24 === 0;
     mins.forEach((m, i) => { if (must(i) && i !== nObs - 1) tPlaced.push(xM(m)); });
     const tKeep = new Set();
@@ -2723,7 +2718,7 @@ function drawRain(animate) {
       if (Math.abs(x - nowX) < NOW_W) return "";
       const lbl = isFc ? FC_HOURS[i - nObs] : isMid ? DAYS[dayOf(gi)] : HOURS[gi].slice(0, 2);
       return `<text x="${x.toFixed(1)}" y="37" text-anchor="middle"
-        font-family="IBM Plex Mono, monospace" font-size="${((isMid ? 10 : 11) * fsg("p-rain", "hax")).toFixed(1)}"
+        font-family="IBM Plex Mono, monospace" font-size="${((isMid ? 10 : 11) * fsg("p-rain", "ctl")).toFixed(1)}"
         font-weight="${isMid ? 600 : 400}"
         fill="${isFc ? "color-mix(in oklab, var(--accent) 62%, var(--ink-3))"
               : isMid ? "var(--ink-2)" : "var(--ink-3)"}">${lbl}</text>`;
@@ -2734,7 +2729,7 @@ function drawRain(animate) {
     cell.innerHTML = `<svg viewBox="0 0 ${TLW} 42" width="100%" height="42" preserveAspectRatio="xMinYMid meet">
       ${ticks}
       <text x="${lx.toFixed(1)}" y="12" text-anchor="middle"
-        font-family="IBM Plex Mono, monospace" font-size="${(12 * fsg("p-rain", "hax")).toFixed(1)}" font-weight="600"
+        font-family="IBM Plex Mono, monospace" font-size="${(12 * fsg("p-rain", "ctl")).toFixed(1)}" font-weight="600"
         letter-spacing="1.1" fill="var(--ink)">${HOURS[SLOTS - 1]}</text>
       <path d="M${(nowX - 4).toFixed(1)} 16 L${(nowX + 4).toFixed(1)} 16 L${nowX.toFixed(1)} 21 Z"
         fill="var(--ink)"/>
@@ -2823,7 +2818,7 @@ function drawRain(animate) {
     const per = Math.floor((box.clientHeight - used) / Math.max(1, rows.length));
     // 글자를 키우면 22px 줄에서 잘린다. 바닥과 천장을 배율만큼 함께 올린다.
     // 줄 안에 여러 모음이 있으므로 그 가운데 제일 큰 것을 따른다.
-    const f = Math.max(...["name", "acc", "cell", "tot"].map(k => fsg("p-rain", k)));
+    const f = Math.max(...["cname", "cacc", "ctl", "ctot"].map(k => fsg("p-rain", k)));
     const next = Math.max(Math.round(22 * f), Math.min(Math.round(58 * f), ROWH + per));
     if (Math.abs(next - ROWH) >= 2) { ROWH = next; TLH = ROWH - 6; FS = Math.max(9, Math.round(TLH * 0.27)); again = true; }
     // 폭과 높이가 함께 바뀌면 한 번으로는 안 맞는다. 최대 세 번까지만 다시 잰다.
@@ -4173,18 +4168,19 @@ const FS_MIN = 0.7, FS_MAX = 2.2, FS_STEP = 0.1;
 const PANEL_NAME = { "p-rain": "강수 타임라인", "p-qpf": "예측 분포 재생",
                      "p-fcsig": "예측 상위 시군", "p-min": "지금 오는 비" };
 
-/* [열쇠, 이름, 선택자] — 아래로 갈수록 좁다. 우클릭한 자리는 **아래에서부터** 찾는다. */
+/* [열쇠, 이름, 선택자] — 아래로 갈수록 좁다. 우클릭한 자리는 **아래에서부터** 찾는다.
+
+   ⚠️ **열이 단위다. 칸이 아니다.** 표는 한 열이 통째로 같은 성격이다 —
+      시군명 열, 누적 강수량 열, 시간별 강수량 열, 합계 열. 한 시군만 키우는 일은
+      없다. 그래서 머리글도 제 열에 딸려 들어간다('다우지점'은 시군명 열의 머리글,
+      '누적 12시간'은 강수량 열의 머리글이다). 어디를 눌러도 그 열이 통째로 바뀐다. */
 const FS_GROUPS = {
   "p-rain": [
-    ["all",  "판 전체",       "#p-rain"],
-    ["hmet", "지표 머리글",    "#p-rain th.metric-h"],
-    ["hacc", "누적 머리글",    "#p-rain thead th.l:not(.metric-h):not(.tlh)"],
-    ["hax",  "시각 눈금",      "#p-rain #tl-head"],
-    ["htot", "합계 머리글",    "#p-rain thead th.totc"],
-    ["name", "지점 이름",      "#p-rain td.dpc"],
-    ["acc",  "누적 막대 숫자",  "#p-rain td.acc"],
-    ["cell", "시간별 숫자",    "#p-rain td.tl"],
-    ["tot",  "합계 숫자",      "#p-rain td.totc"],
+    ["all",   "판 전체",          "#p-rain"],
+    ["cname", "시군·지점명 열",    "#p-rain th.metric-h, #p-rain td.dpc"],
+    ["cacc",  "누적 강수량 열",    "#p-rain thead th.l:not(.metric-h):not(.tlh), #p-rain td.acc"],
+    ["ctl",   "시간별 강수량 열",  "#p-rain #tl-head, #p-rain td.tl"],
+    ["ctot",  "합계 열",          "#p-rain thead th.totc, #p-rain td.totc"],
   ],
   "p-qpf": [
     ["all",   "판 전체",   "#p-qpf"],
@@ -4200,10 +4196,10 @@ const FS_GROUPS = {
     ["cell", "시군 칸",   "#p-fcsig .fs-grid"],
   ],
   "p-min": [
-    ["all",   "판 전체",   "#p-min"],
-    ["head",  "판 머리글", "#p-min > header"],
-    ["chead", "칸 머리글", "#p-min .mn-head"],
-    ["row",   "지점 줄",   "#p-min .mn-list"],
+    ["all",  "판 전체",   "#p-min"],
+    ["head", "판 머리글", "#p-min > header"],
+    ["c15",  "15분 열",   "#p-min .mn-col:nth-child(1)"],
+    ["c60",  "60분 열",   "#p-min .mn-col:nth-child(2)"],
   ],
 };
 
@@ -4221,8 +4217,14 @@ function paintFsCss() {
   const out = [];
   for (const pid in FS_GROUPS)
     for (const [k, , sel] of FS_GROUPS[pid]) {
+      // ① 배율
       const v = +FSG[`${pid}.${k}`];
       if (v && v !== 1) out.push(`${sel} { --fs: ${v}; }`);
+      // ② 편집 중 걸린 모음 — **열 전체**를 물들인다. 한 칸만 감싸면 거짓말이 된다.
+      out.push(`body.editing[data-hot="${pid}.${k}"] :is(${sel}) {` +
+               ` outline: 1px dashed color-mix(in oklab, var(--accent) 80%, transparent);` +
+               ` outline-offset: -1px;` +
+               ` background-color: color-mix(in oklab, var(--accent) 10%, transparent); }`);
     }
   document.getElementById("fs-css").textContent = out.join(String.fromCharCode(10));
 }
@@ -4261,20 +4263,43 @@ function fsRow(pid, g) {
 }
 
 /* ── 편집모드 ─────────────────────────────────────────────────────── */
+/* 메뉴가 열려 있는 동안에는 걸린 모음을 붙잡아 둔다 — ＋ 를 누르는 동안 마우스가
+   메뉴 위로 가는데, 그때 물든 자리가 풀리면 무엇을 키우는지 놓친다. */
+let hotLock = "";
+
+function setHot(v) {
+  if (hotLock) return;
+  if (document.body.dataset.hot !== v) document.body.dataset.hot = v || "";
+}
+
+document.addEventListener("mouseover", e => {
+  if (!editing) return;
+  const panel = e.target.closest(".panel");
+  const g = panel && FS_GROUPS[panel.id] ? fsHit(e.target, panel.id) : null;
+  setHot(g ? `${panel.id}.${g[0]}` : "");
+});
+
 function setEditing(on) {
   editing = !!on;
   document.body.classList.toggle("editing", editing);
+  if (!editing) { hotLock = ""; document.body.dataset.hot = ""; }
   const b = document.getElementById("m-edit");
   if (b) {
     b.classList.toggle("on", editing);
     b.setAttribute("aria-pressed", String(editing));
     document.getElementById("lb-edit").textContent = editing ? "편집 중" : "편집";
   }
-  if (!editing) ctx.classList.remove("on");
+  if (!editing) closeCtx();
 }
 
 /* ── 우클릭 — 그 시군의 다우지점 더 얹기 ─────────────────────────── */
 const ctx = document.getElementById("ctx");
+
+function closeCtx() {
+  ctx.classList.remove("on");
+  hotLock = "";
+  if (!editing) document.body.dataset.hot = "";
+}
 
 function placeCtx(x, y) {
   ctx.classList.add("on");
@@ -4328,9 +4353,12 @@ document.addEventListener("contextmenu", e => {
   if (!g) return;
   e.preventDefault();
   activate(panel);
+  hotLock = "";
+  document.body.dataset.hot = `${panel.id}.${g[0]}`;
+  hotLock = document.body.dataset.hot;      // 메뉴가 닫힐 때까지 이 열을 붙잡는다
   ctx.innerHTML = fsRow(panel.id, g) +
-    `<div class="ctx-foot">${PANEL_NAME[panel.id]} · ＋－ 로 맞춘다<br>
-      좁은 자리를 누르면 그 모음만, 빈 자리를 누르면 판 전체</div>`;
+    `<div class="ctx-foot">${PANEL_NAME[panel.id]} · <b>물든 자리가 함께 바뀐다</b><br>
+      빈 자리를 누르면 판 전체</div>`;
   placeCtx(e.clientX, e.clientY);
 });
 
@@ -4348,7 +4376,7 @@ ctx.addEventListener("click", e => {
     if (k === "flat") flat = !flat;
     else { perSigun = +k.split(":")[1]; flat = false; }
     if (metric !== "max") metric = "max";   // 지점을 다루는 설정이므로 지표를 되돌린다
-    ctx.classList.remove("on");
+    closeCtx();
     drawRain(true);
     return;
   }
@@ -4358,13 +4386,13 @@ ctx.addEventListener("click", e => {
   const list = extra[sig] || (extra[sig] = []);
   const at = list.indexOf(stn);
   at >= 0 ? list.splice(at, 1) : list.push(stn);
-  ctx.classList.remove("on");
+  closeCtx();
   drawRain(true);
 });
 
-document.addEventListener("click", e => { if (!e.target.closest("#ctx")) ctx.classList.remove("on"); });
-document.addEventListener("keydown", e => { if (e.key === "Escape") ctx.classList.remove("on"); });
-window.addEventListener("blur", () => ctx.classList.remove("on"));
+document.addEventListener("click", e => { if (!e.target.closest("#ctx")) closeCtx(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeCtx(); });
+window.addEventListener("blur", closeCtx);
 
 /* ── 갱신 주기 · 카운트다운 ───────────────────────────────────────── */
 const CIRC = 2 * Math.PI * 16;
