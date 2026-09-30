@@ -74,7 +74,7 @@ def usage() -> dict:
 
     tables = []
     with db.tx() as con:
-        for t, col in _AGED + (("fcst_rn1", None), ("qpf_frame", None),
+        for t, col in _AGED + (("fcst_rn1", None), ("fcst_short", None), ("qpf_frame", None),
                                ("snapshot", None), ("collect_log", None)):
             try:
                 n = con.execute(f"SELECT COUNT(*) c FROM {t}").fetchone()["c"]

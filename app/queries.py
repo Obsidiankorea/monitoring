@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 
 from . import db
 from .bangjae import as_of as bj_as_of
-from .domain.regions import ORDER, REP_STN, by_sigun, stations
+from .domain.regions import ORDER, REP_STN, ZONES, by_sigun, grids, stations
 
 STN_NAME = {s["stn"]: s["name"] for s in stations()}
 STN_SIGUN = {s["stn"]: s["sigun"] for s in stations()}
@@ -294,3 +294,161 @@ def bangjae_rain() -> dict:
                   "daw": ({"name": r["daw_name"], "mm": r["daw_mm"]}
                           if r["daw_name"] else None)} for r in rows],
     }
+
+
+# ── 단기예보 — 권역·시군 예보 판 ────────────────────────────────────────
+# 기상청 예상강수량 문구의 범위들. 격자 분포의 가운데(20~80백분위)를 담는
+# 가장 좁은 범위를 고른다 — 사람이 통보문에서 읽는 그 말로 옮기는 것이다.
+RAIN_BINS = [(5, 10), (5, 20), (10, 40), (20, 60), (30, 80), (50, 100),
+             (80, 150), (100, 200), (150, 300), (200, 400), (300, 500)]
+_DAYNAME = ("오늘", "내일", "모레")
+
+
+def _pct(vals: list[float], p: float) -> float:
+    """선형 보간 백분위. vals 는 정렬돼 있어야 한다."""
+    if len(vals) == 1:
+        return vals[0]
+    k = (len(vals) - 1) * p
+    lo = int(k)
+    hi = min(lo + 1, len(vals) - 1)
+    return vals[lo] + (vals[hi] - vals[lo]) * (k - lo)
+
+
+def rain_phrase(lo: float, hi: float) -> str:
+    if hi < 0.5:
+        return "없음"
+    if hi < 1:
+        return "1 미만"
+    if hi < 5:
+        return "5 미만"
+    lo = max(lo, 5)
+    if hi > RAIN_BINS[-1][1]:
+        return f"{RAIN_BINS[-1][1]} 이상"
+    # 다 담는 범위 가운데 가장 좁은 것. 다 담는 것이 없으면(74~104 같은 경우)
+    # 덜 담기는 양이 가장 작은 범위 — 문구는 늘 기상청이 쓰는 범위 중 하나로 낸다.
+    a, b = min(RAIN_BINS, key=lambda x: (max(0, x[0] - lo) + max(0, hi - x[1]),
+                                          x[1] - x[0], -x[0]))
+    return f"{a}~{b}"
+
+
+def _dist(vals: list[float]) -> dict | None:
+    v = sorted(x for x in vals if x is not None)
+    if not v:
+        return None
+    r = lambda x: round(x, 1)
+    return {"n": len(v), "min": r(v[0]), "p10": r(_pct(v, .1)), "p20": r(_pct(v, .2)),
+            "p50": r(_pct(v, .5)), "p80": r(_pct(v, .8)), "p90": r(_pct(v, .9)),
+            "p95": r(_pct(v, .95)), "max": r(v[-1])}
+
+
+def _day_of(tmef: str) -> str:
+    """PCP 대상시각 H 는 (H-1)~H 시의 양이다. 00시 값은 전날 몫이다."""
+    t = datetime.strptime(tmef, "%Y%m%d%H") - timedelta(hours=1)
+    return t.strftime("%Y%m%d")
+
+
+def _short_cells(con, tmfc: str, hours: set[str] | None = None) -> dict:
+    """{날짜: {'pcp': {xy: 합계}, 'hours': set, 'tmn': {xy: v}, 'tmx': {xy: v}}}"""
+    out: dict[str, dict] = {}
+    for r in con.execute("SELECT tmef, var, x, y, val FROM fcst_short WHERE tmfc=?", (tmfc,)):
+        xy = (r["x"], r["y"])
+        if r["var"] == "PCP":
+            if hours is not None and r["tmef"] not in hours:
+                continue
+            d = out.setdefault(_day_of(r["tmef"]), {})
+            d.setdefault("hours", set()).add(r["tmef"])
+            if r["val"] is not None:
+                p = d.setdefault("pcp", {})
+                p[xy] = p.get(xy, 0.0) + r["val"]
+        else:
+            d = out.setdefault(r["tmef"][:8], {})
+            d.setdefault(r["var"].lower(), {})[xy] = r["val"]
+    return out
+
+
+def _short_groups() -> dict[str, list[dict]]:
+    by_sig = {s: list(dict.fromkeys(tuple(it["xy"]) for it in items))
+              for s, items in grids()["sigun_grids"].items()}
+    zone = []
+    for name, sigs, band in ZONES:
+        xy = list(dict.fromkeys(c for s in sigs for c in by_sig.get(s, [])))
+        zone.append({"name": name, "members": sigs, "band": band, "xy": xy})
+    sigun = [{"name": s, "members": [s], "band": "", "xy": by_sig.get(s, [])}
+             for s in ORDER if s in by_sig]
+    return {"zone": zone, "sigun": sigun}
+
+
+def _short_stats(cells: dict, groups: dict, days: list[str]) -> dict:
+    out: dict[str, list[dict]] = {}
+    for by, gs in groups.items():
+        rows = []
+        for g in gs:
+            per = {}
+            for d in days:
+                c = cells.get(d, {})
+                pcp = _dist([c.get("pcp", {}).get(xy) for xy in g["xy"]]) if c.get("hours") else None
+                if pcp:
+                    pcp["text"] = rain_phrase(pcp["p20"], pcp["p80"])
+                tmn = _dist([c.get("tmn", {}).get(xy) for xy in g["xy"]])
+                tmx = _dist([c.get("tmx", {}).get(xy) for xy in g["xy"]])
+                for t in (tmn, tmx):
+                    if t:
+                        a, b = round(t["p10"]), round(t["p90"])
+                        t["text"] = f"{a}" if a == b else f"{a}~{b}"
+                per[d] = {"pcp": pcp, "tmn": tmn, "tmx": tmx}
+            rows.append({"name": g["name"], "members": g["members"], "band": g["band"],
+                         "cells": len(g["xy"]), "days": per})
+        out[by] = rows
+    return out
+
+
+def short(now: datetime | None = None) -> dict:
+    """권역·시군별 단기예보 분포.
+
+    강수량은 격자 칸마다 그날 PCP 를 더한 뒤 권역 안에서 분포를 낸다.
+    ⚠️ '오늘'은 발표 뒤의 남은 시간만 담는다(14시 발표면 14~24시). 화면이 그 구간을 적는다.
+    ⚠️ 직전 발표 대비(▲▼)는 **같은 시간대끼리** 견준다. 직전 발표는 오늘의 더 이른
+       시간을 담고 있어 그냥 견주면 늘 줄어든 것처럼 보인다.
+    """
+    now = now or datetime.now()
+    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    days = [(today + timedelta(days=i)).strftime("%Y%m%d") for i in range(3)]
+    groups = _short_groups()
+    with db.tx() as con:
+        runs = [dict(r) for r in con.execute(
+            "SELECT tmfc, complete, fetched_at FROM fcst_short_run ORDER BY tmfc DESC LIMIT 3")]
+        # 다 받은 가장 최근 발표분. 없으면 받는 중인 것이라도 쓴다.
+        done = [r for r in runs if r["complete"]]
+        cur = done[0] if done else (runs[0] if runs else None)
+        if not cur:
+            return {"tmfc": None, "prev_tmfc": None, "days": [], "zone": [], "sigun": []}
+        prev = next((r for r in done if r["tmfc"] < cur["tmfc"]), None)
+        cells = _short_cells(con, cur["tmfc"])
+        hours = set().union(*(c.get("hours", set()) for c in cells.values()))
+        pcells = _short_cells(con, prev["tmfc"], hours) if prev else {}
+
+    stats = _short_stats(cells, groups, days)
+    pstats = _short_stats(pcells, groups, days) if prev else None
+
+    # 직전 발표 대비 — 강수는 중앙값, 기온은 최저·최고 중앙값의 차
+    if pstats:
+        for by, rows in stats.items():
+            for row, prow in zip(rows, pstats[by]):
+                for d in days:
+                    for k in ("pcp", "tmn", "tmx"):
+                        a, b = row["days"][d][k], prow["days"][d][k]
+                        if a and b:
+                            a["d"] = round(a["p50"] - b["p50"], 1)
+                            if k == "pcp":
+                                a["d95"] = round(a["p95"] - b["p95"], 1)
+
+    dinfo = []
+    for i, d in enumerate(days):
+        hs = sorted(cells.get(d, {}).get("hours", set()))
+        dinfo.append({"day": d, "label": _DAYNAME[i],
+                      "from": f"{int(hs[0][8:10]) - 1:02d}" if hs else None,
+                      "to": f"{int(hs[-1][8:10]) or 24:02d}" if hs else None,
+                      "hours": len(hs)})
+    return {"tmfc": cur["tmfc"], "complete": bool(cur["complete"]),
+            "fetched_at": cur["fetched_at"], "prev_tmfc": prev["tmfc"] if prev else None,
+            "days": dinfo, **stats}

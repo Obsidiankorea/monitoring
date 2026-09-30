@@ -52,6 +52,25 @@ CREATE TABLE IF NOT EXISTS fcst_rn1 (
 );
 CREATE INDEX IF NOT EXISTS idx_fcst ON fcst_rn1(tmfc, tmef);
 
+-- 단기예보 격자(nph-dfs_shrt_grd). 권역·시군 예보 판의 출처.
+-- 격자 칸(x, y)마다 한 줄 — 권역을 어떻게 묶든 읽을 때 다시 모을 수 있게 칸째로 둔다.
+-- var: 'PCP' 1시간 강수량 | 'TMN' 일 최저 | 'TMX' 일 최고.  val NULL = 결측.
+CREATE TABLE IF NOT EXISTS fcst_short (
+  tmfc TEXT NOT NULL,                  -- 'YYYYMMDDHH' 발표
+  tmef TEXT NOT NULL,                  -- 'YYYYMMDDHH' 대상
+  var  TEXT NOT NULL,
+  x INTEGER NOT NULL, y INTEGER NOT NULL,
+  val REAL,
+  fetched_at TEXT NOT NULL,
+  PRIMARY KEY (tmfc, var, tmef, x, y)
+);
+-- 발표분을 끝까지 다 받았는가. 덜 받은 발표분은 다음 주기에 이어 받는다.
+CREATE TABLE IF NOT EXISTS fcst_short_run (
+  tmfc TEXT PRIMARY KEY,
+  complete INTEGER NOT NULL,
+  fetched_at TEXT NOT NULL
+);
+
 -- 스방(경남 스마트 통합 방재시스템) 시군별 **평균** 강수량.
 -- ⚠️ 기상청 대표지점 값(obs_hourly)과 **뜻이 다르다** — 관측망이 달라 값도 다르다.
 --    그래서 같은 표에 섞지 않고 따로 쌓는다. 화면에서도 출처를 밝혀야 한다.

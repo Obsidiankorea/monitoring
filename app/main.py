@@ -20,7 +20,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import db, demo, maint, queries, update
-from .collectors import alerts, bangjae_rain, forecast, qpf, rain
+from .collectors import alerts, bangjae_rain, forecast, qpf, rain, shortfc
 from .config import CACHE, INTERVALS, POLL_DEFAULT
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
@@ -37,7 +37,9 @@ RESTART_CODE = 42
 COLLECTORS = {"rain": rain.collect, "forecast": forecast.collect,
               "alerts": alerts.collect, "qpf": qpf.collect,
               # 스방은 기상청과 **다른 서버**라 따로 돈다(계정 없으면 조용히 건너뜀)
-              "bangjae": bangjae_rain.collect}
+              "bangjae": bangjae_rain.collect,
+              # 단기예보 격자 — 권역·시군 예보 판. 받은 발표분은 다시 부르지 않는다.
+              "short": shortfc.collect}
 
 # 한 자료를 두 번 동시에 받지 않게 — 주기가 겹치거나 수동 조회가 끼어들 수 있다
 _locks = {k: asyncio.Lock() for k in COLLECTORS}
@@ -112,6 +114,12 @@ async def api_rain(hours: int = Query(12, ge=1, le=72),
 @app.get("/api/forecast")
 async def api_forecast(hours: int = Query(6, ge=1, le=6)):
     return queries.forecast(hours)
+
+
+@app.get("/api/short")
+async def api_short():
+    """단기예보 — 권역·시군별 예상강수량 격자 분포와 최저·최고기온(오늘·내일·모레)."""
+    return queries.short()
 
 
 @app.get("/api/minute")
