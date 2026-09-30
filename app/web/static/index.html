@@ -75,10 +75,10 @@
   --on-accent:   #06121B;  /* 강조색 배경 위 */
   --track:       #131B26;  /* 막대 트랙 바탕 */
 
-  /* 권역 예보 — 기온 두 줄. 최저는 청색 계열, 최고는 장밋빛.
-     ⚠️ 빨강·주황·노랑은 특보 예약색이라 '덥다'에 쓰지 않는다. */
-  --t-lo:        #5EC3EE;
-  --t-hi:        #E08DB0;
+  /* 권역 예보 — 직전 발표 대비 ▲▼.
+     ⚠️ 빨강·주황·노랑은 특보 예약색이라 '늘었다'에 쓰지 않는다. */
+  --zn-up:       #E08DB0;
+  --zn-dn:       #5EC3EE;
   --zn-tail:     #C9A36B;  /* 95백분위 점 — 청색 상자 위에서 갈라져 보이는 색 */
 
   --r-sm: 4px;
@@ -136,8 +136,8 @@
   --on-accent:   #FFFFFF;
   --track:       #E4EAF2;
 
-  --t-lo:        #1B6698;
-  --t-hi:        #B2456E;
+  --zn-up:       #B2456E;
+  --zn-dn:       #1B6698;
   --zn-tail:     #8A5A1C;
 }
 
@@ -666,7 +666,6 @@ td.totc .tot { width: auto; display: block; }
   grid-auto-rows: minmax(18px, 1fr);
   column-gap: 12px; padding: 0 12px 4px;
 }
-.zn-grid.t { grid-template-columns: max-content minmax(0, 1fr) max-content max-content; }
 .zn-grid > .h {
   position: sticky; top: 0; z-index: 2; background: var(--panel);
   display: flex; align-items: flex-end; padding: 6px 0 4px;
@@ -689,12 +688,15 @@ td.totc .tot { width: auto; display: block; }
   justify-content: flex-end; gap: 5px; white-space: nowrap;
   font-family: var(--mono); font-size: calc(13px * var(--fs, 1)); font-weight: 600;
 }
-.zn-grid > .v.lo { color: var(--t-lo); }
-.zn-grid > .v.hi { color: var(--t-hi); }
 .zn-grid > .v.none { color: var(--ink-3); font-weight: 400; }
 .zn-grid > .v u { text-decoration: none; font-size: .72em; width: 1em; text-align: center; }
-.zn-grid > .v u.up { color: var(--t-hi); }
-.zn-grid > .v u.dn { color: var(--t-lo); }
+.zn-grid > .v u.up { color: var(--zn-up); }
+.zn-grid > .v u.dn { color: var(--zn-dn); }
+/* 하위 권역 — 상위 권역 줄 바로 밑에 들여 쓰고, 한 단계 낮춰 보인다 */
+.zn-grid > .c.sub { border-top-style: dotted; }
+.zn-grid > .nm.sub { padding-left: 4px; color: var(--ink-2); font-size: calc(12px * var(--fs, 1)); }
+.zn-grid > .nm.sub i { font-style: normal; color: var(--ink-3); margin-right: 5px; }
+.zn-grid > .v.sub { font-weight: 500; color: var(--ink-2); }
 .zn-trk { position: relative; flex: 1; height: 100%; }
 .zn-trk::before {             /* 기준선 */
   content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--line);
@@ -705,8 +707,6 @@ td.totc .tot { width: auto; display: block; }
   background: color-mix(in oklab, var(--accent) 30%, transparent);
   border: 1px solid color-mix(in oklab, var(--accent) 75%, transparent);
 }
-.zn-trk > i.bx.lo { background: color-mix(in oklab, var(--t-lo) 28%, transparent); border-color: var(--t-lo); }
-.zn-trk > i.bx.hi { background: color-mix(in oklab, var(--t-hi) 28%, transparent); border-color: var(--t-hi); }
 .zn-trk > i.md { width: 2px; height: 62%; max-height: 24px; margin-left: -1px; background: var(--ink); border-radius: 1px; }
 .zn-trk > i.tail { width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; background: var(--zn-tail); }
 .zn-trk > i.gl { top: 0; bottom: 0; transform: none; width: 1px; background: var(--line-soft); }
@@ -718,8 +718,6 @@ td.totc .tot { width: auto; display: block; }
 .zn-foot .k { display: inline-flex; align-items: center; gap: 5px; }
 .zn-foot .k i { display: inline-block; }
 .zn-foot .k i.bx { width: 16px; height: 9px; border-radius: 2px; background: color-mix(in oklab, var(--accent) 30%, transparent); border: 1px solid color-mix(in oklab, var(--accent) 75%, transparent); }
-.zn-foot .k i.bx.lo { background: color-mix(in oklab, var(--t-lo) 28%, transparent); border-color: var(--t-lo); }
-.zn-foot .k i.bx.hi { background: color-mix(in oklab, var(--t-hi) 28%, transparent); border-color: var(--t-hi); }
 .zn-foot .k i.md { width: 2px; height: 11px; background: var(--ink); }
 .zn-foot .k i.tail { width: 7px; height: 7px; border-radius: 50%; background: var(--zn-tail); }
 .zn-foot .sp { flex: 1; }
@@ -1535,9 +1533,6 @@ body.editing .panel {
       <button class="mb-item" id="m-zby" type="button" data-owner="p-zone" aria-haspopup="menu" aria-expanded="false" title="권역으로 묶을지, 시군마다 볼지">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 5h7v6H4zM13 5h7v14h-7zM4 13h7v6H4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span id="lb-zby">권역</span><svg class="chev" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
-      <button class="mb-item" id="m-zvar" type="button" data-owner="p-zone" aria-haspopup="menu" aria-expanded="false" title="강수량 · 기온">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3.5c-3 4-5 6.6-5 9.3a5 5 0 0 0 10 0c0-2.7-2-5.3-5-9.3z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span id="lb-zvar">강수량</span><svg class="chev" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
       <button class="mb-item" id="m-zday" type="button" data-owner="p-zone" aria-haspopup="menu" aria-expanded="false" title="어느 날의 예보">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M4 10h16M9 3.5v4M15 3.5v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span id="lb-zday">내일</span><svg class="chev" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
@@ -1839,7 +1834,7 @@ body.editing .panel {
             <select id="pf-slot">
               <option value="fcsig">예측 상위 시군</option>
               <option value="min">지금 오는 비 (15분 · 60분)</option>
-              <option value="zone">권역 예보 (단기예보 강수량 · 기온)</option>
+              <option value="zone">권역 예보 (단기예보 강수량)</option>
             </select>
           </span>
         </div>
@@ -2187,10 +2182,9 @@ document.addEventListener("click", e => {
    ⚠️ 줄끼리 견주는 그림이다 — 줄마다 눈금을 따로 잡으면 안 된다.
    ⚠️ '오늘'은 발표 뒤 남은 시간만 담는다. 그 구간을 늘 같이 적는다. */
 let ZN = null;                        // /api/short 응답
-let znBy = "zone", znVar = "pcp", znDay = 1;   // 권역|시군 · 강수|기온 · 0 오늘 1 내일 2 모레
+let znBy = "zone", znDay = 1;         // 권역|시군 · 0 오늘 1 내일 2 모레
 try {
   znBy  = localStorage.getItem("gn-znby")  || "zone";
-  znVar = localStorage.getItem("gn-znvar") || "pcp";
   znDay = +(localStorage.getItem("gn-znday") ?? 1);
 } catch {}
 const ZN_DAYS = ["오늘", "내일", "모레"];
@@ -2212,11 +2206,10 @@ function niceTop(v) {
 }
 
 /* 직전 발표 대비. 조금 흔들린 것까지 화살표를 달면 늘 화살표투성이가 된다. */
-function znArrow(x, kind) {
+function znArrow(x) {
   if (!x || x.d === undefined) return `<u></u>`;
-  const th = kind === "pcp" ? Math.max(3, x.p50 * 0.2) : 1;
-  const unit = kind === "pcp" ? "㎜" : "℃";
-  const t = `직전 발표보다 중앙값 ${x.d > 0 ? "+" : ""}${x.d}${unit}`;
+  const th = Math.max(3, x.p50 * 0.2);
+  const t = `직전 발표보다 중앙값 ${x.d > 0 ? "+" : ""}${x.d}㎜`;
   if (x.d >= th)  return `<u class="up" title="${t}">▲</u>`;
   if (x.d <= -th) return `<u class="dn" title="${t}">▼</u>`;
   return `<u title="${t}"></u>`;
@@ -2232,7 +2225,6 @@ function drawShort() {
   title.textContent = znBy === "zone" ? "권역 예보" : "시군 예보";
 
   if (!ZN || !ZN.tmfc || !rows.length) {
-    grid.className = "zn-grid";
     grid.innerHTML = `<div class="zn-empty" style="grid-column:1/-1">${DEMO
       ? "데모에는 단기예보가 담겨 있지 않다 — 오늘 예보를 그때 사례 옆에 붙이지 않는다."
       : "단기예보를 아직 받지 못했다. 발표(02·05·08·11·14·17·20·23시) 20분 뒤부터 받는다."}</div>`;
@@ -2247,71 +2239,44 @@ function drawShort() {
   if (base) base.innerHTML = `발표 <b>${t.slice(4, 6)}/${t.slice(6, 8)} ${t.slice(8, 10)}시</b>`
     + (ZN.complete ? "" : ` · 받는 중`);
   const dLabel = `${ZN_DAYS[znDay]} ${day ? +day.day.slice(6, 8) + "일" : ""}`;
-  if (span) span.innerHTML = znVar === "pcp"
-    ? `${dLabel} · <b>${day && day.hours ? `${day.from}~${day.to}시` : "예보 없음"}</b> 강수량`
-    : `${dLabel} · 최저·최고기온`;
+  if (span) span.innerHTML =
+    `${dLabel} · <b>${day && day.hours ? `${day.from}~${day.to}시` : "예보 없음"}</b> 강수량`;
 
-  const pick = r => r.days[day?.day] || {};
-  let lo, hi;
-  if (znVar === "pcp") {
-    lo = 0;
-    hi = niceTop(Math.max(10, ...rows.map(r => pick(r).pcp?.p95 ?? 0)));
-  } else {
-    const all = rows.flatMap(r => [pick(r).tmn, pick(r).tmx]).filter(Boolean);
-    lo = all.length ? Math.floor(Math.min(...all.map(x => x.min)) / 2) * 2 : 0;
-    hi = all.length ? Math.ceil(Math.max(...all.map(x => x.max)) / 2) * 2 : 30;
-    if (hi - lo < 6) hi = lo + 6;
-  }
-  const pos = v => (((Math.min(Math.max(v, lo), hi) - lo) / (hi - lo)) * 100).toFixed(2) + "%";
-  const box = (a, b, cls = "") => `<i class="bx ${cls}" style="left:${pos(a)};width:calc(${pos(b)} - ${pos(a)})"></i>`;
+  const pick = r => r.days[day?.day]?.pcp;
+  const hi = niceTop(Math.max(10, ...rows.map(r => pick(r)?.p95 ?? 0)));
+  const pos = v => ((Math.min(Math.max(v, 0), hi) / hi) * 100).toFixed(2) + "%";
 
   // 눈금 — 다섯 칸 안팎
-  const stepT = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500].find(x => (hi - lo) / x <= 5) || (hi - lo) / 4;
+  const stepT = [5, 10, 20, 25, 50, 100, 200, 250, 500].find(x => hi / x <= 5) || hi / 4;
   const ticks = [];
-  for (let v = lo; v <= hi + 1e-9; v += stepT) ticks.push(Math.round(v * 10) / 10);
+  for (let v = 0; v <= hi + 1e-9; v += stepT) ticks.push(Math.round(v * 10) / 10);
   const gl = ticks.slice(1, -1).map(v => `<i class="gl" style="left:${pos(v)}"></i>`).join("");
 
-  const isT = znVar !== "pcp";
-  grid.className = "zn-grid" + (isT ? " t" : "");
   let html = `<div class="h">${znBy === "zone" ? "권역" : "시군"}</div>`
     + `<div class="h ax"><div class="zn-ax">${ticks.map(v =>
-        `<span style="left:${pos(v)}">${v}${v === ticks.at(-1) ? (isT ? "℃" : "㎜") : ""}</span>`).join("")}</div></div>`
-    + (isT ? `<div class="h r">최저</div><div class="h r">최고</div>` : `<div class="h r">예상 ㎜</div>`);
+        `<span style="left:${pos(v)}">${v}${v === ticks.at(-1) ? "㎜" : ""}</span>`).join("")}</div></div>`
+    + `<div class="h r">예상 ㎜</div>`;
 
   let band = null;
   rows.forEach((r, i) => {
-    const x = pick(r);
+    const p = pick(r);
     const sep = i === 0 ? " first" : (band !== null && r.band !== band ? " sep" : "");
     band = r.band;
-    html += `<div class="c nm${sep}" data-zi="${i}">${r.name}</div>`;
+    // 하위 권역(북서내륙·남서내륙)은 상위 권역(서부내륙) 밑에 들여 적는다
+    const sub = r.parent ? " sub" : "";
+    html += `<div class="c nm${sep}${sub}" data-zi="${i}">${r.parent ? "<i>└</i>" : ""}${r.name}</div>`;
     let trk = gl;
-    if (!isT) {
-      const p = x.pcp;
-      if (p) trk += box(p.p20, p.p80) + `<i class="md" style="left:${pos(p.p50)}"></i>`
-                 + `<i class="tail" style="left:${pos(p.p95)}"></i>`;
-      html += `<div class="c${sep}" data-zi="${i}"><div class="zn-trk">${trk}</div></div>`;
-      html += p ? `<div class="c v${sep}" data-zi="${i}">${p.text}${znArrow(p, "pcp")}</div>`
-                : `<div class="c v none${sep}" data-zi="${i}">—<u></u></div>`;
-    } else {
-      for (const [k, cls] of [["tmn", "lo"], ["tmx", "hi"]]) {
-        const q = x[k];
-        if (q) trk += box(q.p10, q.p90, cls) + `<i class="md" style="left:${pos(q.p50)}"></i>`;
-      }
-      html += `<div class="c${sep}" data-zi="${i}"><div class="zn-trk">${trk}</div></div>`;
-      for (const [k, cls] of [["tmn", "lo"], ["tmx", "hi"]]) {
-        const q = x[k];
-        html += q ? `<div class="c v ${cls}${sep}" data-zi="${i}">${q.text}℃${znArrow(q, k)}</div>`
-                  : `<div class="c v none${sep}" data-zi="${i}" title="이 발표분에는 없다 — 지나간 시각의 값은 다시 발표하지 않는다">—<u></u></div>`;
-      }
-    }
+    if (p) trk += `<i class="bx" style="left:${pos(p.p20)};width:calc(${pos(p.p80)} - ${pos(p.p20)})"></i>`
+               + `<i class="md" style="left:${pos(p.p50)}"></i>`
+               + `<i class="tail" style="left:${pos(p.p95)}"></i>`;
+    html += `<div class="c${sep}${sub}" data-zi="${i}"><div class="zn-trk">${trk}</div></div>`;
+    html += p ? `<div class="c v${sep}${sub}" data-zi="${i}">${p.text}${znArrow(p)}</div>`
+              : `<div class="c v none${sep}${sub}" data-zi="${i}">—<u></u></div>`;
   });
   grid.innerHTML = html;
 
-  foot.innerHTML = (isT
-    ? `<span class="k"><i class="bx lo"></i>최저</span><span class="k"><i class="bx hi"></i>최고</span>
-       <span class="k">상자 = 격자 10~90백분위 → 문구 범위</span><span class="k"><i class="md"></i>중앙값</span>`
-    : `<span class="k"><i class="bx"></i>격자 20~80백분위 → 문구 범위</span>
-       <span class="k"><i class="md"></i>중앙값</span><span class="k"><i class="tail"></i>95백분위(많은 곳)</span>`)
+  foot.innerHTML = `<span class="k"><i class="bx"></i>격자 20~80백분위 → 문구 범위</span>
+       <span class="k"><i class="md"></i>중앙값</span><span class="k"><i class="tail"></i>95백분위(많은 곳)</span>`
     + (ZN.prev_tmfc ? `<span class="k">▲▼ ${ZN.prev_tmfc.slice(8, 10)}시 발표 대비</span>` : "")
     + `<span class="sp"></span><span>격자 약 5km</span>`;
 
@@ -2323,14 +2288,12 @@ document.getElementById("zn-grid").addEventListener("mouseover", e => {
   const c = e.target.closest("[data-zi]");
   if (!c || !ZN) return;
   const r = (ZN[znBy] || [])[+c.dataset.zi];
-  const x = r && r.days[ZN.days[znDay]?.day];
-  if (!x) return;
-  const f = (q, u) => q ? `${q.min}·<b>${q.p50}</b>·${q.max}${u}` : "—";
+  const p = r && r.days[ZN.days[znDay]?.day]?.pcp;
+  if (!r) return;
   tip.innerHTML = `<div class="k">${r.name}${znBy === "zone" ? " · " + r.members.join(" ") : ""} · 격자 ${r.cells}칸</div>`
-    + (znVar === "pcp"
-      ? (x.pcp ? `<div class="v">${x.pcp.text} ㎜</div>
-         <div class="k">20% ${x.pcp.p20} · 중앙 ${x.pcp.p50} · 80% ${x.pcp.p80} · 95% ${x.pcp.p95} · 최대 ${x.pcp.max}</div>` : `<div class="v">예보 없음</div>`)
-      : `<div class="k">최저(최소·중앙·최대) ${f(x.tmn, "℃")}</div><div class="k">최고(최소·중앙·최대) ${f(x.tmx, "℃")}</div>`);
+    + (p ? `<div class="v">${p.text} ㎜</div>
+       <div class="k">20% ${p.p20} · 중앙 ${p.p50} · 80% ${p.p80} · 95% ${p.p95} · 최대 ${p.max}</div>`
+         : `<div class="v">예보 없음</div>`);
   tip.classList.add("on");
 });
 document.getElementById("zn-grid").addEventListener("mousemove", e => {
@@ -3882,16 +3845,12 @@ bindMenu("m-zby", "lb-zby", "묶음",
   () => [{ k: "zone", l: "권역", on: znBy === "zone" }, { k: "sigun", l: "시군", on: znBy === "sigun" }],
   k => { znBy = k; try { localStorage.setItem("gn-znby", k); } catch {} drawShort(); });
 
-bindMenu("m-zvar", "lb-zvar", "요소",
-  () => [{ k: "pcp", l: "강수량", on: znVar === "pcp" }, { k: "tmp", l: "기온", on: znVar === "tmp" }],
-  k => { znVar = k; try { localStorage.setItem("gn-znvar", k); } catch {} drawShort(); });
 
 bindMenu("m-zday", "lb-zday", "날짜",
   () => ZN_DAYS.map((l, i) => ({ k: i, l, on: i === znDay })),
   k => { znDay = +k; try { localStorage.setItem("gn-znday", k); } catch {} drawShort(); });
 // 며칠인지는 판 머리글(메뉴바 오른쪽)에 따로 적는다
 document.getElementById("lb-zby").textContent = znBy === "zone" ? "권역" : "시군";
-document.getElementById("lb-zvar").textContent = znVar === "pcp" ? "강수량" : "기온";
 document.getElementById("lb-zday").textContent = ZN_DAYS[znDay] || "내일";
 
 /* 활성 창이 쓰는 자료의 주기를 바꾼다 — 맥 메뉴바가 앞창 설정을 보여주듯 */

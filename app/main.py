@@ -118,7 +118,7 @@ async def api_forecast(hours: int = Query(6, ge=1, le=6)):
 
 @app.get("/api/short")
 async def api_short():
-    """단기예보 — 권역·시군별 예상강수량 격자 분포와 최저·최고기온(오늘·내일·모레)."""
+    """단기예보 — 권역·시군별 예상강수량 격자 분포(오늘·내일·모레)."""
     return queries.short()
 
 

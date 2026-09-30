@@ -54,7 +54,7 @@ CREATE INDEX IF NOT EXISTS idx_fcst ON fcst_rn1(tmfc, tmef);
 
 -- 단기예보 격자(nph-dfs_shrt_grd). 권역·시군 예보 판의 출처.
 -- 격자 칸(x, y)마다 한 줄 — 권역을 어떻게 묶든 읽을 때 다시 모을 수 있게 칸째로 둔다.
--- var: 'PCP' 1시간 강수량 | 'TMN' 일 최저 | 'TMX' 일 최고.  val NULL = 결측.
+-- var: 지금은 'PCP'(1시간 강수량)만 받는다. 요소가 늘어도 표를 안 바꾸게 칸을 둔다. val NULL = 결측.
 CREATE TABLE IF NOT EXISTS fcst_short (
   tmfc TEXT NOT NULL,                  -- 'YYYYMMDDHH' 발표
   tmef TEXT NOT NULL,                  -- 'YYYYMMDDHH' 대상

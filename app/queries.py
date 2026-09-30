@@ -348,21 +348,18 @@ def _day_of(tmef: str) -> str:
 
 
 def _short_cells(con, tmfc: str, hours: set[str] | None = None) -> dict:
-    """{날짜: {'pcp': {xy: 합계}, 'hours': set, 'tmn': {xy: v}, 'tmx': {xy: v}}}"""
+    """{날짜: {'pcp': {xy: 합계}, 'hours': set}}"""
     out: dict[str, dict] = {}
-    for r in con.execute("SELECT tmef, var, x, y, val FROM fcst_short WHERE tmfc=?", (tmfc,)):
-        xy = (r["x"], r["y"])
-        if r["var"] == "PCP":
-            if hours is not None and r["tmef"] not in hours:
-                continue
-            d = out.setdefault(_day_of(r["tmef"]), {})
-            d.setdefault("hours", set()).add(r["tmef"])
-            if r["val"] is not None:
-                p = d.setdefault("pcp", {})
-                p[xy] = p.get(xy, 0.0) + r["val"]
-        else:
-            d = out.setdefault(r["tmef"][:8], {})
-            d.setdefault(r["var"].lower(), {})[xy] = r["val"]
+    for r in con.execute(
+            "SELECT tmef, x, y, val FROM fcst_short WHERE tmfc=? AND var='PCP'", (tmfc,)):
+        if hours is not None and r["tmef"] not in hours:
+            continue
+        d = out.setdefault(_day_of(r["tmef"]), {})
+        d.setdefault("hours", set()).add(r["tmef"])
+        if r["val"] is not None:
+            p = d.setdefault("pcp", {})
+            xy = (r["x"], r["y"])
+            p[xy] = p.get(xy, 0.0) + r["val"]
     return out
 
 
@@ -370,10 +367,10 @@ def _short_groups() -> dict[str, list[dict]]:
     by_sig = {s: list(dict.fromkeys(tuple(it["xy"]) for it in items))
               for s, items in grids()["sigun_grids"].items()}
     zone = []
-    for name, sigs, band in ZONES:
+    for name, sigs, band, parent in ZONES:
         xy = list(dict.fromkeys(c for s in sigs for c in by_sig.get(s, [])))
-        zone.append({"name": name, "members": sigs, "band": band, "xy": xy})
-    sigun = [{"name": s, "members": [s], "band": "", "xy": by_sig.get(s, [])}
+        zone.append({"name": name, "members": sigs, "band": band, "parent": parent, "xy": xy})
+    sigun = [{"name": s, "members": [s], "band": "", "parent": None, "xy": by_sig.get(s, [])}
              for s in ORDER if s in by_sig]
     return {"zone": zone, "sigun": sigun}
 
@@ -389,21 +386,16 @@ def _short_stats(cells: dict, groups: dict, days: list[str]) -> dict:
                 pcp = _dist([c.get("pcp", {}).get(xy) for xy in g["xy"]]) if c.get("hours") else None
                 if pcp:
                     pcp["text"] = rain_phrase(pcp["p20"], pcp["p80"])
-                tmn = _dist([c.get("tmn", {}).get(xy) for xy in g["xy"]])
-                tmx = _dist([c.get("tmx", {}).get(xy) for xy in g["xy"]])
-                for t in (tmn, tmx):
-                    if t:
-                        a, b = round(t["p10"]), round(t["p90"])
-                        t["text"] = f"{a}" if a == b else f"{a}~{b}"
-                per[d] = {"pcp": pcp, "tmn": tmn, "tmx": tmx}
+                per[d] = {"pcp": pcp}
             rows.append({"name": g["name"], "members": g["members"], "band": g["band"],
+                         "parent": g["parent"],
                          "cells": len(g["xy"]), "days": per})
         out[by] = rows
     return out
 
 
 def short(now: datetime | None = None) -> dict:
-    """권역·시군별 단기예보 분포.
+    """권역·시군별 단기예보 강수량 분포.
 
     강수량은 격자 칸마다 그날 PCP 를 더한 뒤 권역 안에서 분포를 낸다.
     ⚠️ '오늘'은 발표 뒤의 남은 시간만 담는다(14시 발표면 14~24시). 화면이 그 구간을 적는다.
@@ -430,17 +422,15 @@ def short(now: datetime | None = None) -> dict:
     stats = _short_stats(cells, groups, days)
     pstats = _short_stats(pcells, groups, days) if prev else None
 
-    # 직전 발표 대비 — 강수는 중앙값, 기온은 최저·최고 중앙값의 차
+    # 직전 발표 대비 — 중앙값의 차
     if pstats:
         for by, rows in stats.items():
             for row, prow in zip(rows, pstats[by]):
                 for d in days:
-                    for k in ("pcp", "tmn", "tmx"):
-                        a, b = row["days"][d][k], prow["days"][d][k]
-                        if a and b:
-                            a["d"] = round(a["p50"] - b["p50"], 1)
-                            if k == "pcp":
-                                a["d95"] = round(a["p95"] - b["p95"], 1)
+                    a, b = row["days"][d]["pcp"], prow["days"][d]["pcp"]
+                    if a and b:
+                        a["d"] = round(a["p50"] - b["p50"], 1)
+                        a["d95"] = round(a["p95"] - b["p95"], 1)
 
     dinfo = []
     for i, d in enumerate(days):

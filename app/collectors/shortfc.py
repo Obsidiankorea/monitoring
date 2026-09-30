@@ -6,8 +6,7 @@
 받는 것
   PCP  1시간 강수량(mm). 대상시각 H 의 값은 (H-1)시~H시에 내리는 양이다.
        날짜별로 더해 '그날 예상강수량'을 만든다.
-  TMN  일 최저기온 — 대상시각 D 06시에만 있다.
-  TMX  일 최고기온 — 대상시각 D 15시에만 있다.
+  (기온은 받지 않는다 — 상황실에서 권역별 기온 범위는 쓸 일이 적다)
 
 ⚠️ 발표는 하루 8번(02·05·08·11·14·17·20·23시)이고 실제로는 +10분쯤 올라온다.
    격자는 그보다 늦을 수 있어 **한 발표분을 통째로 다 받아야 완료**로 친다.
@@ -49,7 +48,7 @@ def base_of(now: datetime) -> datetime:
 
 
 def plan(base: datetime, today: datetime) -> list[tuple[str, datetime]]:
-    """이 발표분에서 받을 (요소, 대상시각) 목록. 오늘·내일·모레만."""
+    """이 발표분에서 받을 (요소, 대상시각) 목록. 오늘·내일·모레 강수량만."""
     d0 = today.replace(hour=0, minute=0, second=0, microsecond=0)
     end = d0 + timedelta(days=DAYS)            # 모레 24시(=글피 00시)
     out: list[tuple[str, datetime]] = []
@@ -57,11 +56,6 @@ def plan(base: datetime, today: datetime) -> list[tuple[str, datetime]]:
     while t <= end:
         out.append(("PCP", t))
         t += timedelta(hours=1)
-    for i in range(DAYS):
-        d = d0 + timedelta(days=i)
-        for var, hh in (("TMN", 6), ("TMX", 15)):
-            if d.replace(hour=hh) > base:
-                out.append((var, d.replace(hour=hh)))
     return out
 
 
