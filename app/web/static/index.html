@@ -634,6 +634,10 @@ td.totc .tot { width: auto; display: block; }
 .mn-tog button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent, #fff); }
 .mn-head > i { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mn-body { display: flex; gap: 0; padding: 0; overflow: hidden; }
+/* 한 열만 볼 때 — 오른쪽 아래 메뉴에서 '15분 강수량'·'60분 강수량'을 고른 경우 */
+.mn-body[data-cols="15"] .mn-col:nth-child(2),
+.mn-body[data-cols="60"] .mn-col:nth-child(1) { display: none; }
+.mn-body[data-cols="60"] .mn-col + .mn-col { border-left: 0; }
 .mn-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .mn-col + .mn-col { border-left: 1px solid var(--line); }
 .mn-head {
@@ -1672,7 +1676,7 @@ body.editing .panel {
         <span class="fetched" data-kind="rain"></span>
         <span class="src">nph-aws2_min · 기상청 매분자료</span>
       </header>
-      <div class="body mn-body">
+      <div class="body mn-body" id="mn-body">
         <div class="mn-col">
           <div class="mn-head">15분 <i>그 15분에 내린 ㎜</i></div>
           <div class="mn-list" id="mn-15"></div>
@@ -2112,6 +2116,15 @@ const mnColor = (mm, kind) => {
 
 let MIN15 = [], MIN60 = [], MIN_TM = null, MIN_T15 = null, MIN_T60 = null;
 let mnCount = 8;                        // 한 칸에 몇 줄 세울지
+/* 지금 오는 비 판에서 어느 열을 보일지. 'both' 둘 다 | '15' 15분만 | '60' 60분만 */
+let mnCols = "both";
+try { mnCols = localStorage.getItem("gn-mncols") || "both"; } catch {}
+function applyMnCols() {
+  const b = document.getElementById("mn-body");
+  if (b) b.dataset.cols = mnCols;
+  const h = document.querySelector("#p-min header h2");
+  if (h) h.textContent = { 15: "15분 강수량", 60: "60분 강수량" }[mnCols] || "지금 오는 비";
+}
 try { mnCount = +(localStorage.getItem("gn-mncount") || 8) || 8; } catch {}
 /* 15분치를 그대로 볼지, 시간당으로 환산(×4)해 볼지.
    ⚠️ 둘은 **같은 값의 다른 표기**다. 15분에 8㎜는 '시간당 32㎜의 기세'라는 뜻이지
@@ -3802,7 +3815,7 @@ function setSlot(v) {
   const sel = document.getElementById("pf-slot");
   if (sel) sel.value = slotBR;
   // 메뉴바 글자도 같이 — 설정창에서 바꿔도 맞게
-  const lb = document.getElementById("lb-slot"), hit = SLOTS_BR.find(([k]) => k === slotBR);
+  const lb = document.getElementById("lb-slot"), hit = SLOTS_BR.find(([k]) => k === slotKey());
   if (lb && hit) lb.textContent = hit[1];
   applySlot();
 }
@@ -3884,15 +3897,29 @@ bindMenu("m-cnt", "lb-cnt", "예상 순위 표시",
 
 /* 오른쪽 아래 자리 바꾸기. 설정창(종합 화면)과 같은 값을 쓴다.
    바꾼 뒤에는 새 판을 앞창으로 잡는다 — 그래야 메뉴바가 새 판의 설정을 보여 준다. */
-const SLOTS_BR = [["fcsig", "예측 상위 시군"], ["min", "지금 오는 비"], ["zone", "권역 예보"]];
+const SLOTS_BR = [
+  ["fcsig",    "예측 상위 시군"],
+  ["min:15",   "15분 강수량"],
+  ["min:60",   "60분 강수량"],
+  ["min:both", "15분 · 60분 강수량"],
+  ["zone",     "권역 예보"],
+];
+const slotKey = () => (slotBR === "min" ? "min:" + mnCols : slotBR);
 bindMenu("m-slot", "lb-slot", "이 자리에 띄울 판",
-  () => SLOTS_BR.map(([k, l]) => ({ k, l, on: k === slotBR })),
+  () => SLOTS_BR.map(([k, l]) => ({ k, l, on: k === slotKey() })),
   k => {
-    setSlot(k);
-    activate(document.getElementById({ fcsig: "p-fcsig", min: "p-min", zone: "p-zone" }[k]), true);
+    const [slot, cols] = k.split(":");
+    if (cols) {
+      mnCols = cols;
+      try { localStorage.setItem("gn-mncols", cols); } catch {}
+      applyMnCols();
+    }
+    setSlot(slot);
+    activate(document.getElementById({ fcsig: "p-fcsig", min: "p-min", zone: "p-zone" }[slot]), true);
   });
+applyMnCols();
 document.getElementById("lb-slot").textContent =
-  (SLOTS_BR.find(([k]) => k === slotBR) || SLOTS_BR[0])[1];
+  (SLOTS_BR.find(([k]) => k === slotKey()) || SLOTS_BR[0])[1];
 
 bindMenu("m-zby", "lb-zby", "묶음",
   () => [{ k: "zone", l: "권역", on: znBy === "zone" }, { k: "sigun", l: "시군", on: znBy === "sigun" }],
