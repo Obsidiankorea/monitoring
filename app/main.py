@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import asyncio
+import gzip
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -16,11 +17,11 @@ from pathlib import Path
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import db, demo, maint, queries, update
-from .collectors import alerts, bangjae_rain, forecast, qpf, rain, shortfc
+from . import db, demo, gridstore, gridview, maint, queries, update
+from .collectors import alerts, bangjae_rain, forecast, grid_rain, qpf, rain, shortfc
 from .config import CACHE, INTERVALS, POLL_DEFAULT
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
@@ -39,7 +40,9 @@ COLLECTORS = {"rain": rain.collect, "forecast": forecast.collect,
               # 스방은 기상청과 **다른 서버**라 따로 돈다(계정 없으면 조용히 건너뜀)
               "bangjae": bangjae_rain.collect,
               # 단기예보 격자 — 권역·시군 예보 판. 받은 발표분은 다시 부르지 않는다.
-              "short": shortfc.collect}
+              "short": shortfc.collect,
+              # 경남 지도 — 500m 격자(15분·60분·일)와 실황 5km. 경남 bbox 만 잘라 둔다.
+              "grid": grid_rain.collect, "odam": grid_rain.collect_odam}
 
 # 한 자료를 두 번 동시에 받지 않게 — 주기가 겹치거나 수동 조회가 끼어들 수 있다
 _locks = {k: asyncio.Lock() for k in COLLECTORS}
@@ -155,6 +158,82 @@ async def api_qpf_frame(tmfc: str, ef: int):
     # 프레임은 한 번 만들어지면 바뀌지 않는다 — 오래 캐시해도 된다
     return FileResponse(p, media_type="image/png",
                         headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/api/grid/meta")
+async def api_grid_meta():
+    """경남 지도 — 층마다 격자·기준시각·지연 여부, 격자 틀, 지도 설정."""
+    return await asyncio.to_thread(gridview.meta)
+
+
+@app.get("/api/grid/sigun")
+async def api_grid_sigun(layer: str, tm: str | None = None, test: bool = False):
+    """시군별 최대(+그 칸의 읍면동)·평균. 결측 칸은 평균에서 뺀다."""
+    try:
+        return await asyncio.to_thread(gridview.sigun, layer, tm, test)
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
+
+
+# 경계·칸 지도(tools/build_geo.py 가 만든 것). 바뀔 일이 드물지만 저장소 갱신 뒤
+# 새로고침 한 번에 따라오게 하루만 캐시한다.
+_GEO_FILES = {"gyeongnam.topo.json": "application/json", "grids.json": "application/json",
+              "mask_sigun.u8.gz": None, "mask_emd.u16.gz": None}
+
+
+@app.get("/api/grid/geo/{name}")
+async def api_grid_geo(name: str):
+    if name not in _GEO_FILES:
+        raise HTTPException(404, "없는 파일")
+    p = gridstore.GEO / name
+    if _GEO_FILES[name]:
+        return FileResponse(p, media_type=_GEO_FILES[name],
+                            headers={"Cache-Control": "public, max-age=86400"})
+    # .gz 는 풀어서 쓰라고 Content-Encoding 으로 준다 — 브라우저가 알아서 푼다
+    return Response(p.read_bytes(), media_type="application/octet-stream",
+                    headers={"Content-Encoding": "gzip",
+                             "Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/api/grid/{layer}")
+async def api_grid(layer: str, tm: str | None = None, test: bool = False):
+    """한 층의 격자 — 0.1㎜ uint16(65535 = 결측), 행은 남→북, gzip.
+
+    layer = obs15 | obs60 | obsday | odam | vsrt+N(1~6) | shrt_today | shrt_tomorrow
+    `test=1` 이면 합성 격자(비 없는 날 화면 점검용).
+    """
+    def build():
+        fr = gridview.frame(layer, tm, test=test)
+        if "arr" in fr:
+            body = gzip.compress(gridstore.encode(fr["arr"]), 6)
+        else:
+            body = gridstore.raw_gz(fr["store"], fr["key"])
+        return fr, body
+
+    try:
+        fr, body = await asyncio.to_thread(build)
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
+    h, w = gridstore.shape(fr["grid"])
+    hd = {"Content-Encoding": "gzip", "X-Grid": fr["grid"], "X-Grid-Shape": f"{h},{w}",
+          "X-Grid-Tm": fr["tm"], "Cache-Control": "no-cache"}
+    for k in ("tmfc", "capped"):
+        if k in fr:
+            hd[f"X-Grid-{k.capitalize()}"] = str(fr[k])
+    if "hours" in fr:
+        hd["X-Grid-Hours"] = ",".join(fr["hours"])
+    if fr.get("test"):
+        hd["X-Grid-Test"] = "1"
+    return Response(body, media_type="application/octet-stream", headers=hd)
+
+
+@app.put("/api/settings/map")
+async def api_settings_map(body: dict):
+    """지도 판에서 고른 층 — 서버에 둔다(벽면 화면은 어느 브라우저에서 바꿔도 같이 가야 한다)."""
+    try:
+        return {"map": gridview.put_setting(body)}
+    except (LookupError, ValueError) as e:
+        raise HTTPException(400, str(e)) from e
 
 
 @app.get("/api/bangjae")

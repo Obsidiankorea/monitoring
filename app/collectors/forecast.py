@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta
 
-from .. import db
+from .. import db, gridstore
 from ..domain.regions import grids
 from ..kma import KmaError, fetch_text
 
@@ -107,6 +107,12 @@ async def collect(now: datetime | None = None) -> dict:
             failed.append(f"{tmef}: 격자 매칭 없음")
             continue
 
+        # 경남 지도 — 받은 격자를 bbox 째로도 둔다. 호출은 늘지 않는다.
+        try:
+            gridstore.save("vsrt", f"{tmfc}_{tmef}", gridstore.crop_dfs(vals))
+        except (OSError, ValueError) as e:
+            failed.append(f"{tmef}: 지도 저장 실패 {e}")
+
         with db.tx() as con:
             for sig, emds in rows.items():
                 for emd, v in emds.items():
@@ -116,6 +122,7 @@ async def collect(now: datetime | None = None) -> dict:
                         (tmfc, tmef, sig, emd, v, at))
         saved += 1
 
+    gridstore.prune(("vsrt",), now)
     ok = saved > 0 or bool(done)
     db.log_collect("forecast", ok, at, f"발표 {tmfc[8:12]} · {saved}구간"
                                        + (f" · 실패 {len(failed)}" if failed else ""))

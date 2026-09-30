@@ -1,8 +1,9 @@
 """저장공간 살피기와 정리.
 
-자료는 두 군데에 쌓인다 — SQLite 파일 하나(`data/gnweather.db`)와
-예측 분포 이미지 캐시(`data/cache/qpf/`). 이미지가 훨씬 빨리 자란다.
-한 발표분이 수십 장이고 10분마다 새 발표분이 나오기 때문이다.
+자료는 세 군데에 쌓인다 — SQLite 파일 하나(`data/gnweather.db`),
+예측 분포 이미지 캐시(`data/cache/qpf/`), 경남 지도 격자(`data/cache/grid/`).
+이미지가 훨씬 빨리 자란다. 한 발표분이 수십 장이고 10분마다 새 발표분이 나오기 때문이다.
+격자는 한 장이 1~30KB 이고 따로 정한 기한(실측 3일·예측 3발표분)으로 치운다.
 
 ⚠️ **오늘 것을 지우지 않는다.** 보관 기간을 아무리 짧게 잡아도 최소 하루는 남긴다.
    화면이 보고 있는 구간을 지워 버리면 그래프가 통째로 빈다.
@@ -12,7 +13,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta
 
-from . import db
+from . import db, gridstore
 from .config import CACHE, DB_PATH
 
 log = logging.getLogger("maint")
@@ -71,6 +72,7 @@ def usage() -> dict:
             db_bytes += w.stat().st_size
 
     img_bytes, img_files = _dir_bytes(CACHE / "qpf")
+    grid_bytes, grid_files = gridstore.usage()
 
     tables = []
     with db.tx() as con:
@@ -90,7 +92,8 @@ def usage() -> dict:
             "SELECT DISTINCT tmfc FROM qpf_frame ORDER BY tmfc DESC")]
 
     return {"db_bytes": db_bytes, "img_bytes": img_bytes, "img_files": img_files,
-            "total_bytes": db_bytes + img_bytes,
+            "grid_bytes": grid_bytes, "grid_files": grid_files,
+            "total_bytes": db_bytes + img_bytes + grid_bytes,
             "tables": tables, "qpf_tmfc": len(tmfcs),
             "retention": cfg()}
 
@@ -131,6 +134,10 @@ def cleanup(obs_days: int | None = None, now: datetime | None = None,
                               ((now - timedelta(days=max(1, ld))).strftime("%Y-%m-%d %H:%M"),))
             if cur.rowcount:
                 removed["snapshot"] = cur.rowcount
+
+    # 경남 지도 격자 — 실측 3일, 예측 최근 3발표분. 보관 기간 설정과 따로 간다
+    # (한 장이 작아도 10분마다 쌓이고, 지도는 지난 사흘보다 앞을 보여 주지 않는다).
+    removed.update(gridstore.prune(now=now))
 
     # 예측 이미지는 qpf 설정(발표분 수)이 주인이다. 여기서는 그 규칙을 한 번 더 돌린다 —
     # DB 에는 없는데 폴더만 남은 고아 폴더를 같이 치운다.

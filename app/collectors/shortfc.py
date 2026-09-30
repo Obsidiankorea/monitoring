@@ -14,15 +14,17 @@
 ⚠️ 아직 안 나온 발표분을 주면 격자가 -99 로 가득 온다(초단기와 같은 성질로 본다).
    그때는 **직전 발표분**을 쓴다 — 화면이 비는 것보다 3시간 묵은 예보가 낫다.
 ⚠️ 선행시간 끝을 넘은 대상시각도 -99 로 가득 온다. 그 자리에서 PCP 를 멈춘다.
-⚠️ **실측으로 확인하지 못한 가정이 있다** — tmfc 를 10자리(YYYYMMDDHH)로 준다는 것,
-   PCP 가 숫자(mm)로 온다는 것. 틀리면 수집 상태에 '격자 매칭 없음'이 찍힌다.
+⚠️ 실측(2026-10-01): tmfc 10자리(YYYYMMDDHH)로 과거 발표분도 받아진다. PCP 는 **1㎜ 정수**이고
+   **30 에서 막힌다**(8.28. 발표분 48시각에 0~30 빠짐없이, 31 이상 없음) — 30 은 '30㎜ 이상'이다.
+   시간당 30㎜ 를 넘는 비가 예보된 날은 합계·최대가 모자라게 나온다.
+⚠️ 받은 격자는 경남 지도용으로 bbox 째 gridstore 에도 둔다(호출은 같다).
 """
 from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
 
-from .. import db
+from .. import db, gridstore
 from ..domain.regions import grids
 from ..kma import KmaError, fetch_text
 from .forecast import _parse_grid
@@ -114,6 +116,11 @@ async def _fill(base: datetime, now: datetime, at: str) -> dict:
             if var == "PCP":
                 pcp_end = tmef                    # 여기부터는 이 발표분에 없다
             continue
+        # 경남 지도 — 같은 격자를 bbox 째로도 둔다. 호출은 늘지 않는다.
+        try:
+            gridstore.save("shrt", f"{tmfc}_{tmef}", gridstore.crop_dfs(vals))
+        except (OSError, ValueError) as e:
+            failed.append(f"{var} {tmef}: 지도 저장 실패 {e}")
         rows = []
         for x, y in xy:
             i = (y - 1) * width + (x - 1)
@@ -136,6 +143,7 @@ async def _fill(base: datetime, now: datetime, at: str) -> dict:
 
 
 def _prune() -> None:
+    gridstore.prune(("shrt",))
     with db.tx() as con:
         keep = [r["tmfc"] for r in con.execute(
             "SELECT tmfc FROM fcst_short_run ORDER BY tmfc DESC LIMIT ?", (KEEP,))]
