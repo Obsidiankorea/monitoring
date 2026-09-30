@@ -14,3 +14,6 @@ __pycache__/
 .DS_Store
 .preview/
 .DS_Store
+
+# 경남 지도 경계 원본(tools/build_geo.py 가 받는다, 45MB)
+tools/.cache/

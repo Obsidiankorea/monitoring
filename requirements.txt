@@ -5,6 +5,11 @@ apscheduler>=3.10
 python-dotenv>=1.0
 pillow>=11.0
 
+# 경남 지도 — 고해상도 격자(500m)를 NetCDF(HDF5)로 받는다. 바이너리(disp=B)는 한 번에
+# 16.8MB 라 하루 7GB 가 넘는데, 같은 자료가 NetCDF 로는 46~430KB 다.
+numpy>=2.0
+h5py>=3.12
+
 # 윈도에서만 — 옆 bangjae 프로그램이 DPAPI 로 잠가 둔 스방 계정을 읽는 데 쓴다.
 # 없으면 config/api_keys.txt 의 BANGJAE_ID/BANGJAE_PW 를 쓴다(맥은 이쪽).
 pywin32>=306; sys_platform == "win32"
