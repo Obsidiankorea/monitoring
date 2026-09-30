@@ -1538,6 +1538,10 @@ body.editing .panel {
       <button class="mb-item" id="m-speed" type="button" data-owner="p-qpf" aria-haspopup="menu" aria-expanded="false">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 20a8 8 0 1 1 8-8" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M12 12l4.5-3" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg><span id="lb-speed">1×</span><svg class="chev" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
+      <!-- 오른쪽 아래 자리에 무엇을 띄울지 — 그 자리의 판을 누르면 여기서 바로 바꾼다 -->
+      <button class="mb-item" id="m-slot" type="button" data-owner="p-fcsig p-min p-zone" aria-haspopup="menu" aria-expanded="false" title="이 자리에 띄울 판">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M12 12h8.5M12 12v7.5" stroke="currentColor" stroke-width="1.8"/></svg><span id="lb-slot">화면</span><svg class="chev" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
       <button class="mb-item" id="m-zby" type="button" data-owner="p-zone" aria-haspopup="menu" aria-expanded="false" title="권역으로 묶을지, 시군마다 볼지">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 5h7v6H4zM13 5h7v14h-7zM4 13h7v6H4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span id="lb-zby">권역</span><svg class="chev" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
@@ -3797,6 +3801,9 @@ function setSlot(v) {
   try { localStorage.setItem("gn-slotbr", slotBR); } catch {}
   const sel = document.getElementById("pf-slot");
   if (sel) sel.value = slotBR;
+  // 메뉴바 글자도 같이 — 설정창에서 바꿔도 맞게
+  const lb = document.getElementById("lb-slot"), hit = SLOTS_BR.find(([k]) => k === slotBR);
+  if (lb && hit) lb.textContent = hit[1];
   applySlot();
 }
 
@@ -3874,6 +3881,18 @@ bindMenu("m-shape", "lb-shape", "곡선 모양",
 bindMenu("m-cnt", "lb-cnt", "예상 순위 표시",
   () => [6, 8, 12, 16, "all"].map(v => ({ k: v, l: v === "all" ? "전부" : v + "개", on: v === tkCount })),
   k => { tkCount = k === "all" ? "all" : +k; drawTicker(); });
+
+/* 오른쪽 아래 자리 바꾸기. 설정창(종합 화면)과 같은 값을 쓴다.
+   바꾼 뒤에는 새 판을 앞창으로 잡는다 — 그래야 메뉴바가 새 판의 설정을 보여 준다. */
+const SLOTS_BR = [["fcsig", "예측 상위 시군"], ["min", "지금 오는 비"], ["zone", "권역 예보"]];
+bindMenu("m-slot", "lb-slot", "이 자리에 띄울 판",
+  () => SLOTS_BR.map(([k, l]) => ({ k, l, on: k === slotBR })),
+  k => {
+    setSlot(k);
+    activate(document.getElementById({ fcsig: "p-fcsig", min: "p-min", zone: "p-zone" }[k]), true);
+  });
+document.getElementById("lb-slot").textContent =
+  (SLOTS_BR.find(([k]) => k === slotBR) || SLOTS_BR[0])[1];
 
 bindMenu("m-zby", "lb-zby", "묶음",
   () => [{ k: "zone", l: "권역", on: znBy === "zone" }, { k: "sigun", l: "시군", on: znBy === "sigun" }],
