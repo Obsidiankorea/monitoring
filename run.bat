@@ -107,17 +107,37 @@ if "%NEED%"=="1" (
 )
 
 rem -- 3. 기상청 키 -------------------------------------------------
-rem 키는 저장소에 없다(.gitignore). 없으면 인수인계 묶음에서 가져온다.
+rem 키는 저장소에 없다(.gitignore). 없으면 인수인계 묶음에서 가져오고,
+rem 그것도 없으면 틀(config\api_keys.example.txt)을 복사해 메모장으로 연다.
 if not exist "config\api_keys.txt" (
   if exist "handoff-mac\config\api_keys.txt" (
     if not exist config mkdir config
     copy /y "handoff-mac\config\api_keys.txt" "config\" >nul
     echo [*] 키 파일을 config\ 로 복사했습니다
   ) else (
-    echo [X] config\api_keys.txt 가 없습니다. ORG_API_KEY 를 넣은 파일을 만드세요.
-    pause & exit /b 1
+    copy /y "config\api_keys.example.txt" "config\api_keys.txt" >nul
+    echo [*] config\api_keys.txt 를 만들었습니다
   )
 )
+
+rem ORG_API_KEY=<영숫자 키> 줄이 있는지 본다. 틀 그대로이거나 'ORG_API_KEY=' 없이
+rem 키만 적어 두면 config.py 가 읽지 못하므로 여기서 잡는다.
+set KEYTRY=0
+:checkkey
+set KEYOK=0
+for /f %%i in ('powershell -NoProfile -Command ^
+  "if((Get-Content config\api_keys.txt -Encoding UTF8) -match '^\s*ORG_API_KEY\s*=\s*[A-Za-z0-9_-]{10,}\s*$'){1}else{0}"') do set KEYOK=%%i
+if "!KEYOK!"=="1" goto keyok
+if "!KEYTRY!"=="1" (
+  echo [X] ORG_API_KEY 가 아직 비어 있습니다. config\api_keys.txt 를 확인하세요.
+  pause & exit /b 1
+)
+set KEYTRY=1
+echo [!] 기상청 키를 넣어야 합니다. 메모장이 열리면
+echo     '여기에기상청API허브기관용키' 자리에 키를 붙여 넣고 저장한 뒤 닫으세요.
+start /wait notepad "config\api_keys.txt"
+goto checkkey
+:keyok
 
 rem -- 4. 포트 ------------------------------------------------------
 rem 이미 쓰고 있으면 다음 빈 포트를 찾는다. 수집기가 둘 돌면 API 호출이 두 배가 된다.

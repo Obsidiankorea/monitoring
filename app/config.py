@@ -22,12 +22,16 @@ def _load_keys() -> dict[str, str]:
     out: dict[str, str] = {}
     f = ROOT / "config" / "api_keys.txt"
     if f.exists():
-        for line in f.read_text(encoding="utf-8").splitlines():
+        # utf-8-sig — 메모장이 BOM 을 붙여 저장해도 첫 키 이름이 깨지지 않게.
+        for line in f.read_text(encoding="utf-8-sig").splitlines():
             line = line.strip()
             if not line or line.startswith("#") or "=" not in line:
                 continue
             k, _, v = line.partition("=")
-            out[k.strip()] = v.strip()
+            v = v.strip()
+            if v.startswith("여기에"):   # api_keys.example.txt 의 자리표시자 — 키 없음으로 본다
+                continue
+            out[k.strip()] = v
     for k in ("ORG_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
               "DISABLE_SSL_VERIFICATION", "BANGJAE_ID", "BANGJAE_PW",
               "BANGJAE_BASE"):

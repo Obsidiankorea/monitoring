@@ -73,15 +73,25 @@ if [ ! -f .venv/.installed ] || [ requirements.txt -nt .venv/.installed ]; then
 fi
 
 # ── 2. 기상청 키 ───────────────────────────────────────────────────
-# ⚠️ 키는 저장소에 없다(.gitignore). 없으면 인수인계 묶음에서 가져온다.
+# ⚠️ 키는 저장소에 없다(.gitignore). 없으면 인수인계 묶음에서 가져오고,
+#    그것도 없으면 틀(config/api_keys.example.txt)을 복사한다.
 if [ ! -f config/api_keys.txt ]; then
   if [ -f handoff-mac/config/api_keys.txt ]; then
     mkdir -p config && cp handoff-mac/config/api_keys.txt config/
     say "키 파일을 config/ 로 복사했습니다"
   else
-    err "config/api_keys.txt 가 없습니다. ORG_API_KEY 를 넣은 파일을 만드세요."
-    exit 1
+    cp config/api_keys.example.txt config/api_keys.txt
+    say "config/api_keys.txt 를 만들었습니다"
   fi
+fi
+
+# ORG_API_KEY=<영숫자 키> 줄이 있는지 본다. 틀 그대로이거나 'ORG_API_KEY=' 없이
+# 키만 적어 두면 config.py 가 읽지 못하므로 여기서 잡는다.
+if ! grep -Eq '^[[:space:]]*ORG_API_KEY[[:space:]]*=[[:space:]]*[A-Za-z0-9_-]{10,}[[:space:]]*$' config/api_keys.txt; then
+  err "기상청 키를 넣어야 합니다. 텍스트 편집기가 열리면"
+  err "'여기에기상청API허브기관용키' 자리에 키를 붙여 넣고 저장한 뒤 다시 실행하세요."
+  open -e config/api_keys.txt 2>/dev/null
+  exit 1
 fi
 
 # ── 3. 포트 ────────────────────────────────────────────────────────
