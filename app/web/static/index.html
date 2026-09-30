@@ -683,7 +683,15 @@ td.totc .tot { width: auto; display: block; }
 .zn-grid > .c.sep { border-top: 1px dashed var(--line); }
 .zn-grid > .c.first { border-top: 0; }
 .zn-grid > .nm { font-size: calc(13px * var(--fs, 1)); font-weight: 500; white-space: nowrap; }
-.zn-grid > .nm small { font-size: .74em; color: var(--ink-3); margin-left: 5px; font-weight: 400; }
+.zn-grid > .nm.tog { cursor: pointer; }
+.zn-grid > .nm.tog:hover > span { text-decoration: underline dotted var(--ink-3); text-underline-offset: 3px; }
+/* 펼친 줄 — 이름 밑에 시군을 한 줄로. 이름 열이 너무 넓어지지 않게 줄바꿈을 허용한다 */
+.zn-grid > .nm.open { flex-direction: column; align-items: flex-start; justify-content: center; gap: 1px; }
+.zn-grid > .nm small {
+  font-size: .74em; color: var(--accent); font-weight: 400;
+  white-space: normal; max-width: 9.5em; line-height: 1.25;
+}
+.zn-grid > .nm.sub small { padding-left: 1.1em; }
 .zn-grid > .v {
   justify-content: flex-end; gap: 5px; white-space: nowrap;
   font-family: var(--mono); font-size: calc(13px * var(--fs, 1)); font-weight: 600;
@@ -2188,6 +2196,10 @@ try {
   znDay = +(localStorage.getItem("gn-znday") ?? 1);
 } catch {}
 const ZN_DAYS = ["오늘", "내일", "모레"];
+/* 권역 이름을 누르면 그 밑에 시군을 펼친다. 벽면에서 '북서내륙이 어디였더라'를
+   바로 풀어 주려는 것이다. 펼친 상태는 화면마다 남겨 둔다. */
+let znOpen = new Set();
+try { znOpen = new Set(JSON.parse(localStorage.getItem("gn-znopen") || "[]")); } catch {}
 
 async function loadShort() {
   // 데모 사례에는 단기예보가 담겨 있지 않다. 오늘 예보를 옛 사례 옆에 붙이지 않는다.
@@ -2264,7 +2276,12 @@ function drawShort() {
     band = r.band;
     // 하위 권역(북서내륙·남서내륙)은 상위 권역(서부내륙) 밑에 들여 적는다
     const sub = r.parent ? " sub" : "";
-    html += `<div class="c nm${sep}${sub}" data-zi="${i}">${r.parent ? "<i>└</i>" : ""}${r.name}</div>`;
+    const canOpen = znBy === "zone";
+    const open = canOpen && znOpen.has(r.name);
+    html += `<div class="c nm${sep}${sub}${canOpen ? " tog" : ""}${open ? " open" : ""}" data-zi="${i}"`
+      + (canOpen ? ` role="button" tabindex="0" aria-expanded="${open}" title="눌러서 시군 ${open ? "접기" : "보기"}"` : "")
+      + `><span>${r.parent ? "<i>└</i>" : ""}${r.name}</span>`
+      + (open ? `<small>${r.members.join("·")}</small>` : "") + `</div>`;
     let trk = gl;
     if (p) trk += `<i class="bx" style="left:${pos(p.p20)};width:calc(${pos(p.p80)} - ${pos(p.p20)})"></i>`
                + `<i class="md" style="left:${pos(p.p50)}"></i>`
@@ -2282,6 +2299,23 @@ function drawShort() {
 
   if (document.getElementById("p-zone").classList.contains("active")) syncMeta();
 }
+
+function znToggle(cell) {
+  const r = ZN && (ZN[znBy] || [])[+cell.dataset.zi];
+  if (!r || znBy !== "zone") return;
+  znOpen.has(r.name) ? znOpen.delete(r.name) : znOpen.add(r.name);
+  try { localStorage.setItem("gn-znopen", JSON.stringify([...znOpen])); } catch {}
+  tip.classList.remove("on");
+  drawShort();
+}
+document.getElementById("zn-grid").addEventListener("click", e => {
+  const c = e.target.closest(".nm.tog");
+  if (c) znToggle(c);
+});
+document.getElementById("zn-grid").addEventListener("keydown", e => {
+  const c = e.target.closest(".nm.tog");
+  if (c && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); znToggle(c); }
+});
 
 /* 줄에 올리면 분포를 숫자로 보여 준다 — 상자만으로는 몇 칸을 모았는지 모른다 */
 document.getElementById("zn-grid").addEventListener("mouseover", e => {
