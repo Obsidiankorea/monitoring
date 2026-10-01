@@ -10,11 +10,16 @@
    파이썬 코드는 프로세스를 다시 띄워야 한다. 무엇이 바뀌었는지 보고 알려 준다.
 ⚠️ 인터넷이 막힌 내부망 PC 도 있다. 확인이 실패해도 화면이 죽지 않게, 실패를
    '최신'으로 읽지 않고 실패라고 적는다.
+⚠️ **requirements.txt 가 바뀌었으면 받는 자리에서 깐다.** 화면의 '재시작'(종료 코드 42)은
+   run.bat 의 설치 단계를 건너뛰고 서버만 다시 띄운다(run.bat `:runserver` 고리). 여기서
+   안 깔면 새 의존성(예: 경남 지도의 h5py)이 없는 채로 떠서, run.bat 을 새로 누를 때까지
+   그 기능만 실패로 남는다. run.bat 은 CP949 라 고치지 않고 이쪽에서 막는다.
 """
 from __future__ import annotations
 
 import logging
 import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -23,6 +28,7 @@ from .config import ROOT
 log = logging.getLogger("update")
 
 TIMEOUT = 25          # 초. 인터넷이 막힌 PC 에서 오래 매달리지 않게
+PIP_TIMEOUT = 300     # 초. 휠 몇 개 받는 데 충분하다
 _PY = (".py",)        # 이게 바뀌면 서버를 다시 띄워야 한다
 
 
@@ -86,6 +92,33 @@ def status(fetch: bool = True) -> dict:
     return out
 
 
+def install_deps() -> dict:
+    """requirements.txt 대로 깐다 — 이 서버를 돌리는 바로 그 파이썬(가상환경)에.
+
+    `--upgrade` 는 주지 않는다. 없는 것·판이 모자란 것만 깐다 — 돌고 있는 서버가 쥐고 있는
+    파일(윈도)을 갈아 끼우려다 실패하지 않게.
+    """
+    cmd = [sys.executable, "-m", "pip", "install", "-q", "--disable-pip-version-check",
+           "--timeout", "15", "--retries", "1", "-r", "requirements.txt"]
+    try:
+        p = subprocess.run(cmd, cwd=ROOT, capture_output=True, timeout=PIP_TIMEOUT,
+                           text=True, encoding="utf-8", errors="replace")
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": f"{PIP_TIMEOUT}초 안에 끝나지 않았다(인터넷이 막혔을 수 있다)"}
+    except OSError as e:
+        return {"ok": False, "error": str(e)}
+    if p.returncode != 0:
+        tail = [l for l in ((p.stderr or "") + (p.stdout or "")).splitlines() if l.strip()][-3:]
+        return {"ok": False, "error": " / ".join(tail)[:300] or f"pip 종료 코드 {p.returncode}"}
+    # run.bat·run.command 는 requirements.txt 가 이 표시보다 새로우면 다시 깐다 — 깔았다고 적어 둔다
+    if sys.prefix != getattr(sys, "base_prefix", sys.prefix):
+        try:
+            (Path(sys.prefix) / ".installed").write_text("\n", encoding="ascii")
+        except OSError:
+            pass
+    return {"ok": True}
+
+
 def pull() -> dict:
     """`git pull --ff-only`. 무엇이 바뀌었고 다시 띄워야 하는지 함께 돌려준다."""
     if not available():
@@ -107,5 +140,8 @@ def pull() -> dict:
     restart = any(f.endswith(_PY) or f == "requirements.txt" for f in changed)
     log.info("업데이트 %s → %s, %d개 파일%s", before, after, len(changed),
              " (재시작 필요)" if restart else "")
-    return {"ok": True, "changed": changed, "restart": restart,
-            "here": _head(), "from": before}
+    out = {"ok": True, "changed": changed, "restart": restart, "here": _head(), "from": before}
+    if "requirements.txt" in changed:
+        out["deps"] = install_deps()
+        log.info("의존성 설치: %s", out["deps"])
+    return out

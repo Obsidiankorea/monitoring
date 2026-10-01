@@ -404,6 +404,9 @@ th.tlh { overflow: visible; }
 @media (max-width: 1100px) { .mb-meta .src { display: none; } }
 
 .mb-icon { width: 26px; padding: 0; justify-content: center; }
+/* 경남 지도 — 링크라서 밑줄·방문색을 걷어 메뉴 단추와 같게 */
+a.mb-item { text-decoration: none; }
+a.mb-item .ext { opacity: .55; margin-left: -1px; }
 .mb-icon[data-busy="true"] { pointer-events: none; color: var(--accent); }
 .mb-icon[data-busy="true"] svg { animation: spin .9s linear infinite; }
 @keyframes spin { to { rotate: 360deg; } }
@@ -1562,6 +1565,14 @@ body.editing .panel {
   </div>
 
   <div class="mb-right">
+      <!-- 경남 지도(map.html) — 아직 판으로 넣지 않은 별도 창이다. 이 웹앱 창(--app)에는
+           주소창이 없어 주소를 칠 수 없으므로 여기서 연다. 창은 하나만 — 다시 누르면 앞으로. -->
+      <a class="mb-item" id="m-map" href="/map.html" target="gn-map" title="경남 강수 지도 — 별도 창 (Ctrl+클릭: 새 탭)">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3.5 6.5l5.5-2 6 2 5.5-2v13l-5.5 2-6-2-5.5 2z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 4.5v13M15 6.5v13" stroke="currentColor" stroke-width="1.5"/></svg><span>지도</span><svg class="ext" width="9" height="9" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M4 2h4v4M8 2L3.5 6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </a>
+
+    <span class="mb-sep"></span>
+
       <button class="mb-item" id="m-look" type="button" aria-haspopup="menu" aria-expanded="false">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.8"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/></svg><span id="lb-look">표시</span><svg class="chev" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
@@ -4291,6 +4302,17 @@ document.getElementById("pf-up").addEventListener("click", async e => {
   if (!r.changed.length) { msg.textContent = r.note || "이미 최신이다"; return; }
 
   msg.textContent = `${r.changed.length}개 파일을 받았다`;
+  /* 새 의존성은 받는 자리에서 서버가 깔았다. 실패했으면 숨기지 않는다 — 다시 띄워도
+     그 기능만 실패로 남으니, run.bat 을 새로 눌러야 한다는 것을 적는다. */
+  let depNote = "";
+  if (r.deps) {
+    if (r.deps.ok) msg.textContent += " · 새 구성요소 설치함";
+    else {
+      depNote = "\n\n⚠️ 새 구성요소를 깔지 못했다: " + (r.deps.error || "")
+              + "\n   다시 띄워도 그 기능만 실패로 남는다. run.bat 창을 닫고 새로 띄우면 다시 깐다.";
+      msg.innerHTML = `${r.changed.length}개 파일을 받았다 · <span class="warnx">새 구성요소 설치 실패</span>`;
+    }
+  }
   /* 화면만 바뀌었으면 새로고침이면 되고, 파이썬이 바뀌었으면 서버를 다시 띄워야 한다.
      ⚠️ 스크립트로 띄우지 않았으면 다시 안 살아난다 — 그래서 먼저 물어본다. */
   if (!r.restart) {
@@ -4299,7 +4321,7 @@ document.getElementById("pf-up").addEventListener("click", async e => {
   }
   if (!confirm("서버 코드가 바뀌었습니다. 지금 서버를 다시 띄울까요?\n\n"
              + "(run.bat / run.command 로 띄운 경우에만 자동으로 다시 살아납니다.\n"
-             + " 직접 실행 중이라면 손으로 다시 띄우세요.)")) return;
+             + " 직접 실행 중이라면 손으로 다시 띄우세요.)" + depNote)) return;
   msg.textContent = "다시 띄우는 중…";
   try { await fetch("/api/update/restart", { method: "POST" }); } catch {}
   // 다시 뜰 때까지 기다렸다가 새로고침한다
@@ -4308,6 +4330,19 @@ document.getElementById("pf-up").addEventListener("click", async e => {
     try { await fetch("/api/status", { cache: "no-store" }); location.reload(); return; } catch {}
   }
   msg.innerHTML = `<span class="warnx">다시 뜨지 않았다 — 창을 확인하세요</span>`;
+});
+
+/* ── 경남 지도 창 ─────────────────────────────────────────────────
+   그냥 누르면 지도 전용 창 하나(주소창 없는 팝업 — 다른 모니터로 끌어 F11 로 채운다).
+   이름(gn-map)으로 열어 두 번 눌러도 창이 늘지 않고 그 창이 앞으로 온다.
+   Ctrl·Shift·가운데 단추는 브라우저에 맡긴다(새 탭 등). */
+document.getElementById("m-map").addEventListener("click", e => {
+  if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+  e.preventDefault();
+  const w = window.open("/map.html", "gn-map", "popup,width=1600,height=900");
+  // ⚠️ 막혔다고 이 창을 지도로 넘기지 않는다 — 벽면의 종합 화면이 사라진다
+  if (w) w.focus();
+  else alert("지도 창이 막혔습니다(팝업 차단). Ctrl+클릭으로 새 탭에서 여세요.");
 });
 
 /* ── 저장공간 ──────────────────────────────────────────────────── */
