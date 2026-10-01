@@ -458,7 +458,9 @@ function draw() {
   const t0 = performance.now();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, cv.width, cv.height);
-  if (!CUR || !V) { drawLabels(); return; }
+  // ⚠️ 판 크기가 0 이면(창이 가려진 채 열림 등) 그리지 않는다. 0×0 캔버스를 drawImage 하면
+  //    예외가 나 머리글까지 안 그려졌다. 크기가 잡히면 ResizeObserver 가 다시 부른다.
+  if (!CUR || !V || !cv.width || !cv.height || !V.s) { drawLabels(); return; }
   const o = offscreen(CUR);
   const T = pixelTransform(CUR.grid, CUR.h).map(x => x * V.dpr);
   ctx.imageSmoothingEnabled = false;                         // 칸 그대로 — 번지게 하지 않는다
@@ -484,7 +486,7 @@ function draw() {
 function drawLabels() {
   const g = $("labels");
   if (!g) return;
-  if (!CURSTAT || !V) { g.innerHTML = ""; return; }
+  if (!CURSTAT || !V || !V.s) { g.innerHTML = ""; return; }
   const fac = factor(), min = stepsOf(kind)[0];
   const rows = CURSTAT.rows.filter(r => r.kind === "gn" && r.max != null && r.max * fac >= min && r.where)
     .sort((a, b) => b.max - a.max);
@@ -766,11 +768,14 @@ document.addEventListener("keydown", ev => {
   if (ev.key === "t" || ev.key === "T") { test = !test; show(); }
 });
 
+/* 창 크기뿐 아니라 판 크기가 바뀔 때마다(가려졌다 보일 때 포함) 다시 짠다 */
 let rsz = null;
-window.addEventListener("resize", () => {
+const relayout = () => {
   clearTimeout(rsz);
-  rsz = setTimeout(() => { PATTERN = null; layout(); draw(); }, 120);
-});
+  rsz = setTimeout(() => { if (!GNB) return; PATTERN = null; layout(); draw(); }, 120);
+};
+window.addEventListener("resize", relayout);
+new ResizeObserver(relayout).observe($("stage"));
 
 async function boot() {
   applyTheme();
