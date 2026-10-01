@@ -50,8 +50,8 @@ def test_flow_test_mode_frames_and_series():
     f = gridview.flow(hours=3, step=30, now=datetime(2026, 10, 1, 23, 17), test=True)
     obs = [x for x in f["frames"] if x["kind"] == "obs"]
     fc = [x for x in f["frames"] if x["kind"] == "fcst"]
-    # 실측은 30분 칸만(지난 3시간), 예측은 1시간씩 여섯
-    assert [x["t"][8:] for x in obs] == ["2030", "2100", "2130", "2200", "2230", "2300"]
+    # 실측은 30분 칸만(지난 3시간) + 가장 최근(23:10)은 간격과 상관없이, 예측은 1시간씩 여섯
+    assert [x["t"][8:] for x in obs] == ["2030", "2100", "2130", "2200", "2230", "2300", "2310"]
     assert [x["layer"] for x in fc] == [f"vsrt+{n}" for n in range(1, 7)]
     assert len(f["series"]) == 18 and all(len(s["max"]) == len(f["frames"]) for s in f["series"])
     assert len(f["total"]["max"]) == len(f["frames"])

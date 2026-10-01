@@ -46,6 +46,7 @@
   --hatch: #8093A8;       /* 결측 빗금 */
   --nb-ink: #56677B;
   --test: #7B5CC8;        /* 테스트 모드 — 특보 예약색(노랑·빨강·보라 중대경보)과 겹치지 않는 남보라 */
+  --on-accent: #06121B;
 
   --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --sans: "IBM Plex Sans KR", system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
@@ -68,6 +69,7 @@
   --halo: #FFFFFF;
   --hatch: #6A7C92;
   --nb-ink: #8C9BAE;
+  --on-accent: #FFFFFF;
 }
 
 * { box-sizing: border-box; }
@@ -190,7 +192,7 @@ button { font-family: inherit; }
   backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   border-left: 1px solid var(--line); box-shadow: -18px 0 50px rgba(0,0,0,.30);
   transform: translateX(105%); transition: transform .55s var(--ease); }
-body.tl-on #tl { transform: none; }
+body.tl-on.panel-tl #tl { transform: none; }
 #tl .hd { display: flex; align-items: baseline; gap: 12px; padding: calc(14px * var(--k, 1)) calc(18px * var(--k, 1)) calc(4px * var(--k, 1)); }
 #tl .hd b { font-size: calc(21px * var(--k, 1)); font-weight: 700; }
 #tl .hd span { font-size: calc(13px * var(--k, 1)); color: var(--ink-2); }
@@ -225,6 +227,108 @@ body.tl-on #tl { transform: none; }
 .trk-head, .trk-knob { transition: transform .3s var(--ease); }
 #tl-svg.noanim *, #trk.noanim * { transition: none !important; }
 .tl-empty { fill: var(--ink-3); text-anchor: middle; }
+
+/* ── 오른쪽 카드 — 종합 화면(강수 모니터링)의 판을 작게. 지도 오른쪽 바다 위에 떠 있다 ──
+   딱 맞춘 격자 대신 카드가 지도 위에 겹쳐 뜨고, 뒤로는 지도가 그라데이션으로 가라앉는다.
+   줄에 마우스를 올리면 지도의 그 시군까지 빛줄이 그어진다(#links). */
+#scrim { position: absolute; top: 0; right: 0; bottom: 0; width: calc(var(--tlw, 640px) + 180px); pointer-events: none;
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--sea) 50%, transparent) 32%,
+              color-mix(in oklab, var(--sea) 80%, transparent));
+  opacity: 0; transition: opacity .6s var(--ease); }
+body.tl-on.panel-cards #scrim { opacity: 1; }
+#rail { position: absolute; top: 16px; right: 16px; bottom: 16px; width: calc(var(--tlw, 640px) - 20px);
+  display: flex; flex-direction: column; gap: 14px; pointer-events: none; }
+.card { pointer-events: auto; position: relative; display: flex; flex-direction: column; min-height: 0;
+  background: color-mix(in oklab, var(--panel) 80%, transparent);
+  backdrop-filter: blur(14px) saturate(1.15); -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  border: 1px solid color-mix(in oklab, var(--line) 85%, transparent); border-radius: 16px;
+  box-shadow: 0 20px 50px rgba(0,0,0,.34), inset 0 1px 0 color-mix(in oklab, var(--ink) 6%, transparent);
+  transform: translateX(calc(100% + 48px)); opacity: 0;
+  transition: transform .6s var(--ease), opacity .45s; }
+.card::before { content: ""; position: absolute; left: 22px; right: 22px; top: -1px; height: 2px; border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent); opacity: .6; }
+body.tl-on.panel-cards .card { transform: none; opacity: 1; }
+.card:nth-child(2) { transition-delay: .08s; }
+.card:nth-child(3) { transition-delay: .16s; }
+#c-acc { flex: 1 1 auto; }
+#c-now, #c-fc { flex: none; }
+.ch { display: flex; align-items: center; gap: 10px; padding: calc(12px * var(--k, 1)) calc(16px * var(--k, 1)) calc(6px * var(--k, 1)); }
+.ch h3 { margin: 0; font-size: calc(16px * var(--k, 1)); font-weight: 700; white-space: nowrap; }
+.ch .sub { font-size: calc(12px * var(--k, 1)); color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.ch .sp { flex: 1; }
+.ch .bt { font: 600 calc(12px * var(--k, 1)) var(--mono); color: var(--ink-2); border: 1px solid var(--line); border-radius: 6px; padding: 1px 7px; white-space: nowrap; }
+.ch .src { font: 600 calc(11px * var(--k, 1)) var(--sans); color: var(--accent); white-space: nowrap; }
+.ch .src.fell { color: var(--lv-fail); }
+.ch .live { width: 7px; height: 7px; border-radius: 50%; background: var(--lv-ok); flex: none; animation: pulse 2.4s infinite; }
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--lv-ok) 55%, transparent); }
+  70% { box-shadow: 0 0 0 8px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+.cb { position: relative; flex: 1; min-height: 0; overflow: hidden; padding: 0 calc(10px * var(--k, 1)) calc(10px * var(--k, 1)); }
+.empty-note { color: var(--ink-3); font-size: calc(13px * var(--k, 1)); padding: 10px 8px; }
+/* 누적 줄 — 순위·다우지점 │ 누적 막대 + 예상 빗금 │ 선 그래프 │ 합 */
+.ar { display: grid; grid-template-columns: calc(118px * var(--k, 1)) 1fr calc(124px * var(--k, 1)) calc(56px * var(--k, 1));
+  align-items: center; gap: calc(10px * var(--k, 1)); height: var(--rh, 30px); padding: 0 6px; border-radius: 8px; cursor: pointer; }
+.ar:hover, .ar.hov, .mr:hover, .mr.hov, .fr:hover, .fr.hov { background: color-mix(in oklab, var(--accent) 13%, transparent); }
+.nm2 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 700; font-size: calc(15px * var(--k, 1)); }
+.nm2 small { font-size: calc(11px * var(--k, 1)); color: var(--ink-3); font-weight: 600; margin-right: 4px; }
+.nm2 .rk { display: inline-grid; place-items: center; width: calc(18px * var(--k, 1)); height: calc(18px * var(--k, 1));
+  margin-right: 6px; border-radius: 50%; vertical-align: 1px;
+  font: 700 calc(11px * var(--k, 1)) var(--mono); color: var(--on-accent); background: var(--accent); }
+.abar { position: relative; height: 58%; border-radius: 5px; background: color-mix(in oklab, var(--ink) 6%, transparent); }
+.abar .o { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px 0 0 5px;
+  background: linear-gradient(90deg, var(--rain-3), var(--rain-4)); transition: width .6s var(--ease); }
+.abar .f { position: absolute; top: 0; bottom: 0; border-radius: 0 5px 5px 0;
+  background: repeating-linear-gradient(115deg, transparent 0 4px, color-mix(in oklab, var(--rain-5) 55%, transparent) 4px 7px),
+              color-mix(in oklab, var(--rain-4) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--rain-5) 45%, transparent);
+  transition: left .6s var(--ease), width .6s var(--ease); }
+.abar .v { position: absolute; top: 50%; transform: translateY(-50%); white-space: nowrap; transition: left .6s var(--ease);
+  font: 700 calc(13px * var(--k, 1)) var(--mono); color: var(--ink); text-shadow: 0 0 3px var(--halo), 0 0 6px var(--halo); }
+.abar .v i { font-style: normal; color: var(--rain-5); margin-left: 5px; }
+.ar svg { width: 100%; height: 82%; overflow: visible; }
+.tot { text-align: right; font: 700 calc(16px * var(--k, 1)) var(--mono); }
+.tot.z { color: var(--ink-3); font-weight: 500; }
+.sp-a { fill: color-mix(in oklab, var(--rain-4) 26%, transparent); }
+.sp-l { fill: none; stroke: var(--rain-5); stroke-width: 1.5; stroke-linejoin: round; }
+.sp-fa { fill: color-mix(in oklab, var(--rain-4) 10%, transparent); }
+.sp-fl { fill: none; stroke: var(--rain-5); stroke-width: 1.4; stroke-dasharray: 3 3; opacity: .85; }
+.sp-now { stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 2 2; }
+.sp-head { stroke: var(--accent); stroke-width: 2; transition: transform .3s var(--ease); }
+/* 지금 오는 비 — 15분 │ 60분 */
+.mn { display: grid; grid-template-columns: 1fr 1fr; gap: calc(16px * var(--k, 1)); }
+.mn h4 { margin: 0 0 4px; padding: 0 4px; display: flex; justify-content: space-between;
+  font: 700 calc(12px * var(--k, 1)) var(--sans); color: var(--ink-3); letter-spacing: .08em; }
+.mr { position: relative; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px;
+  height: calc(27px * var(--k, 1)); padding: 0 6px; border-radius: 6px; cursor: pointer; }
+.mr .nm2 { font-size: calc(14px * var(--k, 1)); z-index: 1; }
+.mr b { font: 700 calc(15px * var(--k, 1)) var(--mono); z-index: 1; }
+.mr .bg { position: absolute; left: 0; top: 16%; bottom: 16%; border-radius: 4px; opacity: .5; transition: width .6s var(--ease); }
+/* 예측 상위 — 시군 │ +1~+6h 칸(지도 색) │ 합 */
+.fr, .fh { display: grid; grid-template-columns: calc(124px * var(--k, 1)) 1fr calc(54px * var(--k, 1)); align-items: center;
+  gap: 10px; padding: 0 6px; }
+.fr { height: calc(30px * var(--k, 1)); border-radius: 6px; cursor: pointer; }
+.fh { font: 600 calc(11px * var(--k, 1)) var(--mono); color: var(--ink-3); padding-bottom: 3px; }
+.fr .nm2 { font-size: calc(14px * var(--k, 1)); }
+.fr .nm2 small { margin: 0 0 0 4px; }
+.cells { display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px; }
+.fh .cells span { text-align: center; }
+.fh .cells span.on { color: var(--accent); font-weight: 700; }
+.fr .cells { height: 72%; }
+.fr .cells i { display: grid; place-items: center; border-radius: 4px; font: 600 calc(12px * var(--k, 1)) var(--mono);
+  font-style: normal; background: color-mix(in oklab, var(--ink) 5%, transparent); color: var(--ink-3); transition: box-shadow .3s; }
+.fr .cells i.on { box-shadow: 0 0 0 2px var(--accent); }
+.fr .sum { text-align: right; font: 700 calc(15px * var(--k, 1)) var(--mono); }
+/* 줄 ↔ 지도 연결선 */
+#links { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+#links path { fill: none; stroke: var(--accent); stroke-width: 2.2; stroke-linecap: round;
+  filter: drop-shadow(0 0 5px color-mix(in oklab, var(--accent) 70%, transparent));
+  stroke-dasharray: var(--len); stroke-dashoffset: var(--len); animation: draw .5s var(--ease) forwards; }
+#links circle { fill: var(--accent); stroke: var(--halo); stroke-width: 2.5; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+/* 지도 위 순위 표식 — 누적 상위 셋 */
+#over .rk circle { fill: var(--accent); stroke: var(--halo); stroke-width: 2.5; }
+#over .rk text { fill: var(--on-accent); stroke: none; font-family: var(--mono); font-weight: 700;
+  text-anchor: middle; dominant-baseline: central; }
 
 #tip { position: absolute; pointer-events: none; font: 500 14px var(--sans); padding: 6px 10px; border-radius: 6px;
   background: color-mix(in oklab, var(--panel) 94%, transparent); border: 1px solid var(--line); color: var(--ink);
@@ -288,7 +392,7 @@ body.tl-on #tl { transform: none; }
   <span class="sp"></span>
   <nav id="menu"></nav>
   <div id="tools">
-    <button id="b-tl" title="강수 타임라인 — 오른쪽 사이드바 (L)">타임라인</button>
+    <button id="b-tl" title="오른쪽 패널 — 강수 누적·지금 오는 비·예측 상위 (L)">패널</button>
     <button id="b-test" title="비 없는 날 화면 점검용 합성 격자 (T)">테스트</button>
     <button id="b-prefs" title="설정 (Ctrl+,)">⚙</button>
   </div>
@@ -300,8 +404,25 @@ body.tl-on #tl { transform: none; }
     <canvas id="ghost"></canvas>
     <svg id="over"></svg>
   </div>
+  <div id="scrim"></div>
   <div id="legend"></div>
   <div id="play" hidden></div>
+  <svg id="links"></svg>
+  <div id="rail" aria-label="강수 모니터링">
+    <section class="card" id="c-acc">
+      <div class="ch"><span class="live"></span><h3>강수 누적</h3><span class="sub" id="acc-sub"></span>
+        <span class="sp"></span><span class="src" id="acc-src"></span><span class="bt" id="acc-bt">—</span></div>
+      <div class="cb" id="acc-b"></div>
+    </section>
+    <section class="card" id="c-now">
+      <div class="ch"><h3>지금 오는 비</h3><span class="sub">기상청 매분자료</span><span class="sp"></span><span class="bt" id="now-bt">—</span></div>
+      <div class="cb" id="now-b"></div>
+    </section>
+    <section class="card" id="c-fc">
+      <div class="ch"><h3>예측 상위</h3><span class="sub">초단기 · 앞으로 6시간</span><span class="sp"></span><span class="bt" id="fc-bt">—</span></div>
+      <div class="cb" id="fc-b"></div>
+    </section>
+  </div>
   <aside id="tl" aria-label="강수 타임라인">
     <div class="hd">
       <b>강수 타임라인</b><span id="tl-sub"></span><span class="sp"></span>
@@ -340,7 +461,8 @@ const KINDS = ["obs15", "obs60", "obsday", "odam", "vsrt", "shrt_today", "shrt_t
 const FLOWK = new Set(["obs60", "vsrt"]);              // 재생 흐름(1시간 강수량)에 드는 층
 const COLLECT_OF = { obs15: "grid", obs60: "grid", obsday: "grid", odam: "odam", vsrt: "forecast",
                      shrt_today: "short", shrt_tomorrow: "short" };
-const SET_DEFAULT = { flow_step: 10, flow_hours: 6, play_ms: 1200, tl_on: false, tl_stat: "max" };
+const SET_DEFAULT = { flow_step: 10, flow_hours: 6, play_ms: 1200, tl_on: false, tl_stat: "max",
+                      panel: "cards", acc_hours: 12 };
 
 let META = null, TOPO = null, GEO = null, MSIG = null, MEMD = null, EMDN = null;
 let SET = { ...SET_DEFAULT };
@@ -468,6 +590,7 @@ function buildBase() {
   const zn = mesh((a, b) => a !== b && P(a).zone !== P(b).zone);        // 권역이 바뀌는 곳
   const sb = mesh((a, b) => a !== b && P(a).zone === P(b).zone && P(a).sub !== P(b).sub);
   const fs = Math.max(15, Math.min(64, V.s * 7));
+  FSN = fs;
   NAMEBOX = [];
   const names = FEAT.map(ft => {
     const p = P(ft), x = V.toX(p.lx), y = V.toY(p.ly), nb = p.kind === "nb";
@@ -479,9 +602,11 @@ function buildBase() {
   }).join("");
   $("over").innerHTML =
     `<path class="sg" d="${sg}"/><path class="cs" d="${cs}"/><path class="sb" d="${sb}"/><path class="zn" d="${zn}"/>`
-    + `<path id="hl"/><g id="labels"></g><g id="names">${names}</g>`;
+    + `<path id="hl"/><g id="labels"></g><g id="names">${names}</g><g id="ranks"></g>`;
   HL = null;
+  drawRanks();
 }
+let FSN = 20;                           // 시군명 글자 크기(순위 표식 자리 잡는 데 쓴다)
 
 /* 한 시군 강조 — 타임라인 줄과 지도가 서로를 가리킨다 */
 let HL = null;
@@ -494,8 +619,8 @@ function highlight(name) {
     if (ft) p.setAttribute("d", PATH(ft));
     p.classList.toggle("on", !!ft);
   }
-  for (const r of document.querySelectorAll(".tl-row"))
-    r.classList.toggle("hov", r.dataset.s === name);
+  for (const r of document.querySelectorAll(".tl-row, .ar, .mr, .fr"))
+    r.classList.toggle("hov", !!name && r.dataset.s === name);
 }
 
 /* ── 색 ─────────────────────────────────────────────────────────────── */
@@ -829,6 +954,7 @@ async function show(fade = false) {
   paintHead();
   buildPlay();
   tlPlayhead();
+  cardsPlayhead();
   SWITCH_MS = performance.now() - t0;
   if (Q.get("debug") === "1") {
     $("dbg").hidden = false;
@@ -857,6 +983,7 @@ async function loadFlow() {
     FLOW.tn = tOf(FLOW.now);
   }
   buildPlay(); buildTL(); tlPlayhead();
+  if (test) loadCards();                 // 테스트 카드는 합성 흐름에서 뽑는다 — 지도와 같은 값
   preloadFlow();
 }
 /* 지금 보는 프레임의 시각(ms) — 흐름 밖 층이면 null */
@@ -989,6 +1116,9 @@ function applyTL(animate = true) {
   const w = tlWidth();
   document.documentElement.style.setProperty("--tlw", w + "px");
   document.body.classList.toggle("tl-on", tlOn);
+  const cards = SET.panel !== "timeline";
+  document.body.classList.toggle("panel-cards", cards);
+  document.body.classList.toggle("panel-tl", !cards);
   let tx = 0, ty = 0, sc = 1;
   if (tlOn) {
     // 지도가 비켜설 자리: 범례 오른쪽 ~ 사이드바 왼쪽. 모자라면 살짝 줄인다
@@ -1007,7 +1137,10 @@ function applyTL(animate = true) {
   // 재생 막대는 지도 가운데 아래로. ⚠️ 막대에 zoom(--k)이 걸려 있어 left 도 그만큼 곱해진다 — 나눠 둔다
   const cx = tlOn ? (V.W - w) / 2 : V.W / 2;
   $("stage").style.setProperty("--playx", (cx / V.k).toFixed(0) + "px");
-  if (tlOn) buildTL();
+  if (tlOn && !cards) buildTL();
+  if (tlOn && cards) { if (CARDS) renderCards(); else loadCards(); }
+  drawRanks();
+  link(null);
 }
 function setTL(on, save = true) {
   tlOn = on;
@@ -1163,6 +1296,271 @@ function tlPlayhead() {
   rows.forEach(g => g.classList.toggle("top", !!topName && g.dataset.s === topName && topV >= 0.1));
 }
 
+/* ── 오른쪽 카드 — 종합 화면(강수 모니터링)의 세 판을 작게 ─────────────────────
+   실제 자료는 종합 화면과 **같은 API·같은 규칙**이다 — 숫자가 두 화면에서 같아야 한다.
+     강수 누적  /api/rain(스방 → 비면 기상청) 시군마다 다우지점(자료 있는 지점 중 합계 최대)
+                + /api/forecast 시군 6시간을 0·5·10·20·30·50 으로 맞춘 합(빗금). 합으로 줄 세운다
+     지금 오는 비 /api/minute — 15분·60분 상위
+     예측 상위  /api/forecast 시군 — 6시간 합 순
+   테스트 모드는 합성 흐름(/api/grid/flow?test=1)에서 뽑는다 — 지도와 같은 값이 나오게. */
+let CARDS = null;
+const qRN1 = v => [0, 5, 10, 20, 30, 50].reduce((a, b) => (Math.abs(b - v) < Math.abs(a - v) ? b : a));
+const ORDER_GN = () => GEO.sigun.filter(s => s.kind === "gn").map(s => s.name);
+const sumv = a => a.reduce((x, v) => x + (typeof v === "number" ? v : 0), 0);
+
+/* 시각 글자('12', '13', …, '23:36') → 시각(ms). 끝에서부터 거슬러 올라가며 날을 넘긴다 */
+function labelTimes(labels, lastHM) {
+  const out = new Array(labels.length), now = new Date();
+  const [lh, lm] = (lastHM || `${now.getHours()}:00`).split(":").map(Number);
+  const t = new Date(now); t.setHours(lh, lm || 0, 0, 0);
+  if (t - now > 3600e3) t.setDate(t.getDate() - 1);
+  out[labels.length - 1] = t.getTime();
+  for (let i = labels.length - 2; i >= 0; i--) {
+    const c = new Date(out[i + 1]);
+    c.setHours(+labels[i].slice(0, 2), labels[i].length > 2 ? +labels[i].slice(3, 5) : 0, 0, 0);
+    if (c.getTime() >= out[i + 1]) c.setDate(c.getDate() - 1);
+    out[i] = c.getTime();
+  }
+  return out;
+}
+function nextHours(labels, after) {          // 예측 '00','01',… → after 뒤의 시각들
+  const out = [];
+  let prev = after;
+  for (const l of labels) {
+    const c = new Date(prev); c.setHours(+l.slice(0, 2), 0, 0, 0);
+    if (c.getTime() <= prev) c.setDate(c.getDate() + 1);
+    out.push(c.getTime()); prev = c.getTime();
+  }
+  return out;
+}
+
+async function cardsFromApi() {
+  const H = SET.acc_hours;
+  let rain = await getJson(`/api/rain?hours=${H}&src=bangjae`), fell = false;
+  // 스방이 멈췄거나 계정이 없으면 빈 응답이다 — 기상청으로 물러서고, 물러섰다고 적는다(종합 화면과 같다)
+  if (!(rain.rows || []).length) { rain = await getJson(`/api/rain?hours=${H}&src=kma`); fell = true; }
+  const [fc, mn] = await Promise.all([getJson("/api/forecast?hours=6"), getJson("/api/minute?n=6")]);
+  const lastHM = rain.labels.at(-1).includes(":") ? rain.labels.at(-1) : rain.base_hour;
+  const dt = labelTimes(rain.labels, lastHM);
+  const ft = nextHours(fc.labels || [], dt.at(-1));
+  const FC = Object.fromEntries((fc.sigun || []).map(s => [s.sigun, s]));
+  const by = {};
+  for (const r of rain.rows) (by[r.sigun] ||= []).push(r);
+  const live = r => r.bad < r.d.length;              // 자료를 아예 안 주는 지점이 0으로 1등이 되지 않게
+  const rows = ORDER_GN().filter(s => by[s]).map(s => {
+    const st = by[s].slice().sort((a, b) => (live(b) - live(a)) || (b.sum - a.sum))[0];
+    const fcd = (FC[s]?.d || []).slice(0, 6).map(qRN1);
+    return { sig: s, stn: st.name, d: st.d, dt, fcd, ft, sum: st.sum, fc: sumv(fcd), bad: st.bad };
+  });
+  const srcL = fell ? "스방 안 됨→기상청" : rain.src === "bangjae" ? "스방 265" : "기상청 56";
+  return {
+    acc: { rows, H, src: srcL, fell, bt: `${lastHM} 실측` },
+    now: { r15: (mn.r15 || []).map(x => ({ sig: x.sigun, name: x.name, mm: x.mm })),
+           r60: (mn.r60 || []).map(x => ({ sig: x.sigun, name: x.name, mm: x.mm })), tm: mn.tm },
+    fc: { rows: (fc.sigun || []).map(s => ({ sig: s.sigun, emd: s.emd, d: s.d.slice(0, 6), sum: s.sum })),
+          labels: fc.labels || [], ft, bt: fc.tmfc ? `${hm(fc.tmfc)} 발표` : "—" },
+  };
+}
+
+async function cardsFromTest() {
+  if (!FLOW) return null;
+  const obsI = [], fcI = [];
+  FLOW.frames.forEach((f, i) => {
+    if (f.kind === "obs" && f.t.endsWith("00")) obsI.push(i);
+    if (f.kind === "fcst") fcI.push(i);
+  });
+  const lastObs = FLOW.frames.reduce((a, f, i) => (f.kind === "obs" ? i : a), -1);
+  const dt = obsI.map(i => FLOW.tt[i]), ft = fcI.map(i => FLOW.tt[i]);
+  const rows = FLOW.series.map(s => {
+    const d = obsI.map(i => s.max[i]), fcd = fcI.map(i => qRN1(s.max[i] ?? 0));
+    return { sig: s.sigun, stn: "격자", d, dt, fcd, ft, sum: Math.round(sumv(d) * 10) / 10, fc: sumv(fcd) };
+  });
+  let s15 = null;
+  try { s15 = await getJson("/api/grid/sigun?layer=obs15&test=1"); } catch {}
+  const top = (arr) => arr.sort((a, b) => b.mm - a.mm).slice(0, 6);
+  const r60 = top(FLOW.series.map(s => ({ sig: s.sigun, name: "격자", mm: lastObs >= 0 ? (s.max[lastObs] ?? 0) : 0 })));
+  const r15 = s15 ? top(s15.rows.filter(r => r.kind === "gn").map(r => ({ sig: r.sigun, name: r.where?.emd || "격자", mm: r.max ?? 0 }))) : [];
+  return {
+    acc: { rows, H: dt.length, src: "테스트", fell: false, bt: lastObs >= 0 ? `${hm(FLOW.frames[lastObs].t)} 실측` : "—" },
+    now: { r15, r60, tm: lastObs >= 0 ? hm(FLOW.frames[lastObs].t) : "—" },
+    fc: { rows: FLOW.series.map(s => { const d = fcI.map(i => s.max[i] ?? 0); return { sig: s.sigun, emd: "", d, sum: sumv(d) }; }),
+          labels: ft.map(fmtH), ft, bt: FLOW.tmfc ? `${hm(FLOW.tmfc)} 발표` : "—" },
+  };
+}
+
+let CARD_SEQ = 0;
+async function loadCards() {
+  if (!tlOn || SET.panel === "timeline") return;
+  const my = ++CARD_SEQ;
+  let c;
+  try { c = test ? await cardsFromTest() : await cardsFromApi(); }
+  catch (e) { c = { err: e.message }; }
+  if (my !== CARD_SEQ) return;
+  CARDS = c;
+  renderCards();
+}
+
+const rampVar = (v, steps) => { const k = stepIdx(v, steps); return k ? `var(--rain-${k})` : null; };
+function rowEvents(el) {
+  for (const r of el.querySelectorAll("[data-s]")) {
+    r.onmouseenter = () => { highlight(r.dataset.s); link(r, r.dataset.s); };
+    r.onmouseleave = () => { highlight(null); link(null); };
+  }
+}
+
+function renderCards() {
+  if (!CARDS || !V) return;
+  if (CARDS.err) {
+    $("acc-b").innerHTML = `<div class="empty-note">불러오지 못했다 — ${CARDS.err}</div>`;
+    return;
+  }
+  // 누적 카드는 남는 높이를 다 쓴다 — 다른 둘을 먼저 채운 뒤에 재야 줄 수가 맞는다
+  renderNow(); renderFc(); renderAcc();
+  drawRanks();
+  cardsPlayhead();
+}
+
+/* 강수 누적 — 종합 화면 '강수 타임라인'을 한 줄짜리로 */
+function renderAcc() {
+  const A = CARDS.acc, k = V.k, body = $("acc-b");
+  $("acc-sub").textContent = `다우지점 · 지난 ${A.H}시간 + 예상 6시간`;
+  $("acc-src").textContent = A.src; $("acc-src").classList.toggle("fell", !!A.fell);
+  $("acc-bt").textContent = A.bt;
+  const rows = A.rows.slice().sort((a, b) => (b.sum + b.fc) - (a.sum + a.fc));
+  if (!rows.length || !rows[0].dt.length) { body.innerHTML = `<div class="empty-note">강수 자료가 아직 없다</div>`; A.sp = null; return; }
+  const bh = body.clientHeight - 10 * k;
+  const rh = Math.max(26 * k, Math.min(44 * k, bh / Math.max(1, rows.length)));   // 카드를 꽉 채운다
+  const n = Math.max(1, Math.min(rows.length, Math.floor(bh / rh)));
+  body.style.setProperty("--rh", rh + "px");
+  const bmax = Math.max(1, ...rows.map(r => r.sum + r.fc));
+  let smax = 5;
+  for (const r of rows) for (const v of [...r.d, ...r.fcd]) if (typeof v === "number" && v > smax) smax = v;
+  const t0 = Math.min(...rows[0].dt) - 1800e3, t1 = Math.max(rows[0].dt.at(-1), ...(rows[0].ft.length ? rows[0].ft : [0]));
+  const SW = 124 * k, SH = rh * 0.82;
+  const sx = t => (t - t0) / Math.max(1, t1 - t0) * SW, sy = v => SH - Math.min(v, smax) / smax * (SH - 3);
+  A.sp = { t0, t1, SW };
+  const sline = (ts, vs, from) => {
+    let pts = ts.map((t, i) => [t, vs[i]]).filter(([, v]) => typeof v === "number");
+    if (from) pts = [from, ...pts];
+    if (!pts.length) return { d: "", a: "" };
+    const p = pts.map(([t, v]) => `${sx(t).toFixed(1)},${sy(v).toFixed(1)}`);
+    return { d: "M" + p.join("L"), a: `M${sx(pts[0][0]).toFixed(1)},${SH}L${p.join("L")}L${sx(pts.at(-1)[0]).toFixed(1)},${SH}Z` };
+  };
+  const xn = sx(rows[0].dt.at(-1));
+  body.innerHTML = rows.slice(0, n).map((r, i) => {
+    const tot = r.sum + r.fc, o = r.sum / bmax * 100, f = r.fc / bmax * 100;
+    const inside = o + f > 62;
+    const vpos = inside ? `right:calc(${(100 - o - f).toFixed(1)}% + 6px)` : `left:calc(${(o + f).toFixed(1)}% + 6px)`;
+    const lastObs = r.d.reduce((a, v, j) => (typeof v === "number" ? [r.dt[j], v] : a), null);
+    const po = sline(r.dt, r.d), pf = sline(r.ft, r.fcd, lastObs);
+    const rank = i < 3 && tot >= 0.1 ? `<span class="rk">${i + 1}</span>` : "";
+    return `<div class="ar" data-s="${r.sig}">
+      <div class="nm2">${rank}<small>${r.sig}</small>${r.stn}</div>
+      <div class="abar"><div class="o" style="width:${o.toFixed(1)}%"></div>
+        ${r.fc ? `<div class="f" style="left:${o.toFixed(1)}%;width:${f.toFixed(1)}%"></div>` : ""}
+        <span class="v" style="${vpos}">${r.sum.toFixed(1)}${r.fc ? `<i>+${r.fc}</i>` : ""}</span></div>
+      <svg viewBox="0 0 ${SW.toFixed(0)} ${SH.toFixed(0)}" preserveAspectRatio="none">
+        <path class="sp-a" d="${po.a}"/><path class="sp-l" d="${po.d}"/>
+        <path class="sp-fa" d="${pf.a}"/><path class="sp-fl" d="${pf.d}"/>
+        <line class="sp-now" x1="${xn}" x2="${xn}" y1="0" y2="${SH}"/>
+        <line class="sp-head" x1="0" x2="0" y1="-2" y2="${SH + 2}" style="transform:translateX(-99px)"/></svg>
+      <div class="tot ${tot ? "" : "z"}">${tot.toFixed(1)}</div></div>`;
+  }).join("");
+  rowEvents(body);
+}
+
+/* 지금 오는 비 — 15분 │ 60분 상위. 단계는 종합 화면과 같다(15분과 60분이 다른 자) */
+const MN_STEPS = { 15: [0.5, 2, 5, 8, 12, 18, 25], 60: [1, 5, 10, 20, 30, 50, 70] };
+function renderNow() {
+  const N = CARDS.now;
+  $("now-bt").textContent = N.tm || "—";
+  const col = (list, kk) => {
+    const mx = Math.max(...list.map(x => x.mm), 0.1);
+    if (!list.length || mx <= 0.1 && !list.some(x => x.mm > 0))
+      return `<div class="empty-note">비 없음</div>`;
+    return list.slice(0, 6).map(x => {
+      const c = rampVar(x.mm, MN_STEPS[kk]) || "var(--ink-3)";
+      return `<div class="mr" data-s="${x.sig}"><span class="bg" style="width:${(x.mm / mx * 100).toFixed(0)}%;background:${c}"></span>
+        <span class="nm2"><small>${x.sig}</small>${x.name}</span><b>${x.mm.toFixed(1)}</b></div>`;
+    }).join("");
+  };
+  $("now-b").innerHTML = `<div class="mn"><div><h4>15분<span>㎜</span></h4>${col(N.r15, 15)}</div>
+    <div><h4>60분<span>㎜</span></h4>${col(N.r60, 60)}</div></div>`;
+  rowEvents($("now-b"));
+}
+
+/* 예측 상위 — 6시간 합 순. 칸은 지도와 같은 색 단계 */
+function renderFc() {
+  const F = CARDS.fc;
+  $("fc-bt").textContent = F.bt;
+  const rows = F.rows.slice().sort((a, b) => b.sum - a.sum).slice(0, 6);
+  if (!rows.length || rows[0].sum <= 0) {
+    $("fc-b").innerHTML = `<div class="empty-note">앞으로 6시간 예상 강수 없음</div>`;
+    return;
+  }
+  const cell = v => {
+    const k = stepIdx(v, STEPS.m60);
+    const txt = v >= 1 ? (Number.isInteger(v) ? v : v.toFixed(1)) : "";
+    return `<i style="${k ? `background:var(--rain-${k});color:${k >= 4 ? "var(--on-accent)" : "var(--ink)"}` : ""}">${txt}</i>`;
+  };
+  $("fc-b").innerHTML = `<div class="fh"><span>시군</span><div class="cells">${F.labels.map(l => `<span>${l}</span>`).join("")}</div><span style="text-align:right">합</span></div>`
+    + rows.map(r => `<div class="fr" data-s="${r.sig}"><span class="nm2">${r.sig}<small>${r.emd || ""}</small></span>
+      <div class="cells">${r.d.map(cell).join("")}</div><span class="sum">${(+r.sum).toFixed(r.sum % 1 ? 1 : 0)}</span></div>`).join("");
+  rowEvents($("fc-b"));
+}
+
+/* 카드 안의 재생 위치 — 누적 줄 선 그래프의 세로선, 예측 칸의 테두리 */
+function cardsPlayhead() {
+  if (!CARDS || CARDS.err || !tlOn || SET.panel === "timeline") return;
+  const ht = headT(), sp = CARDS.acc?.sp;
+  for (const l of document.querySelectorAll(".sp-head")) {
+    const x = ht != null && sp && ht >= sp.t0 && ht <= sp.t1 ? (ht - sp.t0) / (sp.t1 - sp.t0) * sp.SW : -99;
+    l.style.transform = `translateX(${x.toFixed(1)}px)`;
+  }
+  // 지도가 예측(초단기)을 보일 때만 그 시각 열을 짚는다 — 실측을 보는 중이면 짚지 않는다
+  let j = -1;
+  if (kind === "vsrt" && ht != null && CARDS.fc.ft?.length) {
+    let bd = Infinity;
+    CARDS.fc.ft.forEach((t, i) => { const d = Math.abs(t - ht); if (d < bd) { bd = d; j = i; } });
+  }
+  for (const r of document.querySelectorAll("#fc-b .fr, #fc-b .fh"))
+    r.querySelectorAll(".cells > *").forEach((c, i) => c.classList.toggle("on", i === j));
+}
+
+/* 지도 위 순위 표식 — 누적 상위 셋(시군명 왼쪽에 작은 원) */
+function drawRanks() {
+  const g = $("ranks");
+  if (!g) return;
+  if (!tlOn || SET.panel === "timeline" || !CARDS || CARDS.err || !V) { g.innerHTML = ""; return; }
+  const rows = CARDS.acc.rows.slice().sort((a, b) => (b.sum + b.fc) - (a.sum + a.fc)).slice(0, 3)
+    .filter(r => r.sum + r.fc >= 0.1);
+  const r0 = FSN * 0.46;
+  g.innerHTML = rows.map((r, i) => {
+    const ft = FEAT.find(f => f.properties.sigun === r.sig);
+    if (!ft) return "";
+    const x = V.toX(ft.properties.lx) - r.sig.length * FSN * 0.52 - r0 - 4, y = V.toY(ft.properties.ly);
+    return `<g class="rk"><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r0.toFixed(1)}"/>
+      <text x="${x.toFixed(1)}" y="${y.toFixed(1)}" style="font-size:${(FSN * 0.56).toFixed(1)}px">${i + 1}</text></g>`;
+  }).join("");
+}
+
+/* 줄 ↔ 지도 연결선 — 카드 줄 왼쪽 끝에서 지도 위 그 시군 이름 오른쪽까지, 그어지듯 */
+function link(el, sig) {
+  const svg = $("links");
+  if (!el || !sig || !V) { svg.innerHTML = ""; return; }
+  const ft = FEAT.find(f => f.properties.sigun === sig);
+  if (!ft) { svg.innerHTML = ""; return; }
+  const st = $("stage").getBoundingClientRect(), r = el.getBoundingClientRect();
+  const x1 = r.left - st.left - 3, y1 = r.top - st.top + r.height / 2;
+  const hw = sig.length * FSN * 0.52 * MT.sc;
+  const x2 = V.toX(ft.properties.lx) * MT.sc + MT.tx + hw + 8, y2 = V.toY(ft.properties.ly) * MT.sc + MT.ty;
+  const dx = Math.max(50, (x1 - x2) * 0.45);
+  svg.innerHTML = `<path d="M${x1.toFixed(1)},${y1.toFixed(1)} C${(x1 - dx).toFixed(1)},${y1.toFixed(1)} ${(x2 + dx).toFixed(1)},${y2.toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)}"/>
+    <circle cx="${x2.toFixed(1)}" cy="${y2.toFixed(1)}" r="5"/>`;
+  const p = svg.querySelector("path");
+  p.style.setProperty("--len", p.getTotalLength().toFixed(0));
+}
+
 /* ── 설정(Ctrl+,) — 서버에 둔다(어느 PC 에서 열어도 같게) ─────────────────── */
 function openPrefs() {
   stopPlay();
@@ -1176,9 +1574,11 @@ function openPrefs() {
     <div class="row"><span class="k"></span><span class="note">예측(초단기)은 1시간 간격뿐이다 — 10분 대상시각을 주면 가까운 정시 격자가 온다.</span></div>
     <div class="row"><span class="k">지난 시간</span>${seg("flow_hours", [[1, "1시간"], [3, "3시간"], [6, "6시간"], [12, "12시간"]])}</div>
     <div class="row"><span class="k">빠르기</span>${seg("play_ms", [[2000, "느리게"], [1200, "보통"], [600, "빠르게"]])}</div>
-    <h4>강수 타임라인</h4>
+    <h4>오른쪽 패널</h4>
     <div class="row"><span class="k">표시</span>${seg("tl_on", [[true, "켬"], [false, "끔"]])}</div>
-    <div class="row"><span class="k">시군 값</span>${seg("tl_stat", [["max", "최대"], ["mean", "평균"]])}</div>
+    <div class="row"><span class="k">방식</span>${seg("panel", [["cards", "카드 — 종합 화면 판"], ["timeline", "타임라인 — 시군 선"]])}</div>
+    <div class="row"><span class="k">누적 구간</span>${seg("acc_hours", [[6, "6시간"], [12, "12시간"], [24, "24시간"], [48, "48시간"]])}</div>
+    <div class="row"><span class="k">타임라인 값</span>${seg("tl_stat", [["max", "시군 최대"], ["mean", "시군 평균"]])}</div>
     <h4>화면</h4>
     <div class="row"><span class="k">테마</span><span class="seg">
       <button data-th="dark" class="${th !== "light" ? "on" : ""}">어둡게</button>
@@ -1190,10 +1590,12 @@ function openPrefs() {
   for (const b of $("prefs").querySelectorAll("button[data-k]")) b.onclick = () => {
     const k = b.dataset.k;
     let v = b.dataset.v;
-    v = k === "tl_on" ? v === "true" : k === "tl_stat" ? v : +v;
+    v = k === "tl_on" ? v === "true" : (k === "tl_stat" || k === "panel") ? v : +v;
     SET[k] = v;
     saveSetting({ [k]: v });
     if (k === "tl_on") setTL(v, false);
+    if (k === "panel") { CARDS = null; applyTL(true); }
+    if (k === "acc_hours") loadCards();
     if (k === "flow_step" || k === "flow_hours") loadFlow();
     if (k === "tl_stat") buildTL();
     openPrefs();
@@ -1318,6 +1720,8 @@ async function boot() {
   applyTL(false);                       // 범례가 그려진 뒤에 지도 비켜설 자리를 다시 잰다
   await loadFlow();
   setInterval(refreshMeta, 60000);
+  // 카드는 종합 화면처럼 1분마다 다시 읽는다(DB 만 읽는다 — 기상청 호출은 늘지 않는다)
+  setInterval(() => { if (!test) loadCards(); }, 60000);
 }
 boot();
 </script>

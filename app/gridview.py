@@ -213,19 +213,23 @@ def flow(hours: int = 6, step: int = 10, now: datetime | None = None, test: bool
     now = now or datetime.now()
     start = now - timedelta(hours=hours)
     frames: list[dict] = []
+    # ⚠️ 가장 최근 실측은 간격과 상관없이 늘 넣는다. 30분 간격에 최신이 23:40 이면
+    #    23:30 에서 흐름이 끝나 '지금' 화면이 재생 막대 밖으로 빠졌다.
     if test:
-        t = _floor10(now - timedelta(minutes=6))
+        latest = _floor10(now - timedelta(minutes=6))
+        t = latest
         while t >= start:
-            if (t.hour * 60 + t.minute) % step == 0:
+            if (t.hour * 60 + t.minute) % step == 0 or t == latest:
                 frames.append({"t": t.strftime("%Y%m%d%H%M"), "kind": "obs"})
             t -= timedelta(minutes=10)
         frames.reverse()
         tmfc = _floor10(now).strftime("%Y%m%d%H%M")
         tmefs = [(now + timedelta(hours=n)).strftime("%Y%m%d%H00") for n in range(1, 7)]
     else:
-        for k in gridstore.keys("obs60"):
+        ks = gridstore.keys("obs60")
+        for k in ks:
             t = _dt(k)
-            if start <= t <= now and (t.hour * 60 + t.minute) % step == 0:
+            if start <= t <= now and ((t.hour * 60 + t.minute) % step == 0 or k == ks[-1]):
                 frames.append({"t": k, "kind": "obs"})
         tmfc, tmefs = vsrt_run()
     for f in frames:
@@ -304,10 +308,13 @@ def meta(now: datetime | None = None) -> dict:
 SETTING_DEFAULT = {"layer": "obs60", "x4": False, "vsrt_n": 1,
                    # 재생 — 실측 간격(분)·지난 시간·한 장 머무는 시간(ms)
                    "flow_step": 10, "flow_hours": 6, "play_ms": 1200,
-                   # 오른쪽 타임라인 — 켬/끔, 시군 '최대'/'평균'
-                   "tl_on": False, "tl_stat": "max"}
+                   # 오른쪽 패널 — 켬/끔, 방식(카드: 종합 화면 판을 작게 / 타임라인: 격자 시군 선),
+                   # 타임라인의 시군 '최대'/'평균', 카드의 누적 구간(시간)
+                   "tl_on": False, "panel": "cards", "tl_stat": "max", "acc_hours": 12}
 _CHOICES = {"flow_step": (10, 20, 30, 60), "flow_hours": (1, 3, 6, 12),
-            "play_ms": (600, 1200, 2000), "tl_stat": ("max", "mean")}
+            "play_ms": (600, 1200, 2000), "tl_stat": ("max", "mean"),
+            "panel": ("cards", "timeline"), "acc_hours": (6, 12, 24, 48)}
+_TEXT = {"tl_stat", "panel"}
 
 
 def setting() -> dict:
@@ -329,7 +336,7 @@ def put_setting(body: dict) -> dict:
         cur["vsrt_n"] = n
     for k, ok in _CHOICES.items():
         if k in body:
-            v = body[k] if k == "tl_stat" else int(body[k])
+            v = body[k] if k in _TEXT else int(body[k])
             if v not in ok:
                 raise ValueError(f"{k} 는 {ok} 중 하나")
             cur[k] = v
