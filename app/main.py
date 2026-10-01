@@ -73,6 +73,12 @@ async def _nightly() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.init()
+    if os.environ.get("NO_COLLECT") == "1":
+        # 화면만 띄운다(개발용). ⚠️ 같은 PC 에서 수집기가 둘 돌면 기상청 호출이 두 배가 된다.
+        log.info("수집기 끔(NO_COLLECT) — 저장된 자료만 보여 준다")
+        app.state.sched = None
+        yield
+        return
     sched = AsyncIOScheduler(timezone="Asia/Seoul")   # 시각은 전부 KST. UTC로 바꾸지 않는다.
     app.state.sched = sched
     for kind, sec in db.get_setting("intervals", INTERVALS).items():
@@ -352,7 +358,7 @@ async def api_settings_intervals(body: dict):
         if k in body:
             sec = max(30, min(3600, int(body[k])))
             cur[k] = sec
-            job = app.state.sched.get_job(k)
+            job = app.state.sched.get_job(k) if app.state.sched else None
             if job:
                 job.reschedule("interval", seconds=sec)
     db.put_setting("intervals", cur)
@@ -391,7 +397,15 @@ if STATIC.exists():
 if __name__ == "__main__":
     # 포트는 PORT 환경변수를 따른다 — 없으면 8000.
     # 하드코딩하면 이미 쓰는 포트와 부딪힌다.
+    #   --no-collect   수집기 없이 화면만(개발용 미리보기). --port N 으로 포트를 준다.
+    import sys
+
     import uvicorn
 
+    argv = sys.argv[1:]
+    if "--no-collect" in argv:
+        os.environ["NO_COLLECT"] = "1"
+    if "--port" in argv:
+        os.environ["PORT"] = argv[argv.index("--port") + 1]
     uvicorn.run("app.main:app", host=os.environ.get("HOST", "127.0.0.1"),
                 port=int(os.environ.get("PORT", "8000")))

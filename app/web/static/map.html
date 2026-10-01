@@ -1,0 +1,798 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>경남 강수 지도</title>
+<link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNyIgZmlsbD0iIzBFMTcyMyIvPjxwYXRoIGQ9Ik0xMCAxOC42YTQuNyA0LjcgMCAwIDEgLjUtOS4zNSA2LjQgNi40IDAgMCAxIDEyLjIgMS41IDQuNiA0LjYgMCAwIDEtLjIgOS4xSDEweiIgZmlsbD0iI0UzRUNGNiIvPjxnIHN0cm9rZT0iIzJGQTNEQyIgc3Ryb2tlLXdpZHRoPSIyLjgiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCI+PHBhdGggZD0iTTEyLjQgMjIuNCA5LjIgMjcuNCIvPjxwYXRoIGQ9Ik0xNy42IDIyLjQgMTQuNCAyNy40Ii8+PHBhdGggZD0iTTIyLjggMjIuNCAxOS42IDI3LjQiLz48L2c+PC9zdmc+">
+<meta name="theme-color" content="#0E1723">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<!--
+  경남 강수 지도 — 경계는 SVG, 격자는 Canvas.
+
+  ⚠️ 경계를 d3.geoConicConformal 로 투영하지 않는다. 그건 구면이라 500m 격자(타원체)와
+     경남 안에서 최대 800m 어긋난다(README '경남 지도' 실측). 경계는 서버가 미리 **500m 격자
+     칸 좌표**로 바꿔 두었고, 여기서는 칸 좌표 → 화면에 축척 하나만 곱한다(toX·toY).
+     격자 Canvas 도 같은 toX·toY 로 놓으므로 두 층이 어긋날 수 없다.
+  ⚠️ 칸 좌표는 칸 가운데가 정수다. 칸 (i, j) 는 [i-0.5, i+0.5] × [j-0.5, j+0.5] 를 덮는다.
+     행은 남→북이라 화면에 그릴 때만 뒤집는다.
+  ⚠️ 5km 층은 5km 칸 그대로 찍고 아핀 하나(grids.json dfs_to_hr)로 얹는다. 두 격자는 지구
+     모양이 달라 정확히 포개지지 않는다 — 경남 안 잔차 0.016칸(8m).
+-->
+<style>
+/* 토큰은 index.html 과 같은 이름·같은 값이다. 한쪽만 고치지 않는다. */
+:root {
+  --ground: #090D13; --panel: #111823; --panel-2: #18202C; --raised: #1E2836;
+  --line: #222D3C; --line-soft: #1A2330;
+  --ink: #E8EEF6; --ink-2: #94A5B8; --ink-3: #5C6D80;
+  --accent: #2FA3DC;
+  --rain-0: #16202C; --rain-1: #1B3A55; --rain-2: #1E5B87; --rain-3: #2280B8;
+  --rain-4: #2FA3DC; --rain-5: #5EC3EE; --rain-6: #96DBF6; --rain-7: #D7F0FC;
+  --lv-fail: #FF8A5B; --lv-ok: #3FB98A;
+
+  /* 지도 전용 */
+  --sea: #090D13;
+  --land: #131B26;
+  --land-nb: #0F151D;
+  --bd: #3B4B5F;          /* 시군 경계 */
+  --coast: #4F6178;       /* 해안선·바깥 경계 */
+  --zone: #A9BACD;        /* 권역 경계 */
+  --halo: #090D13;        /* 글자 테두리 — 칠해진 칸 위에서도 읽히게 */
+  --hatch: #8093A8;       /* 결측 빗금 */
+  --nb-ink: #56677B;
+
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --sans: "IBM Plex Sans KR", system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+}
+:root[data-theme="light"] {
+  --ground: #EEF2F7; --panel: #FFFFFF; --panel-2: #F5F8FC; --raised: #E8EEF6;
+  --line: #D3DCE7; --line-soft: #E5EBF3;
+  --ink: #101821; --ink-2: #47596D; --ink-3: #7688A0;
+  --accent: #1B7FBF;
+  --rain-0: #F1F5FA; --rain-1: #DDEDF8; --rain-2: #BADCF1; --rain-3: #86C0E4;
+  --rain-4: #2E86C2; --rain-5: #1B6698; --rain-6: #0E4A73; --rain-7: #073050;
+  --lv-fail: #C4521E; --lv-ok: #12805A;
+  --sea: #E2E9F1;
+  --land: #FFFFFF;
+  --land-nb: #F2F5F9;
+  --bd: #A3B1C2;
+  --coast: #7F90A5;
+  --zone: #2E3D50;
+  --halo: #FFFFFF;
+  --hatch: #6A7C92;
+  --nb-ink: #8C9BAE;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  display: flex; flex-direction: column;
+  background: var(--ground); color: var(--ink);
+  font-family: var(--sans); font-size: 14px; line-height: 1.4;
+  -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums;
+  overflow: hidden;
+}
+
+/* ── 머리 ── */
+#hd {
+  flex: none; display: flex; align-items: center; gap: 18px;
+  padding: 10px 18px; min-height: 64px;
+  background: var(--panel); border-bottom: 1px solid var(--line);
+}
+#hd .ttl { display: flex; align-items: baseline; gap: 14px; min-width: 0; flex-wrap: wrap; }
+#lname { font-size: 30px; font-weight: 700; letter-spacing: -.01em; white-space: nowrap; }
+#ltime { font-family: var(--mono); font-size: 19px; font-weight: 600; color: var(--ink); white-space: nowrap; }
+#lsrc { font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+.badge {
+  display: inline-block; font-size: 14px; font-weight: 600; padding: 2px 9px; border-radius: 5px;
+  border: 1px solid var(--line); color: var(--ink-2); white-space: nowrap;
+}
+.badge.warn { color: var(--lv-fail); border-color: color-mix(in oklab, var(--lv-fail) 55%, var(--line)); }
+.badge.test { color: var(--on-test, #fff); background: #7B5CC8; border-color: #7B5CC8; }
+#hd .sp { flex: 1; }
+
+/* 오른쪽 위 층 메뉴 */
+#menu { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; justify-content: flex-end; }
+#menu .grp { display: flex; align-items: center; gap: 4px; }
+#menu .gl { font-size: 12px; color: var(--ink-3); margin-right: 4px; letter-spacing: .08em; }
+#menu button, #tools button {
+  font: 600 14px var(--sans); color: var(--ink-2); background: transparent;
+  border: 1px solid var(--line); border-radius: 6px; padding: 5px 11px; cursor: pointer; white-space: nowrap;
+}
+#menu button:hover, #tools button:hover { color: var(--ink); border-color: var(--ink-3); }
+#menu button.on { color: var(--ink); background: color-mix(in oklab, var(--accent) 22%, transparent);
+  border-color: color-mix(in oklab, var(--accent) 60%, var(--line)); }
+#menu button.none { opacity: .45; }
+#menu button.late::after { content: "·"; color: var(--lv-fail); font-weight: 800; margin-left: 3px; }
+#tools { display: flex; gap: 6px; }
+#tools button.on { color: #fff; background: #7B5CC8; border-color: #7B5CC8; }
+
+/* ── 지도 ── */
+#stage { position: relative; flex: 1; min-height: 0; background: var(--sea); overflow: hidden; }
+#stage > svg, #stage > canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+#cv { transition: opacity .3s; }
+#stage.late #cv { opacity: .4; }
+#over { pointer-events: none; }
+#over .sg { fill: none; stroke: var(--bd); stroke-width: 1; }
+#over .cs { fill: none; stroke: var(--coast); stroke-width: 1.1; }
+#over .zn { fill: none; stroke: var(--zone); stroke-width: 2.6; stroke-dasharray: 9 6; stroke-linecap: round; }
+#over .sb { fill: none; stroke: var(--zone); stroke-width: 1.5; stroke-dasharray: 3 5; opacity: .8; }
+#over text { paint-order: stroke; stroke: var(--halo); stroke-linejoin: round; }
+#over .nm { font-weight: 700; fill: var(--ink); text-anchor: middle; dominant-baseline: central; }
+#over .nm.nb { fill: var(--nb-ink); font-weight: 600; }
+#over .mx { font-family: var(--mono); font-weight: 700; fill: var(--ink); }
+#over .mxw { font-weight: 500; fill: var(--ink-2); }
+#over .pin { fill: var(--ink); stroke: var(--halo); }
+#over .lead { stroke: var(--ink-2); stroke-width: 1; }
+#under .ld { fill: var(--land); }
+#under .ld.nb { fill: var(--land-nb); }
+
+/* 범례 — 상자는 색 띠에만 두른다(README '예측 분포 범례'). 글자는 지도 위에 그대로. */
+#legend { position: absolute; left: 22px; bottom: 22px; display: flex; flex-direction: column; gap: 8px;
+  font-family: var(--mono); color: var(--ink); text-shadow: 0 0 3px var(--halo), 0 0 6px var(--halo); }
+#legend .lt { font: 600 15px var(--sans); display: flex; align-items: center; gap: 10px; }
+#legend .band { display: flex; flex-direction: column-reverse; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; width: 30px; }
+#legend .band i { display: block; height: 26px; }
+#legend .rows { display: flex; gap: 10px; align-items: stretch; margin-bottom: 8px; }
+/* 눈금 숫자는 칸의 **아래 끝**(그 값부터 이 색)에 맞춘다 */
+#legend .ticks { position: relative; width: 44px; font-size: 15px; font-weight: 600; }
+#legend .ticks span { position: absolute; left: 0; transform: translateY(50%); line-height: 1; }
+#legend .sw { display: flex; align-items: center; gap: 8px; font: 500 13px var(--sans); color: var(--ink-2); }
+#legend .sw b { width: 30px; height: 16px; border: 1px solid var(--line); border-radius: 3px; display: inline-block; }
+#legend .sw b.h { background: repeating-linear-gradient(135deg, transparent 0 3px, var(--hatch) 3px 4.5px); }
+#legend button { font: 600 13px var(--sans); color: var(--ink-2); background: var(--panel); border: 1px solid var(--line);
+  border-radius: 5px; padding: 2px 8px; cursor: pointer; text-shadow: none; }
+#legend button.on { color: var(--ink); border-color: var(--accent); }
+
+/* 초단기 재생 막대 */
+#play { position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); display: flex; gap: 4px;
+  background: color-mix(in oklab, var(--panel) 88%, transparent); border: 1px solid var(--line); border-radius: 8px; padding: 6px; }
+#play button { font: 600 15px var(--mono); color: var(--ink-2); background: transparent; border: 1px solid transparent;
+  border-radius: 5px; padding: 5px 10px; cursor: pointer; white-space: nowrap; }
+#play button small { font: 500 12px var(--sans); color: var(--ink-3); margin-left: 4px; }
+#play button.on { color: var(--ink); background: color-mix(in oklab, var(--accent) 25%, transparent); border-color: var(--accent); }
+#play .pp { width: 42px; }
+
+#tip { position: absolute; pointer-events: none; font: 500 14px var(--sans); padding: 6px 10px; border-radius: 6px;
+  background: color-mix(in oklab, var(--panel) 94%, transparent); border: 1px solid var(--line); color: var(--ink);
+  white-space: nowrap; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+#tip b { font-family: var(--mono); font-size: 16px; }
+#tip .d { color: var(--ink-3); font-family: var(--mono); font-size: 12px; margin-top: 2px; }
+
+#empty { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); text-align: center;
+  font-size: 20px; font-weight: 600; color: var(--ink-2); background: color-mix(in oklab, var(--panel) 90%, transparent);
+  border: 1px solid var(--line); border-radius: 10px; padding: 16px 26px; }
+#empty small { display: block; font-size: 14px; font-weight: 400; color: var(--ink-3); margin-top: 6px; }
+#empty.fail { color: var(--lv-fail); }
+
+/* 테스트 모드 — 실황으로 착각하지 않게 크게. 지도 위를 덮지 않고 판 테두리와 왼쪽 위에 둔다
+   (지도 한가운데 큰 글자를 얹었더니 옅게 해도 비구름처럼 보였다). */
+#stage.test { box-shadow: inset 0 0 0 6px #7B5CC8; }
+#testmark { position: absolute; left: 26px; top: 20px; pointer-events: none; color: #9C82E0;
+  font: 800 64px var(--sans); line-height: 1; letter-spacing: .06em; }
+#testmark small { display: block; font: 600 18px var(--sans); letter-spacing: 0; color: var(--ink-2); margin-top: 8px; }
+#dbg { position: absolute; right: 10px; bottom: 8px; font: 12px var(--mono); color: var(--ink-3); }
+[hidden] { display: none !important; }
+
+/* 4K 벽면(배율 100%)에서도 머리글·범례가 1080p 와 같은 크기로 읽히게 통째로 키운다.
+   --k = min(가로/1920, 세로/1080), 1 아래로는 줄이지 않는다(layout 에서 정한다).
+   지도 위 글자는 칸 크기를 따라 이미 커지므로 여기 넣지 않는다. */
+#hd, #legend, #play, #empty, #testmark { zoom: var(--k, 1); }
+#tip { font-size: calc(14px * var(--k, 1)); }
+#tip b { font-size: calc(16px * var(--k, 1)); }
+#tip .d { font-size: calc(12px * var(--k, 1)); }
+</style>
+
+<header id="hd">
+  <div class="ttl">
+    <span id="lname">경남 강수 지도</span>
+    <span id="ltime"></span>
+    <span id="badges"></span>
+  </div>
+  <span id="lsrc"></span>
+  <span class="sp"></span>
+  <nav id="menu"></nav>
+  <div id="tools">
+    <button id="b-test" title="비 없는 날 화면 점검용 합성 격자 (T)">테스트</button>
+    <button id="b-theme" title="밝은/어두운 테마">◐</button>
+  </div>
+</header>
+<main id="stage">
+  <svg id="under"></svg>
+  <canvas id="cv"></canvas>
+  <svg id="over"></svg>
+  <div id="legend"></div>
+  <div id="play" hidden></div>
+  <div id="tip" hidden></div>
+  <div id="empty" hidden></div>
+  <div id="testmark" hidden>테스트<small>합성 격자 — 실제 비가 아니다</small></div>
+  <div id="dbg" hidden></div>
+</main>
+
+<script src="vendor/d3-array.min.js"></script>
+<script src="vendor/d3-geo.min.js"></script>
+<script src="vendor/topojson-client.min.js"></script>
+<script>
+"use strict";
+const Q = new URLSearchParams(location.search);
+const $ = id => document.getElementById(id);
+const MISSING = 65535;
+
+/* ── 층 ───────────────────────────────────────────────────────────────
+   색 단계는 7칸(--rain-1 ~ --rain-7). 0 은 칠하지 않는다.
+   면을 칠하므로 '지금 오는 비' 표보다 한 칸 아래(0.1㎜)부터 보인다.
+   15분치와 60분치는 크기가 다른 값이라 단계를 따로 둔다 — 같은 눈금이면 15분에 8㎜
+   (시간당 32㎜의 기세)가 옅은 색으로 묻힌다. ×4 로 보면 60분 단계를 쓴다(index.html 과 같은 규칙). */
+const STEPS = {
+  m15: [0.1, 0.5, 2, 5, 8, 12, 18],
+  m60: [0.1, 1, 5, 10, 20, 30, 50],
+  day: [0.1, 5, 10, 30, 50, 80, 150],
+};
+const KINDS = ["obs15", "obs60", "obsday", "odam", "vsrt", "shrt_today", "shrt_tomorrow"];
+const COLLECT_OF = { obs15: "grid", obs60: "grid", obsday: "grid", odam: "odam", vsrt: "forecast",
+                     shrt_today: "short", shrt_tomorrow: "short" };
+
+let META = null, TOPO = null, GEO = null, MSIG = null, MEMD = null, EMDN = null;
+let kind = "obs60", vsrtN = 1, x4 = false;
+let test = Q.get("test") === "1";
+let CUR = null, CURSTAT = null;          // 지금 그리는 격자, 시군 통계
+let playing = null;
+const GRIDS = new Map(), STATS = new Map();
+let V = null;                           // 화면 틀
+let NAMEBOX = [];
+let lastErr = null;
+
+const layerKey = () => kind === "vsrt" ? `vsrt+${vsrtN}` : kind;
+const metaOf = k => (META?.layers || []).find(x => x.id === k) || {};
+const stepsOf = k => k === "obs15" ? (x4 ? STEPS.m60 : STEPS.m15)
+  : (k === "obsday" || k.startsWith("shrt")) ? STEPS.day : STEPS.m60;
+const factor = () => (kind === "obs15" && x4) ? 4 : 1;
+
+async function getJson(u) {
+  const r = await fetch(u, { cache: "no-cache" });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.status);
+  return r.json();
+}
+
+/* ── 테마 — index.html 과 같은 자리(gn-theme)에 둔다. 한쪽에서 바꾸면 둘 다 따라간다. ── */
+function applyTheme(t) {
+  let th = t || Q.get("theme");
+  if (!th) { try { th = localStorage.getItem("gn-theme"); } catch {} }
+  th = th === "light" ? "light" : "dark";
+  document.documentElement.dataset.theme = th;
+  return th;
+}
+$("b-theme").onclick = () => {
+  const th = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+  applyTheme(th);
+  try { localStorage.setItem("gn-theme", th); } catch {}
+  LUTS.clear(); OFF.clear(); PATTERN = null;
+  draw(); buildLegend();
+};
+
+/* ── 투영(칸 → 경위도). 마우스를 올렸을 때 좌표만 쓴다 — 그리기에는 쓰지 않는다.
+   app/domain/gridproj.py 와 같은 식: GRS80 타원체 람베르트, 30°·60°, 126°E·38°N. ── */
+const LCC = (() => {
+  const D = Math.PI / 180, a = 6378137, f = 1 / 298.257222101, e = Math.sqrt(f * (2 - f));
+  const m = p => Math.cos(p) / Math.sqrt(1 - e * e * Math.sin(p) ** 2);
+  const t = p => Math.tan(Math.PI / 4 - p / 2) / ((1 - e * Math.sin(p)) / (1 + e * Math.sin(p))) ** (e / 2);
+  const p1 = 30 * D, p2 = 60 * D, p0 = 38 * D;
+  const n = (Math.log(m(p1)) - Math.log(m(p2))) / (Math.log(t(p1)) - Math.log(t(p2)));
+  const AF = a * m(p1) / (n * t(p1) ** n), rho0 = AF * t(p0) ** n;
+  return (col, row) => {
+    const x = (col - 880) * 500, y = (row - 1540) * 500, dy = rho0 - y;
+    const rho = Math.hypot(x, dy), th = Math.atan2(x, dy), tt = (rho / AF) ** (1 / n);
+    let phi = Math.PI / 2 - 2 * Math.atan(tt);
+    for (let i = 0; i < 15; i++) {
+      const s = Math.sin(phi);
+      phi = Math.PI / 2 - 2 * Math.atan(tt * ((1 - e * s) / (1 + e * s)) ** (e / 2));
+    }
+    return [th / n / D + 126, phi / D];
+  };
+})();
+
+/* ── 화면 틀: 칸 좌표 → 화면 ─────────────────────────────────────────── */
+function gnBounds() {
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+  const fc = topojson.feature(TOPO, TOPO.objects.sigun);
+  for (const ft of fc.features) {
+    if (ft.properties.kind !== "gn") continue;
+    // 섬이 없는 시군은 mapshaper 가 Polygon 으로 내보낸다
+    const polys = ft.geometry.type === "Polygon" ? [ft.geometry.coordinates] : ft.geometry.coordinates;
+    for (const poly of polys) for (const ring of poly) for (const [x, y] of ring) {
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+  }
+  return { x0, x1, y0, y1 };
+}
+let GNB = null;
+function layout() {
+  const k = Math.max(1, Math.min(innerWidth / 1920, innerHeight / 1080));
+  document.documentElement.style.setProperty("--k", k.toFixed(3));
+  const r = $("stage").getBoundingClientRect();
+  const W = r.width, H = r.height, dpr = window.devicePixelRatio || 1;
+  const m = 5;                                  // 칸 — 경남 바깥으로 2.5km 여유
+  const X0 = GNB.x0 - m, X1 = GNB.x1 + m, Y0 = GNB.y0 - m, Y1 = GNB.y1 + m;
+  const s = Math.min(W / (X1 - X0), H / (Y1 - Y0));
+  const ox = (W - (X1 - X0) * s) / 2, oy = (H - (Y1 - Y0) * s) / 2;
+  V = { W, H, dpr, s, ox, oy, X0, Y1,
+        toX: gx => ox + (gx - X0) * s, toY: gy => oy + (Y1 - gy) * s,
+        fromX: x => X0 + (x - ox) / s, fromY: y => Y1 - (y - oy) / s };
+  const cv = $("cv");
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  for (const id of ["under", "over"]) $(id).setAttribute("viewBox", `0 0 ${W} ${H}`);
+  buildBase();
+}
+
+/* 격자 Canvas 의 픽셀 (px, py) → 화면. 픽셀 (c, r) 은 [c, c+1] × [r, r+1] 이고 행은 북→남으로
+   뒤집어 담았다. 5km 는 아핀(dfs_to_hr)을, 500m 는 항등을 거친다 — 식은 하나다. */
+function pixelTransform(grid, h) {
+  const g = META.grids, b = g[grid];
+  const [A, B, C] = grid === "hr" ? [1, 0, 0] : g.dfs_to_hr.col;
+  const [Dd, E, F] = grid === "hr" ? [0, 1, 0] : g.dfs_to_hr.row;
+  const x0 = b.i0 - 0.5, y0 = b.j0 + h - 0.5;           // 픽셀 (0,0) 모서리의 칸 좌표
+  const c0 = A * x0 + B * y0 + C, r0 = Dd * x0 + E * y0 + F;
+  const s = V.s;
+  return [s * A, -s * Dd, -s * B, s * E, V.ox + (c0 - V.X0) * s, V.oy + (V.Y1 - r0) * s];
+}
+
+/* ── 경계(아래: 땅 칠, 위: 선·이름) ───────────────────────────────────── */
+function buildBase() {
+  const path = d3.geoPath(d3.geoTransform({ point(x, y) { this.stream.point(V.toX(x), V.toY(y)); } }));
+  const obj = TOPO.objects.sigun;
+  const fc = topojson.feature(TOPO, obj).features;
+  const P = g => g.properties;
+  const under = fc.map(ft => `<path class="ld ${P(ft).kind === "nb" ? "nb" : ""}" d="${path(ft)}"/>`).join("");
+  $("under").innerHTML = under;
+
+  const mesh = fn => path(topojson.mesh(TOPO, obj, fn)) || "";
+  const sg = mesh((a, b) => a !== b);                                   // 시군 사이
+  const cs = mesh((a, b) => a === b);                                   // 해안·바깥
+  const zn = mesh((a, b) => a !== b && P(a).zone !== P(b).zone);        // 권역이 바뀌는 곳
+  const sb = mesh((a, b) => a !== b && P(a).zone === P(b).zone && P(a).sub !== P(b).sub);
+  const fs = Math.max(15, Math.min(64, V.s * 7));
+  NAMEBOX = [];
+  const names = fc.map(ft => {
+    const p = P(ft), x = V.toX(p.lx), y = V.toY(p.ly), nb = p.kind === "nb";
+    const f = nb ? fs * 0.72 : fs;
+    NAMEBOX.push({ x0: x - p.sigun.length * f * 0.52, x1: x + p.sigun.length * f * 0.52,
+                   y0: y - f * 0.6, y1: y + f * 0.6 });
+    return `<text class="nm ${nb ? "nb" : ""}" x="${x.toFixed(1)}" y="${y.toFixed(1)}"
+      style="font-size:${f.toFixed(1)}px;stroke-width:${(f * 0.16).toFixed(1)}px">${p.sigun}</text>`;
+  }).join("");
+  $("over").innerHTML =
+    `<path class="sg" d="${sg}"/><path class="cs" d="${cs}"/><path class="sb" d="${sb}"/><path class="zn" d="${zn}"/>`
+    + `<g id="labels"></g><g id="names">${names}</g>`;
+}
+
+/* ── 색 ─────────────────────────────────────────────────────────────── */
+function cssColor(name) {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const h = v.replace("#", "");
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+}
+const LUTS = new Map();
+/* 0.1㎜ 정수값 → RGBA(Uint32, 리틀엔디언 ABGR). 65536 칸짜리 표를 한 번 만들어 둔다. */
+function lut(steps, fac) {
+  const key = steps.join(",") + "|" + fac + "|" + document.documentElement.dataset.theme;
+  if (LUTS.has(key)) return LUTS.get(key);
+  const cols = [1, 2, 3, 4, 5, 6, 7].map(i => cssColor(`--rain-${i}`))
+    .map(([r, g, b]) => (255 << 24 | b << 16 | g << 8 | r) >>> 0);
+  const t = new Uint32Array(65536);
+  const th = steps.map(x => x * 10 / fac - 1e-6);   // 0.1㎜ 정수값 기준
+  let k = -1;
+  for (let v = 0; v < 65535; v++) {
+    while (k + 1 < th.length && v >= th[k + 1]) k++;
+    t[v] = k < 0 ? 0 : cols[k];
+  }
+  LUTS.set(key, t);
+  return t;
+}
+
+/* 5km 칸마다 '땅이 조금이라도 걸치나' — 결측 빗금은 땅에만 긋는다.
+   경남 bbox 안의 결측은 거의 다 분석 영역 밖 바다(늘 같은 칸)라 빗금을 치면 바다가 온통 회색이 된다. */
+let LAND5 = null;
+function landMask(grid, h, w) {
+  if (grid === "hr") return MSIG;
+  if (LAND5) return LAND5;
+  const g = META.grids, hb = g.hr, db = g.dfs, [A, B, C] = g.dfs_to_hr.col, [Dd, E, F] = g.dfs_to_hr.row;
+  LAND5 = new Uint8Array(h * w);
+  for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) {
+    let on = 0;
+    for (let a = -2; a <= 2 && !on; a++) for (let b = -2; b <= 2 && !on; b++) {
+      const x5 = db.i0 + c + a / 5, y5 = db.j0 + r + b / 5;
+      const cc = Math.round(A * x5 + B * y5 + C) - hb.i0, rr = Math.round(Dd * x5 + E * y5 + F) - hb.j0;
+      if (cc >= 0 && cc < hb.w && rr >= 0 && rr < hb.h && MSIG[rr * hb.w + cc]) on = 1;
+    }
+    LAND5[r * w + c] = on;
+  }
+  return LAND5;
+}
+
+/* 격자 한 장을 칸 = 픽셀인 작은 그림으로. 층·눈금·테마마다 한 번만 만든다. */
+const OFF = new Map();
+function offscreen(gr) {
+  const steps = stepsOf(kind), fac = factor();
+  const key = gr.ck + "|" + steps.join(",") + "|" + fac + "|" + document.documentElement.dataset.theme;
+  if (OFF.has(key)) return OFF.get(key);
+  const { h, w, u, grid } = gr;
+  const table = lut(steps, fac), land = landMask(grid, h, w);
+  const img = document.createElement("canvas"); img.width = w; img.height = h;
+  const ic = img.getContext("2d"), id = ic.createImageData(w, h), px = new Uint32Array(id.data.buffer);
+  const miss = document.createElement("canvas"); miss.width = w; miss.height = h;
+  const mc = miss.getContext("2d"), md = mc.createImageData(w, h), mp = new Uint32Array(md.data.buffer);
+  let nmiss = 0;
+  for (let r = 0; r < h; r++) {
+    const src = r * w, dst = (h - 1 - r) * w;                // 행 남→북 → 그림은 위가 북
+    for (let c = 0; c < w; c++) {
+      const v = u[src + c];
+      if (v === MISSING) {
+        if (land[src + c]) { mp[dst + c] = 0xff000000; nmiss++; }
+      } else px[dst + c] = table[v];
+    }
+  }
+  ic.putImageData(id, 0, 0);
+  mc.putImageData(md, 0, 0);
+  const o = { img, miss: nmiss ? miss : null, nmiss };
+  if (OFF.size > 40) OFF.clear();
+  OFF.set(key, o);
+  return o;
+}
+
+let PATTERN = null, HATCH = null;
+function hatchPattern(ctx) {
+  if (PATTERN) return PATTERN;
+  const d = Math.max(1, V.dpr), n = Math.round(7 * d);
+  const p = document.createElement("canvas"); p.width = p.height = n;
+  const c = p.getContext("2d");
+  const [r, g, b] = cssColor("--hatch");
+  c.strokeStyle = `rgb(${r},${g},${b})`; c.lineWidth = 1.4 * d;
+  c.beginPath(); c.moveTo(-1, n + 1); c.lineTo(n + 1, -1); c.stroke();
+  PATTERN = ctx.createPattern(p, "repeat");
+  return PATTERN;
+}
+
+let RENDER_MS = 0;
+function draw() {
+  const cv = $("cv"), ctx = cv.getContext("2d");
+  const t0 = performance.now();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  if (!CUR || !V) { drawLabels(); return; }
+  const o = offscreen(CUR);
+  const T = pixelTransform(CUR.grid, CUR.h).map(x => x * V.dpr);
+  ctx.imageSmoothingEnabled = false;                         // 칸 그대로 — 번지게 하지 않는다
+  ctx.setTransform(...T);
+  ctx.drawImage(o.img, 0, 0);
+  if (o.miss) {
+    // 빗금을 화면 크기로 깔고, 결측 칸 모양으로 도려낸다(destination-in)
+    HATCH = HATCH || document.createElement("canvas");
+    if (HATCH.width !== cv.width || HATCH.height !== cv.height) { HATCH.width = cv.width; HATCH.height = cv.height; }
+    const hc = HATCH.getContext("2d");
+    hc.setTransform(1, 0, 0, 1, 0, 0); hc.globalCompositeOperation = "source-over";
+    hc.clearRect(0, 0, HATCH.width, HATCH.height);
+    hc.fillStyle = hatchPattern(hc); hc.fillRect(0, 0, HATCH.width, HATCH.height);
+    hc.globalCompositeOperation = "destination-in"; hc.imageSmoothingEnabled = false;
+    hc.setTransform(...T); hc.drawImage(o.miss, 0, 0);
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(HATCH, 0, 0);
+  }
+  drawLabels();
+  RENDER_MS = performance.now() - t0;
+}
+
+/* ── 시군 최대 라벨 — 값이 있는 시군만. 이름·앞 라벨과 겹치면 자리를 옮긴다. ── */
+function drawLabels() {
+  const g = $("labels");
+  if (!g) return;
+  if (!CURSTAT || !V) { g.innerHTML = ""; return; }
+  const fac = factor(), min = stepsOf(kind)[0];
+  const rows = CURSTAT.rows.filter(r => r.kind === "gn" && r.max != null && r.max * fac >= min && r.where)
+    .sort((a, b) => b.max - a.max);
+  const fs = Math.max(14, Math.min(58, V.s * 6.2)), fs2 = fs * 0.62;
+  // 다른 시군의 점 바로 옆에 붙으면 누구 값인지 헷갈린다 — 점 자리도 미리 비워 둔다
+  const pr = fs * 0.45;
+  const placed = NAMEBOX.concat(rows.map(r => {
+    const x = V.toX(r.where.col), y = V.toY(r.where.row);
+    return { x0: x - pr, x1: x + pr, y0: y - pr, y1: y + pr };
+  })), out = [];
+  const hit = b => placed.some(p => b.x0 < p.x1 && b.x1 > p.x0 && b.y0 < p.y1 && b.y1 > p.y0);
+  const inside = b => b.x0 >= 4 && b.y0 >= 4 && b.x1 <= V.W - 4 && b.y1 <= V.H - 4;
+  for (const r of rows) {
+    const ax = V.toX(r.where.col), ay = V.toY(r.where.row);
+    const val = (r.max * fac).toFixed(1);
+    const emd = r.where.emd || "";
+    const w = Math.max(val.length * fs * 0.62, emd.length * fs2 * 1.02) + 4, h = fs + fs2 + 2;
+    const pad = pr + 3;                      // 제 점 자리(pr)는 건너뛴다
+    let best = null;
+    for (const k of [1, 1.9, 3]) {
+      const d = pad * k;
+      for (const [dx, dy] of [[d, -h / 2], [-d - w, -h / 2], [-w / 2, -d - h], [-w / 2, d],
+                              [d, -h - d / 2], [d, d / 2], [-d - w, -h - d / 2], [-d - w, d / 2]]) {
+        const b = { x0: ax + dx, y0: ay + dy, x1: ax + dx + w, y1: ay + dy + h };
+        if (inside(b) && !hit(b)) { best = b; break; }
+      }
+      if (best) break;
+    }
+    // 끝내 빈자리가 없으면 오른쪽에 그냥 둔다 — 극값은 가리더라도 빼지 않는다
+    best = best || { x0: ax + pad, y0: ay - h / 2, x1: ax + pad + w, y1: ay + h / 2 };
+    placed.push(best);
+    const cx = Math.max(best.x0, Math.min(ax, best.x1)), cy = Math.max(best.y0, Math.min(ay, best.y1));
+    const far = Math.hypot(cx - ax, cy - ay) > pad * 1.3;
+    out.push(
+      (far ? `<line class="lead" x1="${ax}" y1="${ay}" x2="${cx}" y2="${cy}"/>` : "")
+      + `<circle class="pin" cx="${ax.toFixed(1)}" cy="${ay.toFixed(1)}" r="${Math.max(3, fs * 0.17).toFixed(1)}" stroke-width="${Math.max(1.5, fs * 0.08).toFixed(1)}"/>`
+      + `<text class="mx" x="${(best.x0 + 2).toFixed(1)}" y="${(best.y0 + fs * 0.86).toFixed(1)}"
+          style="font-size:${fs.toFixed(1)}px;stroke-width:${(fs * 0.16).toFixed(1)}px">${val}</text>`
+      + (emd ? `<text class="mxw" x="${(best.x0 + 2).toFixed(1)}" y="${(best.y0 + fs + fs2 * 0.86).toFixed(1)}"
+          style="font-size:${fs2.toFixed(1)}px;stroke-width:${(fs2 * 0.18).toFixed(1)}px">${emd}</text>` : ""));
+  }
+  g.innerHTML = out.join("");
+}
+
+/* ── 범례 ─────────────────────────────────────────────────────────── */
+function buildLegend() {
+  const st = stepsOf(kind), lg = $("legend");
+  const unit = (kind === "obsday" || kind.startsWith("shrt")) ? "㎜ 누적" : kind === "obs15" && x4 ? "㎜/h 환산" : "㎜";
+  const cells = [1, 2, 3, 4, 5, 6, 7].map(i => `<i style="background:var(--rain-${i})"></i>`).join("");
+  const ticks = st.map((v, i) => `<span style="bottom:${i * 26}px">${v}</span>`).join("");
+  lg.innerHTML = `<div class="lt">${unit}${kind === "obs15"
+      ? `<button id="b-x4" class="${x4 ? "on" : ""}" title="15분 값을 ×4 — 시간당 기세로 60분치·특보 기준과 같은 자로 본다">${x4 ? "×4 환산" : "그대로"}</button>` : ""}</div>
+    <div class="rows"><div class="band">${cells}</div><div class="ticks">${ticks}</div></div>
+    <div class="sw"><b class="h"></b>결측(땅)</div>
+    <div class="sw"><b style="background:var(--land)"></b>0 · 비 없음</div>`;
+  const b = $("b-x4");
+  if (b) b.onclick = () => { x4 = !x4; saveSetting({ x4 }); buildLegend(); draw(); paintHead(); };
+}
+
+/* ── 머리 ─────────────────────────────────────────────────────────── */
+const hm = t => t ? `${t.slice(8, 10)}:${t.slice(10, 12)}` : "—";
+const md = t => t ? `${+t.slice(4, 6)}.${+t.slice(6, 8)}.` : "";
+function when(gr) {
+  if (!gr || !gr.tm) return "";
+  const t = gr.tm;
+  switch (kind) {
+    case "obs15": return `${md(t)} ${hm(t)} · 15분`;
+    case "obs60": return `${md(t)} ${hm(t)} · 60분`;
+    case "obsday": return `${md(t)} 00:00~${hm(t)}`;
+    case "odam": return `${md(t)} ${hm(t)} · 1시간`;
+    case "vsrt": return `${hm(gr.tmfc)} 발표 → ${+t.slice(8, 10)}시까지 1시간 (+${vsrtN}h)`;
+    default: {
+      const [a, b] = gr.hours || [];
+      const from = a ? +a.slice(8, 10) - 1 : "", to = b ? (+b.slice(8, 10) || 24) : "";
+      return `${gr.tmfc ? +gr.tmfc.slice(8, 10) + "시 발표 · " : ""}${md(t)} ${from}~${to}시 합`;
+    }
+  }
+}
+function paintHead() {
+  const L = metaOf(kind);
+  $("lname").textContent = L.label || kind;
+  $("ltime").textContent = when(CUR);
+  $("lsrc").textContent = test ? "합성 격자 — 실제 자료 아님" : (L.src || "");
+  const b = [];
+  const past = pinned(kind);                  // ?tm= 으로 일부러 지난 시각을 보는 중 — 지연이 아니다
+  if (test) b.push(`<span class="badge test">테스트</span>`);
+  else if (past) b.push(`<span class="badge">지난 시각 보기 (tm=${PIN_TM})</span>`);
+  else {
+    const col = META?.collect?.[COLLECT_OF[kind]];
+    if (col && !col.ok) b.push(`<span class="badge warn" title="${(col.detail || "").replace(/"/g, "'")}">수집 실패 · 마지막 정상 ${col.ok_at ? col.ok_at.slice(11, 16) : "없음"}</span>`);
+    if (L.stale) b.push(`<span class="badge warn">자료 지연${L.age_min != null ? ` · ${Math.round(L.age_min)}분 전` : ""}</span>`);
+    if (CUR && +CUR.capped > 0) b.push(`<span class="badge" title="단기예보 PCP 는 30 에서 막힌다 — 30㎜ 이상">30㎜ 이상 든 칸 ${CUR.capped} · 합계는 하한</span>`);
+  }
+  if (kind === "obs15" && x4) b.push(`<span class="badge">×4 환산</span>`);
+  $("badges").innerHTML = b.join(" ");
+  $("stage").classList.toggle("late", !test && !past && !!L.stale);
+  $("testmark").hidden = !test;
+  $("stage").classList.toggle("test", test);
+  $("b-test").classList.toggle("on", test);
+}
+
+/* ── 메뉴 ─────────────────────────────────────────────────────────── */
+function buildMenu() {
+  const grp = (label, ks) => `<div class="grp"><span class="gl">${label}</span>${ks.map(k => {
+    const L = metaOf(k);
+    const cls = [k === kind ? "on" : "", !L.tm ? "none" : "", L.stale ? "late" : ""].join(" ");
+    const tip = `${L.label || k} — ${L.src || ""}${L.stale ? " · 자료 지연" : ""}${!L.tm ? " · 아직 없음" : ""}`;
+    return `<button data-k="${k}" class="${cls}" title="${tip}">${L.short || k}</button>`;
+  }).join("")}</div>`;
+  $("menu").innerHTML = grp("실측", KINDS.slice(0, 4)) + grp("예측", KINDS.slice(4));
+  for (const b of $("menu").querySelectorAll("button"))
+    b.onclick = () => { stopPlay(); choose(b.dataset.k, true); };
+}
+function buildPlay() {
+  const p = $("play");
+  if (kind !== "vsrt") { p.hidden = true; return; }
+  const tmefs = metaOf("vsrt").tmefs || [];
+  p.hidden = false;
+  p.innerHTML = `<button class="pp" id="b-pp" title="재생">${playing ? "❚❚" : "▶"}</button>`
+    + [1, 2, 3, 4, 5, 6].map(n => `<button data-n="${n}" class="${n === vsrtN ? "on" : ""}">+${n}h`
+      + `${tmefs[n - 1] ? `<small>${+tmefs[n - 1].slice(8, 10)}시</small>` : ""}</button>`).join("");
+  $("b-pp").onclick = () => playing ? stopPlay() : startPlay();
+  for (const b of p.querySelectorAll("button[data-n]"))
+    b.onclick = () => { stopPlay(); vsrtN = +b.dataset.n; saveSetting({ layer: "vsrt", vsrt_n: vsrtN }); show(); };
+}
+function startPlay() {
+  playing = setInterval(() => { vsrtN = vsrtN % 6 + 1; show(); }, 1300);
+  buildPlay();
+}
+function stopPlay() {
+  if (playing) { clearInterval(playing); playing = null; buildPlay(); }
+}
+
+function saveSetting(body) {
+  fetch("/api/settings/map", { method: "PUT", headers: { "Content-Type": "application/json" },
+                               body: JSON.stringify(body) }).catch(() => {});
+}
+
+/* ── 자료 ─────────────────────────────────────────────────────────── */
+function wantTm(key) {
+  const k = key.startsWith("vsrt") ? "vsrt" : key;
+  return metaOf(k).tm || "";
+}
+/* ?tm=YYYYMMDDHHMI — 실측 층을 그 시각으로 본다(점검용. 남아 있는 사흘 안에서만). */
+const PIN_TM = /^\d{12}$/.test(Q.get("tm") || "") ? Q.get("tm") : null;
+const pinned = key => PIN_TM && !test && ["obs15", "obs60", "obsday", "odam"].includes(key);
+function qs(key) {
+  return test ? "?test=1" : pinned(key) ? `?tm=${PIN_TM}` : "";
+}
+async function fetchGrid(key) {
+  const ck = key + "|" + (test ? "test" : pinned(key) ? PIN_TM : wantTm(key));
+  if (GRIDS.has(ck)) return GRIDS.get(ck);
+  const r = await fetch(`/api/grid/${encodeURIComponent(key)}${qs(key)}`, { cache: "no-cache" });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || `HTTP ${r.status}`);
+  const buf = await r.arrayBuffer();
+  const [h, w] = r.headers.get("X-Grid-Shape").split(",").map(Number);
+  const hd = n => r.headers.get("X-Grid-" + n);
+  const gr = { ck, key, u: new Uint16Array(buf), h, w, grid: r.headers.get("X-Grid"),
+               tm: hd("Tm"), tmfc: hd("Tmfc"), capped: hd("Capped"),
+               hours: hd("Hours") ? hd("Hours").split(",") : null };
+  if (gr.u.length !== h * w) throw new Error("격자 크기가 맞지 않는다");
+  GRIDS.set(ck, gr);
+  return gr;
+}
+async function fetchStat(key) {
+  const ck = key + "|" + (test ? "test" : pinned(key) ? PIN_TM : wantTm(key));
+  if (STATS.has(ck)) return STATS.get(ck);
+  const j = await getJson(`/api/grid/sigun?layer=${encodeURIComponent(key)}${qs(key).replace("?", "&")}`);
+  STATS.set(ck, j);
+  return j;
+}
+
+let SEQ = 0, SWITCH_MS = 0;
+async function show() {
+  const my = ++SEQ, t0 = performance.now(), key = layerKey();
+  buildMenu(); buildPlay(); buildLegend();
+  try {
+    const [gr, st] = await Promise.all([fetchGrid(key), fetchStat(key)]);
+    if (my !== SEQ) return;                     // 그새 다른 층을 골랐다
+    CUR = gr; CURSTAT = st; lastErr = null;
+    $("empty").hidden = true;
+  } catch (e) {
+    if (my !== SEQ) return;
+    CUR = null; CURSTAT = null; lastErr = e;
+    const col = META?.collect?.[COLLECT_OF[kind]];
+    const fail = col && !col.ok;
+    $("empty").className = fail ? "fail" : "";
+    $("empty").innerHTML = (fail ? "조회 실패" : "아직 받은 격자가 없다")
+      + `<small>${e.message}${col ? ` · 수집 ${col.tried_at ? col.tried_at.slice(11, 16) : "—"} ${col.detail || ""}` : ""}</small>`;
+    $("empty").hidden = false;
+  }
+  draw();
+  paintHead();
+  SWITCH_MS = performance.now() - t0;
+  if (Q.get("debug") === "1") {
+    $("dbg").hidden = false;
+    $("dbg").textContent = `전환 ${SWITCH_MS.toFixed(1)}ms · 그리기 ${RENDER_MS.toFixed(1)}ms · ${V.W}×${V.H} dpr ${V.dpr} · 칸 ${V.s.toFixed(2)}px`;
+  }
+  window.__mapPerf = { switch: SWITCH_MS, render: RENDER_MS };
+}
+
+function choose(k, save) {
+  kind = k;
+  if (save) saveSetting(k === "vsrt" ? { layer: "vsrt", vsrt_n: vsrtN } : { layer: k });
+  show();
+}
+
+/* 뒤에서 다른 층도 미리 받아 둔다 — 층을 바꿀 때 기다리지 않게(목표 50ms). */
+async function preload() {
+  const keys = KINDS.filter(k => k !== "vsrt").concat([1, 2, 3, 4, 5, 6].map(n => `vsrt+${n}`));
+  for (const k of keys) {
+    try { await Promise.all([fetchGrid(k), fetchStat(k)]); } catch {}
+  }
+}
+
+async function refreshMeta() {
+  try { META = await getJson("/api/grid/meta"); } catch { return; }
+  const before = CUR && CUR.ck;
+  // 새 자료가 왔으면 캐시 열쇠(tm)가 바뀌어 저절로 다시 받는다
+  if (!test && before && before !== layerKey() + "|" + wantTm(layerKey())) show();
+  else { buildMenu(); paintHead(); }
+}
+
+/* ── 마우스 — 그 칸 값, 좌표, 읍면동 ───────────────────────────────── */
+async function loadEmd() {
+  if (MEMD) return;
+  MEMD = true;
+  const r = await fetch("/api/grid/geo/mask_emd.u16.gz");
+  MEMD = new Uint16Array(await r.arrayBuffer());
+  EMDN = new Map(GEO.emd.map(e => [e.id, e]));
+}
+function valueAt(gx, gy) {
+  if (!CUR) return undefined;
+  const g = META.grids;
+  let c, r;
+  if (CUR.grid === "hr") { c = Math.round(gx) - g.hr.i0; r = Math.round(gy) - g.hr.j0; }
+  else {
+    const [A, B, C] = g.dfs_to_hr.col, [Dd, E, F] = g.dfs_to_hr.row, det = A * E - B * Dd;
+    const x = gx - C, y = gy - F;
+    c = Math.round((E * x - B * y) / det) - g.dfs.i0;
+    r = Math.round((A * y - Dd * x) / det) - g.dfs.j0;
+  }
+  if (c < 0 || r < 0 || c >= CUR.w || r >= CUR.h) return undefined;
+  return CUR.u[r * CUR.w + c];
+}
+$("stage").addEventListener("mousemove", ev => {
+  if (!V || !GEO) return;
+  const rc = $("stage").getBoundingClientRect(), x = ev.clientX - rc.left, y = ev.clientY - rc.top;
+  const gx = V.fromX(x), gy = V.fromY(y), v = valueAt(gx, gy), tip = $("tip");
+  if (v === undefined) { tip.hidden = true; return; }
+  loadEmd();
+  const hb = META.grids.hr, c = Math.round(gx) - hb.i0, r = Math.round(gy) - hb.j0;
+  let where = "";
+  if (MEMD instanceof Uint16Array && c >= 0 && r >= 0 && c < hb.w && r < hb.h) {
+    const e = EMDN.get(MEMD[r * hb.w + c]);
+    if (e) where = `${e.sigun} ${e.name}`;
+  }
+  if (!where && MSIG) {
+    const s = GEO.sigun.find(s => s.id === MSIG[r * hb.w + c]);
+    if (s) where = s.name;
+  }
+  const [lon, lat] = LCC(gx, gy), fac = factor();
+  const val = v === MISSING ? "결측"
+    : fac > 1 ? `${(v / 10 * fac).toFixed(1)}㎜/h 환산</b> (15분 ${(v / 10).toFixed(1)}㎜)<b>`
+    : `${(v / 10).toFixed(1)}㎜`;
+  tip.innerHTML = `<b>${val}</b>${where ? " · " + where : ""}<div class="d">${lat.toFixed(4)}°N ${lon.toFixed(4)}°E · 칸 ${Math.round(gx)}, ${Math.round(gy)}</div>`;
+  tip.hidden = false;
+  const tw = tip.offsetWidth, th = tip.offsetHeight;
+  tip.style.left = Math.min(V.W - tw - 6, x + 16) + "px";
+  tip.style.top = Math.max(6, y - th - 12) + "px";
+});
+$("stage").addEventListener("mouseleave", () => { $("tip").hidden = true; });
+
+$("b-test").onclick = () => { test = !test; show(); };
+document.addEventListener("keydown", ev => {
+  if (ev.target.closest("input, textarea")) return;
+  const i = "1234567".indexOf(ev.key);
+  if (i >= 0) { stopPlay(); choose(KINDS[i], true); }
+  if (ev.key === "t" || ev.key === "T") { test = !test; show(); }
+});
+
+let rsz = null;
+window.addEventListener("resize", () => {
+  clearTimeout(rsz);
+  rsz = setTimeout(() => { PATTERN = null; layout(); draw(); }, 120);
+});
+
+async function boot() {
+  applyTheme();
+  try {
+    [META, TOPO, GEO] = await Promise.all([getJson("/api/grid/meta"),
+      getJson("/api/grid/geo/gyeongnam.topo.json"), getJson("/api/grid/geo/grids.json")]);
+    MSIG = new Uint8Array(await (await fetch("/api/grid/geo/mask_sigun.u8.gz")).arrayBuffer());
+  } catch (e) {
+    $("empty").innerHTML = `지도를 띄울 수 없다<small>${e.message}</small>`;
+    $("empty").className = "fail"; $("empty").hidden = false;
+    return;
+  }
+  const s = META.setting || {};
+  vsrtN = +s.vsrt_n || 1; x4 = !!s.x4;
+  const want = Q.get("layer") || s.layer || "obs60";      // URL 이 서버 설정보다 먼저다(화면 고정용)
+  if (want.startsWith("vsrt")) { kind = "vsrt"; const n = +want.replace(/\D/g, ""); if (n >= 1 && n <= 6) vsrtN = n; }
+  else kind = KINDS.includes(want) ? want : "obs60";
+  GNB = gnBounds();
+  layout();
+  await show();
+  preload();
+  setInterval(refreshMeta, 60000);
+}
+boot();
+</script>

@@ -120,8 +120,15 @@ def frame(layer: str, tm: str | None = None, now: datetime | None = None,
     info = BY_ID[kind]
     now = now or datetime.now()
     if test:
-        return {"grid": info["grid"], "tm": now.strftime("%Y%m%d%H%M"), "test": True,
-                "arr": synth(kind, info["grid"], n)}
+        fr = {"grid": info["grid"], "tm": now.strftime("%Y%m%d%H%M"), "test": True,
+              "arr": synth(kind, info["grid"], n)}
+        if kind == "vsrt":
+            fr.update(tmfc=fr["tm"], n=n, tm=(now + timedelta(hours=n)).strftime("%Y%m%d%H00"))
+        elif kind.startswith("shrt_"):
+            d = now + timedelta(days=0 if kind == "shrt_today" else 1)
+            fr.update(tmfc=now.strftime("%Y%m%d%H"), tm=d.strftime("%Y%m%d"), capped=0,
+                      hours=[d.strftime("%Y%m%d01"), (d + timedelta(days=1)).strftime("%Y%m%d00")])
+        return fr
     if kind == "vsrt":
         tmfc, tmefs = vsrt_run(tm)
         if not tmfc or n > len(tmefs):
@@ -232,9 +239,10 @@ def put_setting(body: dict) -> dict:
 
 
 # ── 테스트 모드 — 비 없는 날 화면 점검용 합성 격자 ─────────────────────────────
-# (경도, 위도, 봉우리 ㎜, 반경 km). 창원·진주·산청·거제에 덩어리를 둔다.
-_BLOBS = [(128.60, 35.23, 1.0, 9), (128.10, 35.18, 0.55, 14), (127.85, 35.40, 0.8, 7),
-          (128.62, 34.88, 0.35, 18), (128.95, 35.30, 0.25, 25)]
+# (경도, 위도, 봉우리 비율, 반경 km). 창원·진주·산청·거제·양산에 덩어리를 둔다 —
+# 봉우리 하나는 시군 경계에 걸치게 해서 라벨 자리 옮기기도 같이 본다.
+_BLOBS = [(128.60, 35.23, 1.0, 5), (128.10, 35.18, 0.55, 8), (127.85, 35.40, 0.8, 4),
+          (128.62, 34.88, 0.4, 9), (129.03, 35.37, 0.3, 6), (128.37, 35.33, 0.45, 3)]
 _PEAK = {"obs15": 14.0, "obs60": 42.0, "obsday": 180.0, "odam": 38.0, "vsrt": 30.0,
          "shrt_today": 120.0, "shrt_tomorrow": 60.0}
 
@@ -251,8 +259,9 @@ def synth(kind: str, grid: str, n: int = 0) -> np.ndarray:
         x, y = (gridproj.hr_xy if grid == "hr" else gridproj.dfs_xy)(lon + shift, lat)
         d2 = ((col - x) ** 2 + (row - y) ** 2) * step * step
         out += amp * np.exp(-d2 / (2 * rad * rad))
-    out *= _PEAK.get(kind, 30.0)
-    out[out < 0.1] = 0.0
+    peak = _PEAK.get(kind, 30.0)
+    out *= peak
+    out[out < max(0.1, peak * 0.01)] = 0.0       # 꼬리를 끊는다 — 도 전체가 옅게 물들지 않게
     out = np.round(out, 1 if grid == "hr" else 0)
     if grid == "hr":
         x, y = gridproj.hr_xy(128.35, 35.55)      # 의령·합천 사이 한 조각을 결측으로

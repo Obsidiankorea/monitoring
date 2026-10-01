@@ -12,6 +12,18 @@
       "port": 8000
     },
     {
+      "name": "dashboard-view",
+      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeArgs": [
+        "-m",
+        "app.main",
+        "--no-collect",
+        "--port",
+        "8010"
+      ],
+      "port": 8010
+    },
+    {
       "name": "dashboard-mac",
       "runtimeExecutable": ".venv/bin/python",
       "runtimeArgs": [
