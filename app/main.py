@@ -172,6 +172,16 @@ async def api_grid_meta():
     return await asyncio.to_thread(gridview.meta)
 
 
+@app.get("/api/grid/flow")
+async def api_grid_flow(hours: int = Query(6, ge=1, le=24), step: int = Query(10),
+                        test: bool = False):
+    """재생 흐름 — 지난 hours 시간 실측(60분, step 분 간격) → 초단기 +1~6h.
+    지도 재생과 오른쪽 타임라인이 같은 프레임 목록·같은 시군 값을 쓴다."""
+    if step not in (10, 20, 30, 60):
+        raise HTTPException(400, "step 은 10·20·30·60")
+    return await asyncio.to_thread(gridview.flow, hours, step, None, test)
+
+
 @app.get("/api/grid/sigun")
 async def api_grid_sigun(layer: str, tm: str | None = None, test: bool = False):
     """시군별 최대(+그 칸의 읍면동)·평균. 결측 칸은 평균에서 뺀다."""

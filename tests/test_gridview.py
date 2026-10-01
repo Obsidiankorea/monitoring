@@ -40,3 +40,28 @@ def test_synth_is_stable_and_has_land_gap():
     b = gridview.synth("obs60", "hr")
     assert np.array_equal(np.nan_to_num(a, nan=-1), np.nan_to_num(b, nan=-1))
     assert np.nanmax(a) > 30 and np.isnan(a).sum() > 0
+    # 시각을 흘리면 모양이 바뀐다(재생하면 움직여 보이게)
+    c = gridview.synth("obs60", "hr", 120)
+    assert not np.array_equal(np.nan_to_num(a, nan=-1), np.nan_to_num(c, nan=-1))
+
+
+def test_flow_test_mode_frames_and_series():
+    from datetime import datetime
+    f = gridview.flow(hours=3, step=30, now=datetime(2026, 10, 1, 23, 17), test=True)
+    obs = [x for x in f["frames"] if x["kind"] == "obs"]
+    fc = [x for x in f["frames"] if x["kind"] == "fcst"]
+    # 실측은 30분 칸만(지난 3시간), 예측은 1시간씩 여섯
+    assert [x["t"][8:] for x in obs] == ["2030", "2100", "2130", "2200", "2230", "2300"]
+    assert [x["layer"] for x in fc] == [f"vsrt+{n}" for n in range(1, 7)]
+    assert len(f["series"]) == 18 and all(len(s["max"]) == len(f["frames"]) for s in f["series"])
+    assert len(f["total"]["max"]) == len(f["frames"])
+
+
+def test_put_setting_validates(monkeypatch):
+    saved = {}
+    monkeypatch.setattr(gridview.db, "get_setting", lambda k, d: dict(d))
+    monkeypatch.setattr(gridview.db, "put_setting", lambda k, v: saved.update(v))
+    assert gridview.put_setting({"flow_step": 30, "tl_on": 1})["flow_step"] == 30
+    for bad in ({"flow_step": 15}, {"play_ms": 50}, {"tl_stat": "sum"}, {"layer": "nope"}):
+        with pytest.raises((ValueError, LookupError)):
+            gridview.put_setting(bad)

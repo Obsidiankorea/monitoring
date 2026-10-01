@@ -194,6 +194,29 @@ def to_hr(arr5: np.ndarray) -> np.ndarray:
 
 
 # ── 시군 통계 ──────────────────────────────────────────────────────────
+@lru_cache(maxsize=1)
+def _sigun_cells() -> list[tuple[dict, np.ndarray]]:
+    """시군마다 그 칸들의 평탄 인덱스 — 재생 프레임마다 마스크를 다시 비교하지 않게."""
+    msig, _ = masks()
+    flat = msig.ravel()
+    return [(s, np.flatnonzero(flat == s["id"])) for s in geo()["sigun"]]
+
+
+def sigun_values(arr_hr: np.ndarray) -> dict[str, tuple[float | None, float | None]]:
+    """{시군: (최대, 평균)} — 타임라인용으로 가볍게. 결측 칸은 빼고, 다 결측이면 None."""
+    flat = arr_hr.ravel()
+    out = {}
+    for s, idx in _sigun_cells():
+        v = flat[idx]
+        v = v[np.isfinite(v)]
+        out[s["name"]] = (round(float(v.max()), 1), round(float(v.mean()), 2)) if v.size else (None, None)
+    gn = np.concatenate([idx for s, idx in _sigun_cells() if s["kind"] == "gn"])
+    v = flat[gn]
+    v = v[np.isfinite(v)]
+    out["경남"] = (round(float(v.max()), 1), round(float(v.mean()), 2)) if v.size else (None, None)
+    return out
+
+
 def sigun_stats(arr_hr: np.ndarray) -> list[dict]:
     """시군마다 최대·평균·위치. 결측 칸은 평균에서 **뺀다**(0 으로 치지 않는다).
 

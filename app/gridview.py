@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from functools import lru_cache
 
 import numpy as np
 
@@ -22,11 +23,11 @@ from .domain import gridproj
 
 LAYERS = [
     {"id": "obs15", "label": "15분 강수량", "short": "15분", "group": "실측", "grid": "hr",
-     "src": "기상청 고해상도 격자(500m)", "stale_min": 25, "x4": True},
+     "src": "기상청 고해상도 격자(500m)", "stale_min": 30, "x4": True},
     {"id": "obs60", "label": "60분 강수량", "short": "60분", "group": "실측", "grid": "hr",
-     "src": "기상청 고해상도 격자(500m)", "stale_min": 25},
+     "src": "기상청 고해상도 격자(500m)", "stale_min": 30},
     {"id": "obsday", "label": "오늘 누적", "short": "오늘", "group": "실측", "grid": "hr",
-     "src": "기상청 고해상도 격자(500m)", "stale_min": 25},
+     "src": "기상청 고해상도 격자(500m)", "stale_min": 30},
     {"id": "odam", "label": "실황 1시간(5km)", "short": "실황 5km", "group": "실측", "grid": "dfs",
      "src": "기상청 동네예보 실황 RN1(5km)", "stale_min": 30},
     {"id": "vsrt", "label": "초단기 예측", "short": "초단기", "group": "예측", "grid": "dfs",
@@ -40,7 +41,7 @@ BY_ID = {x["id"]: x for x in LAYERS}
 PCP_CAP = 30.0
 
 # 지연 판정 근거(평소 가장 늙은 때 + 여유):
-#   500m  6분 물러선 5분 칸을 10분마다 → 평소 6~21분 → 25분
+#   500m  6분 물러선 10분 칸을 10분마다 → 평소 6~26분 → 30분
 #   실황  발표 +3~13분, 10분마다 → 평소 ~25분 → 30분
 #   초단기 발표 슬롯에서 10분 물러서고 10분마다 → 평소 10~30분 → 30분 넘으면
 #   단기  발표 +20분부터 받는다 → 지금 받을 수 있는 발표분보다 30분 넘게 묵으면
@@ -60,6 +61,11 @@ def split(layer: str) -> tuple[str, int]:
 
 def _dt(key: str) -> datetime:
     return datetime.strptime(key[:12].ljust(12, "0"), "%Y%m%d%H%M")
+
+
+def _floor10(t: datetime) -> datetime:
+    t = t.replace(second=0, microsecond=0)
+    return t - timedelta(minutes=t.minute % 10)
 
 
 def vsrt_run(tmfc: str | None = None) -> tuple[str | None, list[str]]:
@@ -120,10 +126,18 @@ def frame(layer: str, tm: str | None = None, now: datetime | None = None,
     info = BY_ID[kind]
     now = now or datetime.now()
     if test:
-        fr = {"grid": info["grid"], "tm": now.strftime("%Y%m%d%H%M"), "test": True,
-              "arr": synth(kind, info["grid"], n)}
+        # tm 을 주면 그 시각만큼 흘린 모양 — 재생해 보면 덩어리가 움직인다.
+        # tm 이 없으면 실제 수집과 같은 '최신' 칸(6분 물러선 10분 칸) — 재생 막대의 마지막 실측과 맞게
+        if not tm and not kind.startswith("shrt") and kind != "vsrt":
+            tm = _floor10(now - timedelta(minutes=6)).strftime("%Y%m%d%H%M")
+        off = 0 if not tm or kind.startswith("shrt") else (_dt(tm) - now).total_seconds() / 60
         if kind == "vsrt":
-            fr.update(tmfc=fr["tm"], n=n, tm=(now + timedelta(hours=n)).strftime("%Y%m%d%H00"))
+            off = n * 60
+        fr = {"grid": info["grid"], "tm": tm or now.strftime("%Y%m%d%H%M"), "test": True,
+              "arr": synth(kind, info["grid"], off)}
+        if kind == "vsrt":
+            fr.update(tmfc=_floor10(now).strftime("%Y%m%d%H%M"), n=n,
+                      tm=(now + timedelta(hours=n)).strftime("%Y%m%d%H00"))
         elif kind.startswith("shrt_"):
             d = now + timedelta(days=0 if kind == "shrt_today" else 1)
             fr.update(tmfc=now.strftime("%Y%m%d%H"), tm=d.strftime("%Y%m%d"), capped=0,
@@ -167,6 +181,78 @@ def sigun(layer: str, tm: str | None = None, test: bool = False) -> dict:
     out["layer"] = layer
     out["rows"] = gridstore.sigun_stats(hr)
     return out
+
+
+# ── 재생 흐름 — 지난 N시간 실측(60분, 10분마다) → 초단기 +1~6h ────────────────
+# 지도와 오른쪽 타임라인이 **같은 프레임 목록**을 쓴다. 그래야 재생 위치 하나로 둘이 함께 움직인다.
+# 값은 '1시간 강수량'으로 통일한다 — 실측 60분(지난 한 시간)과 초단기 RN1(앞 한 시간)은 같은 단위다.
+# ⚠️ 예측은 1시간 간격뿐이다. 초단기 격자에 10분 대상시각을 주면 가까운 정시 격자가 온다
+#    (실측 2026-10-01: 8.28. tmfc 10:30 에 tmef 12:10 → 12:00 과 같은 값, 12:30 → 13:00 과 같은 값).
+#    10분 예측은 QPF '그림'뿐이고 숫자 격자를 찾지 못했다.
+_STAT: dict[tuple, dict] = {}
+
+
+def _frame_values(store: str, key: str, arr_fn) -> dict:
+    """프레임 하나의 시군 값. 프레임은 한 번 저장되면 안 바뀌므로 기억해 둔다."""
+    ck = (store, key)
+    if ck not in _STAT:
+        a = arr_fn()
+        if a is None:
+            return {}
+        hr = a if GRID_OF_STORE[store] == "hr" else gridstore.to_hr(a)
+        if len(_STAT) > 600:
+            _STAT.pop(next(iter(_STAT)))
+        _STAT[ck] = gridstore.sigun_values(hr)
+    return _STAT[ck]
+
+
+GRID_OF_STORE = gridstore.GRID_OF
+
+
+def flow(hours: int = 6, step: int = 10, now: datetime | None = None, test: bool = False) -> dict:
+    now = now or datetime.now()
+    start = now - timedelta(hours=hours)
+    frames: list[dict] = []
+    if test:
+        t = _floor10(now - timedelta(minutes=6))
+        while t >= start:
+            if (t.hour * 60 + t.minute) % step == 0:
+                frames.append({"t": t.strftime("%Y%m%d%H%M"), "kind": "obs"})
+            t -= timedelta(minutes=10)
+        frames.reverse()
+        tmfc = _floor10(now).strftime("%Y%m%d%H%M")
+        tmefs = [(now + timedelta(hours=n)).strftime("%Y%m%d%H00") for n in range(1, 7)]
+    else:
+        for k in gridstore.keys("obs60"):
+            t = _dt(k)
+            if start <= t <= now and (t.hour * 60 + t.minute) % step == 0:
+                frames.append({"t": k, "kind": "obs"})
+        tmfc, tmefs = vsrt_run()
+    for f in frames:
+        f.update(layer="obs60", key=f["t"])
+    for n, ef in enumerate(tmefs[:6], 1):
+        frames.append({"t": ef, "kind": "fcst", "layer": f"vsrt+{n}", "n": n,
+                       "key": f"{tmfc}_{ef}", "tmfc": tmfc})
+
+    names = [s["name"] for s in gridstore.geo()["sigun"] if s["kind"] == "gn"]
+    series = {s: {"max": [], "mean": []} for s in names + ["경남"]}
+    for f in frames:
+        if test:
+            if f["kind"] == "obs":
+                a = synth("obs60", "hr", (_dt(f["t"]) - now).total_seconds() / 60)
+            else:
+                a = gridstore.to_hr(synth("vsrt", "dfs", f["n"] * 60))
+            vals = gridstore.sigun_values(a)
+        else:
+            store = "obs60" if f["kind"] == "obs" else "vsrt"
+            vals = _frame_values(store, f["key"], lambda s=store, k=f["key"]: gridstore.load(s, k))
+        for s in series:
+            mx, mean = vals.get(s, (None, None))
+            series[s]["max"].append(mx)
+            series[s]["mean"].append(mean)
+    return {"now": now.strftime("%Y%m%d%H%M"), "start": start.strftime("%Y%m%d%H%M"),
+            "hours": hours, "step": step, "tmfc": tmfc, "frames": frames,
+            "series": [{"sigun": s, **series[s]} for s in names], "total": series["경남"]}
 
 
 # ── 목록 · 지연 ─────────────────────────────────────────────────────────
@@ -215,7 +301,13 @@ def meta(now: datetime | None = None) -> dict:
             "layers": out, "collect": status, "setting": setting()}
 
 
-SETTING_DEFAULT = {"layer": "obs60", "x4": False, "vsrt_n": 1}
+SETTING_DEFAULT = {"layer": "obs60", "x4": False, "vsrt_n": 1,
+                   # 재생 — 실측 간격(분)·지난 시간·한 장 머무는 시간(ms)
+                   "flow_step": 10, "flow_hours": 6, "play_ms": 1200,
+                   # 오른쪽 타임라인 — 켬/끔, 시군 '최대'/'평균'
+                   "tl_on": False, "tl_stat": "max"}
+_CHOICES = {"flow_step": (10, 20, 30, 60), "flow_hours": (1, 3, 6, 12),
+            "play_ms": (600, 1200, 2000), "tl_stat": ("max", "mean")}
 
 
 def setting() -> dict:
@@ -227,13 +319,20 @@ def put_setting(body: dict) -> dict:
     if "layer" in body:
         split(str(body["layer"]))            # 모르는 층이면 LookupError
         cur["layer"] = str(body["layer"])
-    if "x4" in body:
-        cur["x4"] = bool(body["x4"])
+    for k in ("x4", "tl_on"):
+        if k in body:
+            cur[k] = bool(body[k])
     if "vsrt_n" in body:
         n = int(body["vsrt_n"])
         if not 1 <= n <= 6:
             raise ValueError("vsrt_n 은 1~6")
         cur["vsrt_n"] = n
+    for k, ok in _CHOICES.items():
+        if k in body:
+            v = body[k] if k == "tl_stat" else int(body[k])
+            if v not in ok:
+                raise ValueError(f"{k} 는 {ok} 중 하나")
+            cur[k] = v
     db.put_setting("map", cur)
     return cur
 
@@ -247,18 +346,30 @@ _PEAK = {"obs15": 14.0, "obs60": 42.0, "obsday": 180.0, "odam": 38.0, "vsrt": 30
          "shrt_today": 120.0, "shrt_tomorrow": 60.0}
 
 
-def synth(kind: str, grid: str, n: int = 0) -> np.ndarray:
-    """늘 같은 모양 — 점검하는 사람이 '어제 본 그 그림'과 견줄 수 있게. 육지 칸 몇 개는 결측."""
+def synth(kind: str, grid: str, off_min: float = 0.0) -> np.ndarray:
+    """합성 격자. 재생하면 같은 프레임을 여러 번 그리므로 분 단위로 기억해 둔다(읽기 전용으로 쓴다)."""
+    return _synth(kind, grid, int(round(off_min)))
+
+
+@lru_cache(maxsize=256)
+def _synth(kind: str, grid: str, off_min: int) -> np.ndarray:
+    """늘 같은 모양 — 점검하는 사람이 '어제 본 그 그림'과 견줄 수 있게. 육지 칸 몇 개는 결측.
+
+    off_min(지금부터 몇 분 뒤/앞)만큼 덩어리가 북동쪽으로 흐르고 세기가 오르내린다 —
+    재생해 보면 비구름이 지나가는 것처럼 보인다. 같은 off_min 이면 늘 같은 그림.
+    """
     b = gridstore.geo()[grid]["bbox"]
     rr, cc = np.mgrid[0:b["h"], 0:b["w"]]
     col, row = cc + b["i0"], rr + b["j0"]
     step = 0.5 if grid == "hr" else 5.0
     out = np.zeros(rr.shape)
-    shift = 0.03 * max(0, n - 1)                 # 초단기 +N 은 동쪽으로 조금씩 흘린다
-    for lon, lat, amp, rad in _BLOBS:
-        x, y = (gridproj.hr_xy if grid == "hr" else gridproj.dfs_xy)(lon + shift, lat)
+    h = off_min / 60.0
+    for k, (lon, lat, amp, rad) in enumerate(_BLOBS):
+        dlon, dlat = 0.10 * h, 0.035 * h                # 시간당 약 9km 동쪽·4km 북쪽
+        a = amp * (0.55 + 0.45 * np.cos(h * 0.9 + k * 1.3))
+        x, y = (gridproj.hr_xy if grid == "hr" else gridproj.dfs_xy)(lon + dlon, lat + dlat)
         d2 = ((col - x) ** 2 + (row - y) ** 2) * step * step
-        out += amp * np.exp(-d2 / (2 * rad * rad))
+        out += a * np.exp(-d2 / (2 * rad * rad))
     peak = _PEAK.get(kind, 30.0)
     out *= peak
     out[out < max(0.1, peak * 0.01)] = 0.0       # 꼬리를 끊는다 — 도 전체가 옅게 물들지 않게
@@ -266,4 +377,5 @@ def synth(kind: str, grid: str, n: int = 0) -> np.ndarray:
     if grid == "hr":
         x, y = gridproj.hr_xy(128.35, 35.55)      # 의령·합천 사이 한 조각을 결측으로
         out[(abs(col - x) < 6) & (abs(row - y) < 4)] = np.nan
+    out.setflags(write=False)                     # 기억해 두고 나눠 쓰므로 고치지 못하게
     return out

@@ -8,7 +8,7 @@
 
 ⚠️ 500m 는 바이너리(disp=B)가 아니라 **NetCDF** 로 받는다. 같은 자료가 16.8MB 대 46~430KB 다
    (실측 2026-10-01). 10분마다 셋이면 하루 7GB 대 0.1GB — 기관키 한도는 여러 PC 가 나눠 쓴다.
-⚠️ 기준시각 +5분 남짓에 만들어진다(NetCDF time_in 실측). 그래서 6분 물러선 5분 칸부터
+⚠️ 기준시각 +5분 남짓에 만들어진다(NetCDF time_in 실측). 그래서 6분 물러선 10분 칸부터
    묻고, 아직 없으면 한 칸 더 물러선다. 아직 없는 시각은 `# file not found` 같은 한 줄이 온다.
 ⚠️ 격자 틀(원점 칸·간격·기준 경위도)을 **받을 때마다 확인한다.** 기상청이 틀을 바꾸면
    경계와 어긋난 자리에 비가 그려진다 — 그때는 저장하지 않고 실패로 남긴다.
@@ -39,9 +39,11 @@ FRAME = {"map_sx": 880, "map_sy": 1540, "map_slon": 126.0, "map_slat": 38.0,
 
 
 def hr_slots(now: datetime) -> list[datetime]:
+    """10분 칸(:00·:10·…)만 받는다. 자료는 5분마다 있지만, 지도 재생 간격(10·20·30·60분)이
+    늘 맞아떨어지게 칸을 고정한다 — 수집 주기의 위상에 따라 :05·:15… 만 쌓이면 정시 칸이 없다."""
     t = (now - timedelta(minutes=LAG_MIN)).replace(second=0, microsecond=0)
-    t -= timedelta(minutes=t.minute % 5)
-    return [t, t - timedelta(minutes=5)]
+    t -= timedelta(minutes=t.minute % 10)
+    return [t, t - timedelta(minutes=10)]
 
 
 def parse_nc(body: bytes) -> np.ndarray:

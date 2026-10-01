@@ -41,15 +41,17 @@ def test_parse_nc_refuses_changed_frame():
 
 
 @pytest.mark.parametrize("now,want", [
-    (datetime(2026, 10, 1, 8, 13, 20), ["202610010805", "202610010800"]),
-    (datetime(2026, 10, 1, 8, 10, 59), ["202610010800", "202610010755"]),
+    (datetime(2026, 10, 1, 8, 13, 20), ["202610010800", "202610010750"]),
+    (datetime(2026, 10, 1, 8, 16, 0), ["202610010810", "202610010800"]),
+    (datetime(2026, 10, 1, 8, 15, 59), ["202610010800", "202610010750"]),
 ])
-def test_hr_slots(now, want):
+def test_hr_slots_are_10min_aligned(now, want):
+    """10분 칸만 — 재생 간격(10·20·30·60분)이 늘 맞아떨어지게."""
     assert [t.strftime("%Y%m%d%H%M") for t in grid_rain.hr_slots(now)] == want
 
 
 def test_collect_skips_midnight_day_total(store, monkeypatch):
-    """일강수 00:00(전날 총량)·00:05(반쯤 리셋)는 받지 않는다."""
+    """일강수 00:00(전날 총량)은 받지 않는다 — 한 칸 앞(23:50)으로 물러선다."""
     calls = []
 
     async def fake(obs, tm):
@@ -58,18 +60,17 @@ def test_collect_skips_midnight_day_total(store, monkeypatch):
 
     monkeypatch.setattr(grid_rain, "_fetch_hr", fake)
     monkeypatch.setattr(grid_rain.db, "log_collect", lambda *a, **k: None)
-    asyncio.run(grid_rain.collect(now=datetime(2026, 10, 2, 0, 11)))     # 슬롯 00:05, 00:00
-    assert ("rn_day", "202610020005") not in calls
+    asyncio.run(grid_rain.collect(now=datetime(2026, 10, 2, 0, 11)))     # 슬롯 00:00, 23:50
     assert ("rn_day", "202610020000") not in calls
-    assert ("rn_60m", "202610020005") in calls
-    assert store.keys("obsday") == []
+    assert ("rn_day", "202610012350") in calls
+    assert ("rn_60m", "202610020000") in calls
 
 
 def test_collect_steps_back_when_not_ready(store, monkeypatch):
     async def fake(obs, tm):
-        return None if tm.endswith("0805") else np.zeros((2049, 2049))   # 08:05 는 아직
+        return None if tm.endswith("0800") else np.zeros((2049, 2049))   # 08:00 은 아직
 
     monkeypatch.setattr(grid_rain, "_fetch_hr", fake)
     monkeypatch.setattr(grid_rain.db, "log_collect", lambda *a, **k: None)
     res = asyncio.run(grid_rain.collect(now=datetime(2026, 10, 1, 8, 13)))
-    assert res["got"] == {"obs15": "202610010800", "obs60": "202610010800", "obsday": "202610010800"}
+    assert res["got"] == {"obs15": "202610010750", "obs60": "202610010750", "obsday": "202610010750"}
