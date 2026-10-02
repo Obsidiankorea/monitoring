@@ -45,7 +45,13 @@
   --halo: #090D13;        /* 글자 테두리 — 칠해진 칸 위에서도 읽히게 */
   --hatch: #8093A8;       /* 결측 빗금 */
   --nb-ink: #56677B;
-  --test: #7B5CC8;        /* 테스트 모드 — 특보 예약색(노랑·빨강·보라 중대경보)과 겹치지 않는 남보라 */
+  /* 특보 예약색 — 특보에만 쓴다(index.html 과 같은 값). 강수는 청색 면, 특보는 이 색의 **선**이다 */
+  --lv-watch: #E8B23A;    /* 주의보 */
+  --lv-warn: #F2543D;     /* 경보 */
+  --lv-severe: #A265E8;   /* 중대경보 */
+  --lv-pre: #6E7FA6;      /* 예비특보 */
+  /* 테스트 모드 — **색을 쓰지 않는다.** 보라로 뒀더니 특보(중대경보 보라)를 켜자 헷갈렸다 */
+  --test: #8A94A4;
   --on-accent: #06121B;
 
   --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -70,6 +76,8 @@
   --hatch: #6A7C92;
   --nb-ink: #8C9BAE;
   --on-accent: #FFFFFF;
+  --lv-watch: #C08400; --lv-warn: #CF3320; --lv-severe: #7B3FBF; --lv-pre: #5A6C8C;
+  --test: #7A8494;
 }
 
 * { box-sizing: border-box; }
@@ -342,12 +350,75 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 #empty small { display: block; font-size: 14px; font-weight: 400; color: var(--ink-3); margin-top: 6px; }
 #empty.fail { color: var(--lv-fail); }
 
-/* 테스트 모드 — 실황으로 착각하지 않게 크게. 지도 위를 덮지 않고 판 테두리와 왼쪽 위에 둔다
-   (지도 한가운데 큰 글자를 얹었더니 옅게 해도 비구름처럼 보였다). */
-#stage.test { box-shadow: inset 0 0 0 6px var(--test); }
-#testmark { position: absolute; left: 26px; top: 20px; pointer-events: none; color: #9C82E0;
-  font: 800 64px var(--sans); line-height: 1; letter-spacing: .06em; }
-#testmark small { display: block; font: 600 18px var(--sans); letter-spacing: 0; color: var(--ink-2); margin-top: 8px; }
+/* 테스트 모드 — 실황으로 착각하지 않게. 판을 **무채색 점선**으로 두르고 위 가운데에 띠를 단다.
+   ⚠️ 지도 한가운데 큰 글자를 얹었더니 옅게 해도 비구름처럼 보였다.
+   ⚠️ 보라 테두리는 특보(중대경보 보라)와 헷갈렸다 — 색을 빼고 선 모양으로만 알린다. */
+#stage.test { outline: 5px dashed var(--test); outline-offset: -5px; }
+#testrib { position: absolute; left: 50%; top: 0; transform: translateX(-50%); pointer-events: none; z-index: 3;
+  padding: 5px 18px 6px; border-radius: 0 0 10px 10px; white-space: nowrap;
+  font: 800 18px var(--sans); letter-spacing: .12em; color: var(--ink);
+  background: repeating-linear-gradient(135deg, color-mix(in oklab, var(--test) 34%, var(--panel)) 0 10px,
+              color-mix(in oklab, var(--test) 18%, var(--panel)) 10px 20px);
+  border: 1px solid var(--test); border-top: 0; }
+#testrib small { font: 600 13px var(--sans); letter-spacing: 0; color: var(--ink-2); margin-left: 10px; }
+
+/* ── 레이어 — 왼쪽 위. 지도 위에 겹칠 것을 고른다(지금은 기상특보, 차츰 늘린다) ── */
+#layers { position: absolute; left: 18px; top: 16px; z-index: 4; display: flex; flex-direction: column; gap: 8px;
+  align-items: flex-start; }
+#ly-btn { display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+  font: 700 15px var(--sans); color: var(--ink); padding: 8px 14px 8px 12px; border-radius: 10px;
+  background: color-mix(in oklab, var(--panel) 84%, transparent); border: 1px solid var(--line);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+#ly-btn:hover, #ly-btn[aria-expanded="true"] { border-color: color-mix(in oklab, var(--accent) 60%, var(--line)); }
+#ly-btn .n { font: 600 13px var(--sans); color: var(--ink-2); }
+#ly-btn .chev { opacity: .6; transition: transform .2s; }
+#ly-btn[aria-expanded="true"] .chev { transform: rotate(180deg); }
+.ly-pop { min-width: 260px; padding: 8px; border-radius: 12px;
+  background: color-mix(in oklab, var(--panel) 94%, transparent); border: 1px solid var(--line);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 16px 40px rgba(0,0,0,.35); }
+.ly-it { display: grid; grid-template-columns: 22px 1fr; align-items: center; gap: 10px; padding: 8px 10px;
+  border-radius: 8px; cursor: pointer; }
+.ly-it:hover { background: color-mix(in oklab, var(--accent) 10%, transparent); }
+.ly-it input { appearance: none; width: 20px; height: 20px; border-radius: 6px; margin: 0; cursor: pointer;
+  border: 1.5px solid var(--ink-3); display: grid; place-items: center; }
+.ly-it input:checked { background: var(--accent); border-color: var(--accent); }
+.ly-it input:checked::after { content: "✓"; color: var(--on-accent); font: 800 13px var(--sans); }
+.ly-it b { font-size: 15px; }
+.ly-it small { display: block; font-size: 12px; color: var(--ink-3); margin-top: 1px; }
+.ly-it.off { opacity: .45; cursor: default; }
+/* 특보 범례 — 켜면 레이어 단추 밑에 붙는다 */
+#ly-alerts { width: 340px; padding: 10px 12px 12px; }
+#ly-alerts .hd2 { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; cursor: pointer; }
+#ly-alerts .hd2 .fd { margin-left: auto; font-style: normal; color: var(--ink-3); }
+#ly-alerts.fold { width: auto; padding-bottom: 8px; }
+#ly-alerts.fold .hd2 { margin-bottom: 0; }
+#ly-alerts.fold .al, #ly-alerts.fold .al-none { display: none; }
+#ly-alerts .hd2 b { font-size: 15px; }
+#ly-alerts .hd2 span { font: 600 12px var(--mono); color: var(--ink-3); }
+.al { display: grid; grid-template-columns: 30px auto 1fr; align-items: center; gap: 9px; padding: 4px 2px;
+  font-size: 14px; border-radius: 6px; cursor: default; }
+.al.hov { background: color-mix(in oklab, var(--accent) 10%, transparent); }
+.al b { white-space: nowrap; }
+.al .where { color: var(--ink-2); font-size: 13px; line-height: 1.3; }
+.al svg { width: 30px; height: 12px; overflow: visible; }
+.al .tag { font: 700 11px var(--sans); color: var(--ink-3); border: 1px solid var(--line); border-radius: 4px;
+  padding: 0 4px; justify-self: start; }
+.al-none { color: var(--ink-3); font-size: 13px; padding: 4px 2px; }
+/* 지도 위 특보 — 면은 칠하지 않는다(강수 청색과 섞인다). 시군 안쪽에 선 + 이름 밑 딱지.
+   선 모양도 다르게: 주의보 점선 · 경보 실선 · 중대경보 겹실선 — 흑백·색약에서도 갈린다 */
+#over .wl { fill: none; stroke-linejoin: round; }
+#over .wl.watch { stroke: var(--lv-watch); }
+#over .wl.warn { stroke: var(--lv-warn); }
+#over .wl.severe { stroke: var(--lv-severe); }
+#over .wl.gap { stroke: var(--halo); }
+#over .wb rect { stroke: var(--halo); stroke-width: 1.5; }
+#over .wb.watch rect { fill: var(--lv-watch); }
+#over .wb.warn rect { fill: var(--lv-warn); }
+#over .wb.severe rect { fill: var(--lv-severe); }
+#over .wb text { stroke: none; font-weight: 700; dominant-baseline: central; }
+#over .wb.watch text { fill: #1A1400; }
+#over .wb.warn text, #over .wb.severe text { fill: #FFFFFF; }
+#over .wsea { font-weight: 700; font-style: italic; }
 #dbg { position: absolute; left: 10px; top: 8px; font: 12px var(--mono); color: var(--ink-3); }
 
 /* ── 설정(Ctrl+,) ── */
@@ -376,7 +447,7 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 /* 4K 벽면(배율 100%)에서도 머리글·범례가 1080p 와 같은 크기로 읽히게 통째로 키운다.
    --k = min(가로/1920, 세로/1080), 1 아래로는 줄이지 않는다(layout 에서 정한다).
    지도 위 글자는 칸 크기를 따라 이미 커지므로 여기 넣지 않는다. */
-#hd, #legend, #play, #empty, #testmark, #prefs .box { zoom: var(--k, 1); }
+#hd, #legend, #play, #empty, #testrib, #layers, #prefs .box { zoom: var(--k, 1); }
 #tip { font-size: calc(14px * var(--k, 1)); }
 #tip b { font-size: calc(16px * var(--k, 1)); }
 #tip .d { font-size: calc(12px * var(--k, 1)); }
@@ -433,7 +504,16 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
   </aside>
   <div id="tip" hidden></div>
   <div id="empty" hidden></div>
-  <div id="testmark" hidden>테스트<small>합성 격자 — 실제 비가 아니다</small></div>
+  <div id="testrib" hidden>테스트<small>합성 격자 · 합성 특보 — 실제가 아니다</small></div>
+  <div id="layers">
+    <button id="ly-btn" aria-haspopup="true" aria-expanded="false" title="지도 위에 겹칠 것 (A: 기상특보)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3 2.5 8 12 13l9.5-5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M2.5 12.5 12 17.5l9.5-5M2.5 16.5 12 21.5l9.5-5" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" opacity=".6"/></svg>
+      레이어 <span class="n" id="ly-n"></span>
+      <svg class="chev" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="ly-pop" id="ly-menu" hidden></div>
+    <div class="ly-pop" id="ly-alerts" hidden></div>
+  </div>
   <div id="dbg" hidden></div>
 </main>
 <div id="prefs" hidden></div>
@@ -602,8 +682,9 @@ function buildBase() {
   }).join("");
   $("over").innerHTML =
     `<path class="sg" d="${sg}"/><path class="cs" d="${cs}"/><path class="sb" d="${sb}"/><path class="zn" d="${zn}"/>`
-    + `<path id="hl"/><g id="labels"></g><g id="names">${names}</g><g id="ranks"></g>`;
+    + `<g id="walerts"></g><path id="hl"/><g id="labels"></g><g id="names">${names}</g><g id="wbadge"></g><g id="ranks"></g>`;
   HL = null;
+  drawAlerts();
   drawRanks();
 }
 let FSN = 20;                           // 시군명 글자 크기(순위 표식 자리 잡는 데 쓴다)
@@ -765,7 +846,7 @@ function drawLabels() {
   const fs = Math.max(14, Math.min(58, V.s * 6.2)), fs2 = fs * 0.62;
   // 다른 시군의 점 바로 옆에 붙으면 누구 값인지 헷갈린다 — 점 자리도 미리 비워 둔다
   const pr = fs * 0.45;
-  const placed = NAMEBOX.concat(rows.map(r => {
+  const placed = NAMEBOX.concat(ALERTBOX, rows.map(r => {
     const x = V.toX(r.where.col), y = V.toY(r.where.row);
     return { x0: x - pr, x1: x + pr, y0: y - pr, y1: y + pr };
   })), out = [];
@@ -859,7 +940,7 @@ function paintHead() {
   if (kind === "obs15" && x4) b.push(`<span class="badge">×4 환산</span>`);
   $("badges").innerHTML = b.join(" ");
   $("stage").classList.toggle("late", !test && !past && !!L.stale);
-  $("testmark").hidden = !test;
+  $("testrib").hidden = !test;
   $("stage").classList.toggle("test", test);
   $("b-test").classList.toggle("on", test);
   $("b-tl").classList.toggle("on", tlOn);
@@ -1561,6 +1642,209 @@ function link(el, sig) {
   p.style.setProperty("--len", p.getTotalLength().toFixed(0));
 }
 
+/* ── 레이어 — 지도 위에 겹칠 것. 왼쪽 위 '레이어'에서 켜고 끈다(서버 설정 overlays) ──
+   지금은 기상특보 하나. 차츰 늘린다(시군 위 막대 등) — OVL 에 한 줄 보태면 메뉴에 뜬다. */
+const OVL = [
+  { id: "alerts", label: "기상특보", sub: "발효 중 — 시군 테두리 · 딱지 / 바다 · 예비는 글로" },
+];
+let OV = new Set();
+function renderLayers() {
+  $("ly-n").textContent = OV.size ? `· ${OVL.filter(o => OV.has(o.id)).map(o => o.label).join(" · ")}` : "";
+  $("ly-menu").innerHTML = OVL.map(o => `<label class="ly-it"><input type="checkbox" data-ov="${o.id}" ${OV.has(o.id) ? "checked" : ""}>
+    <span><b>${o.label}</b><small>${o.sub}</small></span></label>`).join("");
+  for (const c of $("ly-menu").querySelectorAll("input[data-ov]")) c.onchange = () => setOverlay(c.dataset.ov, c.checked);
+  renderAlertLegend();
+}
+function setOverlay(id, on) {
+  on ? OV.add(id) : OV.delete(id);
+  saveSetting({ overlays: [...OV] });
+  if (id === "alerts") { if (on) loadAlerts(); else { ALERTS = null; drawAlerts(); draw(); } }
+  renderLayers();
+}
+$("ly-btn").onclick = () => {
+  const open = $("ly-menu").hidden;
+  $("ly-menu").hidden = !open;
+  $("ly-btn").setAttribute("aria-expanded", String(open));
+};
+document.addEventListener("pointerdown", ev => {
+  if (!$("ly-menu").hidden && !ev.target.closest?.("#layers")) {
+    $("ly-menu").hidden = true; $("ly-btn").setAttribute("aria-expanded", "false");
+  }
+});
+
+/* ── 기상특보 ─────────────────────────────────────────────────────────
+   ⚠️ **면을 칠하지 않는다.** 강수는 청색 면이다 — 특보까지 면이면 두 색이 섞여 둘 다 못 읽는다.
+      특보는 예약색(주의보 노랑 · 경보 빨강 · 중대경보 보라)의 **선**과 **글자 딱지**다.
+   ⚠️ 색만으로 가르지 않는다: 주의보 점선 · 경보 실선 · 중대경보 겹실선. 흑백·색약에서도 갈린다.
+   ⚠️ 선은 시군 **안쪽**에만 긋는다(제 모양으로 잘라 낸다). 이웃 시군의 다른 특보 선과 겹치지 않는다.
+   일부 구역만(합천 서북부 등)이면 시군 전체에 긋고 딱지에 '서북'을 적는다 — 특보구역 경계는 아직 없다.
+   바다 특보는 바다 위에 글로, 예비특보는 지도에 긋지 않고 레이어 범례에만 적는다(발효 전이다). */
+let ALERTS = null, ALERTBOX = [];
+let AL_FOLD = false;
+try { AL_FOLD = localStorage.getItem("gn-map-alfold") === "1"; } catch {}
+const LVRANK = { severe: 3, warn: 2, watch: 1 };
+const LVNAME = { severe: "중대경보", warn: "경보", watch: "주의보" };
+function regSig(reg) {                    // '합천서북부' → ['합천', '서북'], '창원시' → ['창원', '']
+  for (const s of ORDER_GN()) if (reg.startsWith(s)) {
+    const rest = reg.slice(s.length);
+    return [s, rest === "시" || rest === "군" ? "" : rest.replace(/부$/, "")];
+  }
+  return [null, ""];
+}
+function parseAlerts(j) {
+  const data = j?.data || { groups: [], pending: [] };
+  const bySig = {}, land = [], sea = [];
+  for (const g of data.groups || []) {
+    if (g.sea) { sea.push(g); continue; }
+    const where = [];
+    for (const reg of g.regions || []) {
+      const [s, sub] = regSig(reg);
+      if (!s) continue;
+      (bySig[s] ||= []).push({ name: g.name, lv: g.lv, sub });
+      where.push(sub ? `${s}(${sub})` : s);
+    }
+    land.push({ ...g, where: [...new Set(where)] });
+  }
+  return { base: j?.base_time, bySig, land, sea, pending: data.pending || [] };
+}
+function testAlerts() {
+  const t = new Date(), hhmm = `${String(t.getHours()).padStart(2, "0")}:00`;
+  return { base_time: `${t.toISOString().slice(0, 10)} ${hhmm}`, data: {
+    groups: [
+      { lv: "severe", name: "폭염중대경보", sea: false, tmfc: hhmm, regions: ["밀양"] },
+      { lv: "warn", name: "호우경보", sea: false, tmfc: hhmm, regions: ["창원", "김해"] },
+      { lv: "watch", name: "호우주의보", sea: false, tmfc: hhmm, regions: ["진주", "산청서남부", "함안"] },
+      { lv: "watch", name: "강풍주의보", sea: false, tmfc: hhmm, regions: ["통영", "거제", "창원"] },
+      { lv: "watch", name: "풍랑주의보", sea: true, tmfc: hhmm, regions: ["남해동부앞바다", "거제시동부앞바다"] },
+    ],
+    pending: [{ kind: "pre", name: "호우", reg: "하동", sigun: "하동", when: "새벽(03~06시)" },
+              { kind: "pre", name: "호우", reg: "남해", sigun: "남해", when: "새벽(03~06시)" }] } };
+}
+let ALERT_SEQ = 0;
+async function loadAlerts() {
+  if (!OV.has("alerts")) return;
+  const my = ++ALERT_SEQ;
+  let j;
+  try { j = test ? testAlerts() : await getJson("/api/alerts"); }
+  catch (e) { j = { err: e.message }; }
+  if (my !== ALERT_SEQ) return;
+  ALERTS = j.err ? { err: j.err } : parseAlerts(j);
+  drawAlerts(); draw(); renderAlertLegend();
+}
+
+/* 경위도 → 500m 칸(정방향). 바다 특보 글자 자리를 경위도로 두려고 쓴다 */
+const LCCF = (() => {
+  const D = Math.PI / 180, a = 6378137, f = 1 / 298.257222101, e = Math.sqrt(f * (2 - f));
+  const m = p => Math.cos(p) / Math.sqrt(1 - e * e * Math.sin(p) ** 2);
+  const t = p => Math.tan(Math.PI / 4 - p / 2) / ((1 - e * Math.sin(p)) / (1 + e * Math.sin(p))) ** (e / 2);
+  const p1 = 30 * D, p2 = 60 * D, p0 = 38 * D;
+  const n = (Math.log(m(p1)) - Math.log(m(p2))) / (Math.log(t(p1)) - Math.log(t(p2)));
+  const AF = a * m(p1) / (n * t(p1) ** n), rho0 = AF * t(p0) ** n;
+  return (lon, lat) => {
+    const rho = AF * t(lat * D) ** n, th = n * (lon - 126) * D;
+    return [rho * Math.sin(th) / 500 + 880, (rho0 - rho * Math.cos(th)) / 500 + 1540];
+  };
+})();
+
+function drawAlerts() {
+  const gl = $("walerts"), gb = $("wbadge");
+  ALERTBOX = [];
+  if (!gl || !gb) return;
+  if (!OV.has("alerts") || !ALERTS || ALERTS.err || !V || !V.s) { gl.innerHTML = gb.innerHTML = ""; return; }
+  const sc = V.s / 3.3, w = Math.max(3.5, 4.6 * sc);      // 보이는 선 굵기(안쪽 절반)
+  const defs = [], lines = [], badges = [];
+  for (const [sig, list] of Object.entries(ALERTS.bySig)) {
+    const ft = FEAT.find(f => f.properties.sigun === sig);
+    if (!ft) continue;
+    const top = list.reduce((a, b) => (LVRANK[b.lv] > LVRANK[a.lv] ? b : a));
+    const id = `wc${ft.properties.id}`, dClip = PATH(ft);
+    defs.push(`<clipPath id="${id}"><path d="${dClip}"/></clipPath>`);
+    // ⚠️ 작은 섬(4㎢ 미만 = 16칸)까지 두르면 통영·거제 바다가 점선으로 어지럽다 — 선은 큰 땅에만
+    const polys = ft.geometry.type === "Polygon" ? [ft.geometry.coordinates] : ft.geometry.coordinates;
+    const areaCells = ring => Math.abs(ring.reduce((s, p, i) => {
+      const q = ring[(i + 1) % ring.length];
+      return s + p[0] * q[1] - q[0] * p[1];
+    }, 0)) / 2;
+    const big = polys.filter(p => areaCells(p[0]) >= 16);
+    const d = PATH({ type: "MultiPolygon", coordinates: big.length ? big : polys });
+    const L = (cls, sw, dash = "") => `<path class="wl ${cls}" d="${d}" clip-path="url(#${id})" stroke-width="${(sw * 2).toFixed(1)}"${dash ? ` stroke-dasharray="${dash}"` : ""}/>`;
+    if (top.lv === "severe") lines.push(L("severe", w * 1.3), L("gap", w * 0.85), L("severe", w * 0.45));
+    else if (top.lv === "warn") lines.push(L("warn", w));
+    else lines.push(L("watch", w, `${(10 * sc).toFixed(1)} ${(6 * sc).toFixed(1)}`));
+    // 딱지 — 시군명 밑에 쌓는다(센 것부터)
+    const fs = FSN * 0.6, bh = fs * 1.5, x = V.toX(ft.properties.lx);
+    let y = V.toY(ft.properties.ly) + FSN * 0.62 + 3;
+    const items = list.slice().sort((a, b) => LVRANK[b.lv] - LVRANK[a.lv]);
+    const seen = new Set();
+    for (const it of items) {
+      const txt = it.name + (it.sub ? ` · ${it.sub}` : "");
+      if (seen.has(txt)) continue;
+      seen.add(txt);
+      const bw = txt.length * fs * 0.95 + fs * 0.9;
+      badges.push(`<g class="wb ${it.lv}"><rect x="${(x - bw / 2).toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="${(bh / 3).toFixed(1)}"/>
+        <text x="${x.toFixed(1)}" y="${(y + bh / 2).toFixed(1)}" text-anchor="middle" style="font-size:${fs.toFixed(1)}px">${txt}</text></g>`);
+      ALERTBOX.push({ x0: x - bw / 2, x1: x + bw / 2, y0: y, y1: y + bh });
+      y += bh + 3;
+    }
+  }
+  // 바다 특보 — 바다 위(거제 남쪽)에 글로
+  if (ALERTS.sea.length) {
+    const [cx, cy] = LCCF(128.66, 34.62);
+    const fs = FSN * 0.62;
+    let y = V.toY(cy);
+    for (const g of ALERTS.sea) {
+      badges.push(`<text class="wsea" x="${V.toX(cx).toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle"
+        style="font-size:${fs.toFixed(1)}px;fill:var(--lv-${g.lv});stroke-width:${(fs * 0.2).toFixed(1)}px">바다 · ${g.name}</text>`);
+      y += fs * 1.35;
+    }
+  }
+  gl.innerHTML = `<defs>${defs.join("")}</defs>${lines.join("")}`;
+  gb.innerHTML = badges.join("");
+}
+
+function renderAlertLegend() {
+  const box = $("ly-alerts");
+  if (!OV.has("alerts")) { box.hidden = true; return; }
+  box.hidden = false;
+  if (!ALERTS) { box.innerHTML = `<div class="hd2"><b>기상특보</b><span>읽는 중…</span></div>`; return; }
+  if (ALERTS.err) { box.innerHTML = `<div class="hd2"><b>기상특보</b></div><div class="al-none">불러오지 못했다 — ${ALERTS.err}</div>`; return; }
+  const sample = lv => lv === "severe"
+    ? `<svg viewBox="0 0 30 12"><line x1="0" x2="30" y1="2.5" y2="2.5" stroke="var(--lv-severe)" stroke-width="3"/><line x1="0" x2="30" y1="9" y2="9" stroke="var(--lv-severe)" stroke-width="2"/></svg>`
+    : `<svg viewBox="0 0 30 12"><line x1="0" x2="30" y1="6" y2="6" stroke="var(--lv-${lv})" stroke-width="4"${lv === "watch" ? ' stroke-dasharray="6 4"' : ""}/></svg>`;
+  const rows = [];
+  for (const g of ALERTS.land)
+    rows.push(`<div class="al" data-s="${g.where.map(x => x.replace(/\(.*/, "")).join(",")}">${sample(g.lv)}<b style="color:var(--lv-${g.lv})">${g.name}</b><span class="where">${g.where.join(" · ")}</span></div>`);
+  for (const g of ALERTS.sea)
+    rows.push(`<div class="al"><span class="tag">바다</span><b style="color:var(--lv-${g.lv})">${g.name}</b><span class="where">${(g.regions || []).slice(0, 2).join(" · ")}${(g.regions || []).length > 2 ? ` 외 ${g.regions.length - 2}` : ""}</span></div>`);
+  const pre = ALERTS.pending.filter(p => p.kind === "pre");
+  const preBy = {};
+  for (const p of pre) (preBy[`${p.name}|${p.when}`] ||= []).push(p.sigun || p.reg);
+  for (const [k, sigs] of Object.entries(preBy)) {
+    const [name, when] = k.split("|");
+    rows.push(`<div class="al"><span class="tag">예비</span><b style="color:var(--lv-pre)">${name}</b><span class="where">${when} · ${[...new Set(sigs)].join(" · ")}</span></div>`);
+  }
+  const later = ALERTS.pending.filter(p => p.kind === "later");
+  for (const p of later)
+    rows.push(`<div class="al"><span class="tag">예정</span><b>${p.name}</b><span class="where">${p.sigun || p.reg} · ${String(p.tmef || "").slice(8, 10)}:${String(p.tmef || "").slice(10, 12)} 발효</span></div>`);
+  const bt = ALERTS.base ? String(ALERTS.base).slice(11, 16) : "—";
+  const nKind = ALERTS.land.length + ALERTS.sea.length;
+  // 머리를 누르면 접는다 — 특보가 많은 날 범례가 지도 북서쪽(함양·거창)을 가리지 않게
+  box.classList.toggle("fold", AL_FOLD);
+  box.innerHTML = `<div class="hd2" id="al-hd" title="눌러서 접기/펼치기"><b>기상특보</b>`
+    + `<span>${nKind ? `${nKind}종 · ` : ""}${test ? "테스트 · " : ""}조회 ${bt}</span><i class="fd">${AL_FOLD ? "▸" : "▾"}</i></div>`
+    + (rows.length ? rows.join("") : `<div class="al-none">발효 중인 특보 없음</div>`);
+  $("al-hd").onclick = () => {
+    AL_FOLD = !AL_FOLD;
+    try { localStorage.setItem("gn-map-alfold", AL_FOLD ? "1" : "0"); } catch {}
+    renderAlertLegend();
+  };
+  for (const r of box.querySelectorAll(".al[data-s]")) {
+    const first = r.dataset.s.split(",")[0];
+    r.onmouseenter = () => highlight(first);
+    r.onmouseleave = () => highlight(null);
+  }
+}
+
 /* ── 설정(Ctrl+,) — 서버에 둔다(어느 PC 에서 열어도 같게) ─────────────────── */
 function openPrefs() {
   stopPlay();
@@ -1583,7 +1867,7 @@ function openPrefs() {
     <div class="row"><span class="k">테마</span><span class="seg">
       <button data-th="dark" class="${th !== "light" ? "on" : ""}">어둡게</button>
       <button data-th="light" class="${th === "light" ? "on" : ""}">밝게</button></span></div>
-    <div class="keys"><kbd>1</kbd>~<kbd>7</kbd> 층 · <kbd>Space</kbd> 재생 · <kbd>←</kbd><kbd>→</kbd> 한 장씩 · <kbd>L</kbd> 타임라인 · <kbd>T</kbd> 테스트 · <kbd>Ctrl</kbd>+<kbd>,</kbd> 설정</div>
+    <div class="keys"><kbd>1</kbd>~<kbd>7</kbd> 층 · <kbd>Space</kbd> 재생 · <kbd>←</kbd><kbd>→</kbd> 한 장씩 · <kbd>L</kbd> 패널 · <kbd>A</kbd> 특보 · <kbd>T</kbd> 테스트 · <kbd>Ctrl</kbd>+<kbd>,</kbd> 설정</div>
   </div>`;
   $("prefs").hidden = false;
   $("pf-x").onclick = closePrefs;
@@ -1665,7 +1949,7 @@ $("stage").addEventListener("mousemove", ev => {
 });
 $("stage").addEventListener("mouseleave", () => { $("tip").hidden = true; highlight(null); });
 
-$("b-test").onclick = () => { test = !test; GRIDS.clear(); STATS.clear(); loadFlow().then(() => show()); };
+$("b-test").onclick = () => { test = !test; GRIDS.clear(); STATS.clear(); loadFlow().then(() => show()); loadAlerts(); };
 $("b-tl").onclick = () => setTL(!tlOn);
 $("tl-x").onclick = () => setTL(false);
 $("tl-stat").onclick = () => { SET.tl_stat = SET.tl_stat === "mean" ? "max" : "mean"; saveSetting({ tl_stat: SET.tl_stat }); buildTL(); };
@@ -1679,6 +1963,7 @@ document.addEventListener("keydown", ev => {
   if (i >= 0) { stopPlay(); choose(KINDS[i], true); }
   else if (ev.key === "t" || ev.key === "T") $("b-test").click();
   else if (ev.key === "l" || ev.key === "L") setTL(!tlOn);
+  else if (ev.key === "a" || ev.key === "A") setOverlay("alerts", !OV.has("alerts"));
   else if (ev.key === " " && FLOWK.has(kind)) { ev.preventDefault(); playing ? stopPlay() : startPlay(); }
   else if ((ev.key === "ArrowRight" || ev.key === "ArrowLeft") && FLOW && FLOWK.has(kind)) {
     stopPlay();
@@ -1709,6 +1994,8 @@ async function boot() {
   }
   FEAT = topojson.feature(TOPO, TOPO.objects.sigun).features;
   SET = { ...SET_DEFAULT, ...(META.setting || {}) };
+  OV = new Set(Q.has("ov") ? Q.get("ov").split(",").filter(Boolean) : (SET.overlays || []));
+  renderLayers();
   vsrtN = +SET.vsrt_n || 1; x4 = !!SET.x4;
   tlOn = Q.has("tl") ? Q.get("tl") === "1" : !!SET.tl_on;
   const want = Q.get("layer") || SET.layer || "obs60";      // URL 이 서버 설정보다 먼저다(화면 고정용)
@@ -1720,8 +2007,9 @@ async function boot() {
   applyTL(false);                       // 범례가 그려진 뒤에 지도 비켜설 자리를 다시 잰다
   await loadFlow();
   setInterval(refreshMeta, 60000);
-  // 카드는 종합 화면처럼 1분마다 다시 읽는다(DB 만 읽는다 — 기상청 호출은 늘지 않는다)
-  setInterval(() => { if (!test) loadCards(); }, 60000);
+  // 카드·특보는 종합 화면처럼 1분마다 다시 읽는다(DB 만 읽는다 — 기상청 호출은 늘지 않는다)
+  setInterval(() => { if (!test) { loadCards(); loadAlerts(); } }, 60000);
+  loadAlerts();
 }
 boot();
 </script>

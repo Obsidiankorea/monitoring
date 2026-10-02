@@ -310,7 +310,10 @@ SETTING_DEFAULT = {"layer": "obs60", "x4": False, "vsrt_n": 1,
                    "flow_step": 10, "flow_hours": 6, "play_ms": 1200,
                    # 오른쪽 패널 — 켬/끔, 방식(카드: 종합 화면 판을 작게 / 타임라인: 격자 시군 선),
                    # 타임라인의 시군 '최대'/'평균', 카드의 누적 구간(시간)
-                   "tl_on": False, "panel": "cards", "tl_stat": "max", "acc_hours": 12}
+                   "tl_on": False, "panel": "cards", "tl_stat": "max", "acc_hours": 12,
+                   # 지도 위에 겹칠 레이어(왼쪽 위 '레이어'에서 켠다). 차츰 늘린다.
+                   "overlays": []}
+OVERLAYS = ("alerts",)
 _CHOICES = {"flow_step": (10, 20, 30, 60), "flow_hours": (1, 3, 6, 12),
             "play_ms": (600, 1200, 2000), "tl_stat": ("max", "mean"),
             "panel": ("cards", "timeline"), "acc_hours": (6, 12, 24, 48)}
@@ -340,6 +343,11 @@ def put_setting(body: dict) -> dict:
             if v not in ok:
                 raise ValueError(f"{k} 는 {ok} 중 하나")
             cur[k] = v
+    if "overlays" in body:
+        ov = body["overlays"]
+        if not isinstance(ov, list) or any(x not in OVERLAYS for x in ov):
+            raise ValueError(f"overlays 는 {OVERLAYS} 의 부분 목록")
+        cur["overlays"] = list(dict.fromkeys(ov))
     db.put_setting("map", cur)
     return cur
 

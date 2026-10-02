@@ -62,6 +62,8 @@ def test_put_setting_validates(monkeypatch):
     monkeypatch.setattr(gridview.db, "get_setting", lambda k, d: dict(d))
     monkeypatch.setattr(gridview.db, "put_setting", lambda k, v: saved.update(v))
     assert gridview.put_setting({"flow_step": 30, "tl_on": 1})["flow_step"] == 30
-    for bad in ({"flow_step": 15}, {"play_ms": 50}, {"tl_stat": "sum"}, {"layer": "nope"}):
+    assert gridview.put_setting({"overlays": ["alerts", "alerts"]})["overlays"] == ["alerts"]
+    for bad in ({"flow_step": 15}, {"play_ms": 50}, {"tl_stat": "sum"}, {"layer": "nope"},
+                {"overlays": ["bars"]}, {"overlays": "alerts"}):
         with pytest.raises((ValueError, LookupError)):
             gridview.put_setting(bad)
