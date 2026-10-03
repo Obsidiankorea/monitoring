@@ -5,6 +5,8 @@
     obs60   그 시각 60분 강수(= 그 앞 한 시간)
     acc     사례 처음부터 그 시각까지 칸마다 더한 누적 — 결측 칸은 결측으로 남는다
 
+관측소는 meta['stations'](매시 RN_HR1, awsh) — obs60 은 그 시각, acc 는 처음부터 더한 것.
+
 ⚠️ 사례의 특보는 **산출**이다(격자 3시간·12시간 합에 호우 기준). 특보 이력 API 가 이 키로 403 이라
    실제 발표 내역을 담을 수 없다. 화면은 '산출'이라 적는다.
 """
@@ -73,6 +75,48 @@ def frame(slug: str, layer: str, tm: str | None) -> dict:
     arr = obs(slug, tm) if layer == "obs60" else acc(slug, tm)
     return {"grid": "hr", "tm": tm, "arr": arr, "case": slug,
             **({"from": m["start"]} if layer == "acc" else {})}
+
+
+def stations(slug: str, layer: str, tm: str | None, base: list[dict]) -> dict:
+    """그 시각 관측소 값 — meta['stations'](매시 RN_HR1, tools/build_map_case.py 가 굳힌 것).
+
+    acc 는 사례 처음부터 그 시각까지 매시 값을 더한다. 한 시간이라도 결측이면 q='part'(하한)."""
+    m = meta(slug)
+    tm = tm or m["end"]
+    if layer not in ("obs60", "acc"):
+        raise LookupError(f"사례에는 1시간(obs60)·누적(acc)만 있다: {layer}")
+    if tm not in m["frames"]:
+        raise LookupError(f"{slug} {tm} 없음")
+    st = m.get("stations")
+    if not st:
+        return {"tm": tm, "status": "none", "src": "", "rows": [{**b, "v": None, "q": "none"} for b in base]}
+    i = m["frames"].index(tm)
+    rows = []
+    for b in base:
+        h = st["h1"].get(b["stn"])
+        if h is None:
+            rows.append({**b, "v": None, "q": "none"})
+            continue
+        seg = h[i:i + 1] if layer == "obs60" else h[:i + 1]
+        have = [v for v in seg if v is not None]
+        if not have:
+            rows.append({**b, "v": None, "q": "missing"})
+        else:
+            rows.append({**b, "v": round(sum(have), 1), "q": "ok" if len(have) == len(seg) else "part"})
+    return {"tm": tm, "status": "ok", "src": st["src"], "rows": rows}
+
+
+def acc_rows(slug: str, tm: str | None, sigun: str | None) -> dict:
+    """사례 누적 표(격자) — 시군 줄 또는 sigun 의 읍면동 줄. 모양은 gridview.acc 와 같다."""
+    from .gridview import acc_table
+    m = meta(slug)
+    tm = tm or m["end"]
+    if tm not in m["frames"]:
+        raise LookupError(f"{slug} {tm} 없음")
+    keys = m["frames"][:m["frames"].index(tm) + 1]
+    return {"basis": "grid", "hours": len(keys), "frames": keys, "tm": tm, "sigun": sigun,
+            "missing": 0, "case": slug, "src": "기상청 고해상도 격자(500m) · 매시 60분 합 — 재현",
+            "rows": acc_table(acc(slug, tm), [obs(slug, k) for k in keys], sigun)}
 
 
 def flow(slug: str) -> dict:

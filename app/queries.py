@@ -200,8 +200,11 @@ def minute_top(n: int = 8) -> dict:
             "r15": r15, "r60": r60}
 
 
-def forecast(hours: int = 6, now: datetime | None = None) -> dict:
-    """최신 발표분의 읍면동 예측. 시군 대표값은 그 시군 읍면동 최대값이다."""
+def forecast(hours: int = 6, now: datetime | None = None, sigun: str | None = None) -> dict:
+    """최신 발표분의 읍면동 예측. 시군 대표값은 그 시군 읍면동 최대값이다.
+
+    `sigun` 을 주면 그 시군 읍면동을 **전부** `emd_sigun` 에 더 준다(지도 판에서 시군을 골랐을 때).
+    """
     with db.tx() as con:
         row = con.execute("SELECT MAX(tmfc) AS t FROM fcst_rn1").fetchone()
         tmfc = row["t"] if row else None
@@ -241,8 +244,11 @@ def forecast(hours: int = 6, now: datetime | None = None) -> dict:
                     "sum": top["sum"], "peak": top["peak"]})
     sig.sort(key=lambda x: (-x["sum"], -x["peak"]))
 
-    return {"tmfc": tmfc, "labels": [t[8:10] for t in tmefs],
-            "emd": emd_list[:24], "sigun": sig}
+    out = {"tmfc": tmfc, "labels": [t[8:10] for t in tmefs],
+           "emd": emd_list[:24], "sigun": sig}
+    if sigun:
+        out["emd_sigun"] = [e for e in emd_list if e["sigun"] == sigun]
+    return out
 
 
 def alerts() -> dict:

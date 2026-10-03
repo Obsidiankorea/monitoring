@@ -8,7 +8,8 @@
 만드는 것
   obs60/{YYYYMMDDHHMI}.u16.gz  매시 정각 60분 강수(= 그 앞 한 시간), 경남 bbox, gridstore 형식
   meta.json                    제목·기간·프레임, 시군별 시계열(1시간·3시간·12시간·누적 최대와
-                               그 칸의 읍면동), 산출 호우특보, 확인한 관측소 값
+                               그 칸의 읍면동), 산출 호우특보, 확인한 관측소 값,
+                               관측소 매시 RN_HR1(awsh.php) — 지도 '관측소' 층이 격자 옆에 놓는다
 
 ⚠️ 특보 이력 API(wrn_met_data.php)는 이 키로 403 이다. 그래서 격자의 3시간·12시간 합에
    호우 기준을 적용한 **산출** 특보만 담는다(종합 화면 데모와 같은 원칙). 화면에 '산출'이라 적는다.
@@ -31,6 +32,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from app import gridstore  # noqa: E402
 from app.collectors.grid_rain import _fetch_hr  # noqa: E402
+from app.collectors.rain import GN_STN, fetch_hour  # noqa: E402
 
 OUT = ROOT / "data" / "demo" / "map"
 
@@ -59,6 +61,21 @@ def level(h3: float | None, h12: float | None) -> str | None:
     if h3 >= WATCH["h3"] or h12 >= WATCH["h12"]:
         return "watch"
     return None
+
+
+async def station_hours(keys: list[str], old: dict | None) -> dict:
+    """관측소 매시 1시간 강수(awsh.php RN_HR1) — 프레임과 같은 시각. 지난번에 받은 게 있으면 다시 안 부른다."""
+    if old and old.get("frames") == keys and old.get("stations"):
+        return old["stations"]
+    h1: dict[str, list] = {s: [] for s in sorted(GN_STN)}
+    for tm in keys:
+        rows = await fetch_hour(datetime.strptime(tm, "%Y%m%d%H%M"))
+        if not rows:
+            raise SystemExit(f"{tm} 관측소 정시자료가 비었다 — 멈춘다")
+        for s in h1:
+            v = (rows.get(s) or {}).get("rn_hr1")
+            h1[s].append(None if v is None or v < 0 else v)
+    return {"src": "기상청 정시자료(awsh.php) RN_HR1 매시", "h1": h1}
 
 
 def stats(arr: np.ndarray) -> dict:
@@ -116,12 +133,25 @@ async def main(slug: str) -> None:
         total["h1m"].append(gv[1])
         total["acc"].append(gridstore.sigun_values(acc)["경남"][0])
     peak = int(np.argmax(total["h1"]))
+    mp = d / "meta.json"
+    stn = await station_hours(keys, json.loads(mp.read_text("utf-8")) if mp.exists() else None)
+    # 관측소 매시 합이 일자료(checked)와 맞는지 — 날(01시~다음날 00시)마다 견준다
+    for ck in c["checked"]:
+        h = stn["h1"].get(ck["stn"])
+        if not h:
+            continue
+        for day, want in ck["days"].items():
+            idx = [i for i, k in enumerate(keys)
+                   if (datetime.strptime(k, "%Y%m%d%H%M") - timedelta(minutes=1)).strftime("%m%d") == day]
+            got = round(sum(h[i] or 0 for i in idx), 1)
+            print(f"관측소 {ck['name']} {day}: 매시 합 {got} / 일자료 {want}"
+                  + ("" if abs(got - want) < 0.15 and len(idx) == 24 else "  ← 다르다"))
     meta = {
         "slug": slug, "title": c["title"], "start": keys[0], "end": keys[-1], "frames": keys,
         "peak": keys[peak], "checked": c["checked"],
         "criteria": {"watch": WATCH, "warn": WARN, "note": "산출 — 격자 3시간·12시간 합에 호우 기준을 적용. 실제 발표 내역이 아니다"},
         "source": "기상청 고해상도 격자(500m) rn_60m 매시 정각 · sfc_grid_nc_down.php",
-        "series": [{"sigun": s, **ser[s]} for s in names], "total": total,
+        "series": [{"sigun": s, **ser[s]} for s in names], "total": total, "stations": stn,
         "built": datetime.now().strftime("%Y-%m-%d %H:%M"),
     }
     (d / "meta.json").write_text(json.dumps(meta, ensure_ascii=False), "utf-8")

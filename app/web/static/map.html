@@ -407,6 +407,7 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 .ly-it b { font-size: 15px; }
 .ly-it small { display: block; font-size: 12px; color: var(--ink-3); margin-top: 1px; }
 .ly-it.off { opacity: .45; cursor: default; }
+.ly-it.sub { margin-left: 26px; padding-top: 4px; }
 /* 특보 범례 — 켜면 레이어 단추 밑에 붙는다 */
 #ly-alerts { width: 340px; padding: 10px 12px 12px; }
 #ly-alerts .hd2 { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; cursor: pointer; }
@@ -440,6 +441,71 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 #over .wb.watch text { fill: #1A1400; }
 #over .wb.warn text, #over .wb.severe text { fill: #FFFFFF; }
 #over .wsea { font-weight: 700; font-style: italic; }
+/* 관측소 — 면(격자)은 분석값, 점(관측소)은 실측. **마름모**로 그려 격자 최대 표식(동그라미)과 가른다.
+   속은 지도와 같은 색 단계 — 둘레 칸과 색이 같으면 격자와 관측이 맞는 것, 다르면 어긋난 것이다. */
+#over .st path { stroke: var(--ink); stroke-width: 1.5; stroke-linejoin: round; paint-order: stroke; }
+#over .st.z path { fill: var(--land); stroke: var(--ink-2); }
+#over .st.none path { fill: none; stroke: var(--ink-3); stroke-dasharray: 2 2; }
+#over .st.miss path { fill: none; stroke: var(--ink-3); }
+#over .st.miss line { stroke: var(--ink-2); stroke-width: 1.6; stroke-linecap: round; }
+#over .st text { font-family: var(--mono); font-weight: 600; fill: var(--ink); dominant-baseline: central; }
+#over .st .n { font-family: var(--sans); font-weight: 700; }
+#over .st.dim { opacity: .3; }
+/* 고른 시군 — 밖을 바다색으로 가라앉히고(스포트라이트) 밝은 겹선을 두른다.
+   ⚠️ 강조색(파랑) 선 하나는 청색 강수 면에 묻혀 안 보였다 */
+#over #selmask { fill: var(--sea); opacity: .5; fill-rule: evenodd; }
+#over #selh { fill: none; stroke: var(--halo); stroke-width: 7; stroke-linejoin: round; opacity: .85; }
+#over #sel { fill: none; stroke: var(--ink); stroke-width: 2.8; stroke-linejoin: round; }
+#over #hot circle { fill: none; stroke: var(--accent); stroke-width: 2.5; }
+#over #hot circle.c { fill: var(--accent); stroke: var(--halo); stroke-width: 2; }
+#ly-stn { width: 340px; padding: 10px 12px 12px; }
+#ly-stn .hd2 { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+#ly-stn .hd2 b { font-size: 15px; }
+#ly-stn .hd2 span { font: 600 12px var(--mono); color: var(--ink-3); margin-left: auto; }
+#ly-stn .keys2 { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--ink-2); }
+#ly-stn .keys2 svg { width: 14px; height: 14px; vertical-align: -2px; margin-right: 5px; overflow: visible; }
+#ly-stn .nt { font-size: 12.5px; color: var(--ink-3); margin-top: 6px; line-height: 1.4; }
+#ly-stn .nt.w { color: var(--lv-fail); }
+/* 누적 카드 머리 — '강수 누적'을 누르면 기준이 바뀐다(AWS 관측소 ↔ 격자) */
+#acc-h { cursor: pointer; display: inline-flex; align-items: center; gap: 8px; user-select: none; }
+#acc-h .bs { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 1px; }
+#acc-h .bs b { font: 700 calc(11px * var(--k, 1)) var(--sans); color: var(--ink-3); padding: 1px 8px; border-radius: 999px;
+  transition: background .25s, color .25s; }
+#acc-h .bs b.on { color: var(--on-accent); background: var(--accent); }
+#acc-h:hover .bs { border-color: var(--accent); }
+.selchip { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap;
+  font: 700 calc(12px * var(--k, 1)) var(--sans); color: var(--ink); padding: 2px 9px; border-radius: 999px;
+  background: color-mix(in oklab, var(--accent) 22%, transparent); border: 1px solid color-mix(in oklab, var(--accent) 60%, var(--line)); }
+.selchip:hover { background: color-mix(in oklab, var(--accent) 34%, transparent); }
+.ar.det { cursor: default; }
+/* 도움말(?) — 용어·자료 출처 */
+#help { position: fixed; inset: 0; z-index: 21; display: flex; align-items: center; justify-content: center;
+  background: rgba(4, 8, 14, .55); }
+#help .box { zoom: var(--k, 1); width: 880px; max-width: calc(100vw - 32px); max-height: calc(100vh / var(--k, 1) - 48px);
+  display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 14px; box-shadow: 0 24px 80px rgba(0,0,0,.45); }
+#help .top { display: flex; align-items: center; gap: 10px; padding: 16px 22px 10px; border-bottom: 1px solid var(--line); }
+#help .top b { font-size: 18px; }
+#help .top .sp { flex: 1; }
+#help .top button { background: transparent; border: 0; color: var(--ink-2); font-size: 20px; cursor: pointer; }
+#help nav { display: flex; gap: 6px; padding: 10px 22px 0; flex-wrap: wrap; }
+#help nav button { font: 600 13px var(--sans); color: var(--ink-2); background: transparent; border: 1px solid var(--line);
+  border-radius: 999px; padding: 4px 12px; cursor: pointer; }
+#help nav button.on { color: var(--ink); border-color: var(--accent); background: color-mix(in oklab, var(--accent) 18%, transparent); }
+#help .bd { overflow: auto; padding: 12px 22px 20px; font-size: 14px; line-height: 1.55; color: var(--ink); }
+#help h4 { margin: 14px 0 6px; font-size: 13px; color: var(--ink-3); letter-spacing: .1em; }
+#help table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+#help th, #help td { text-align: left; vertical-align: top; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+#help th { font-size: 12px; color: var(--ink-3); font-weight: 600; white-space: nowrap; }
+#help td b { white-space: nowrap; }
+#help code { font: 12.5px var(--mono); color: var(--ink-2); background: color-mix(in oklab, var(--ink) 7%, transparent);
+  padding: 0 4px; border-radius: 4px; }
+#help .k { color: var(--ink-3); font-size: 12.5px; }
+#help dl { display: grid; grid-template-columns: 150px 1fr; gap: 6px 14px; margin: 0; }
+#help dt { font-weight: 700; }
+#help dd { margin: 0; color: var(--ink-2); }
+#help .lede { background: color-mix(in oklab, var(--accent) 10%, transparent); border: 1px solid color-mix(in oklab, var(--accent) 35%, var(--line));
+  border-radius: 10px; padding: 10px 14px; margin: 6px 0 4px; }
 #dbg { position: absolute; left: 10px; top: 8px; font: 12px var(--mono); color: var(--ink-3); }
 
 /* ── 설정(Ctrl+,) ── */
@@ -488,6 +554,7 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
     <div class="ly-pop" id="case-menu" hidden></div>
     <button id="b-tl" title="오른쪽 패널 — 강수 누적·지금 오는 비·예측 상위 (L)">패널</button>
     <button id="b-test" title="비 없는 날 화면 점검용 합성 격자 (T)">테스트</button>
+    <button id="b-help" title="도움말 — 용어 · 자료 출처 (?)">?</button>
     <button id="b-prefs" title="설정 (Ctrl+,)">⚙</button>
   </div>
 </header>
@@ -504,7 +571,8 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
   <svg id="links"></svg>
   <div id="rail" aria-label="강수 모니터링">
     <section class="card" id="c-acc">
-      <div class="ch"><span class="live"></span><h3>강수 누적</h3><span class="sub" id="acc-sub"></span>
+      <div class="ch"><span class="live"></span><h3 id="acc-h" title="눌러서 기준 바꾸기 — AWS 관측소 ↔ 격자(500m)">강수 누적<span class="bs"><b data-b="aws">AWS</b><b data-b="grid">격자</b></span></h3>
+        <span class="selchip" id="acc-sel" hidden title="경남 전체로 (Esc)"></span><span class="sub" id="acc-sub"></span>
         <span class="sp"></span><span class="src" id="acc-src"></span><span class="bt" id="acc-bt">—</span></div>
       <div class="cb" id="acc-b"></div>
     </section>
@@ -529,17 +597,19 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
   <div id="empty" hidden></div>
   <div id="testrib" hidden>테스트<small>합성 격자 · 합성 특보 — 실제가 아니다</small></div>
   <div id="layers">
-    <button id="ly-btn" aria-haspopup="true" aria-expanded="false" title="지도 위에 겹칠 것 (A: 기상특보)">
+    <button id="ly-btn" aria-haspopup="true" aria-expanded="false" title="지도 위에 겹칠 것 (A: 기상특보 · S: 관측소)">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3 2.5 8 12 13l9.5-5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M2.5 12.5 12 17.5l9.5-5M2.5 16.5 12 21.5l9.5-5" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" opacity=".6"/></svg>
       레이어 <span class="n" id="ly-n"></span>
       <svg class="chev" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
     <div class="ly-pop" id="ly-menu" hidden></div>
     <div class="ly-pop" id="ly-alerts" hidden></div>
+    <div class="ly-pop" id="ly-stn" hidden></div>
   </div>
   <div id="dbg" hidden></div>
 </main>
 <div id="prefs" hidden></div>
+<div id="help" hidden></div>
 
 <script src="vendor/d3-array.min.js"></script>
 <script src="vendor/d3-geo.min.js"></script>
@@ -571,7 +641,7 @@ const NOWL = CASE ? "끝" : "지금";
 const COLLECT_OF = { obs15: "grid", obs60: "grid", obsday: "grid", odam: "odam", vsrt: "forecast",
                      shrt_today: "short", shrt_tomorrow: "short" };
 const SET_DEFAULT = { flow_step: 10, flow_hours: 6, play_ms: 1200, tl_on: false, tl_stat: "max",
-                      panel: "cards", acc_hours: 12 };
+                      panel: "cards", acc_hours: 12, acc_basis: "aws" };
 
 let META = null, TOPO = null, GEO = null, MSIG = null, MEMD = null, EMDN = null;
 let SET = { ...SET_DEFAULT };
@@ -711,10 +781,12 @@ function buildBase() {
   }).join("");
   $("over").innerHTML =
     `<path class="sg" d="${sg}"/><path class="cs" d="${cs}"/><path class="sb" d="${sb}"/><path class="zn" d="${zn}"/>`
-    + `<g id="walerts"></g><path id="hl"/><g id="labels"></g><g id="names">${names}</g><g id="wbadge"></g><g id="ranks"></g>`;
+    + `<path id="selmask"/><g id="walerts"></g><path id="hl"/><path id="selh"/><path id="sel"/><g id="stns"></g><g id="labels"></g><g id="names">${names}</g>`
+    + `<g id="wbadge"></g><g id="ranks"></g><g id="hot"></g>`;
   HL = null;
   drawAlerts();
   drawRanks();
+  drawSel();
 }
 let FSN = 20;                           // 시군명 글자 크기(순위 표식 자리 잡는 데 쓴다)
 
@@ -868,7 +940,7 @@ function draw(fade = false) {
 function drawLabels() {
   const g = $("labels");
   if (!g) return;
-  if (!CURSTAT || !V || !V.s) { g.innerHTML = ""; return; }
+  if (!CURSTAT || !V || !V.s) { g.innerHTML = ""; LABELBOX = NAMEBOX.concat(ALERTBOX); drawStations(); return; }
   const fac = factor(), min = stepsOf(kind)[0];
   const rows = CURSTAT.rows.filter(r => r.kind === "gn" && r.max != null && r.max * fac >= min && r.where)
     .sort((a, b) => b.max - a.max);
@@ -911,6 +983,8 @@ function drawLabels() {
           style="font-size:${fs2.toFixed(1)}px;stroke-width:${(fs2 * 0.18).toFixed(1)}px">${emd}</text>` : ""));
   }
   g.innerHTML = out.join("");
+  LABELBOX = placed;                     // 관측소 글자가 피해 갈 자리(이름·특보 딱지·최대 라벨)
+  drawStations();
 }
 
 /* ── 범례 ─────────────────────────────────────────────────────────── */
@@ -1076,11 +1150,12 @@ async function show(fade = false) {
     // 사례는 시각마다 특보(산출)·카드 내용이 바뀐다 — 프레임과 함께 다시 그린다
     if (OV.has("alerts")) { ALERTS = caseAlerts(); drawAlerts(); renderAlertLegend(); }
   }
+  loadStations();                        // 기억해 둔 시각이면 곧바로(같은 틱에) 바뀐다 — 격자와 함께 넘어간다
   draw(fade);
   paintHead();
   buildPlay();
   tlPlayhead();
-  if (CASE && CASEM && CUR && tlOn && SET.panel !== "timeline") { CARDS = cardsFromCase(); renderCards(); }
+  if (CASE && CASEM && CUR && tlOn && SET.panel !== "timeline") loadCards();
   cardsPlayhead();
   SWITCH_MS = performance.now() - t0;
   if (Q.get("debug") === "1") {
@@ -1468,30 +1543,75 @@ function nextHours(labels, after) {          // 예측 '00','01',… → after �
 
 async function cardsFromApi() {
   const H = SET.acc_hours;
+  const fq = SEL ? `&sigun=${encodeURIComponent(SEL)}` : "";
+  const [fc, mn] = await Promise.all([getJson(`/api/forecast?hours=6${fq}`), getJson(`/api/minute?n=${SEL ? 20 : 6}`)]);
+  const acc = ACC_BASIS === "grid" ? await accGrid(H, fc) : await accAws(H, fc);
+  // 시군을 골랐으면 '지금 오는 비'는 그 시군 지점만, '예측 상위'는 그 시군 읍면동
+  const mine = l => (l || []).filter(x => !SEL || x.sigun === SEL).slice(0, 6).map(x => ({ sig: x.sigun, name: x.name, mm: x.mm }));
+  return {
+    acc,
+    now: { r15: mine(mn.r15), r60: mine(mn.r60), tm: mn.tm, sub: SEL ? `기상청 매분자료 · ${SEL} 지점` : null },
+    fc: { det: !!SEL, labels: fc.labels || [], ft: acc.ft || [], bt: fc.tmfc ? `${hm(fc.tmfc)} 발표` : "—",
+          rows: SEL ? (fc.emd_sigun || []).map(e => ({ sig: e.sigun, label: e.emd, d: e.d.slice(0, 6), sum: e.sum }))
+                    : (fc.sigun || []).map(s => ({ sig: s.sigun, emd: s.emd, d: s.d.slice(0, 6), sum: s.sum })) },
+  };
+}
+const fcMaps = fc => [Object.fromEntries((fc.sigun || []).map(s => [s.sigun, s])),
+                      Object.fromEntries((fc.emd_sigun || []).map(e => [e.emd, e]))];
+const sitePos = stn => { const s = SITEBY.get(stn); return s ? { x: s.x, y: s.y } : null; };
+
+/* AWS 기준 — 스방 265(내부망) → 비면 기상청 56. 시군 줄은 다우지점, 시군을 고르면 그 시군 지점 전부.
+   지점 줄의 예상(빗금)은 그 지점이 든 읍면동 예측 — 위치를 아는 지점(기상청 지점)만 붙인다. */
+async function accAws(H, fc) {
   let rain = await getJson(`/api/rain?hours=${H}&src=bangjae`), fell = false;
   // 스방이 멈췄거나 계정이 없으면 빈 응답이다 — 기상청으로 물러서고, 물러섰다고 적는다(종합 화면과 같다)
   if (!(rain.rows || []).length) { rain = await getJson(`/api/rain?hours=${H}&src=kma`); fell = true; }
-  const [fc, mn] = await Promise.all([getJson("/api/forecast?hours=6"), getJson("/api/minute?n=6")]);
   const lastHM = rain.labels.at(-1).includes(":") ? rain.labels.at(-1) : rain.base_hour;
-  const dt = labelTimes(rain.labels, lastHM);
-  const ft = nextHours(fc.labels || [], dt.at(-1));
-  const FC = Object.fromEntries((fc.sigun || []).map(s => [s.sigun, s]));
-  const by = {};
-  for (const r of rain.rows) (by[r.sigun] ||= []).push(r);
+  const dt = labelTimes(rain.labels, lastHM), ft = nextHours(fc.labels || [], dt.at(-1));
+  const [FC, FE] = fcMaps(fc);
   const live = r => r.bad < r.d.length;              // 자료를 아예 안 주는 지점이 0으로 1등이 되지 않게
-  const rows = ORDER_GN().filter(s => by[s]).map(s => {
-    const st = by[s].slice().sort((a, b) => (live(b) - live(a)) || (b.sum - a.sum))[0];
-    const fcd = (FC[s]?.d || []).slice(0, 6).map(qRN1);
-    return { sig: s, stn: st.name, d: st.d, dt, fcd, ft, sum: st.sum, fc: sumv(fcd), bad: st.bad };
+  const base = { H, ft, basis: "aws", fell, bt: `${lastHM} 실측`,
+                 src: fell ? "스방 안 됨→기상청" : rain.src === "bangjae" ? "스방 265" : "기상청 56" };
+  if (!SEL) {
+    const by = {};
+    for (const r of rain.rows) (by[r.sigun] ||= []).push(r);
+    const rows = ORDER_GN().filter(s => by[s]).map(s => {
+      const st = by[s].slice().sort((a, b) => (live(b) - live(a)) || (b.sum - a.sum))[0];
+      const fcd = (FC[s]?.d || []).slice(0, 6).map(qRN1);
+      return { sig: s, stn: st.name, d: st.d, dt, fcd, ft, sum: st.sum, fc: sumv(fcd), bad: st.bad, pos: sitePos(st.stn) };
+    });
+    return { ...base, rows, sub: `다우지점 · 지난 ${H}시간 + 예상 6시간` };
+  }
+  const rows = rain.rows.filter(r => r.sigun === SEL).map(r => {
+    const site = SITEBY.get(r.stn), e = site?.emd ? FE[site.emd] : null;
+    const fcd = e ? e.d.slice(0, 6).map(qRN1) : [];
+    return { sig: SEL, tag: site?.emd || "", stn: r.name, d: r.d, dt, fcd, ft: fcd.length ? ft : [], sum: r.sum,
+             fc: sumv(fcd), bad: r.bad, dead: !live(r), pos: sitePos(r.stn), det: true };
   });
-  const srcL = fell ? "스방 안 됨→기상청" : rain.src === "bangjae" ? "스방 265" : "기상청 56";
-  return {
-    acc: { rows, H, src: srcL, fell, bt: `${lastHM} 실측` },
-    now: { r15: (mn.r15 || []).map(x => ({ sig: x.sigun, name: x.name, mm: x.mm })),
-           r60: (mn.r60 || []).map(x => ({ sig: x.sigun, name: x.name, mm: x.mm })), tm: mn.tm },
-    fc: { rows: (fc.sigun || []).map(s => ({ sig: s.sigun, emd: s.emd, d: s.d.slice(0, 6), sum: s.sum })),
-          labels: fc.labels || [], ft, bt: fc.tmfc ? `${hm(fc.tmfc)} 발표` : "—" },
-  };
+  return { ...base, rows, sel: SEL,
+    sub: `${SEL} AWS ${rows.length}곳 · 지난 ${H}시간${rows.some(r => r.fcd.length) ? " + 그 읍면동 예상" : ""}`,
+    note: rows.some(r => !r.pos) ? "위치를 모르는 지점(스방 자체 AWS 등)은 지도에 짚지 못하고 예상도 붙이지 않는다" : "" };
+}
+
+/* 격자 기준 — 매시 정각 60분 격자를 칸마다 더한 누적. 시군 줄은 시군 누적 최대 칸(+읍면동),
+   시군을 고르면 읍면동 줄(그 읍면동 누적 최대 칸). 선 그래프는 그 칸의 매시 값이다. */
+async function accGrid(H, fc) {
+  const p = new URLSearchParams({ hours: H });
+  if (SEL) p.set("sigun", SEL);
+  if (test) p.set("test", "1");
+  const j = await getJson(`/api/grid/acctable?${p}`);
+  const dt = j.frames.map(tOf), ft = nextHours(fc.labels || [], dt.at(-1));
+  const [FC, FE] = fcMaps(fc);
+  const rows = j.rows.map(r => {
+    const fcd = ((SEL ? FE[r.name] : FC[r.sig])?.d || []).slice(0, 6).map(qRN1);
+    return { sig: r.sig, tag: SEL ? "" : r.sig, stn: SEL ? r.name : (r.name || "—"), d: r.d, dt, fcd,
+             ft: fcd.length ? ft : [], sum: r.sum ?? 0, fc: sumv(fcd), det: !!SEL,
+             pos: r.col != null ? { x: r.col, y: r.row } : null };
+  });
+  return { rows, H, ft, basis: "grid", fell: false, sel: SEL, src: j.test ? "테스트" : "격자 500m",
+    bt: `${hm(j.tm)} 정각까지`,
+    sub: SEL ? `${SEL} 읍면동 ${rows.length} · 누적 최대 칸 · 지난 ${H}시간` : `시군 누적 최대 칸 · 지난 ${H}시간 + 예상 6시간`,
+    note: j.missing ? `정시 격자 ${j.missing}시간 빠짐 — 합은 하한이다(수집기가 한 번에 4장씩 메운다)` : "" };
 }
 
 async function cardsFromTest() {
@@ -1512,8 +1632,15 @@ async function cardsFromTest() {
   const top = (arr) => arr.sort((a, b) => b.mm - a.mm).slice(0, 6);
   const r60 = top(FLOW.series.map(s => ({ sig: s.sigun, name: "격자", mm: lastObs >= 0 ? (s.max[lastObs] ?? 0) : 0 })));
   const r15 = s15 ? top(s15.rows.filter(r => r.kind === "gn").map(r => ({ sig: r.sigun, name: r.where?.emd || "격자", mm: r.max ?? 0 }))) : [];
+  let acc = { rows, H: dt.length, src: "테스트", fell: false, basis: "aws", bt: lastObs >= 0 ? `${hm(FLOW.frames[lastObs].t)} 실측` : "—" };
+  if (ACC_BASIS === "grid" || SEL) {
+    try {
+      acc = await accGrid(SET.acc_hours, { labels: [], sigun: [] });
+      if (ACC_BASIS === "aws") { acc.basis = "aws"; acc.note = "테스트에는 관측소 시계열이 없어 격자 누적으로 보인다"; }
+    } catch (e) { acc.note = e.message; }
+  }
   return {
-    acc: { rows, H: dt.length, src: "테스트", fell: false, bt: lastObs >= 0 ? `${hm(FLOW.frames[lastObs].t)} 실측` : "—" },
+    acc,
     now: { r15, r60, tm: lastObs >= 0 ? hm(FLOW.frames[lastObs].t) : "—" },
     fc: { rows: FLOW.series.map(s => { const d = fcI.map(i => s.max[i] ?? 0); return { sig: s.sigun, emd: "", d, sum: sumv(d) }; }),
           labels: ft.map(fmtH), ft, bt: FLOW.tmfc ? `${hm(FLOW.tmfc)} 발표` : "—" },
@@ -1525,7 +1652,7 @@ async function loadCards() {
   if (!tlOn || SET.panel === "timeline") return;
   const my = ++CARD_SEQ;
   let c;
-  try { c = CASE ? (CASEM ? cardsFromCase() : null) : test ? await cardsFromTest() : await cardsFromApi(); }
+  try { c = CASE ? (CASEM ? await cardsFromCase() : null) : test ? await cardsFromTest() : await cardsFromApi(); }
   catch (e) { c = { err: e.message }; }
   if (my !== CARD_SEQ) return;
   CARDS = c;
@@ -1535,8 +1662,11 @@ async function loadCards() {
 const rampVar = (v, steps) => { const k = stepIdx(v, steps); return k ? `var(--rain-${k})` : null; };
 function rowEvents(el) {
   for (const r of el.querySelectorAll("[data-s]")) {
-    r.onmouseenter = () => { highlight(r.dataset.s); link(r, r.dataset.s); };
-    r.onmouseleave = () => { highlight(null); link(null); };
+    const pt = r.dataset.x ? { x: +r.dataset.x, y: +r.dataset.y } : null;
+    r.onmouseenter = () => { highlight(r.dataset.s); link(r, r.dataset.s, pt); hot(pt); };
+    r.onmouseleave = () => { highlight(null); link(null); hot(null); };
+    // 시군 줄을 누르면 그 시군을 고른다(오른쪽 패널이 그 시군 읍면동·지점으로 바뀐다)
+    r.onclick = r.classList.contains("det") ? null : () => selectSig(r.dataset.s === SEL ? null : r.dataset.s);
   }
 }
 
@@ -1547,7 +1677,7 @@ function renderCards() {
     return;
   }
   $("fc-h").textContent = CASE ? "호우 기준" : "예측 상위";
-  $("fc-sub").textContent = CASE ? "산출 — 격자 3시간·12시간 합" : "초단기 · 앞으로 6시간";
+  $("fc-sub").textContent = CASE ? "산출 — 격자 3시간·12시간 합" : CARDS.fc?.det ? `${SEL} 읍면동 · 초단기 6시간` : "초단기 · 앞으로 6시간";
   $("now-sub").textContent = CARDS.now.sub || "기상청 매분자료";
   // 누적 카드는 남는 높이를 다 쓴다 — 다른 둘을 먼저 채운 뒤에 재야 줄 수가 맞는다
   renderNow(); CASE ? renderCrit() : renderFc(); renderAcc();
@@ -1558,11 +1688,18 @@ function renderCards() {
 /* 강수 누적 — 종합 화면 '강수 타임라인'을 한 줄짜리로 */
 function renderAcc() {
   const A = CARDS.acc, k = V.k, body = $("acc-b");
+  for (const b of $("acc-h").querySelectorAll(".bs b")) b.classList.toggle("on", b.dataset.b === (A.basis || ACC_BASIS));
+  $("acc-sel").hidden = !A.sel;
+  $("acc-sel").textContent = A.sel ? `${A.sel} ✕` : "";
   $("acc-sub").textContent = A.sub || `다우지점 · 지난 ${A.H}시간 + 예상 6시간`;
   $("acc-src").textContent = A.src; $("acc-src").classList.toggle("fell", !!A.fell);
   $("acc-bt").textContent = A.bt;
   const rows = A.rows.slice().sort((a, b) => (b.sum + b.fc) - (a.sum + a.fc));
-  if (!rows.length || !rows[0].dt.length) { body.innerHTML = `<div class="empty-note">강수 자료가 아직 없다</div>`; A.sp = null; return; }
+  if (!rows.length || !rows[0].dt.length) {
+    body.innerHTML = `<div class="empty-note">${A.sel ? `${A.sel} — ${A.basis === "grid" ? "읍면동" : "지점"} 자료가 없다` : "강수 자료가 아직 없다"}</div>`
+      + (A.note ? `<div class="case-note">${A.note}</div>` : "");
+    A.sp = null; return;
+  }
   const bh = body.clientHeight - 10 * k - (A.note ? 40 * k : 0);
   const rh = Math.max(26 * k, Math.min(44 * k, bh / Math.max(1, rows.length)));   // 카드를 꽉 채운다
   const n = Math.max(1, Math.min(rows.length, Math.floor(bh / rh)));
@@ -1570,7 +1707,8 @@ function renderAcc() {
   const bmax = Math.max(1, ...rows.map(r => r.sum + r.fc));
   let smax = 5;
   for (const r of rows) for (const v of [...r.d, ...r.fcd]) if (typeof v === "number" && v > smax) smax = v;
-  const t0 = Math.min(...rows[0].dt) - 1800e3, t1 = Math.max(rows[0].dt.at(-1), ...(rows[0].ft.length ? rows[0].ft : [0]));
+  // 축 끝은 줄들 가운데 예상이 가장 멀리 간 데까지(예상이 없는 줄이 맨 위여도 다른 줄이 밖으로 새지 않게)
+  const t0 = Math.min(...rows[0].dt) - 1800e3, t1 = Math.max(rows[0].dt.at(-1), ...rows.flatMap(r => r.ft));
   const SW = 124 * k, SH = rh * 0.82;
   const sx = t => (t - t0) / Math.max(1, t1 - t0) * SW, sy = v => SH - Math.min(v, smax) / smax * (SH - 3);
   A.sp = { t0, t1, SW };
@@ -1589,18 +1727,21 @@ function renderAcc() {
     const lastObs = r.d.reduce((a, v, j) => (typeof v === "number" ? [r.dt[j], v] : a), null);
     const po = sline(r.dt, r.d), pf = sline(r.ft, r.fcd, lastObs);
     const rank = i < 3 && tot >= 0.1 ? `<span class="rk">${i + 1}</span>` : "";
-    return `<div class="ar" data-s="${r.sig}">
-      <div class="nm2">${rank}<small>${r.sig}</small>${r.stn}</div>
+    const ge = r.part ? "≥" : "";
+    const at = r.pos ? ` data-x="${r.pos.x}" data-y="${r.pos.y}"` : "";
+    return `<div class="ar${r.det ? " det" : ""}" data-s="${r.sig}"${at} title="${r.det ? "" : `${r.sig} — 눌러서 이 시군 ${A.basis === "grid" ? "읍면동" : "지점"} 보기`}">
+      <div class="nm2">${rank}<small>${r.tag ?? r.sig}</small>${r.stn}</div>
       <div class="abar"><div class="o" style="width:${o.toFixed(1)}%"></div>
         ${r.fc ? `<div class="f" style="left:${o.toFixed(1)}%;width:${f.toFixed(1)}%"></div>` : ""}
-        <span class="v" style="${vpos}">${r.sum.toFixed(1)}${r.fc ? `<i>+${r.fc}</i>` : ""}</span></div>
+        <span class="v" style="${vpos}">${ge}${r.sum.toFixed(1)}${r.fc ? `<i>+${r.fc}</i>` : ""}</span></div>
       <svg viewBox="0 0 ${SW.toFixed(0)} ${SH.toFixed(0)}" preserveAspectRatio="none">
         <path class="sp-a" d="${po.a}"/><path class="sp-l" d="${po.d}"/>
         <path class="sp-fa" d="${pf.a}"/><path class="sp-fl" d="${pf.d}"/>
         <line class="sp-now" x1="${xn}" x2="${xn}" y1="0" y2="${SH}"/>
         <line class="sp-head" x1="0" x2="0" y1="-2" y2="${SH + 2}" style="transform:translateX(-99px)"/></svg>
-      <div class="tot ${tot ? "" : "z"}">${tot.toFixed(1)}</div></div>`;
-  }).join("") + (A.note ? `<div class="case-note">${A.note}</div>` : "");
+      <div class="tot ${tot && !r.dead ? "" : "z"}">${r.dead ? "결측" : ge + tot.toFixed(1)}</div></div>`;
+  }).join("") + (n < rows.length ? `<div class="case-note">외 ${rows.length - n}${A.basis === "grid" && A.sel ? "개 읍면동" : "곳"} — 적은 순이라 생략</div>` : "")
+    + (A.note ? `<div class="case-note">${A.note}</div>` : "");
   rowEvents(body);
 }
 
@@ -1646,7 +1787,7 @@ function renderFc() {
     return `<i style="${k ? `background:var(--rain-${k});color:${k >= 4 ? "var(--on-accent)" : "var(--ink)"}` : ""}">${txt}</i>`;
   };
   $("fc-b").innerHTML = `<div class="fh"><span>시군</span><div class="cells">${F.labels.map(l => `<span>${l}</span>`).join("")}</div><span style="text-align:right">합</span></div>`
-    + rows.map(r => `<div class="fr" data-s="${r.sig}"><span class="nm2">${r.sig}<small>${r.emd || ""}</small></span>
+    + rows.map(r => `<div class="fr${F.det ? " det" : ""}" data-s="${r.sig}"><span class="nm2">${r.label || r.sig}<small>${r.label ? "" : r.emd || ""}</small></span>
       <div class="cells">${r.d.map(cell).join("")}</div><span class="sum">${(+r.sum).toFixed(r.sum % 1 ? 1 : 0)}</span></div>`).join("");
   rowEvents($("fc-b"));
 }
@@ -1669,38 +1810,59 @@ function cardsPlayhead() {
     r.querySelectorAll(".cells > *").forEach((c, i) => c.classList.toggle("on", i === j));
 }
 
-/* 지도 위 순위 표식 — 누적 상위 셋(시군명 왼쪽에 작은 원) */
+/* 지도 위 순위 표식 — 누적 상위 셋. 시군 줄이면 시군명 왼쪽, 시군을 골랐으면 그 지점·칸 자리에 */
 function drawRanks() {
   const g = $("ranks");
   if (!g) return;
-  if (!tlOn || SET.panel === "timeline" || !CARDS || CARDS.err || !V) { g.innerHTML = ""; return; }
+  if (!tlOn || SET.panel === "timeline" || !CARDS || CARDS.err || !CARDS.acc || !V) { g.innerHTML = ""; return; }
+  const det = !!CARDS.acc.sel;
   const rows = CARDS.acc.rows.slice().sort((a, b) => (b.sum + b.fc) - (a.sum + a.fc)).slice(0, 3)
     .filter(r => r.sum + r.fc >= 0.1);
   const r0 = FSN * 0.46;
   g.innerHTML = rows.map((r, i) => {
-    const ft = FEAT.find(f => f.properties.sigun === r.sig);
-    if (!ft) return "";
-    const x = V.toX(ft.properties.lx) - r.sig.length * FSN * 0.52 - r0 - 4, y = V.toY(ft.properties.ly);
+    let x, y;
+    if (det) {
+      if (!r.pos) return "";
+      x = V.toX(r.pos.x) + r0 * 1.15; y = V.toY(r.pos.y) - r0 * 1.15;
+    } else {
+      const ft = FEAT.find(f => f.properties.sigun === r.sig);
+      if (!ft) return "";
+      x = V.toX(ft.properties.lx) - r.sig.length * FSN * 0.52 - r0 - 4; y = V.toY(ft.properties.ly);
+    }
     return `<g class="rk"><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r0.toFixed(1)}"/>
       <text x="${x.toFixed(1)}" y="${y.toFixed(1)}" style="font-size:${(FSN * 0.56).toFixed(1)}px">${i + 1}</text></g>`;
   }).join("");
 }
 
-/* 줄 ↔ 지도 연결선 — 카드 줄 왼쪽 끝에서 지도 위 그 시군 이름 오른쪽까지, 그어지듯 */
-function link(el, sig) {
+/* 줄 ↔ 지도 연결선 — 카드 줄 왼쪽 끝에서 지도 위 그 시군 이름 오른쪽까지, 그어지듯.
+   pt(칸 좌표)를 주면 그 자리(지점·누적 최대 칸)까지 긋는다. */
+function link(el, sig, pt) {
   const svg = $("links");
   if (!el || !sig || !V) { svg.innerHTML = ""; return; }
-  const ft = FEAT.find(f => f.properties.sigun === sig);
-  if (!ft) { svg.innerHTML = ""; return; }
   const st = $("stage").getBoundingClientRect(), r = el.getBoundingClientRect();
   const x1 = r.left - st.left - 3, y1 = r.top - st.top + r.height / 2;
-  const hw = sig.length * FSN * 0.52 * MT.sc;
-  const x2 = V.toX(ft.properties.lx) * MT.sc + MT.tx + hw + 8, y2 = V.toY(ft.properties.ly) * MT.sc + MT.ty;
+  let x2, y2;
+  if (pt) {
+    x2 = V.toX(pt.x) * MT.sc + MT.tx; y2 = V.toY(pt.y) * MT.sc + MT.ty;
+  } else {
+    const ft = FEAT.find(f => f.properties.sigun === sig);
+    if (!ft) { svg.innerHTML = ""; return; }
+    const hw = sig.length * FSN * 0.52 * MT.sc;
+    x2 = V.toX(ft.properties.lx) * MT.sc + MT.tx + hw + 8; y2 = V.toY(ft.properties.ly) * MT.sc + MT.ty;
+  }
   const dx = Math.max(50, (x1 - x2) * 0.45);
   svg.innerHTML = `<path d="M${x1.toFixed(1)},${y1.toFixed(1)} C${(x1 - dx).toFixed(1)},${y1.toFixed(1)} ${(x2 + dx).toFixed(1)},${y2.toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)}"/>
     <circle cx="${x2.toFixed(1)}" cy="${y2.toFixed(1)}" r="5"/>`;
   const p = svg.querySelector("path");
   p.style.setProperty("--len", p.getTotalLength().toFixed(0));
+}
+/* 줄이 가리키는 자리에 고리 — 지점·누적 최대 칸 */
+function hot(pt) {
+  const g = $("hot");
+  if (!g) return;
+  if (!pt || !V) { g.innerHTML = ""; return; }
+  const x = V.toX(pt.x).toFixed(1), y = V.toY(pt.y).toFixed(1), r = Math.max(9, V.s * 2.4);
+  g.innerHTML = `<circle cx="${x}" cy="${y}" r="${r.toFixed(1)}"/><circle class="c" cx="${x}" cy="${y}" r="${Math.max(3, r * 0.28).toFixed(1)}"/>`;
 }
 
 /* ── 재현 사례(?case=) ────────────────────────────────────────────────
@@ -1722,26 +1884,64 @@ function caseIdx() {
   const i = CASEM.frames.indexOf(CUR?.tm || OBS_TM || CASEM.end);
   return i < 0 ? CASEM.frames.length - 1 : i;
 }
-function cardsFromCase() {
+const CASEACC = new Map();
+async function cardsFromCase() {
   const i = caseIdx(), S = CASEM.series, t = CASEM.frames[i];
   const dt = CASEM.frames.map(tOf);
-  const rows = S.map(s => ({ sig: s.sigun, stn: s.accw[i] || "", d: s.h1, dt, fcd: [], ft: [], sum: s.acc[i] ?? 0, fc: 0 }));
+  const when = `${md(t)} ${hm(t)}`;
+  const from = `${md(CASEM.start)} ${String(+CASEM.start.slice(8, 10) - 1).padStart(2, "0")}:00부터`;
+  let acc;
+  if (ACC_BASIS === "aws") acc = caseAccAws(i, dt, from);
+  else if (SEL) acc = await caseAccGrid(i, dt, from);
+  else acc = { rows: S.map(s => ({ sig: s.sigun, stn: s.accw[i] || "", d: s.h1, dt, fcd: [], ft: [], sum: s.acc[i] ?? 0, fc: 0 })),
+               sub: `사례 누적 · 격자 시군 최대 칸 · ${from}`,
+               note: "관측소(이틀): " + CASEM.checked.map(c => `${c.name} ${c.sum.toFixed(1)}`).join(" · ")
+                     + " — 격자는 관측값을 그대로 지나지 않는다('강수 누적'을 누르면 AWS 기준)" };
   const top = (k, w) => S.map(s => ({ sig: s.sigun, name: (w && s[w][i]) || "", mm: s[k][i] ?? 0 }))
     .sort((a, b) => b.mm - a.mm).slice(0, 6);
   const rank = { warn: 2, watch: 1 };
   const crit = S.map(s => ({ sig: s.sigun, h3: s.h3[i] ?? 0, h12: s.h12[i] ?? 0, lv: s.lv[i] }))
     .sort((a, b) => ((rank[b.lv] || 0) - (rank[a.lv] || 0)) || (b.h12 - a.h12)).slice(0, 6);
-  const when = `${md(t)} ${hm(t)}`;
   return {
-    acc: { rows, H: i + 1, src: "재현", fell: false, bt: when,
-           sub: `사례 누적 · ${md(CASEM.start)} ${String(+CASEM.start.slice(8, 10) - 1).padStart(2, "0")}:00부터`,
-           note: "관측소(이틀): " + CASEM.checked.map(c => `${c.name} ${c.sum.toFixed(1)}`).join(" · ")
-                 + " — 격자는 관측값을 그대로 지나지 않는다" },
+    acc: { H: i + 1, src: "재현", fell: false, bt: when, basis: ACC_BASIS, ...acc },
     now: { tm: when, sub: "격자 · 1시간 · 3시간",
            cols: [{ title: "1시간", list: top("h1", "h1w"), steps: MN_STEPS[60] },
                   { title: "3시간", list: top("h3"), steps: [5, 20, 40, 60, 90, 120, 180] }] },
     crit: { rows: crit, bt: when },
   };
+}
+/* 사례 AWS 기준 — 굳혀 둔 매시 RN_HR1(meta.stations)을 그 시각까지 더한다 */
+function caseAccAws(i, dt, from) {
+  const h1 = CASEM.stations?.h1;
+  if (!h1 || !SITES) return { rows: [], sel: SEL, sub: "이 사례에는 관측소 자료가 없다", note: "" };
+  const all = SITES.stations.filter(s => h1[s.stn]).map(s => {
+    const h = h1[s.stn], seg = h.slice(0, i + 1), have = seg.filter(v => v != null);
+    return { sig: s.sigun, tag: SEL ? (s.emd || "") : s.sigun, stn: s.name, d: h, dt, fcd: [], ft: [],
+             sum: Math.round(sumv(seg) * 10) / 10, fc: 0, pos: { x: s.x, y: s.y }, det: !!SEL,
+             part: have.length > 0 && have.length < seg.length, dead: !have.length };
+  });
+  const note = "기상청 정시자료(awsh) 매시 1시간 강수의 합" + (all.some(r => r.part) ? " · ≥ 는 일부 시각 결측(하한)" : "");
+  if (SEL) {
+    const rows = all.filter(r => r.sig === SEL);
+    return { rows, sel: SEL, sub: `${SEL} AWS ${rows.length}곳 · ${from}`, note };
+  }
+  const best = {};
+  for (const r of all) if (!best[r.sig] || r.sum > best[r.sig].sum) best[r.sig] = r;
+  return { rows: ORDER_GN().filter(s => best[s]).map(s => best[s]), sub: `다우지점 · ${from}`,
+           note: note + " — 격자 누적보다 봉우리가 높다(격자는 관측소 사이를 메운 분석값)" };
+}
+async function caseAccGrid(i, dt, from) {
+  const t = CASEM.frames[i], ck = `${t}|${SEL}`;
+  let j = CASEACC.get(ck);
+  if (!j) {
+    j = await getJson(`/api/grid/acctable?case=${CASE}&tm=${t}&sigun=${encodeURIComponent(SEL)}`);
+    if (CASEACC.size > 200) CASEACC.delete(CASEACC.keys().next().value);
+    CASEACC.set(ck, j);
+  }
+  const n = CASEM.frames.length;
+  const rows = j.rows.map(r => ({ sig: SEL, tag: "", stn: r.name, d: r.d.concat(Array(n - r.d.length).fill(null)), dt,
+    fcd: [], ft: [], sum: r.sum ?? 0, fc: 0, det: true, pos: r.col != null ? { x: r.col, y: r.row } : null }));
+  return { rows, sel: SEL, sub: `${SEL} 읍면동 ${rows.length} · 누적 최대 칸 · ${from}`, note: "" };
 }
 function caseAlerts() {
   const i = caseIdx(), bySig = {}, by = {};
@@ -1790,19 +1990,25 @@ document.addEventListener("pointerdown", ev => {
    지금은 기상특보 하나. 차츰 늘린다(시군 위 막대 등) — OVL 에 한 줄 보태면 메뉴에 뜬다. */
 const OVL = [
   { id: "alerts", label: "기상특보", sub: "발효 중 — 시군 테두리 · 딱지 / 바다 · 예비는 글로" },
+  { id: "stations", label: "관측소", sub: "AWS 실측 — 격자와 같은 시각, 마름모 (S)" },
+  { id: "stnval", label: "지점 강수량 글자", sub: "관측소 옆에 값 — 켜면 지도가 붐빌 수 있다 (V)", parent: "stations" },
 ];
 let OV = new Set();
 function renderLayers() {
   $("ly-n").textContent = OV.size ? `· ${OVL.filter(o => OV.has(o.id)).map(o => o.label).join(" · ")}` : "";
-  $("ly-menu").innerHTML = OVL.map(o => `<label class="ly-it"><input type="checkbox" data-ov="${o.id}" ${OV.has(o.id) ? "checked" : ""}>
+  // 딸린 항목(지점 강수량 글자)은 부모(관측소) 밑에 들여 쓰고, 부모가 꺼져 있으면 흐리게
+  $("ly-menu").innerHTML = OVL.map(o => `<label class="ly-it${o.parent ? " sub" : ""}${o.parent && !OV.has(o.parent) ? " off" : ""}"><input type="checkbox" data-ov="${o.id}" ${OV.has(o.id) ? "checked" : ""}${o.parent && !OV.has(o.parent) ? " disabled" : ""}>
     <span><b>${o.label}</b><small>${o.sub}</small></span></label>`).join("");
   for (const c of $("ly-menu").querySelectorAll("input[data-ov]")) c.onchange = () => setOverlay(c.dataset.ov, c.checked);
   renderAlertLegend();
+  renderStnLegend();
 }
 function setOverlay(id, on) {
   on ? OV.add(id) : OV.delete(id);
   saveSetting({ overlays: [...OV] });
   if (id === "alerts") { if (on) loadAlerts(); else { ALERTS = null; drawAlerts(); draw(); } }
+  if (id === "stations") loadStations();
+  if (id === "stnval") drawStations();
   renderLayers();
 }
 $("ly-btn").onclick = () => {
@@ -1995,6 +2201,269 @@ function renderAlertLegend() {
   }
 }
 
+/* ── 관측소(점) — 격자와 **같은 시각**의 실측. 레이어 '관측소'(S) ─────────────────
+   ⚠️ 격자(면)는 관측소 사이를 메운 분석값이라 관측소 자리에서도 값이 다르다(봉우리가 깎인다).
+      점의 속을 지도와 같은 색 단계로 칠해 둘레 칸과 견주게 한다. 값 글자는 빈자리에만 단다.
+   ⚠️ 값이 없는 것을 셋으로 가른다: 0(속 빈 마름모) · 기상청 결측(×) · 그 시각 값을 못 받음(점선).
+   위치는 data/geo/stations.json(tools/build_stations.py) — 화면은 기상청을 부르지 않는다. */
+let SITES = null, SITEBY = new Map();
+let STN = null, STN_SEQ = 0, STN_R = 6, LABELBOX = [];
+let SEL = null;                          // 고른 시군 — 오른쪽 패널이 그 시군 읍면동·지점으로 바뀐다
+let ACC_BASIS = "aws";                   // 누적 카드 기준: aws(관측소 다우지점) | grid(격자 누적 최대 칸)
+const STNC = new Map();
+const isFcst = k => k === "vsrt" || k.startsWith("shrt");
+async function stnFetch(key, tm) {
+  const p = new URLSearchParams({ layer: key });
+  if (tm) p.set("tm", tm);
+  if (test) p.set("test", "1");
+  if (CASE) p.set("case", CASE);
+  const ck = p.toString();
+  if (STNC.has(ck)) return STNC.get(ck);
+  let j;
+  try { j = await getJson(`/api/grid/stations?${p}`); }
+  catch (e) { return { err: e.message, layer: key }; }
+  // 아직 못 받은 시각(none)은 기억하지 않는다 — 수집기가 곧 채운다
+  if (j.status !== "none") {
+    if (STNC.size > 400) STNC.delete(STNC.keys().next().value);
+    STNC.set(ck, j);
+  }
+  return j;
+}
+function loadStations() {
+  if (!OV.has("stations")) { STN = null; drawStations(); renderStnLegend(); return; }
+  const key = layerKey(), tm = isFcst(kind) ? null : CUR?.tm;
+  const my = ++STN_SEQ;
+  const done = j => { if (my !== STN_SEQ) return; STN = j; drawStations(); renderStnLegend(); };
+  const p = new URLSearchParams({ layer: key });
+  if (tm) p.set("tm", tm);
+  if (test) p.set("test", "1");
+  if (CASE) p.set("case", CASE);
+  const hit = STNC.get(p.toString());
+  if (hit) done(hit);                    // 기억해 둔 시각은 같은 틱에 — 재생할 때 격자와 함께 넘어간다
+  else stnFetch(key, tm).then(done);
+}
+/* 지금 그리는 격자와 같은 층·시각의 관측소 값인가 — 아니면 그리지 않는다(어긋난 시각을 나란히 두지 않는다) */
+function stnFresh() {
+  return !!STN && !STN.err && STN.layer === layerKey() && (STN.status === "forecast" || STN.tm === CUR?.tm);
+}
+function drawStations() {
+  const g = $("stns");
+  if (!g) return;
+  if (!OV.has("stations") || !V || !V.s || !stnFresh()) { g.innerHTML = ""; return; }
+  const steps = stepsOf(kind), fac = factor(), fc = STN.status === "forecast";
+  const r = STN_R = Math.max(4.5, Math.min(12, V.s * 1.05));
+  const fs = Math.max(11, Math.min(26, V.s * 3.1));
+  const val = s => s.v * fac;
+  const has = s => !fc && (s.q === "ok" || s.q === "part");
+  const dia = (x, y, rr) => `M${x.toFixed(1)},${(y - rr).toFixed(1)}L${(x + rr).toFixed(1)},${y.toFixed(1)}L${x.toFixed(1)},${(y + rr).toFixed(1)}L${(x - rr).toFixed(1)},${y.toFixed(1)}Z`;
+  const marks = [], boxes = [];
+  for (const s of STN.rows) {
+    const x = V.toX(s.x), y = V.toY(s.y), dim = SEL && s.sigun !== SEL ? " dim" : "";
+    boxes.push({ x0: x - r, x1: x + r, y0: y - r, y1: y + r });
+    if (has(s)) {
+      const k = stepIdx(val(s), steps);
+      marks.push(k ? `<g class="st${dim}"><path d="${dia(x, y, r)}" style="fill:var(--rain-${k})"/></g>`
+                   : `<g class="st z${dim}"><path d="${dia(x, y, r * 0.8)}"/></g>`);
+    } else if (!fc && s.q === "missing") {
+      const q = r * 0.42;
+      marks.push(`<g class="st miss${dim}"><path d="${dia(x, y, r * 0.8)}"/>
+        <line x1="${(x - q).toFixed(1)}" y1="${(y - q).toFixed(1)}" x2="${(x + q).toFixed(1)}" y2="${(y + q).toFixed(1)}"/>
+        <line x1="${(x - q).toFixed(1)}" y1="${(y + q).toFixed(1)}" x2="${(x + q).toFixed(1)}" y2="${(y - q).toFixed(1)}"/></g>`);
+    } else marks.push(`<g class="st none${dim}"><path d="${dia(x, y, r * 0.75)}"/></g>`);
+  }
+  // 값 글자 — 레이어 '지점 강수량 글자'(V)를 켰을 때만. 점만으로도 색 단계는 읽힌다(붐비지 않게 기본은 끔).
+  // 센 곳부터, 시군명·특보 딱지·격자 최대 라벨·다른 점·앞 글자와 겹치지 않는 자리에만.
+  // 상위 셋은 지점 이름도 단다. 시군을 골랐으면 그 시군 지점만, 이름까지.
+  const wet = !OV.has("stnval") ? [] : STN.rows.filter(s => has(s) && val(s) >= steps[0] && (!SEL || s.sigun === SEL)).sort((a, b) => b.v - a.v);
+  const named = new Set(wet.slice(0, 3).map(s => s.stn));
+  const placed = LABELBOX.concat(boxes), out = [];
+  const hit = b => placed.some(p => b.x0 < p.x1 && b.x1 > p.x0 && b.y0 < p.y1 && b.y1 > p.y0);
+  const inside = b => b.x0 >= 4 && b.y0 >= 4 && b.x1 <= V.W - 4 && b.y1 <= V.H - 4;
+  for (const s of wet) {
+    const t = (s.q === "part" ? "≥" : "") + val(s).toFixed(1);
+    const nm = SEL || named.has(s.stn) ? s.name : "";
+    const w = t.length * fs * 0.6 + (nm ? nm.length * fs * 0.98 + fs * 0.3 : 0) + 4, h = fs * 1.2;
+    const ax = V.toX(s.x), ay = V.toY(s.y), gap = r + 3;
+    let best = null;
+    for (const [dx, dy] of [[gap, -h / 2], [-gap - w, -h / 2], [-w / 2, -gap - h], [-w / 2, gap]]) {
+      const b = { x0: ax + dx, y0: ay + dy, x1: ax + dx + w, y1: ay + dy + h };
+      if (inside(b) && !hit(b)) { best = b; break; }
+    }
+    if (!best) continue;                 // 자리가 없으면 글자는 뺀다 — 점(색)은 남는다. 마우스를 올리면 값이 나온다
+    placed.push(best);
+    out.push(`<text x="${(best.x0 + 2).toFixed(1)}" y="${(best.y0 + h / 2).toFixed(1)}"
+      style="font-size:${fs.toFixed(1)}px;stroke-width:${(fs * 0.2).toFixed(1)}px">${t}${nm ? `<tspan class="n" dx="${(fs * 0.3).toFixed(1)}">${nm}</tspan>` : ""}</text>`);
+  }
+  g.innerHTML = marks.join("") + `<g class="st">${out.join("")}</g>`;
+}
+function renderStnLegend() {
+  const box = $("ly-stn");
+  if (!OV.has("stations")) { box.hidden = true; return; }
+  box.hidden = false;
+  const d = (fill, stroke, extra = "", dash = "") =>
+    `<svg viewBox="-8 -8 16 16"><path d="M0,-6L6,0L0,6L-6,0Z" style="fill:${fill};stroke:${stroke};stroke-width:1.5"${dash ? ` stroke-dasharray="${dash}"` : ""}/>${extra}</svg>`;
+  const x = `<path d="M-2.6,-2.6L2.6,2.6M-2.6,2.6L2.6,-2.6" style="stroke:var(--ink-2);stroke-width:1.6;stroke-linecap:round"/>`;
+  const n = SITES?.stations?.length || 0;
+  const keys = `<div class="keys2"><span>${d("var(--rain-4)", "var(--ink)")}실측(지도와 같은 색 단계)</span>
+    <span>${d("var(--land)", "var(--ink-2)")}0</span><span>${d("none", "var(--ink-3)", x)}결측</span>
+    <span>${d("none", "var(--ink-3)", "", "2 2")}값 없음</span></div>`;
+  let nt = "";
+  if (!STN) nt = `<div class="nt">읽는 중…</div>`;
+  else if (STN.err) nt = `<div class="nt w">불러오지 못했다 — ${STN.err}</div>`;
+  else if (!stnFresh()) nt = `<div class="nt">읽는 중…</div>`;
+  else if (STN.status === "forecast") nt = `<div class="nt">예측 화면 — 관측소는 자리만 찍는다(실측은 지나간 시각에만 있다)</div>`;
+  else if (STN.status === "none") nt = `<div class="nt w">이 시각(${hm(STN.tm)}) 관측소 값을 아직 받지 못했다 — 수집기가 격자와 같은 시각으로 받는다</div>`;
+  else {
+    const ok = STN.rows.filter(s => s.q === "ok" || s.q === "part").length;
+    nt = `<div class="nt">${STN.src} · ${ok}곳 값 있음${STN.rows.some(s => s.q === "part") ? " · ≥ 일부 시각 결측(하한)" : ""}</div>`
+      + `<div class="nt">면(격자)은 관측소 사이를 메운 분석값이라 관측소 자리에서도 다르다. 점에 마우스를 올리면 둘을 견준다</div>`;
+  }
+  const un = (STN?.unsited || SITES?.missing || []).map(m => `${m.name}(${m.stn})`).join(" · ");
+  box.innerHTML = `<div class="hd2"><b>관측소</b><span class="k">AWS ${n}곳</span><span>${STN && !STN.err && STN.tm && STN.status !== "forecast" ? (CASE ? `${md(STN.tm)} ` : "") + hm(STN.tm) : ""}</span></div>`
+    + keys + nt + (un ? `<div class="nt">위치 없음: ${un} — 이 API 들에 자료가 없는 지점</div>` : "");
+}
+/* 마우스 아래 관측소(지도 좌표 mx,my 에서 가장 가까운 점, 점 크기의 1.5배 안) */
+function stationAt(mx, my) {
+  if (!OV.has("stations") || !stnFresh() || !V) return null;
+  const lim = Math.max(9, STN_R * 1.5);
+  let best = null, bd = lim * lim;
+  for (const s of STN.rows) {
+    const dx = V.toX(s.x) - mx, dy = V.toY(s.y) - my, dd = dx * dx + dy * dy;
+    if (dd < bd) { bd = dd; best = s; }
+  }
+  return best;
+}
+function stationTip(s) {
+  const fac = factor(), gv = valueAt(s.x, s.y), site = SITEBY.get(s.stn);
+  const has = s.q === "ok" || s.q === "part";
+  const obs = STN.status === "forecast" ? "예측 화면" : has ? `${s.q === "part" ? "≥" : ""}${(s.v * fac).toFixed(1)}㎜`
+    : s.q === "missing" ? "결측" : "값 없음";
+  const grid = gv === undefined ? "—" : gv === MISSING ? "결측" : `${(gv / 10 * fac).toFixed(1)}㎜`;
+  const diff = has && gv !== undefined && gv !== MISSING ? gv / 10 * fac - s.v * fac : null;
+  return `<b>${s.name} ${obs}</b> · 관측소 ${s.stn} · ${s.sigun} ${site?.emd || ""}`
+    + `<div class="d">그 칸 격자 ${grid}${diff != null ? ` (격자 − 관측 ${diff >= 0 ? "+" : ""}${diff.toFixed(1)})` : ""} · 해발 ${Math.round(s.ht)}m${STN.src ? ` · ${STN.src}` : ""}</div>`;
+}
+
+/* ── 시군 고르기 — 지도에서 시군을 누르면 오른쪽 패널이 그 시군으로 ──────────────────
+   누적 카드: 격자 기준이면 그 시군 읍면동(읍면동마다 누적 최대 칸), AWS 기준이면 그 시군 지점 전부
+   (내부망 스방이면 265곳 가운데 그 시군 것 — 여러 곳이 나온다). 예측 상위는 그 시군 읍면동,
+   지금 오는 비는 그 시군 지점. 지도에는 테두리를 두르고 다른 시군 관측소를 흐리게 한다. */
+function sigunAt(gx, gy) {
+  if (!MSIG || !META || !GEO) return null;
+  const hb = META.grids.hr, c = Math.round(gx) - hb.i0, r = Math.round(gy) - hb.j0;
+  if (c < 0 || r < 0 || c >= hb.w || r >= hb.h) return null;
+  const sg = GEO.sigun.find(s => s.id === MSIG[r * hb.w + c]);
+  return sg && sg.kind === "gn" ? sg.name : null;
+}
+function drawSel() {
+  const p = $("sel");
+  if (!p || !PATH || !V) return;
+  const ft = SEL && FEAT.find(f => f.properties.sigun === SEL);
+  const d = ft ? PATH(ft) : "";
+  p.setAttribute("d", d);
+  $("selh").setAttribute("d", d);
+  $("selmask").setAttribute("d", d ? `M-20,-20H${V.W + 20}V${V.H + 20}H-20Z${d}` : "");
+}
+function selectSig(name) {
+  SEL = name || null;
+  drawSel(); drawStations(); hot(null); link(null);
+  $("acc-sel").hidden = !SEL;
+  $("acc-sel").textContent = SEL ? `${SEL} ✕` : "";
+  if (SET.panel === "timeline") return;  // 타임라인 패널은 시군 줄이 이미 다 있다 — 테두리만
+  if (!tlOn) { CARDS = null; if (SEL) setTL(true, false); return; }   // 닫혀 있으면 연다(설정에는 안 남긴다)
+  loadCards();
+}
+function toggleBasis() {
+  ACC_BASIS = ACC_BASIS === "aws" ? "grid" : "aws";
+  if (!CASE) { SET.acc_basis = ACC_BASIS; saveSetting({ acc_basis: ACC_BASIS }); }
+  for (const b of $("acc-h").querySelectorAll(".bs b")) b.classList.toggle("on", b.dataset.b === ACC_BASIS);
+  if (SET.panel === "timeline") return;
+  if (!tlOn) { CARDS = null; setTL(true, false); return; }
+  loadCards();
+}
+
+/* ── 도움말(?) — 용어 · 자료 출처 · 그 자료를 기상청 어디서 쓰나 ───────────────────
+   ✔ 는 날씨누리 지도(weather.go.kr/wnuri-map)가 받아 가는 파일로 직접 확인한 것(2026.10.3).
+   확인하지 못한 쓰임은 적지 않는다. */
+let HELP_TAB = "src";
+function helpHtml(tab) {
+  const src = `
+    <div class="lede"><b>면(격자)은 그림, 점(관측소)은 정답.</b> 500m 격자는 관측소에서 잰 값으로 관측소 사이를 메운
+      <b>분석값</b>이다 — 새 관측이 더해진 것이 아니다. 그래서 관측소 자리에서도 값이 조금 다르고, 센 비의 봉우리는 깎인다
+      (거제 사례 끝: 관측소 거제 967.7㎜ · 격자 최대 767.7㎜). '얼마 왔나'는 관측소, '어디에 얼마나 넓게'는 격자로 본다.</div>
+    <h4>자료 출처</h4>
+    <table><tr><th>화면</th><th>원본(기상청 API)</th><th>무엇으로 · 어떻게</th><th>주기 · 지연</th><th>기상청 어디서 쓰나</th></tr>
+    <tr><td><b>15분 · 60분 · 오늘</b><div class="k">격자 500m</div></td>
+      <td>API허브 고해상도 격자자료<br><code>sfc_grid_nc_down.php</code><div class="k">NetCDF · rn_15m · rn_60m · rn_day</div></td>
+      <td>기상청·산림청·농진청 등 공공기관 AWS, 해양기상부이, 등표 관측(받은 파일 기준 전국 1,022곳)을 <b>객관분석</b>.
+        강수는 2차원 분석. <b>레이더·위성은 쓰지 않는다.</b></td>
+      <td>5분마다, 기준 +5분쯤. 지도는 10분 칸만 받는다. 1997년부터 있다</td>
+      <td>API허브·공공데이터포털로 내보내는 개발·연구용 자료(실시간 2023.7~). <b>날씨누리 지도에는 쓰이지 않는다</b> ✔</td></tr>
+    <tr><td><b>실황 5km</b></td><td><code>nph-dfs_odam_grd</code> RN1<div class="k">동네예보 초단기실황</div></td>
+      <td>관측을 5km 동네예보 격자(149×253)에 분석한 1시간 강수</td><td>10분 발표, +3~13분</td>
+      <td>날씨누리 지도 '관측 › 3시간누적강수 · 현재기온'이 이 격자를 쓴다 ✔</td></tr>
+    <tr><td><b>초단기 +1~6h</b></td><td><code>nph-dfs_vsrt_grd</code> RN1<div class="k">초단기예보</div></td>
+      <td>앞으로 6시간 1시간 강수, 5km. 1시간 간격뿐(10분 대상시각을 주면 가까운 정시 값)</td><td>10분 발표</td>
+      <td>동네예보(초단기예보) 산출물</td></tr>
+    <tr><td><b>단기 오늘 · 내일</b></td><td><code>nph-dfs_shrt_grd</code> PCP<div class="k">단기예보</div></td>
+      <td>1시간 강수를 그날 몫만 더한 합, 5km. PCP 는 30에서 막혀 30㎜ 이상 든 칸의 합은 하한</td>
+      <td>3시간마다 발표(02·05·08…시), +20분부터</td><td>동네예보(단기예보). 날씨누리 지도도 단기예보 격자를 받아 간다 ✔(바람 표출)</td></tr>
+    <tr><td><b>관측소</b><div class="k">AWS · 레이어 S</div></td>
+      <td>위치 <code>sfc_aws_day.php</code>(LON·LAT·HT)<br>값 <code>nph-aws2_min</code> 매분 · <code>awsh.php</code> 정시</td>
+      <td>경남 AWS 56곳(위치 55 — 사천공항(161)은 이 API 들에 자료가 없다). 지도 층은 격자와 <b>같은 시각</b>의 매분자료, 없으면 정시자료</td>
+      <td>매분. 지도 수집기가 격자를 받은 시각에 맞춰 같이 받는다</td>
+      <td>날씨누리 지도 '관측 › 일강수'는 AWS 지점값(전국 약 720곳)을 화면에서 면으로 칠한 것 ✔</td></tr>
+    <tr><td><b>스방</b><div class="k">내부망</div></td><td>경남 스마트 통합 방재시스템</td>
+      <td><b>기상청 자료가 아니다.</b> 경남 자체 AWS 212곳 + 기상청 53곳 = 265곳의 시간 강우량</td><td>10분마다</td>
+      <td>상황실 내부망에서만. 안 되면 기상청 56곳으로 물러서고 '스방 안 됨→기상청'이라 적는다</td></tr>
+    <tr><td><b>기상특보</b><div class="k">레이어 A</div></td><td><code>wrn_now_data.php</code></td>
+      <td>발효 중 특보 · 예비특보. 재현 사례의 특보는 <b>산출</b>(격자 3·12시간 합에 호우 기준) — 이력 API 가 이 키로 403</td>
+      <td>1분마다</td><td>기상청 특보 발표 원자료</td></tr>
+    <tr><td><b>재현 사례</b></td><td>위 500m <code>rn_60m</code> · <code>awsh.php</code> 매시</td>
+      <td>지난 호우를 매시 격자·관측소 값 그대로 저장소에 굳혀 둔다(data/demo/map) — 볼 때 기상청을 다시 부르지 않는다</td>
+      <td>—</td><td>—</td></tr></table>
+    <p class="k">✔ 날씨누리 지도(weather.go.kr/wnuri-map)가 받아 가는 파일을 직접 열어 확인했다(2026.10.3). 확인하지 못한 쓰임은 적지 않았다.
+      고해상도 격자 설명은 기상청 API허브 자료 안내와 2025.11.28. 보도자료(고해상도 기후격자자료)를 따랐다.</p>`;
+  const terms = `<dl>
+    <dt>격자(면) · 관측소(점)</dt><dd>면은 칸마다 값이 있는 분석값, 점은 그 자리에서 잰 실측. 같은 자리에서도 다르다 — 관측소가 정답이다</dd>
+    <dt>객관분석</dt><dd>흩어진 관측값으로 빈 칸을 메우는 통계적 내삽. 관측값을 그대로 지나지 않고 봉우리가 깎인다. 지형은 기온 같은 요소에만 반영(강수는 2차원)</dd>
+    <dt>500m 칸 · 5km 칸</dt><dd>고해상도 격자는 500m, 동네예보(실황·초단기·단기)는 5km. 둘은 지구 모양(타원체/구면)이 달라 정확히 겹치지 않아 옮겨 그린다</dd>
+    <dt>다우지점</dt><dd>그 시군에서 그 구간 비가 가장 많이 온 관측 지점</dd>
+    <dt>누적 최대 칸</dt><dd>격자 기준 누적에서 그 시군(읍면동) 안 가장 큰 칸과 그 칸이 든 읍면동. 선 그래프는 그 칸의 매시 값</dd>
+    <dt>0 · 결측 · 값 없음</dt><dd>0은 비가 안 온 것, 결측은 기상청이 값을 못 낸 것(지도 빗금 · 관측소 ×), 값 없음 · 조회 실패는 우리가 못 받은 것(점선). 셋을 섞지 않는다</dd>
+    <dt>×4 환산</dt><dd>15분 값 × 4 — 시간당 기세로 60분치 · 특보 기준과 같은 자로 본다</dd>
+    <dt>≥ (하한)</dt><dd>일부 시각이 빠져 실제보다 작을 수 있는 합. 단기예보 PCP 30 상한도 같다</dd>
+    <dt>산출 특보</dt><dd>실제 발표가 아니라 격자 3시간 · 12시간 합에 호우 기준(주의보 60 · 110 / 경보 90 · 180㎜)을 적용해 계산한 것</dd>
+    <dt>기준 · 발표 · 대상시각</dt><dd>실측은 기준시각(그 시각까지), 예측은 발표시각(tmfc)과 대상시각(tmef). 60분 강수 13:00 은 12:00~13:00 몫</dd>
+    <dt>정각</dt><dd>매시 00분. 격자 누적은 정각 60분 격자를 칸마다 더한다(빠진 정각은 수집기가 한 번에 4장씩 메운다)</dd>
+    <dt>자료 지연</dt><dd>평소보다 늦게 온 층에 붙는 배지. 500m · 실황은 30분 넘게 묵으면</dd>
+    <dt>시각</dt><dd>모두 한국 표준시(KST)</dd></dl>`;
+  const how = `<dl>
+    <dt>시군 누르기</dt><dd>오른쪽 패널이 그 시군으로 — 격자 기준이면 읍면동, AWS 기준이면 지점(내부망 스방이면 여러 곳). 다시 누르거나 바다를 누르거나 <code>Esc</code> 면 경남 전체</dd>
+    <dt>'강수 누적' 누르기</dt><dd>기준을 바꾼다 — AWS(관측소 다우지점) ↔ 격자(누적 최대 칸). <code>B</code> 도 같다</dd>
+    <dt>줄에 마우스</dt><dd>지도에 그 시군 · 지점 · 칸까지 선이 그어진다</dd>
+    <dt>관측소에 마우스</dt><dd>실측과 그 칸 격자 값, 차이(격자 − 관측)</dd>
+    <dt>레이어</dt><dd>왼쪽 위. 기상특보 <code>A</code> · 관측소 <code>S</code> · 지점 강수량 글자 <code>V</code>(관측소를 켰을 때, 기본은 끔 — 점 색만으로도 단계가 읽힌다)</dd>
+    <dt>층 · 재생</dt><dd><code>1</code>~<code>7</code> 층 · <code>Space</code> 재생 · <code>←</code><code>→</code> 한 장씩 · <code>L</code> 패널 · <code>T</code> 테스트</dd>
+    <dt>주소로 고정</dt><dd><code>?layer=obs60</code> · <code>?ov=alerts,stations</code> · <code>?sig=창원</code> · <code>?basis=grid</code> · <code>?case=geoje-20260816</code> — 벽면 화면을 한 상태로 둘 때</dd>
+    <dt>설정 · 도움말</dt><dd><code>Ctrl</code>+<code>,</code> 설정 · <code>?</code> 이 창</dd></dl>`;
+  return tab === "terms" ? terms : tab === "how" ? how : src;
+}
+function openHelp(tab = HELP_TAB) {
+  HELP_TAB = tab;
+  stopPlay();
+  const tabs = [["src", "자료 출처"], ["terms", "용어"], ["how", "조작"]];
+  $("help").innerHTML = `<div class="box" role="dialog" aria-label="도움말">
+    <div class="top"><b>도움말 — 경남 지도</b><span class="sp"></span><button id="hp-x" title="닫기 (Esc)">✕</button></div>
+    <nav>${tabs.map(([k, l]) => `<button data-t="${k}" class="${k === tab ? "on" : ""}">${l}</button>`).join("")}</nav>
+    <div class="bd">${helpHtml(tab)}</div></div>`;
+  $("help").hidden = false;
+  $("hp-x").onclick = closeHelp;
+  for (const b of $("help").querySelectorAll("nav button")) b.onclick = () => openHelp(b.dataset.t);
+}
+function closeHelp() { $("help").hidden = true; }
+$("help").addEventListener("click", ev => { if (ev.target.id === "help") closeHelp(); });
+
 /* ── 설정(Ctrl+,) — 서버에 둔다(어느 PC 에서 열어도 같게) ─────────────────── */
 function openPrefs() {
   stopPlay();
@@ -2017,7 +2486,7 @@ function openPrefs() {
     <div class="row"><span class="k">테마</span><span class="seg">
       <button data-th="dark" class="${th !== "light" ? "on" : ""}">어둡게</button>
       <button data-th="light" class="${th === "light" ? "on" : ""}">밝게</button></span></div>
-    <div class="keys"><kbd>1</kbd>~<kbd>7</kbd> 층 · <kbd>Space</kbd> 재생 · <kbd>←</kbd><kbd>→</kbd> 한 장씩 · <kbd>L</kbd> 패널 · <kbd>A</kbd> 특보 · <kbd>T</kbd> 테스트 · <kbd>Ctrl</kbd>+<kbd>,</kbd> 설정</div>
+    <div class="keys"><kbd>1</kbd>~<kbd>7</kbd> 층 · <kbd>Space</kbd> 재생 · <kbd>←</kbd><kbd>→</kbd> 한 장씩 · <kbd>L</kbd> 패널 · <kbd>A</kbd> 특보 · <kbd>S</kbd> 관측소 · <kbd>V</kbd> 지점 값 · <kbd>B</kbd> 누적 기준 · <kbd>T</kbd> 테스트 · <kbd>?</kbd> 도움말 · <kbd>Ctrl</kbd>+<kbd>,</kbd> 설정</div>
   </div>`;
   $("prefs").hidden = false;
   $("pf-x").onclick = closePrefs;
@@ -2076,6 +2545,16 @@ $("stage").addEventListener("mousemove", ev => {
   const rc = $("stage").getBoundingClientRect(), x = ev.clientX - rc.left, y = ev.clientY - rc.top;
   const mx = (x - MT.tx) / MT.sc, my = (y - MT.ty) / MT.sc;
   const gx = V.fromX(mx), gy = V.fromY(my), v = valueAt(gx, gy), tip = $("tip");
+  const sp = stationAt(mx, my);
+  $("stage").style.cursor = sp || sigunAt(gx, gy) ? "pointer" : "";
+  if (sp) {                              // 관측소 위 — 실측과 그 칸 격자를 나란히
+    highlight(sp.sigun);
+    tip.innerHTML = stationTip(sp);
+    tip.hidden = false;
+    tip.style.left = Math.min(V.W - tip.offsetWidth - 6, x + 16) + "px";
+    tip.style.top = Math.max(6, y - tip.offsetHeight - 12) + "px";
+    return;
+  }
   const hb = META.grids.hr, c = Math.round(gx) - hb.i0, r = Math.round(gy) - hb.j0;
   const inHr = c >= 0 && r >= 0 && c < hb.w && r < hb.h;
   const sg = inHr && MSIG ? GEO.sigun.find(s => s.id === MSIG[r * hb.w + c]) : null;
@@ -2099,22 +2578,40 @@ $("stage").addEventListener("mousemove", ev => {
   tip.style.top = Math.max(6, y - th - 12) + "px";
 });
 $("stage").addEventListener("mouseleave", () => { $("tip").hidden = true; highlight(null); });
+/* 시군을 누르면 고른다 — 오른쪽 패널이 그 시군 읍면동(격자)·지점(AWS)으로 바뀐다. 다시 누르거나 바다를 누르면 푼다 */
+$("stage").addEventListener("click", ev => {
+  if (!V || !GEO || ev.target.closest("#tl, #play, #legend, #rail, #layers, #tip")) return;
+  const rc = $("stage").getBoundingClientRect();
+  const mx = (ev.clientX - rc.left - MT.tx) / MT.sc, my = (ev.clientY - rc.top - MT.ty) / MT.sc;
+  const sg = sigunAt(V.fromX(mx), V.fromY(my));
+  selectSig(sg && sg !== SEL ? sg : null);
+});
 
 $("b-test").onclick = () => { test = !test; GRIDS.clear(); STATS.clear(); loadFlow().then(() => show()); loadAlerts(); };
 $("b-tl").onclick = () => setTL(!tlOn);
 $("tl-x").onclick = () => setTL(false);
 $("tl-stat").onclick = () => { SET.tl_stat = SET.tl_stat === "mean" ? "max" : "mean"; saveSetting({ tl_stat: SET.tl_stat }); buildTL(); };
 $("b-prefs").onclick = openPrefs;
+$("b-help").onclick = () => ($("help").hidden ? openHelp() : closeHelp());
+$("acc-h").onclick = toggleBasis;
+$("acc-sel").onclick = ev => { ev.stopPropagation(); selectSig(null); };
 document.addEventListener("keydown", ev => {
   if (ev.target.closest?.("input, textarea")) return;
   if ((ev.ctrlKey || ev.metaKey) && ev.key === ",") { ev.preventDefault(); $("prefs").hidden ? openPrefs() : closePrefs(); return; }
-  if (ev.key === "Escape") { closePrefs(); return; }
-  if (!$("prefs").hidden || ev.ctrlKey || ev.metaKey || ev.altKey) return;
+  if (ev.key === "Escape") {
+    if (!$("prefs").hidden) closePrefs(); else if (!$("help").hidden) closeHelp(); else if (SEL) selectSig(null);
+    return;
+  }
+  if (ev.key === "?") { $("help").hidden ? openHelp() : closeHelp(); return; }
+  if (!$("prefs").hidden || !$("help").hidden || ev.ctrlKey || ev.metaKey || ev.altKey) return;
   const i = "1234567".indexOf(ev.key);
   if (i >= 0) { stopPlay(); choose(KINDS[i], true); }
   else if (ev.key === "t" || ev.key === "T") $("b-test").click();
   else if (ev.key === "l" || ev.key === "L") setTL(!tlOn);
   else if (ev.key === "a" || ev.key === "A") setOverlay("alerts", !OV.has("alerts"));
+  else if (ev.key === "s" || ev.key === "S") setOverlay("stations", !OV.has("stations"));
+  else if ((ev.key === "v" || ev.key === "V") && OV.has("stations")) setOverlay("stnval", !OV.has("stnval"));
+  else if (ev.key === "b" || ev.key === "B") toggleBasis();
   else if (ev.key === " " && FLOWK.has(kind)) { ev.preventDefault(); playing ? stopPlay() : startPlay(); }
   else if ((ev.key === "ArrowRight" || ev.key === "ArrowLeft") && FLOW && FLOWK.has(kind)) {
     stopPlay();
@@ -2131,12 +2628,24 @@ const relayout = () => {
 };
 window.addEventListener("resize", relayout);
 new ResizeObserver(relayout).observe($("stage"));
+// 누적 카드는 남는 높이를 다 쓴다 — 다른 카드가 늦게 자리 잡으면(글꼴이 늦게 오는 등) 줄 수를 다시 센다.
+// ⚠️ 이게 없으면 처음 잰 낮은 높이로 굳어 아래가 빈 채 '외 8곳'이 나왔다(헤드리스 실측)
+let accH = 0, accRz = null;
+new ResizeObserver(() => {
+  const h = $("acc-b").clientHeight;
+  if (Math.abs(h - accH) < 2) return;
+  accH = h;
+  clearTimeout(accRz);
+  accRz = setTimeout(() => { if (CARDS && !CARDS.err && tlOn && SET.panel !== "timeline") { renderAcc(); drawRanks(); cardsPlayhead(); } }, 80);
+}).observe($("acc-b"));
 
 async function boot() {
   applyTheme();
   try {
-    [META, TOPO, GEO] = await Promise.all([getJson("/api/grid/meta"),
-      getJson("/api/grid/geo/gyeongnam.topo.json"), getJson("/api/grid/geo/grids.json")]);
+    [META, TOPO, GEO, SITES] = await Promise.all([getJson("/api/grid/meta"),
+      getJson("/api/grid/geo/gyeongnam.topo.json"), getJson("/api/grid/geo/grids.json"),
+      getJson("/api/grid/geo/stations.json").catch(() => null)]);    // 없어도 지도는 뜬다(관측소 층만 빈다)
+    SITEBY = new Map((SITES?.stations || []).map(s => [s.stn, s]));
     MSIG = new Uint8Array(await (await fetch("/api/grid/geo/mask_sigun.u8.gz")).arrayBuffer());
   } catch (e) {
     $("empty").innerHTML = `지도를 띄울 수 없다<small>${e.message}</small>`;
@@ -2157,11 +2666,14 @@ async function boot() {
     // 끝(전부 쌓인 모습)에서 연다 — 재생하면 처음부터 쌓여 간다. ?tm= 이면 그 시각(봉우리 등)
     OBS_TM = CASEM.frames.includes(Q.get("tm")) ? Q.get("tm") : CASEM.end;
   }
+  // 누적 카드 기준 — 실황은 서버 설정(기본 AWS), 사례는 격자에서 연다. ?basis= 가 먼저
+  ACC_BASIS = ["aws", "grid"].includes(Q.get("basis")) ? Q.get("basis") : CASE ? "grid" : (SET.acc_basis || "aws");
+  if (ORDER_GN().includes(Q.get("sig"))) SEL = Q.get("sig");          // ?sig=창원 — 그 시군을 고른 채로
   OV = new Set(Q.has("ov") ? Q.get("ov").split(",").filter(Boolean)
                : CASE ? ["alerts"] : (SET.overlays || []));
   renderLayers();
   vsrtN = +SET.vsrt_n || 1; x4 = !!SET.x4;
-  tlOn = Q.has("tl") ? Q.get("tl") === "1" : CASE ? true : !!SET.tl_on;
+  tlOn = Q.has("tl") ? Q.get("tl") === "1" : (CASE || SEL) ? true : !!SET.tl_on;
   const want = Q.get("layer") || (CASE ? "acc" : SET.layer) || "obs60";   // URL 이 서버 설정보다 먼저다(화면 고정용)
   if (want.startsWith("vsrt")) { kind = "vsrt"; const n = +want.replace(/\D/g, ""); if (n >= 1 && n <= 6) vsrtN = n; }
   else kind = KINDS.includes(want) ? want : "obs60";
@@ -2174,6 +2686,9 @@ async function boot() {
   // 카드·특보는 종합 화면처럼 1분마다 다시 읽는다(DB 만 읽는다 — 기상청 호출은 늘지 않는다)
   setInterval(() => { if (!test) { loadCards(); loadAlerts(); } }, 60000);
   loadAlerts();
+  // 웹 글꼴이 늦게 오면 카드 높이가 바뀐다 — 다 오면 한 번 더 잰다(누적 카드가 아래를 비운 채 굳지 않게)
+  document.fonts?.ready?.then(() => { if (CARDS && !CARDS.err && tlOn && SET.panel !== "timeline") renderCards(); });
+  if (Q.has("help")) openHelp(["src", "terms", "how"].includes(Q.get("help")) ? Q.get("help") : "src");   // ?help= — 도움말을 연 채로(안내용 링크)
 }
 boot();
 </script>

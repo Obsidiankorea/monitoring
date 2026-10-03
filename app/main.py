@@ -121,8 +121,9 @@ async def api_rain(hours: int = Query(12, ge=1, le=72),
 
 
 @app.get("/api/forecast")
-async def api_forecast(hours: int = Query(6, ge=1, le=6)):
-    return queries.forecast(hours)
+async def api_forecast(hours: int = Query(6, ge=1, le=6), sigun: str | None = None):
+    """`sigun=` 이면 그 시군 읍면동 전부(emd_sigun)를 더 준다 — 지도 판 시군 상세."""
+    return queries.forecast(hours, sigun=sigun)
 
 
 @app.get("/api/short")
@@ -213,9 +214,34 @@ async def api_grid_sigun(layer: str, tm: str | None = None, test: bool = False,
         raise HTTPException(404, str(e)) from e
 
 
-# 경계·칸 지도(tools/build_geo.py 가 만든 것). 바뀔 일이 드물지만 저장소 갱신 뒤
-# 새로고침 한 번에 따라오게 하루만 캐시한다.
+@app.get("/api/grid/stations")
+async def api_grid_stations(layer: str, tm: str | None = None, test: bool = False,
+                            case: str | None = None):
+    """관측소(경남 AWS) — 위치와 **격자와 같은 시각**의 실측값. 예측 층이면 위치만(status 'forecast').
+    행마다 q = ok | missing(기상청 결측) | none(그 시각 값을 못 받음) | part(사례 누적, 일부 결측 — 하한)."""
+    try:
+        return await asyncio.to_thread(gridview.stations, layer, tm, test, case)
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
+
+
+@app.get("/api/grid/acctable")
+async def api_grid_acctable(hours: int = Query(12, ge=1, le=48), sigun: str | None = None,
+                       test: bool = False, case: str | None = None, tm: str | None = None):
+    """격자 누적 — 시군 줄(누적 최대 칸·읍면동·그 칸의 매시 값), `sigun=` 이면 그 시군 읍면동 줄.
+    `case=` 면 재현 사례 처음부터 tm 까지. 받지 못한 정시가 있으면 missing 시간 수(합은 하한)."""
+    try:
+        if case:
+            return await asyncio.to_thread(gridcase.acc_rows, case, tm, sigun)
+        return await asyncio.to_thread(gridview.acc, hours, sigun, None, test)
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
+
+
+# 경계·칸 지도(tools/build_geo.py 가 만든 것)와 관측소 위치(tools/build_stations.py).
+# 바뀔 일이 드물지만 저장소 갱신 뒤 새로고침 한 번에 따라오게 하루만 캐시한다.
 _GEO_FILES = {"gyeongnam.topo.json": "application/json", "grids.json": "application/json",
+              "stations.json": "application/json",
               "mask_sigun.u8.gz": None, "mask_emd.u16.gz": None}
 
 

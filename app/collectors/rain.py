@@ -81,6 +81,18 @@ async def fetch_minute(at: datetime) -> dict[str, dict]:
     return out
 
 
+def store_minute(tm: str, rows: dict[str, dict], at: str) -> None:
+    """매분자료 한 시각('YYYY-MM-DD HH:MM')을 obs_minute 에. 지도 수집기도 격자 시각에 맞춰 쓴다."""
+    with db.tx() as con:
+        for stn, r in rows.items():
+            con.execute(
+                """INSERT OR REPLACE INTO obs_minute
+                   (stn, tm, rn_15m, rn_60m, rn_day, quality, fetched_at)
+                   VALUES(?,?,?,?,?,?,?)""",
+                (stn, tm, r["rn_15m"], r["rn_60m"], r["rn_day"],
+                 "ok" if r["rn_60m"] is not None else "missing", at))
+
+
 async def collect(now: datetime | None = None, back_hours: int | None = None) -> dict:
     """정시 자료를 채우고, 마지막 정시 이후 구간을 매분자료로 보강한다.
 
@@ -143,14 +155,7 @@ async def collect(now: datetime | None = None, back_hours: int | None = None) ->
         rows = await fetch_minute(mark)
         if rows:
             minute_at = mark.strftime("%Y-%m-%d %H:%M")
-            with db.tx() as con:
-                for stn, r in rows.items():
-                    con.execute(
-                        """INSERT OR REPLACE INTO obs_minute
-                           (stn, tm, rn_15m, rn_60m, rn_day, quality, fetched_at)
-                           VALUES(?,?,?,?,?,?,?)""",
-                        (stn, minute_at, r["rn_15m"], r["rn_60m"], r["rn_day"],
-                         "ok" if r["rn_60m"] is not None else "missing", at))
+            store_minute(minute_at, rows, at)
     except KmaError as e:
         failed.append(f"매분자료: {e}")
 
