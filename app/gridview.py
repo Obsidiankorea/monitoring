@@ -173,8 +173,9 @@ def array(fr: dict) -> np.ndarray:
     return gridstore.load(fr["store"], fr["key"])
 
 
-def sigun(layer: str, tm: str | None = None, test: bool = False) -> dict:
-    fr = frame(layer, tm, test=test)
+def sigun(layer: str, tm: str | None = None, test: bool = False, case: str | None = None) -> dict:
+    from . import gridcase
+    fr = gridcase.frame(case, layer, tm) if case else frame(layer, tm, test=test)
     a = array(fr)
     hr = a if fr["grid"] == "hr" else gridstore.to_hr(a)
     out = {k: v for k, v in fr.items() if k not in ("arr", "store", "key")}

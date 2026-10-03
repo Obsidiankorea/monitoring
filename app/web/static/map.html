@@ -123,7 +123,27 @@ button { font-family: inherit; }
   border-color: color-mix(in oklab, var(--accent) 60%, var(--line)); }
 #menu button.none { opacity: .45; }
 #menu button.late::after { content: "·"; color: var(--lv-fail); font-weight: 800; margin-left: 3px; }
-#tools { display: flex; gap: 6px; }
+#tools { display: flex; gap: 6px; position: relative; }
+#case-menu { position: absolute; right: 0; top: calc(100% + 8px); z-index: 30; width: 340px; }
+#case-menu a { display: block; padding: 9px 12px; border-radius: 8px; color: var(--ink); text-decoration: none; }
+#case-menu a:hover { background: color-mix(in oklab, var(--accent) 12%, transparent); }
+#case-menu a.on { box-shadow: inset 3px 0 0 var(--accent); }
+#case-menu a b { display: block; font-size: 15px; }
+#case-menu a small { color: var(--ink-3); font: 500 12px var(--mono); }
+.crit { display: grid; grid-template-columns: calc(110px * var(--k, 1)) 1fr 1fr calc(70px * var(--k, 1)); align-items: center;
+  gap: 10px; height: calc(30px * var(--k, 1)); padding: 0 6px; border-radius: 6px; cursor: pointer; }
+.crit:hover, .crit.hov { background: color-mix(in oklab, var(--accent) 13%, transparent); }
+.crit.h { height: auto; cursor: default; font: 600 calc(11px * var(--k, 1)) var(--mono); color: var(--ink-3); padding-bottom: 3px; }
+.crit .g { position: relative; height: 62%; border-radius: 4px; background: color-mix(in oklab, var(--ink) 6%, transparent); }
+.crit .g i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--rain-4); transition: width .5s var(--ease); }
+.crit .g s { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ink-3); text-decoration: none; }
+.crit .g span { position: absolute; left: 6px; top: 50%; transform: translateY(-50%); font: 700 calc(12px * var(--k, 1)) var(--mono);
+  color: var(--ink); text-shadow: 0 0 3px var(--halo); }
+.crit .lv { justify-self: end; font: 700 calc(12px * var(--k, 1)) var(--sans); padding: 1px 8px; border-radius: 5px; }
+.crit .lv.warn { background: var(--lv-warn); color: #fff; }
+.crit .lv.watch { background: var(--lv-watch); color: #1A1400; }
+.crit .lv.none { color: var(--ink-3); }
+.case-note { font-size: calc(12px * var(--k, 1)); color: var(--ink-3); padding: 6px 8px 0; line-height: 1.4; }
 #tools button.on { color: var(--ink); background: color-mix(in oklab, var(--accent) 22%, transparent);
   border-color: color-mix(in oklab, var(--accent) 60%, var(--line)); }
 #tools #b-test.on { color: #fff; background: var(--test); border-color: var(--test); }
@@ -308,9 +328,10 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
   font: 700 calc(12px * var(--k, 1)) var(--sans); color: var(--ink-3); letter-spacing: .08em; }
 .mr { position: relative; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px;
   height: calc(27px * var(--k, 1)); padding: 0 6px; border-radius: 6px; cursor: pointer; }
-.mr .nm2 { font-size: calc(14px * var(--k, 1)); z-index: 1; }
+.mr .nm2 { font-size: calc(14px * var(--k, 1)); z-index: 1; text-shadow: 0 0 3px var(--halo), 0 0 6px var(--halo); }
 .mr b { font: 700 calc(15px * var(--k, 1)) var(--mono); z-index: 1; }
-.mr .bg { position: absolute; left: 0; top: 16%; bottom: 16%; border-radius: 4px; opacity: .5; transition: width .6s var(--ease); }
+/* ⚠️ 센 비의 밝은 단계(--rain-6·7) 위에서 흰 글자가 묻혔다 — 막대를 옅게, 글자에 테두리 */
+.mr .bg { position: absolute; left: 0; top: 16%; bottom: 16%; border-radius: 4px; opacity: .38; transition: width .6s var(--ease); }
 /* 예측 상위 — 시군 │ +1~+6h 칸(지도 색) │ 합 */
 .fr, .fh { display: grid; grid-template-columns: calc(124px * var(--k, 1)) 1fr calc(54px * var(--k, 1)); align-items: center;
   gap: 10px; padding: 0 6px; }
@@ -463,6 +484,8 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
   <span class="sp"></span>
   <nav id="menu"></nav>
   <div id="tools">
+    <button id="b-case" title="지난 호우를 되돌려 본다(재현 사례)">사례</button>
+    <div class="ly-pop" id="case-menu" hidden></div>
     <button id="b-tl" title="오른쪽 패널 — 강수 누적·지금 오는 비·예측 상위 (L)">패널</button>
     <button id="b-test" title="비 없는 날 화면 점검용 합성 격자 (T)">테스트</button>
     <button id="b-prefs" title="설정 (Ctrl+,)">⚙</button>
@@ -486,11 +509,11 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
       <div class="cb" id="acc-b"></div>
     </section>
     <section class="card" id="c-now">
-      <div class="ch"><h3>지금 오는 비</h3><span class="sub">기상청 매분자료</span><span class="sp"></span><span class="bt" id="now-bt">—</span></div>
+      <div class="ch"><h3>지금 오는 비</h3><span class="sub" id="now-sub">기상청 매분자료</span><span class="sp"></span><span class="bt" id="now-bt">—</span></div>
       <div class="cb" id="now-b"></div>
     </section>
     <section class="card" id="c-fc">
-      <div class="ch"><h3>예측 상위</h3><span class="sub">초단기 · 앞으로 6시간</span><span class="sp"></span><span class="bt" id="fc-bt">—</span></div>
+      <div class="ch"><h3 id="fc-h">예측 상위</h3><span class="sub" id="fc-sub">초단기 · 앞으로 6시간</span><span class="sp"></span><span class="bt" id="fc-bt">—</span></div>
       <div class="cb" id="fc-b"></div>
     </section>
   </div>
@@ -536,9 +559,15 @@ const STEPS = {
   m15: [0.1, 0.5, 2, 5, 8, 12, 18],
   m60: [0.1, 1, 5, 10, 20, 30, 50],
   day: [0.1, 5, 10, 30, 50, 80, 150],
+  // 재현 사례 누적 — 이틀에 900㎜ 가 오는 비라 하루 눈금(150㎜ 끝)으로는 거제가 통째로 한 색이 된다
+  event: [1, 50, 100, 200, 300, 500, 700],
 };
-const KINDS = ["obs15", "obs60", "obsday", "odam", "vsrt", "shrt_today", "shrt_tomorrow"];
-const FLOWK = new Set(["obs60", "vsrt"]);              // 재생 흐름(1시간 강수량)에 드는 층
+/* 재현 사례(?case=) — 지난 호우를 격자 그대로 되돌려 본다(data/demo/map/). 실황 설정은 건드리지 않는다 */
+const CASE = /^[a-z0-9-]{1,64}$/.test(Q.get("case") || "") ? Q.get("case") : null;
+let CASEM = null;                                       // 사례 meta(시군 시계열·산출 특보)
+const KINDS = CASE ? ["obs60", "acc"] : ["obs15", "obs60", "obsday", "odam", "vsrt", "shrt_today", "shrt_tomorrow"];
+const FLOWK = new Set(CASE ? ["obs60", "acc"] : ["obs60", "vsrt"]);   // 재생 흐름에 드는 층
+const NOWL = CASE ? "끝" : "지금";
 const COLLECT_OF = { obs15: "grid", obs60: "grid", obsday: "grid", odam: "odam", vsrt: "forecast",
                      shrt_today: "short", shrt_tomorrow: "short" };
 const SET_DEFAULT = { flow_step: 10, flow_hours: 6, play_ms: 1200, tl_on: false, tl_stat: "max",
@@ -561,7 +590,7 @@ let FEAT = null;                        // 시군 GeoJSON(강조용)
 
 const layerKey = () => kind === "vsrt" ? `vsrt+${vsrtN}` : kind;
 const metaOf = k => (META?.layers || []).find(x => x.id === k) || {};
-const stepsOf = k => k === "obs15" ? (x4 ? STEPS.m60 : STEPS.m15)
+const stepsOf = k => k === "acc" ? STEPS.event : k === "obs15" ? (x4 ? STEPS.m60 : STEPS.m15)
   : (k === "obsday" || k.startsWith("shrt")) ? STEPS.day : STEPS.m60;
 const factor = () => (kind === "obs15" && x4) ? 4 : 1;
 const tOf = key => new Date(+key.slice(0, 4), +key.slice(4, 6) - 1, +key.slice(6, 8),
@@ -887,7 +916,7 @@ function drawLabels() {
 /* ── 범례 ─────────────────────────────────────────────────────────── */
 function buildLegend() {
   const st = stepsOf(kind), lg = $("legend");
-  const unit = (kind === "obsday" || kind.startsWith("shrt")) ? "㎜ 누적" : kind === "obs15" && x4 ? "㎜/h 환산" : "㎜";
+  const unit = (kind === "obsday" || kind === "acc" || kind.startsWith("shrt")) ? "㎜ 누적" : kind === "obs15" && x4 ? "㎜/h 환산" : "㎜";
   const cells = [1, 2, 3, 4, 5, 6, 7].map(i => `<i style="background:var(--rain-${i})"></i>`).join("");
   const ticks = st.map((v, i) => `<span style="bottom:${i * 26}px">${v}</span>`).join("");
   lg.innerHTML = `<div class="lt">${unit}${kind === "obs15"
@@ -906,6 +935,12 @@ function when(gr) {
   if (!gr || !gr.tm) return "";
   const t = gr.tm;
   switch (kind) {
+    case "acc": {
+      // 첫 칸은 그 앞 한 시간 몫이다(01:00 = 00~01시) — 시작은 한 시간 앞으로 적는다
+      const f0 = gr.from ? new Date(tOf(gr.from) - 3600e3) : null;
+      const fs = f0 ? `${f0.getMonth() + 1}.${f0.getDate()}. ${String(f0.getHours()).padStart(2, "0")}:00` : "";
+      return `${fs}부터 ${md(t)} ${hm(t)}까지`;
+    }
     case "obs15": return `${md(t)} ${hm(t)} · 15분`;
     case "obs60": return `${md(t)} ${hm(t)} · 60분`;
     case "obsday": return `${md(t)} 00:00~${hm(t)}`;
@@ -919,7 +954,7 @@ function when(gr) {
   }
 }
 function isPast() {                     // 일부러 지난 시각을 보는 중 — 지연이 아니다
-  return pinned(kind) || (kind === "obs60" && OBS_TM && OBS_TM !== metaOf("obs60").tm);
+  return !CASE && (pinned(kind) || (kind === "obs60" && OBS_TM && OBS_TM !== metaOf("obs60").tm));
 }
 function paintHead() {
   const L = metaOf(kind);
@@ -928,7 +963,8 @@ function paintHead() {
   $("lsrc").textContent = test ? "합성 격자 — 실제 자료 아님" : (L.src || "");
   const b = [];
   const past = isPast();
-  if (test) b.push(`<span class="badge test">테스트</span>`);
+  if (CASE) b.push(`<span class="badge past">재현 · ${CASEM?.title || CASE}</span>`);
+  else if (test) b.push(`<span class="badge test">테스트</span>`);
   else if (pinned(kind)) b.push(`<span class="badge past">지난 시각 보기 (tm=${PIN_TM})</span>`);
   else if (past) b.push(`<span class="badge past">지난 시각</span>`);
   else {
@@ -954,21 +990,23 @@ function buildMenu() {
     const tip = `${L.label || k} — ${L.src || ""}${L.stale ? " · 자료 지연" : ""}${!L.tm ? " · 아직 없음" : ""}`;
     return `<button data-k="${k}" class="${cls}" title="${tip}">${L.short || k}</button>`;
   }).join("")}</div>`;
-  $("menu").innerHTML = grp("실측", KINDS.slice(0, 4)) + grp("예측", KINDS.slice(4));
+  $("menu").innerHTML = CASE ? grp("재현", KINDS) : grp("실측", KINDS.slice(0, 4)) + grp("예측", KINDS.slice(4));
   for (const b of $("menu").querySelectorAll("button"))
     b.onclick = () => { stopPlay(); choose(b.dataset.k, true); };
 }
 
 function saveSetting(body) {
+  if (CASE) return;                       // 재현을 보는 동안 고른 것은 실황 설정에 남기지 않는다
   fetch("/api/settings/map", { method: "PUT", headers: { "Content-Type": "application/json" },
                                body: JSON.stringify(body) }).catch(() => {});
 }
 
 /* ── 자료 ─────────────────────────────────────────────────────────── */
 /* ?tm=YYYYMMDDHHMI — 실측 층을 그 시각으로 본다(점검용. 남아 있는 사흘 안에서만). */
-const PIN_TM = /^\d{12}$/.test(Q.get("tm") || "") ? Q.get("tm") : null;
+const PIN_TM = !CASE && /^\d{12}$/.test(Q.get("tm") || "") ? Q.get("tm") : null;
 const pinned = key => PIN_TM && !test && ["obs15", "obs60", "obsday", "odam"].includes(key);
 function reqTm(key) {
+  if (CASE) return OBS_TM || CASEM?.end || null;
   if (key === "obs60" && OBS_TM) return OBS_TM;
   return pinned(key) ? PIN_TM : null;
 }
@@ -976,10 +1014,12 @@ function qs(key, tm) {
   const p = new URLSearchParams();
   if (tm) p.set("tm", tm);
   if (test) p.set("test", "1");
+  if (CASE) p.set("case", CASE);
   const s = p.toString();
   return s ? "?" + s : "";
 }
 function wantTm(key) {
+  if (CASE) return "case:" + CASE;
   const k = key.startsWith("vsrt") ? "vsrt" : key;
   return metaOf(k).tm || "";
 }
@@ -993,7 +1033,7 @@ async function fetchGrid(key, tm) {
   const [h, w] = r.headers.get("X-Grid-Shape").split(",").map(Number);
   const hd = n => r.headers.get("X-Grid-" + n);
   const gr = { ck, key, u: new Uint16Array(buf), h, w, grid: r.headers.get("X-Grid"),
-               tm: hd("Tm"), tmfc: hd("Tmfc"), capped: hd("Capped"),
+               tm: hd("Tm"), tmfc: hd("Tmfc"), capped: hd("Capped"), from: hd("From"),
                hours: hd("Hours") ? hd("Hours").split(",") : null };
   if (gr.u.length !== h * w) throw new Error("격자 크기가 맞지 않는다");
   if (GRIDS.size > 200) GRIDS.delete(GRIDS.keys().next().value);
@@ -1006,6 +1046,7 @@ async function fetchStat(key, tm) {
   const p = new URLSearchParams({ layer: key });
   if (tm) p.set("tm", tm);
   if (test) p.set("test", "1");
+  if (CASE) p.set("case", CASE);
   const j = await getJson(`/api/grid/sigun?${p}`);
   if (STATS.size > 200) STATS.delete(STATS.keys().next().value);
   STATS.set(ck, j);
@@ -1031,10 +1072,15 @@ async function show(fade = false) {
       + `<small>${e.message}${col ? ` · 수집 ${col.tried_at ? col.tried_at.slice(11, 16) : "—"} ${col.detail || ""}` : ""}</small>`;
     $("empty").hidden = false;
   }
+  if (CASE && CASEM && CUR) {
+    // 사례는 시각마다 특보(산출)·카드 내용이 바뀐다 — 프레임과 함께 다시 그린다
+    if (OV.has("alerts")) { ALERTS = caseAlerts(); drawAlerts(); renderAlertLegend(); }
+  }
   draw(fade);
   paintHead();
   buildPlay();
   tlPlayhead();
+  if (CASE && CASEM && CUR && tlOn && SET.panel !== "timeline") { CARDS = cardsFromCase(); renderCards(); }
   cardsPlayhead();
   SWITCH_MS = performance.now() - t0;
   if (Q.get("debug") === "1") {
@@ -1046,7 +1092,7 @@ async function show(fade = false) {
 
 function choose(k, save) {
   kind = k;
-  OBS_TM = null;                         // 메뉴로 고르면 늘 '지금'
+  if (!CASE) OBS_TM = null;              // 메뉴로 고르면 늘 '지금'(사례는 보던 시각 그대로)
   if (save) saveSetting(k === "vsrt" ? { layer: "vsrt", vsrt_n: vsrtN } : { layer: k });
   show();
 }
@@ -1055,6 +1101,7 @@ function choose(k, save) {
 async function loadFlow() {
   const p = new URLSearchParams({ hours: SET.flow_hours, step: SET.flow_step });
   if (test) p.set("test", "1");
+  if (CASE) p.set("case", CASE);
   try { FLOW = await getJson(`/api/grid/flow?${p}`); }
   catch { FLOW = null; }
   if (FLOW) {
@@ -1085,15 +1132,17 @@ function nearestFrame(t) {
 function curFrame() {
   const t = headT();
   if (t == null || !FLOW) return -1;
-  // 같은 시각이라도 층이 맞는 프레임을 고른다
-  const i = FLOW.frames.findIndex(f => (kind === "obs60" ? f.kind === "obs" : f.kind === "fcst" && f.n === vsrtN)
+  // 같은 시각이라도 층이 맞는 프레임을 고른다(사례는 실측뿐이다)
+  const i = FLOW.frames.findIndex(f => (CASE || kind === "obs60" ? f.kind === "obs" : f.kind === "fcst" && f.n === vsrtN)
     && tOf(f.t) === t);
   return i >= 0 ? i : nearestFrame(t);
 }
 function seek(i, fade = true) {
   if (!FLOW || i < 0 || i >= FLOW.frames.length) return;
   const f = FLOW.frames[i];
-  if (f.kind === "obs") {
+  if (CASE) {
+    OBS_TM = f.t;                         // 사례는 고른 층(1시간/누적) 그대로 시각만 옮긴다
+  } else if (f.kind === "obs") {
     kind = "obs60";
     OBS_TM = f.t === metaOf("obs60").tm ? null : f.t;
   } else {
@@ -1117,7 +1166,8 @@ function stopPlay(quiet) {
 async function preloadFlow() {
   if (!FLOW) return;
   for (const f of FLOW.frames) {
-    const key = f.kind === "obs" ? "obs60" : f.layer, tm = f.kind === "obs" && f.t !== metaOf("obs60").tm ? f.t : null;
+    const key = CASE ? kind : f.kind === "obs" ? "obs60" : f.layer;
+    const tm = CASE ? f.t : f.kind === "obs" && f.t !== metaOf("obs60").tm ? f.t : null;
     try { await Promise.all([fetchGrid(key, tm), fetchStat(key, tm)]); } catch {}
   }
 }
@@ -1134,6 +1184,7 @@ function playHead() {
   const x = ht != null ? trkX(ht) : -40;
   for (const el of p.querySelectorAll(".trk-head, .trk-knob")) el.style.transform = `translateX(${x.toFixed(1)}px)`;
   p.querySelector(".lab").innerHTML = !f ? `<b>—</b><small>흐름 밖</small>`
+    : CASE ? `<b>${md(f.t)} ${hm(f.t)}</b><small>재현 · ${kind === "acc" ? "처음부터 누적" : "지난 1시간"}</small>`
     : f.kind === "obs" ? `<b>${hm(f.t)}</b><small>실측 · 지난 1시간</small>`
     : `<b>+${f.n}h ${fmtH(tOf(f.t))}시</b><small class="fc">예측 · 초단기</small>`;
   $("b-pp").textContent = playing ? "❚❚" : "▶";
@@ -1164,7 +1215,7 @@ function buildPlay() {
       <rect class="trk-fc" x="${xn}" y="14" width="${Math.max(0, Wt - padX - xn)}" height="10" rx="3"/>
       ${ticks}
       <line class="trk-now" x1="${xn}" x2="${xn}" y1="4" y2="30"/>
-      <text class="trk-nowl" x="${xn}" y="42">지금</text>
+      <text class="trk-nowl" x="${xn}" y="42">${NOWL}</text>
       ${hours}
       <line class="trk-head" x1="0" x2="0" y1="6" y2="30"/><circle class="trk-knob" cx="0" cy="19" r="7"/>
     </svg>
@@ -1267,7 +1318,7 @@ function buildTL() {
   }
   out.push(`<text class="tl-zl" x="${x0}" y="${axisH - 12 * k}" style="font-size:${11 * k}px" text-anchor="start">실측</text>`);
   out.push(`<text class="tl-zl" x="${x1}" y="${axisH - 12 * k}" style="font-size:${11 * k}px" text-anchor="end">예측</text>`);
-  out.push(`<text class="tl-nowl" x="${xn}" y="${axisH - 12 * k}" style="font-size:${12 * k}px">지금</text>`);
+  out.push(`<text class="tl-nowl" x="${xn}" y="${axisH - 12 * k}" style="font-size:${12 * k}px">${NOWL}</text>`);
   out.push(`<line class="tl-now" x1="${xn}" x2="${xn}" y1="${axisH - 4 * k}" y2="${H}"/>`);
   // 실측이 앞쪽까지 다 차 있지 않으면(막 수집을 시작했거나 끊겼다) 비어 있는 까닭을 적는다
   const firstObs = FLOW.frames.findIndex(f => f.kind === "obs");
@@ -1474,7 +1525,7 @@ async function loadCards() {
   if (!tlOn || SET.panel === "timeline") return;
   const my = ++CARD_SEQ;
   let c;
-  try { c = test ? await cardsFromTest() : await cardsFromApi(); }
+  try { c = CASE ? (CASEM ? cardsFromCase() : null) : test ? await cardsFromTest() : await cardsFromApi(); }
   catch (e) { c = { err: e.message }; }
   if (my !== CARD_SEQ) return;
   CARDS = c;
@@ -1495,8 +1546,11 @@ function renderCards() {
     $("acc-b").innerHTML = `<div class="empty-note">불러오지 못했다 — ${CARDS.err}</div>`;
     return;
   }
+  $("fc-h").textContent = CASE ? "호우 기준" : "예측 상위";
+  $("fc-sub").textContent = CASE ? "산출 — 격자 3시간·12시간 합" : "초단기 · 앞으로 6시간";
+  $("now-sub").textContent = CARDS.now.sub || "기상청 매분자료";
   // 누적 카드는 남는 높이를 다 쓴다 — 다른 둘을 먼저 채운 뒤에 재야 줄 수가 맞는다
-  renderNow(); renderFc(); renderAcc();
+  renderNow(); CASE ? renderCrit() : renderFc(); renderAcc();
   drawRanks();
   cardsPlayhead();
 }
@@ -1504,12 +1558,12 @@ function renderCards() {
 /* 강수 누적 — 종합 화면 '강수 타임라인'을 한 줄짜리로 */
 function renderAcc() {
   const A = CARDS.acc, k = V.k, body = $("acc-b");
-  $("acc-sub").textContent = `다우지점 · 지난 ${A.H}시간 + 예상 6시간`;
+  $("acc-sub").textContent = A.sub || `다우지점 · 지난 ${A.H}시간 + 예상 6시간`;
   $("acc-src").textContent = A.src; $("acc-src").classList.toggle("fell", !!A.fell);
   $("acc-bt").textContent = A.bt;
   const rows = A.rows.slice().sort((a, b) => (b.sum + b.fc) - (a.sum + a.fc));
   if (!rows.length || !rows[0].dt.length) { body.innerHTML = `<div class="empty-note">강수 자료가 아직 없다</div>`; A.sp = null; return; }
-  const bh = body.clientHeight - 10 * k;
+  const bh = body.clientHeight - 10 * k - (A.note ? 40 * k : 0);
   const rh = Math.max(26 * k, Math.min(44 * k, bh / Math.max(1, rows.length)));   // 카드를 꽉 채운다
   const n = Math.max(1, Math.min(rows.length, Math.floor(bh / rh)));
   body.style.setProperty("--rh", rh + "px");
@@ -1546,7 +1600,7 @@ function renderAcc() {
         <line class="sp-now" x1="${xn}" x2="${xn}" y1="0" y2="${SH}"/>
         <line class="sp-head" x1="0" x2="0" y1="-2" y2="${SH + 2}" style="transform:translateX(-99px)"/></svg>
       <div class="tot ${tot ? "" : "z"}">${tot.toFixed(1)}</div></div>`;
-  }).join("");
+  }).join("") + (A.note ? `<div class="case-note">${A.note}</div>` : "");
   rowEvents(body);
 }
 
@@ -1562,10 +1616,17 @@ function renderNow() {
     return list.slice(0, 6).map(x => {
       const c = rampVar(x.mm, MN_STEPS[kk]) || "var(--ink-3)";
       return `<div class="mr" data-s="${x.sig}"><span class="bg" style="width:${(x.mm / mx * 100).toFixed(0)}%;background:${c}"></span>
-        <span class="nm2"><small>${x.sig}</small>${x.name}</span><b>${x.mm.toFixed(1)}</b></div>`;
+        <span class="nm2">${x.name && x.name !== x.sig ? `<small>${x.sig}</small>${x.name}` : x.sig}</span><b>${x.mm.toFixed(1)}</b></div>`;
     }).join("");
   };
-  $("now-b").innerHTML = `<div class="mn"><div><h4>15분<span>㎜</span></h4>${col(N.r15, 15)}</div>
+  const colSteps = (list, steps) => {                 // 사례: 1시간·3시간 (단계를 직접 준다)
+    const saved = MN_STEPS.x; MN_STEPS.x = steps;
+    const h = col(list, "x"); MN_STEPS.x = saved;
+    return h;
+  };
+  $("now-b").innerHTML = N.cols
+    ? `<div class="mn">${N.cols.map(c => `<div><h4>${c.title}<span>㎜</span></h4>${colSteps(c.list, c.steps)}</div>`).join("")}</div>`
+    : `<div class="mn"><div><h4>15분<span>㎜</span></h4>${col(N.r15, 15)}</div>
     <div><h4>60분<span>㎜</span></h4>${col(N.r60, 60)}</div></div>`;
   rowEvents($("now-b"));
 }
@@ -1641,6 +1702,89 @@ function link(el, sig) {
   const p = svg.querySelector("path");
   p.style.setProperty("--len", p.getTotalLength().toFixed(0));
 }
+
+/* ── 재현 사례(?case=) ────────────────────────────────────────────────
+   지난 호우를 500m 격자 그대로 되돌려 본다(data/demo/map/, tools/build_map_case.py).
+   층은 1시간·사례 누적, 재생은 처음부터 끝까지 매시, 카드·특보도 그 시각에 맞춘다.
+   ⚠️ 특보는 **산출**이다 — 격자 3시간·12시간 합에 호우 기준. 이력 API 가 403 이라 실제 발표 내역이 없다.
+   ⚠️ 격자는 관측소 값을 그대로 지나지 않는다(객관분석). 확인한 관측소 값을 누적 카드 밑에 같이 적는다. */
+async function loadCase() {
+  CASEM = await getJson(`/api/grid/case/${CASE}`);
+  const src = "기상청 고해상도 격자(500m) · 매시 60분 — 재현";
+  META.layers = [
+    { id: "obs60", label: "1시간 강수량", short: "1시간", grid: "hr", src, tm: CASEM.end },
+    { id: "acc", label: "사례 누적", short: "누적", grid: "hr", src: src + " · 칸마다 더함", tm: CASEM.end },
+  ];
+  META.collect = {};
+}
+function caseIdx() {
+  if (!CASEM) return -1;
+  const i = CASEM.frames.indexOf(CUR?.tm || OBS_TM || CASEM.end);
+  return i < 0 ? CASEM.frames.length - 1 : i;
+}
+function cardsFromCase() {
+  const i = caseIdx(), S = CASEM.series, t = CASEM.frames[i];
+  const dt = CASEM.frames.map(tOf);
+  const rows = S.map(s => ({ sig: s.sigun, stn: s.accw[i] || "", d: s.h1, dt, fcd: [], ft: [], sum: s.acc[i] ?? 0, fc: 0 }));
+  const top = (k, w) => S.map(s => ({ sig: s.sigun, name: (w && s[w][i]) || "", mm: s[k][i] ?? 0 }))
+    .sort((a, b) => b.mm - a.mm).slice(0, 6);
+  const rank = { warn: 2, watch: 1 };
+  const crit = S.map(s => ({ sig: s.sigun, h3: s.h3[i] ?? 0, h12: s.h12[i] ?? 0, lv: s.lv[i] }))
+    .sort((a, b) => ((rank[b.lv] || 0) - (rank[a.lv] || 0)) || (b.h12 - a.h12)).slice(0, 6);
+  const when = `${md(t)} ${hm(t)}`;
+  return {
+    acc: { rows, H: i + 1, src: "재현", fell: false, bt: when,
+           sub: `사례 누적 · ${md(CASEM.start)} ${String(+CASEM.start.slice(8, 10) - 1).padStart(2, "0")}:00부터`,
+           note: "관측소(이틀): " + CASEM.checked.map(c => `${c.name} ${c.sum.toFixed(1)}`).join(" · ")
+                 + " — 격자는 관측값을 그대로 지나지 않는다" },
+    now: { tm: when, sub: "격자 · 1시간 · 3시간",
+           cols: [{ title: "1시간", list: top("h1", "h1w"), steps: MN_STEPS[60] },
+                  { title: "3시간", list: top("h3"), steps: [5, 20, 40, 60, 90, 120, 180] }] },
+    crit: { rows: crit, bt: when },
+  };
+}
+function caseAlerts() {
+  const i = caseIdx(), bySig = {}, by = {};
+  for (const s of CASEM.series) {
+    const lv = s.lv[i];
+    if (!lv) continue;
+    const name = lv === "warn" ? "호우경보" : "호우주의보";
+    bySig[s.sigun] = [{ name, lv, sub: "산출" }];
+    (by[name] ||= { lv, name, where: [] }).where.push(s.sigun);
+  }
+  const land = Object.values(by).sort((a, b) => (b.lv === "warn") - (a.lv === "warn"));
+  const t = CASEM.frames[i];
+  return { base: `${t.slice(0, 4)}-${t.slice(4, 6)}-${t.slice(6, 8)} ${hm(t)}`, bySig, land, sea: [], pending: [], calc: true };
+}
+function renderCrit() {
+  const C = CARDS.crit;
+  $("fc-bt").textContent = C.bt;
+  const W = CASEM.criteria;
+  const g = (v, cap, warnAt) => {
+    const w = Math.min(100, v / cap * 100), m = Math.min(100, warnAt / cap * 100);
+    return `<div class="g"><i style="width:${w.toFixed(1)}%"></i><s style="left:${m.toFixed(1)}%"></s><span>${v.toFixed(1)}</span></div>`;
+  };
+  $("fc-b").innerHTML = `<div class="crit h"><span>시군</span><span>3시간 (경보 ${W.warn.h3})</span><span>12시간 (경보 ${W.warn.h12})</span><span style="text-align:right">산출</span></div>`
+    + C.rows.map(r => `<div class="crit" data-s="${r.sig}"><span class="nm2">${r.sig}</span>
+        ${g(r.h3, 180, W.warn.h3)}${g(r.h12, 450, W.warn.h12)}
+        <span class="lv ${r.lv || "none"}">${r.lv === "warn" ? "경보" : r.lv === "watch" ? "주의보" : "—"}</span></div>`).join("");
+  rowEvents($("fc-b"));
+}
+$("b-case").onclick = async () => {
+  const m = $("case-menu");
+  if (!m.hidden) { m.hidden = true; return; }
+  let list = [];
+  try { list = (await getJson("/api/grid/cases")).cases; } catch {}
+  const live = `<a href="/map.html" class="${CASE ? "" : "on"}"><b>실황(지금)</b><small>수집 중인 자료</small></a>`;
+  m.innerHTML = live + list.map(c => `<a class="${c.slug === CASE ? "on" : ""}"
+      href="/map.html?case=${c.slug}&layer=acc&tl=1&ov=alerts"><b>${c.title}</b>
+      <small>${md(c.start)} ${hm(c.start)} ~ ${md(c.end)} ${hm(c.end)} · 봉우리 ${md(c.peak)} ${hm(c.peak)}</small></a>`).join("")
+    + (list.length ? "" : `<div class="al-none" style="padding:8px 12px">사례가 없다</div>`);
+  m.hidden = false;
+};
+document.addEventListener("pointerdown", ev => {
+  if (!$("case-menu").hidden && !ev.target.closest?.("#case-menu, #b-case")) $("case-menu").hidden = true;
+});
 
 /* ── 레이어 — 지도 위에 겹칠 것. 왼쪽 위 '레이어'에서 켜고 끈다(서버 설정 overlays) ──
    지금은 기상특보 하나. 차츰 늘린다(시군 위 막대 등) — OVL 에 한 줄 보태면 메뉴에 뜬다. */
@@ -1723,6 +1867,11 @@ function testAlerts() {
 let ALERT_SEQ = 0;
 async function loadAlerts() {
   if (!OV.has("alerts")) return;
+  if (CASE) {                             // 사례: 그 시각의 산출 특보
+    ALERTS = CASEM ? caseAlerts() : null;
+    drawAlerts(); draw(); renderAlertLegend();
+    return;
+  }
   const my = ++ALERT_SEQ;
   let j;
   try { j = test ? testAlerts() : await getJson("/api/alerts"); }
@@ -1830,9 +1979,10 @@ function renderAlertLegend() {
   const nKind = ALERTS.land.length + ALERTS.sea.length;
   // 머리를 누르면 접는다 — 특보가 많은 날 범례가 지도 북서쪽(함양·거창)을 가리지 않게
   box.classList.toggle("fold", AL_FOLD);
-  box.innerHTML = `<div class="hd2" id="al-hd" title="눌러서 접기/펼치기"><b>기상특보</b>`
-    + `<span>${nKind ? `${nKind}종 · ` : ""}${test ? "테스트 · " : ""}조회 ${bt}</span><i class="fd">${AL_FOLD ? "▸" : "▾"}</i></div>`
-    + (rows.length ? rows.join("") : `<div class="al-none">발효 중인 특보 없음</div>`);
+  box.innerHTML = `<div class="hd2" id="al-hd" title="눌러서 접기/펼치기"><b>기상특보${ALERTS.calc ? " · 산출" : ""}</b>`
+    + `<span>${nKind ? `${nKind}종 · ` : ""}${test ? "테스트 · " : ""}${ALERTS.calc ? "" : "조회 "}${bt}</span><i class="fd">${AL_FOLD ? "▸" : "▾"}</i></div>`
+    + (rows.length ? rows.join("") : `<div class="al-none">${ALERTS.calc ? "호우 기준을 넘은 시군 없음" : "발효 중인 특보 없음"}</div>`)
+    + (ALERTS.calc ? `<div class="al-none">격자 3시간·12시간 합에 호우 기준(주의보 60·110 / 경보 90·180㎜)을 적용 — 실제 발표 내역이 아니다</div>` : "");
   $("al-hd").onclick = () => {
     AL_FOLD = !AL_FOLD;
     try { localStorage.setItem("gn-map-alfold", AL_FOLD ? "1" : "0"); } catch {}
@@ -1890,6 +2040,7 @@ function closePrefs() { $("prefs").hidden = true; }
 $("prefs").addEventListener("click", ev => { if (ev.target.id === "prefs") closePrefs(); });
 
 async function refreshMeta() {
+  if (CASE) return;                       // 사례는 바뀌지 않는다
   let m;
   try { m = await getJson("/api/grid/meta"); } catch { return; }
   const changed = JSON.stringify(m.layers.map(l => l.tm)) !== JSON.stringify((META?.layers || []).map(l => l.tm));
@@ -1994,11 +2145,24 @@ async function boot() {
   }
   FEAT = topojson.feature(TOPO, TOPO.objects.sigun).features;
   SET = { ...SET_DEFAULT, ...(META.setting || {}) };
-  OV = new Set(Q.has("ov") ? Q.get("ov").split(",").filter(Boolean) : (SET.overlays || []));
+  if (CASE) {
+    try { await loadCase(); }
+    catch (e) {
+      $("empty").innerHTML = `사례를 띄울 수 없다<small>${e.message}</small>`;
+      $("empty").className = "fail"; $("empty").hidden = false;
+      return;
+    }
+    $("b-test").hidden = true;
+    $("b-case").classList.add("on");
+    // 끝(전부 쌓인 모습)에서 연다 — 재생하면 처음부터 쌓여 간다. ?tm= 이면 그 시각(봉우리 등)
+    OBS_TM = CASEM.frames.includes(Q.get("tm")) ? Q.get("tm") : CASEM.end;
+  }
+  OV = new Set(Q.has("ov") ? Q.get("ov").split(",").filter(Boolean)
+               : CASE ? ["alerts"] : (SET.overlays || []));
   renderLayers();
   vsrtN = +SET.vsrt_n || 1; x4 = !!SET.x4;
-  tlOn = Q.has("tl") ? Q.get("tl") === "1" : !!SET.tl_on;
-  const want = Q.get("layer") || SET.layer || "obs60";      // URL 이 서버 설정보다 먼저다(화면 고정용)
+  tlOn = Q.has("tl") ? Q.get("tl") === "1" : CASE ? true : !!SET.tl_on;
+  const want = Q.get("layer") || (CASE ? "acc" : SET.layer) || "obs60";   // URL 이 서버 설정보다 먼저다(화면 고정용)
   if (want.startsWith("vsrt")) { kind = "vsrt"; const n = +want.replace(/\D/g, ""); if (n >= 1 && n <= 6) vsrtN = n; }
   else kind = KINDS.includes(want) ? want : "obs60";
   GNB = gnBounds();

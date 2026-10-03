@@ -20,7 +20,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import db, demo, gridstore, gridview, maint, queries, update
+from . import db, demo, gridcase, gridstore, gridview, maint, queries, update
 from .collectors import alerts, bangjae_rain, forecast, grid_rain, qpf, rain, shortfc
 from .config import CACHE, INTERVALS, POLL_DEFAULT
 
@@ -174,19 +174,41 @@ async def api_grid_meta():
 
 @app.get("/api/grid/flow")
 async def api_grid_flow(hours: int = Query(6, ge=1, le=24), step: int = Query(10),
-                        test: bool = False):
+                        test: bool = False, case: str | None = None):
     """재생 흐름 — 지난 hours 시간 실측(60분, step 분 간격) → 초단기 +1~6h.
-    지도 재생과 오른쪽 타임라인이 같은 프레임 목록·같은 시군 값을 쓴다."""
+    지도 재생과 오른쪽 타임라인이 같은 프레임 목록·같은 시군 값을 쓴다.
+    `case=` 면 재현 사례의 처음부터 끝까지(매시, 예측 없음)."""
+    if case:
+        try:
+            return await asyncio.to_thread(gridcase.flow, case)
+        except LookupError as e:
+            raise HTTPException(404, str(e)) from e
     if step not in (10, 20, 30, 60):
         raise HTTPException(400, "step 은 10·20·30·60")
     return await asyncio.to_thread(gridview.flow, hours, step, None, test)
 
 
+@app.get("/api/grid/cases")
+async def api_grid_cases():
+    """재현 사례 목록(data/demo/map/*) — 지난 호우를 격자 그대로 굳혀 둔 것."""
+    return {"cases": gridcase.listing()}
+
+
+@app.get("/api/grid/case/{slug}")
+async def api_grid_case(slug: str):
+    """사례 meta — 시군별 1시간·3시간·12시간·누적 최대(+읍면동), 산출 호우특보, 확인한 관측소 값."""
+    try:
+        return gridcase.meta(slug)
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
+
+
 @app.get("/api/grid/sigun")
-async def api_grid_sigun(layer: str, tm: str | None = None, test: bool = False):
+async def api_grid_sigun(layer: str, tm: str | None = None, test: bool = False,
+                         case: str | None = None):
     """시군별 최대(+그 칸의 읍면동)·평균. 결측 칸은 평균에서 뺀다."""
     try:
-        return await asyncio.to_thread(gridview.sigun, layer, tm, test)
+        return await asyncio.to_thread(gridview.sigun, layer, tm, test, case)
     except LookupError as e:
         raise HTTPException(404, str(e)) from e
 
@@ -212,14 +234,16 @@ async def api_grid_geo(name: str):
 
 
 @app.get("/api/grid/{layer}")
-async def api_grid(layer: str, tm: str | None = None, test: bool = False):
+async def api_grid(layer: str, tm: str | None = None, test: bool = False,
+                   case: str | None = None):
     """한 층의 격자 — 0.1㎜ uint16(65535 = 결측), 행은 남→북, gzip.
 
     layer = obs15 | obs60 | obsday | odam | vsrt+N(1~6) | shrt_today | shrt_tomorrow
     `test=1` 이면 합성 격자(비 없는 날 화면 점검용).
+    `case=사례` 면 재현 사례 — layer = obs60(1시간) | acc(사례 누적).
     """
     def build():
-        fr = gridview.frame(layer, tm, test=test)
+        fr = gridcase.frame(case, layer, tm) if case else gridview.frame(layer, tm, test=test)
         if "arr" in fr:
             body = gzip.compress(gridstore.encode(fr["arr"]), 6)
         else:
@@ -233,7 +257,7 @@ async def api_grid(layer: str, tm: str | None = None, test: bool = False):
     h, w = gridstore.shape(fr["grid"])
     hd = {"Content-Encoding": "gzip", "X-Grid": fr["grid"], "X-Grid-Shape": f"{h},{w}",
           "X-Grid-Tm": fr["tm"], "Cache-Control": "no-cache"}
-    for k in ("tmfc", "capped"):
+    for k in ("tmfc", "capped", "from", "case"):
         if k in fr:
             hd[f"X-Grid-{k.capitalize()}"] = str(fr[k])
     if "hours" in fr:
