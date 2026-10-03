@@ -238,6 +238,12 @@ async def api_grid_acctable(hours: int = Query(12, ge=1, le=48), sigun: str | No
         raise HTTPException(404, str(e)) from e
 
 
+@app.get("/api/grid/testrain")
+async def api_grid_testrain(hours: int = Query(12, ge=1, le=48)):
+    """테스트 — /api/rain 과 같은 모양의 합성 지점(기상청 자리 + 스방 흉내, 위치 없음). 실제 자료가 아니다."""
+    return await asyncio.to_thread(gridview.test_rain, hours)
+
+
 # 경계·칸 지도(tools/build_geo.py 가 만든 것)와 관측소 위치(tools/build_stations.py).
 # 바뀔 일이 드물지만 저장소 갱신 뒤 새로고침 한 번에 따라오게 하루만 캐시한다.
 _GEO_FILES = {"gyeongnam.topo.json": "application/json", "grids.json": "application/json",

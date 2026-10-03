@@ -126,3 +126,17 @@ def test_backfill_recent_hours_first_and_capped(store, tdb, monkeypatch):
     assert got[:2] == ["202610031500", "202610031400"]      # 최근 것부터
     asyncio.run(grid_rain._backfill_hours(now, []))
     assert got[grid_rain.BACKFILL] == "202610031100"        # 다음 주기는 이어서
+
+
+def test_test_rain_shape_and_unsited_fakes():
+    from datetime import datetime as dt
+    r = gridview.test_rain(6, now=dt(2026, 10, 3, 15, 20))
+    assert r["labels"] == ["10", "11", "12", "13", "14", "15"] and r["base_hour"] == "15:00"
+    sites = {x["stn"] for x in gridview.station_sites()["stations"]}
+    fake = [x for x in r["rows"] if x["stn"] not in sites]
+    # 시군마다 '스방 흉내' 지점 — 번호가 기상청 지점번호가 아니라 위치를 화면에 주지 않는다
+    assert fake and all(x["stn"].startswith("T") and x["name"].endswith("(가상)") for x in fake)
+    assert {x["sigun"] for x in fake} == {s["name"] for s in gridview.gridstore.geo()["sigun"] if s["kind"] == "gn"}
+    assert all(len(x["d"]) == 6 for x in r["rows"])
+    # 기상청 자리 값은 관측소 층(테스트)과 같은 비율 — 지도와 카드가 같은 비를 보인다
+    assert gridview._tfac("155") == 0.7 + 0.6 * ((155 * 37) % 100) / 100

@@ -208,6 +208,46 @@ def _minute_key(tm: str) -> str:
     return f"{tm[:4]}-{tm[4:6]}-{tm[6:8]} {tm[8:10]}:{tm[10:12]}"
 
 
+def _tfac(stn: str) -> float:
+    """테스트 지점마다 늘 같은 비율(0.7~1.3) — 관측과 격자가 어긋나 보이는 모양까지 점검하려고."""
+    k = int(stn) if stn.isdigit() else sum(ord(ch) * (i + 7) for i, ch in enumerate(stn))
+    return 0.7 + 0.6 * ((k * 37) % 100) / 100
+
+
+def test_rain(hours: int = 12, now: datetime | None = None) -> dict:
+    """테스트 — /api/rain 과 같은 모양. 기상청 지점(위치 있음) + 시군마다 '스방 흉내' 합성 지점 셋(위치 없음).
+
+    값은 합성 60분 격자를 그 칸에서 읽어 지점 비율을 곱한다 — 지도·관측소 층(테스트)과 같은 비다.
+    스방 흉내 지점은 실제 스방처럼 위치를 화면에 주지 않는다(번호가 기상청 지점번호가 아니다).
+    비 없는 날 내부망 목록 모양(한 시군 여러 지점, 위치 모르는 지점)을 미리 보려는 것 — 실제 자료가 아니다.
+    """
+    now = now or datetime.now()
+    top = now.replace(minute=0, second=0, microsecond=0)
+    slots = [top - timedelta(hours=h) for h in range(hours - 1, -1, -1)]
+    frames = [synth("obs60", "hr", (t - now).total_seconds() / 60) for t in slots]
+    g = gridstore.geo()
+    hb = g["hr"]["bbox"]
+    pts = [(s["stn"], s["name"], s["sigun"], s["x"], s["y"]) for s in station_sites()["stations"]]
+    for sg in (x for x in g["sigun"] if x["kind"] == "gn"):
+        emds = [e for e in g["emd"] if e["sigun"] == sg["name"] and e.get("c")]
+        for e in emds[::max(1, len(emds) // 3)][:3]:
+            pts.append((f"T{e['id']}", f"{e['name']}(가상)", sg["name"], e["c"][0], e["c"][1]))
+    rows = []
+    for stn, name, sig, x, y in pts:
+        c, r = round(x) - hb["i0"], round(y) - hb["j0"]
+        f = _tfac(stn)
+        d = []
+        for a in frames:
+            v = a[r, c] if 0 <= r < hb["h"] and 0 <= c < hb["w"] else np.nan
+            d.append(round(float(v) * f, 1) if np.isfinite(v) else None)
+        ok = [v for v in d if v is not None]
+        rows.append({"stn": stn, "name": name, "sigun": sig, "rep": False, "d": d, "m60": None,
+                     "sum": round(sum(ok), 1), "bad": len(d) - len(ok)})
+    return {"labels": [t.strftime("%H") for t in slots], "hours": hours, "src": "test",
+            "src_label": "테스트", "count": len(rows), "base_hour": top.strftime("%H:%M"),
+            "minute_tm": None, "missing": 0, "rows": rows}
+
+
 def _test_station_values(layer: str, tm: str | None, base: list[dict]) -> dict:
     """테스트 — 합성 격자를 지점 칸에서 읽고 지점마다 늘 같은 비율(0.7~1.3)을 곱한다.
     관측소와 격자가 어긋나 보이는 모양까지 점검하려고(실제 자료가 아니다)."""
@@ -218,7 +258,7 @@ def _test_station_values(layer: str, tm: str | None, base: list[dict]) -> dict:
     for b in base:
         c, r = round(b["x"]) - hb["i0"], round(b["y"]) - hb["j0"]
         v = float(a[r, c]) if 0 <= r < hb["h"] and 0 <= c < hb["w"] else float("nan")
-        f = 0.7 + 0.6 * ((int(b["stn"]) * 37) % 100) / 100
+        f = _tfac(b["stn"])
         ok = v == v
         rows.append({**b, "v": round(v * f, 1) if ok else None, "q": "ok" if ok else "missing"})
     return {"tm": fr["tm"], "status": "test", "src": "합성 — 실제 자료 아님", "rows": rows}
