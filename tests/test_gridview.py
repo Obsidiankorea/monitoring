@@ -63,6 +63,8 @@ def test_put_setting_validates(monkeypatch):
     monkeypatch.setattr(gridview.db, "put_setting", lambda k, v: saved.update(v))
     assert gridview.put_setting({"flow_step": 30, "tl_on": 1})["flow_step"] == 30
     assert gridview.put_setting({"overlays": ["alerts", "alerts"]})["overlays"] == ["alerts"]
+    assert gridview.SETTING_DEFAULT["sel_zoom"] is True
+    assert gridview.put_setting({"sel_zoom": 0})["sel_zoom"] is False
     for bad in ({"flow_step": 15}, {"play_ms": 50}, {"tl_stat": "sum"}, {"layer": "nope"},
                 {"overlays": ["bars"]}, {"overlays": "alerts"}):
         with pytest.raises((ValueError, LookupError)):

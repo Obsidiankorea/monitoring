@@ -202,6 +202,41 @@ def _sigun_cells() -> list[tuple[dict, np.ndarray]]:
     return [(s, np.flatnonzero(flat == s["id"])) for s in geo()["sigun"]]
 
 
+@lru_cache(maxsize=1)
+def _emd_cells() -> dict[int, np.ndarray]:
+    """읍면동마다 그 칸들의 평탄 인덱스."""
+    _, memd = masks()
+    flat = memd.ravel()
+    order = np.argsort(flat, kind="stable")
+    ids, starts = np.unique(flat[order], return_index=True)
+    ends = list(starts[1:]) + [flat.size]
+    return {int(i): order[a:b] for i, a, b in zip(ids, starts, ends) if i}
+
+
+def emd_stats(arr_hr: np.ndarray, siguns: list[str]) -> list[dict]:
+    """그 시군들 읍면동마다 최대(+그 칸 위치). 결측 칸은 뺀다. 칸이 없는(아주 작은) 읍면동은 뺀다."""
+    g = geo()
+    hb = g["hr"]["bbox"]
+    cells = _emd_cells()
+    flat = arr_hr.ravel()
+    out = []
+    for e in g["emd"]:
+        if e["sigun"] not in siguns or e["id"] not in cells:
+            continue
+        idx = cells[e["id"]]
+        v = flat[idx]
+        ok = np.isfinite(v)
+        row = {"sig": e["sigun"], "name": e["name"], "max": None, "col": None, "row": None}
+        if ok.any():
+            mx = float(v[ok].max())
+            row["max"] = round(mx, 1)
+            if mx >= 0.1:
+                r, c = divmod(int(idx[ok][int(np.argmax(v[ok]))]), hb["w"])
+                row.update(col=c + hb["i0"], row=r + hb["j0"])
+        out.append(row)
+    return out
+
+
 def sigun_values(arr_hr: np.ndarray) -> dict[str, tuple[float | None, float | None]]:
     """{시군: (최대, 평균)} — 타임라인용으로 가볍게. 결측 칸은 빼고, 다 결측이면 None."""
     flat = arr_hr.ravel()

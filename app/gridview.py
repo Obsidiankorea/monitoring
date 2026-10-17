@@ -18,7 +18,7 @@ from functools import lru_cache
 
 import numpy as np
 
-from . import db, gridstore
+from . import db, gridstore, sites
 from .collectors.shortfc import base_of
 from .domain import gridproj
 
@@ -174,6 +174,53 @@ def array(fr: dict) -> np.ndarray:
     return gridstore.load(fr["store"], fr["key"])
 
 
+SEL_MAX = 3                     # 지도에서 한꺼번에 고르는 시군(Ctrl+클릭으로 비교)
+
+
+def siguns_of(sigun: str | list | None) -> list[str]:
+    """'함양,거창' → ['함양', '거창']. 경남 시군만, 겹치면 하나로, SEL_MAX 곳까지. 모르면 LookupError."""
+    if not sigun:
+        return []
+    names = [x.strip() for x in (sigun.split(",") if isinstance(sigun, str) else sigun) if x.strip()]
+    gn = {s["name"] for s in gridstore.geo()["sigun"] if s["kind"] == "gn"}
+    bad = [x for x in names if x not in gn]
+    if bad:
+        raise LookupError(f"모르는 시군: {', '.join(bad)}")
+    out = list(dict.fromkeys(names))
+    if len(out) > SEL_MAX:
+        raise LookupError(f"시군은 {SEL_MAX}곳까지")
+    return out
+
+
+def emd(sigun: str, layer: str = "obs60", tm: str | None = None, test: bool = False,
+        case: str | None = None, hours: int = 1) -> dict:
+    """고른 시군들 **읍면동마다** 그 층 최대 — 오른쪽 '지금 오는 비'·'예측 상위'(테스트)를 읍면동으로.
+
+    사례(case)면 1시간 격자를 tm 까지 hours 장 더한다(3시간 등). 결측 칸은 결측으로 남긴다."""
+    sg = siguns_of(sigun)
+    if not sg:
+        raise LookupError("시군을 하나 이상 주어야 한다")
+    if case:
+        from . import gridcase
+        m = gridcase.meta(case)
+        tm = tm or m["end"]
+        if tm not in m["frames"]:
+            raise LookupError(f"{case} {tm} 없음")
+        i = m["frames"].index(tm)
+        keys = m["frames"][max(0, i - hours + 1):i + 1]
+        hr = gridcase.obs(case, keys[0])
+        for k in keys[1:]:
+            hr = hr + gridcase.obs(case, k)
+        out = {"grid": "hr", "tm": tm, "case": case, "hours": len(keys)}
+    else:
+        fr = frame(layer, tm, test=test)
+        a = array(fr)
+        hr = a if fr["grid"] == "hr" else gridstore.to_hr(a)
+        out = {k: v for k, v in fr.items() if k not in ("arr", "store", "key")}
+    out.update(layer=layer, siguns=sg, rows=gridstore.emd_stats(hr, sg))
+    return out
+
+
 def sigun(layer: str, tm: str | None = None, test: bool = False, case: str | None = None) -> dict:
     from . import gridcase
     fr = gridcase.frame(case, layer, tm) if case else frame(layer, tm, test=test)
@@ -215,10 +262,10 @@ def _tfac(stn: str) -> float:
 
 
 def test_rain(hours: int = 12, now: datetime | None = None) -> dict:
-    """테스트 — /api/rain 과 같은 모양. 기상청 지점(위치 있음) + 시군마다 '스방 흉내' 합성 지점 셋(위치 없음).
+    """테스트 — /api/rain 과 같은 모양. 기상청 지점(위치 있음) + 시군마다 '스방 흉내' 합성 지점 셋.
 
     값은 합성 60분 격자를 그 칸에서 읽어 지점 비율을 곱한다 — 지도·관측소 층(테스트)과 같은 비다.
-    스방 흉내 지점은 실제 스방처럼 위치를 화면에 주지 않는다(번호가 기상청 지점번호가 아니다).
+    스방 흉내 지점은 실제 스방처럼 위치를 이름으로 짐작한다(sites.position — 읍면동 가운데, est).
     비 없는 날 내부망 목록 모양(한 시군 여러 지점, 위치 모르는 지점)을 미리 보려는 것 — 실제 자료가 아니다.
     """
     now = now or datetime.now()
@@ -241,8 +288,11 @@ def test_rain(hours: int = 12, now: datetime | None = None) -> dict:
             v = a[r, c] if 0 <= r < hb["h"] and 0 <= c < hb["w"] else np.nan
             d.append(round(float(v) * f, 1) if np.isfinite(v) else None)
         ok = [v for v in d if v is not None]
-        rows.append({"stn": stn, "name": name, "sigun": sig, "rep": False, "d": d, "m60": None,
-                     "sum": round(sum(ok), 1), "bad": len(d) - len(ok)})
+        row = {"stn": stn, "name": name, "sigun": sig, "rep": False, "d": d, "m60": None,
+               "sum": round(sum(ok), 1), "bad": len(d) - len(ok)}
+        if stn.startswith("T"):
+            row["pos"] = sites.position(stn, name, sig)
+        rows.append(row)
     return {"labels": [t.strftime("%H") for t in slots], "hours": hours, "src": "test",
             "src_label": "테스트", "count": len(rows), "base_hour": top.strftime("%H:%M"),
             "minute_tm": None, "missing": 0, "rows": rows}
@@ -337,7 +387,7 @@ def acc_table(acc: np.ndarray, frames: list, sigun: str | None = None) -> list[d
         return out
 
     emds = {e["id"]: e for e in g["emd"]}
-    if sigun is None:
+    if not sigun:
         def emd_at(r, c, sig):
             e = emds.get(int(memd[r, c]))
             if e and e["sigun"] == sig:
@@ -350,11 +400,10 @@ def acc_table(acc: np.ndarray, frames: list, sigun: str | None = None) -> list[d
         sf = msig.ravel()
         return [row("", s["name"], np.flatnonzero(sf == s["id"]), emd_at)
                 for s in g["sigun"] if s["kind"] == "gn"]
-    mine = [e for e in g["emd"] if e["sigun"] == sigun]
-    if not mine:
-        raise LookupError(f"모르는 시군: {sigun}")
+    sg = siguns_of(sigun)                      # '함양,거창' — 여러 시군 읍면동을 한 표로(비교)
+    mine = [e for e in g["emd"] if e["sigun"] in sg]
     ef = memd.ravel()
-    return [row(e["name"], sigun, np.flatnonzero(ef == e["id"])) for e in mine]
+    return [row(e["name"], e["sigun"], np.flatnonzero(ef == e["id"])) for e in mine]
 
 
 _ACC_CACHE: dict[tuple, dict] = {}
@@ -528,6 +577,8 @@ SETTING_DEFAULT = {"layer": "obs60", "x4": False, "vsrt_n": 1,
                    "tl_on": False, "panel": "cards", "tl_stat": "max", "acc_hours": 12,
                    # 누적 카드 기준 — aws: 관측소 다우지점(스방 265 → 기상청 56) / grid: 격자 누적 최대 칸
                    "acc_basis": "aws",
+                   # 시군을 누르면 그 시군으로 확대(읍면동 경계·이름이 나온다). 끄면 테두리만
+                   "sel_zoom": True,
                    # 지도 위에 겹칠 레이어(왼쪽 위 '레이어'에서 켠다). 차츰 늘린다.
                    "overlays": []}
 OVERLAYS = ("alerts", "stations", "stnval")   # stnval = 관측소 옆 값 글자(관측소에 딸림)
@@ -547,7 +598,7 @@ def put_setting(body: dict) -> dict:
     if "layer" in body:
         split(str(body["layer"]))            # 모르는 층이면 LookupError
         cur["layer"] = str(body["layer"])
-    for k in ("x4", "tl_on"):
+    for k in ("x4", "tl_on", "sel_zoom"):
         if k in body:
             cur[k] = bool(body[k])
     if "vsrt_n" in body:

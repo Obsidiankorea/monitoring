@@ -8,6 +8,7 @@ node 가 있어야 한다 — 단순화·TopoJSON 은 mapshaper 를 npx 로 부�
 
 만드는 것 (data/geo/)
   gyeongnam.topo.json  시군 경계(경남 18 + 부산·울산). **500m 격자 칸 좌표**로 미리 바꿔 둔다
+  emd.topo.json        경남 읍면동 경계(같은 칸 좌표) — 시군을 눌러 확대했을 때 안쪽 선·이름
   grids.json           투영 매개변수, bbox, 5km→500m 아핀, 시군·읍면동 번호
   mask_sigun.u8.gz     bbox 칸마다 시군 번호(0 = 밖)
   mask_emd.u16.gz      bbox 칸마다 경남 읍면동 번호(0 = 밖) — 최대값 위치 이름에 쓴다
@@ -182,6 +183,7 @@ def main() -> None:
     e = json.loads(fetch(EMD, "HangJeongDong_ver20260701.geojson").read_text("utf-8"))
     emds = []
     memd = np.zeros((h, w), np.uint16)
+    egj = {"type": "FeatureCollection", "features": []}     # 읍면동 경계(시군을 확대했을 때 그린다)
     for ft in e["features"]:
         p = ft["properties"]
         if p.get("sidonm") != "경상남도":
@@ -189,7 +191,14 @@ def main() -> None:
         sig = short_sigun(p["sggnm"])
         emds.append({"id": len(emds) + 1, "sigun": sig, "name": p["adm_nm"].split()[-1],
                      "code": p["adm_cd2"]})
-        rasterize(memd, rings_to_grid(ft["geometry"], gp.hr_xy), len(emds), i0, j0)
+        polys = rings_to_grid(ft["geometry"], gp.hr_xy)
+        rasterize(memd, polys, len(emds), i0, j0)
+        egj["features"].append({
+            "type": "Feature",
+            "properties": {"id": len(emds), "sigun": sig, "name": emds[-1]["name"]},
+            "geometry": {"type": "MultiPolygon",
+                         "coordinates": [[[[round(x, 4), round(y, 4)] for x, y in ring]
+                                          for ring in poly] for poly in polys]}})
     for it in emds:
         rr, cc = np.nonzero(memd == it["id"])
         # 칸 가운데(열, 행) — 읍면동이 칸 하나보다 작아 칸이 없을 때를 대비한 가까운 곳 찾기용
@@ -227,6 +236,18 @@ def main() -> None:
            "-o", str(topo), "format=topojson", "quantization=100000", "force"]
     subprocess.run(cmd, check=True)
     print(f"{topo.name} {topo.stat().st_size / 1024:.1f}KB")
+
+    # 읍면동 경계 — 시군과 같은 칸 좌표·같은 단순화. 화면은 시군을 확대했을 때만 받아 그 시군 안쪽 선만 긋는다.
+    # ⚠️ 시군(SGIS 2020)과 원본이 달라 바깥 둘레가 수십 m 어긋난다 — 그래서 바깥 둘레는 쓰지 않는다
+    etmp = CACHE / "emd_grid.json"
+    etmp.write_text(json.dumps(egj, ensure_ascii=False), "utf-8")
+    etopo = OUT / "emd.topo.json"
+    subprocess.run([npx, "-y", MAPSHAPER, "-i", str(etmp), "name=emd",
+                    "-filter-islands", f"min-area={MIN_ISLAND}",
+                    "-simplify", f"interval={SIMPLIFY}", "keep-shapes",
+                    "-each", "lx=+this.innerX.toFixed(2), ly=+this.innerY.toFixed(2)",
+                    "-o", str(etopo), "format=topojson", "quantization=100000", "force"], check=True)
+    print(f"{etopo.name} {etopo.stat().st_size / 1024:.1f}KB")
 
     meta = {
         "_comment": "경남 지도 격자 틀. tools/build_geo.py 가 만든다 — 손으로 고치지 않는다. "

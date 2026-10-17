@@ -238,16 +238,26 @@ async def api_grid_acctable(hours: int = Query(12, ge=1, le=48), sigun: str | No
         raise HTTPException(404, str(e)) from e
 
 
+@app.get("/api/grid/emd")
+async def api_grid_emd(sigun: str, layer: str = "obs60", tm: str | None = None, test: bool = False,
+                       case: str | None = None, hours: int = Query(1, ge=1, le=12)):
+    """고른 시군(쉼표로 3곳까지)의 **읍면동마다** 그 층 최대와 그 칸. 사례면 hours 시간 합."""
+    try:
+        return await asyncio.to_thread(gridview.emd, sigun, layer, tm, test, case, hours)
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
+
+
 @app.get("/api/grid/testrain")
 async def api_grid_testrain(hours: int = Query(12, ge=1, le=48)):
-    """테스트 — /api/rain 과 같은 모양의 합성 지점(기상청 자리 + 스방 흉내, 위치 없음). 실제 자료가 아니다."""
+    """테스트 — /api/rain 과 같은 모양의 합성 지점(기상청 자리 + 스방 흉내, 위치는 읍면동 짐작). 실제 자료가 아니다."""
     return await asyncio.to_thread(gridview.test_rain, hours)
 
 
 # 경계·칸 지도(tools/build_geo.py 가 만든 것)와 관측소 위치(tools/build_stations.py).
 # 바뀔 일이 드물지만 저장소 갱신 뒤 새로고침 한 번에 따라오게 하루만 캐시한다.
 _GEO_FILES = {"gyeongnam.topo.json": "application/json", "grids.json": "application/json",
-              "stations.json": "application/json",
+              "stations.json": "application/json", "emd.topo.json": "application/json",
               "mask_sigun.u8.gz": None, "mask_emd.u16.gz": None}
 
 

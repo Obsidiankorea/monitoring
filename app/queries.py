@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from . import db
+from . import db, sites
 from .bangjae import as_of as bj_as_of
 from .domain.regions import ORDER, REP_STN, ZONES, by_sigun, grids, stations
 
@@ -143,6 +143,8 @@ def _rain_bangjae(hours: int, now: datetime | None = None) -> dict:
             "d": vals, "m60": None,
             "sum": round(sum(ok), 1),
             "bad": len(vals) - len(ok),
+            # 위치 — 받은 정확한 값이 없으면 이름이 가리키는 읍면동 가운데(임시, est). 기상청 번호면 화면이 안다
+            "pos": None if stn in STN_NAME else sites.position(stn, st["name"], st["sigun"]),
         })
     out.sort(key=lambda r: (ORDER.index(r["sigun"]) if r["sigun"] in ORDER else 99, r["name"]))
 
@@ -246,8 +248,9 @@ def forecast(hours: int = 6, now: datetime | None = None, sigun: str | None = No
 
     out = {"tmfc": tmfc, "labels": [t[8:10] for t in tmefs],
            "emd": emd_list[:24], "sigun": sig}
-    if sigun:
-        out["emd_sigun"] = [e for e in emd_list if e["sigun"] == sigun]
+    if sigun:                                  # '함양,거창' — 여러 시군 읍면동(지도 판 비교)
+        want = {x.strip() for x in sigun.split(",") if x.strip()}
+        out["emd_sigun"] = [e for e in emd_list if e["sigun"] in want]
     return out
 
 
