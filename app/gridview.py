@@ -221,6 +221,71 @@ def emd(sigun: str, layer: str = "obs60", tm: str | None = None, test: bool = Fa
     return out
 
 
+DAY_WIN = ("06", "12", "18", "24")       # 단기 하루를 6시간씩 — 끝 시각(KMA 'H시' = (H-1)~H시 한 시간)
+_DAYC: dict[tuple, dict] = {}
+
+
+def _win_of(tmef: str) -> int:
+    """'YYYYMMDDHH' 한 시간 → 0~3 구간. 00시는 그 전날 24시다."""
+    h = int(tmef[8:10]) or 24
+    return (h - 1) // 6
+
+
+def emd_day(layer: str, sigun: str | None = None, test: bool = False, now: datetime | None = None) -> dict:
+    """단기 오늘·내일 — **읍면동마다** 그날 합과 6시간 구간 합(00~06·06~12·12~18·18~24시)의 최대.
+
+    지도 '단기 오늘/내일'을 볼 때 오른쪽 '예측 상위'가 이것으로 바뀐다. sigun 이 없으면 경남 읍면동 전부.
+    ⚠️ 5km 격자라 이웃 읍면동이 같은 값이 많다(한 칸이 여러 읍면동에 걸친다).
+    ⚠️ 오늘은 발표 뒤 남은 시간만 — 지난 구간은 hours 0(값 None)."""
+    kind, _ = split(layer)
+    if not kind.startswith("shrt_"):
+        raise LookupError(f"단기 오늘·내일만: {layer}")
+    sg = siguns_of(sigun) or [s["name"] for s in gridstore.geo()["sigun"] if s["kind"] == "gn"]
+    now = now or datetime.now()
+    day = (now + timedelta(days=0 if kind == "shrt_today" else 1)).strftime("%Y%m%d")
+    if test:
+        tot = synth(kind, "dfs", 0)
+        wins = [tot * f for f in (0.15, 0.35, 0.3, 0.2)]             # 합성 — 하루를 대충 나눈 모양
+        tmfc, counts = now.strftime("%Y%m%d%H"), [6, 6, 6, 6]
+    else:
+        tmfc, tmefs = shrt_run()
+        if not tmfc:
+            raise LookupError("단기예보 격자가 아직 없다")
+        hours = [t for t in tmefs if _day_of(t) == day]
+        if not hours:
+            raise LookupError(f"{tmfc} 발표분에 {day} 몫이 없다")
+        ck = (tmfc, day, tuple(sg))
+        if ck in _DAYC:
+            return _DAYC[ck]
+        wins, counts = [None] * 4, [0] * 4
+        for t in hours:
+            a = gridstore.load("shrt", f"{tmfc}_{t}")
+            if a is None:
+                continue
+            w = _win_of(t)
+            wins[w] = a.copy() if wins[w] is None else wins[w] + a     # NaN 은 NaN 으로 남는다
+            counts[w] += 1
+        got = [w for w in wins if w is not None]
+        tot = got[0].copy() if got else None
+        for w in got[1:]:
+            tot = tot + w
+        if tot is None:
+            raise LookupError(f"{tmfc} 발표분 {day} 격자를 읽지 못했다")
+    total = gridstore.emd_stats(gridstore.to_hr(tot), sg)
+    per = [gridstore.emd_stats(gridstore.to_hr(w), sg) if w is not None else None for w in wins]
+    rows = []
+    for i, r in enumerate(total):
+        rows.append({**r, "sum": r["max"], "w": [p[i]["max"] if p else None for p in per]})
+    rows.sort(key=lambda r: -(r["sum"] or 0))
+    out = {"layer": layer, "tmfc": tmfc, "day": day, "labels": list(DAY_WIN), "hours": counts,
+           "siguns": sg if sigun else [], "test": test, "rows": rows}
+    if not test:
+        if len(_DAYC) > 32:
+            _DAYC.pop(next(iter(_DAYC)))
+        _DAYC[ck] = out
+    return out
+
+
 def sigun(layer: str, tm: str | None = None, test: bool = False, case: str | None = None) -> dict:
     from . import gridcase
     fr = gridcase.frame(case, layer, tm) if case else frame(layer, tm, test=test)
@@ -579,6 +644,8 @@ SETTING_DEFAULT = {"layer": "obs60", "x4": False, "vsrt_n": 1,
                    "acc_basis": "aws",
                    # 시군을 누르면 그 시군으로 확대(읍면동 경계·이름이 나온다). 끄면 테두리만
                    "sel_zoom": True,
+                   # 누적 카드에 예상(앞으로 6시간)을 붙이나 — 카드 머리 AWS|격자 옆 단추(F)
+                   "acc_fc": True,
                    # 지도 위에 겹칠 레이어(왼쪽 위 '레이어'에서 켠다). 차츰 늘린다.
                    "overlays": []}
 OVERLAYS = ("alerts", "stations", "stnval")   # stnval = 관측소 옆 값 글자(관측소에 딸림)
@@ -598,7 +665,7 @@ def put_setting(body: dict) -> dict:
     if "layer" in body:
         split(str(body["layer"]))            # 모르는 층이면 LookupError
         cur["layer"] = str(body["layer"])
-    for k in ("x4", "tl_on", "sel_zoom"):
+    for k in ("x4", "tl_on", "sel_zoom", "acc_fc"):
         if k in body:
             cur[k] = bool(body[k])
     if "vsrt_n" in body:

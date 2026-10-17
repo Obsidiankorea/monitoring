@@ -87,3 +87,24 @@ def test_forecast_several_siguns(tdb):
                         ("202610171100", "2026101712", sg, emd, v, "x"))
     r = queries.forecast(6, now=datetime(2026, 10, 17, 11, 10), sigun="함양,거창")
     assert {e["sigun"] for e in r["emd_sigun"]} == {"함양", "거창"}
+
+
+def test_emd_day_windows_and_layers():
+    assert [gridview._win_of(f"20261018{h:02d}") for h in (1, 6, 7, 12, 13, 18, 19, 23)] == [0, 0, 1, 1, 2, 2, 3, 3]
+    assert gridview._win_of("2026101900") == 3                          # 00시 = 그 전날 24시
+    r = gridview.emd_day("shrt_tomorrow", test=True)
+    assert r["labels"] == ["06", "12", "18", "24"] and len(r["rows"]) == len(gridstore.geo()["emd"])
+    sums = [x["sum"] or 0 for x in r["rows"]]
+    assert sums == sorted(sums, reverse=True)                            # 그날 합 큰 순
+    assert all(len(x["w"]) == 4 for x in r["rows"])
+    s = gridview.emd_day("shrt_today", "함양,거창", test=True)
+    assert {x["sig"] for x in s["rows"]} == {"함양", "거창"} and s["siguns"] == ["함양", "거창"]
+    with pytest.raises(LookupError):
+        gridview.emd_day("vsrt+1", test=True)                            # 단기 오늘·내일만
+
+
+def test_acc_fc_setting(monkeypatch):
+    monkeypatch.setattr(gridview.db, "get_setting", lambda k, d: dict(d))
+    monkeypatch.setattr(gridview.db, "put_setting", lambda k, v: None)
+    assert gridview.SETTING_DEFAULT["acc_fc"] is True
+    assert gridview.put_setting({"acc_fc": False})["acc_fc"] is False

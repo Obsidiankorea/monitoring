@@ -248,6 +248,15 @@ async def api_grid_emd(sigun: str, layer: str = "obs60", tm: str | None = None, 
         raise HTTPException(404, str(e)) from e
 
 
+@app.get("/api/grid/emdday")
+async def api_grid_emdday(layer: str, sigun: str | None = None, test: bool = False):
+    """단기 오늘·내일 — 읍면동마다 그날 합 · 6시간 구간 합 최대(합 큰 순). sigun 이 없으면 경남 전부."""
+    try:
+        return await asyncio.to_thread(gridview.emd_day, layer, sigun, test)
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
+
+
 @app.get("/api/grid/testrain")
 async def api_grid_testrain(hours: int = Query(12, ge=1, le=48)):
     """테스트 — /api/rain 과 같은 모양의 합성 지점(기상청 자리 + 스방 흉내, 위치는 읍면동 짐작). 실제 자료가 아니다."""

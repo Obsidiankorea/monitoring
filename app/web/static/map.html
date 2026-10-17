@@ -348,7 +348,10 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 .fh { font: 600 calc(11px * var(--k, 1)) var(--mono); color: var(--ink-3); padding-bottom: 3px; }
 .fr .nm2 { font-size: calc(14px * var(--k, 1)); }
 .fr .nm2 small { margin: 0 0 0 4px; }
-.cells { display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px; }
+.fr .nm2 small.pre { margin: 0 4px 0 0; }
+.cells { display: grid; grid-template-columns: repeat(var(--n, 6), 1fr); gap: 3px; }
+.fr .cells i.na { background: repeating-linear-gradient(135deg, transparent 0 3px, color-mix(in oklab, var(--ink) 8%, transparent) 3px 5px); }
+.fh .cells s { text-decoration: none; opacity: .45; }
 .fh .cells span { text-align: center; }
 .fh .cells span { border-radius: 4px; transition: background .2s, color .2s; }
 .fh .cells span.on { color: var(--on-accent); background: var(--accent); font-weight: 700; }
@@ -514,6 +517,14 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
   transition: background .25s, color .25s; }
 #acc-h .bs b.on { color: var(--on-accent); background: var(--accent); }
 #acc-h:hover .bs { border-color: var(--accent); }
+/* 예상 켜고 끄기 — 실선(실측)에 점선(예상)이 이어지는 그림. 켜면 강조색 */
+.fctg { display: inline-grid; place-items: center; width: calc(30px * var(--k, 1)); height: calc(20px * var(--k, 1)); padding: 0;
+  border: 1px solid var(--line); border-radius: 999px; background: none; color: var(--ink-3); cursor: pointer; }
+.fctg svg { width: 70%; height: 70%; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.fctg svg .d { stroke-dasharray: 2.2 2.4; }
+.fctg.on { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
+.fctg:hover { border-color: var(--accent); }
+.fctg[hidden] { display: none; }
 .selchip { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap;
   font: 700 calc(12px * var(--k, 1)) var(--sans); color: var(--ink); padding: 2px 9px; border-radius: 999px;
   background: color-mix(in oklab, var(--accent) 22%, transparent); border: 1px solid color-mix(in oklab, var(--accent) 60%, var(--line)); }
@@ -613,6 +624,7 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
   <div id="rail" aria-label="강수 모니터링">
     <section class="card" id="c-acc">
       <div class="ch"><span class="live"></span><h3 id="acc-h" title="눌러서 기준 바꾸기 — AWS 관측소 ↔ 격자(500m)">강수 누적<span class="bs"><b data-b="aws">AWS</b><b data-b="grid">격자</b></span></h3>
+        <button id="acc-fc" class="fctg on" aria-pressed="true" title="예상(앞으로 6시간) 보이기 — 막대의 연한 부분 · 선 그래프 점선 · 합 (F)"><svg viewBox="0 0 24 16" aria-hidden="true"><path d="M2 13 6.5 8l3.5 3 3.5-6"/><path class="d" d="M13.5 5 17 9l2.5-2.5L22 9"/></svg></button>
         <span class="selchip" id="acc-sel" hidden title="경남 전체로 (Esc)"></span><span class="sub" id="acc-sub"></span>
         <span class="sp"></span><span class="src" id="acc-src"></span><span class="bt" id="acc-bt">—</span></div>
       <div class="cb" id="acc-b"></div>
@@ -684,7 +696,7 @@ const NOWL = CASE ? "끝" : "지금";
 const COLLECT_OF = { obs15: "grid", obs60: "grid", obsday: "grid", odam: "odam", vsrt: "forecast",
                      shrt_today: "short", shrt_tomorrow: "short" };
 const SET_DEFAULT = { flow_step: 10, flow_hours: 6, play_ms: 1200, tl_on: false, tl_stat: "max",
-                      panel: "cards", acc_hours: 12, acc_basis: "aws", sel_zoom: true };
+                      panel: "cards", acc_hours: 12, acc_basis: "aws", sel_zoom: true, acc_fc: true };
 
 let META = null, TOPO = null, GEO = null, MSIG = null, MEMD = null, EMDN = null;
 let SET = { ...SET_DEFAULT };
@@ -1221,10 +1233,12 @@ async function show(fade = false) {
 }
 
 function choose(k, save) {
+  const fcWas = isDay() ? kind : "";
   kind = k;
   if (!CASE) OBS_TM = null;              // 메뉴로 고르면 늘 '지금'(사례는 보던 시각 그대로)
   if (save) saveSetting(k === "vsrt" ? { layer: "vsrt", vsrt_n: vsrtN } : { layer: k });
   show();
+  if ((isDay() ? kind : "") !== fcWas) loadCards();   // 예측 카드: 초단기 ↔ 단기 오늘 ↔ 단기 내일
 }
 
 /* ── 재생 흐름 ────────────────────────────────────────────────────── */
@@ -1783,10 +1797,31 @@ async function cardsFromApi() {
   // 시군을 골랐으면 '지금 오는 비'·'예측 상위'도 그 시군(들) 읍면동 — 누적 카드와 같은 단위로 맞춘다
   return {
     acc, now,
-    fc: { det: selOn(), labels: fc.labels || [], ft: acc.ft || [], bt: fc.tmfc ? `${hm(fc.tmfc)} 발표` : "—",
+    fc: isDay() ? await fcDay() : {
+          det: selOn(), labels: fc.labels || [], ft: acc.ft || [], bt: fc.tmfc ? `${hm(fc.tmfc)} 발표` : "—",
           rows: selOn() ? (fc.emd_sigun || []).map(e => ({ sig: e.sigun, label: e.emd, tag: multi() ? e.sigun : "", d: e.d.slice(0, 6), sum: e.sum }))
                         : (fc.sigun || []).map(s => ({ sig: s.sigun, emd: s.emd, d: s.d.slice(0, 6), sum: s.sum })) },
   };
+}
+/* 지도가 단기 오늘·내일이면 '예측 상위'도 그날로 — 읍면동마다 그날 합과 6시간씩(06·12·18·24시 끝) 합.
+   초단기(앞으로 6시간)는 그날 비를 담지 못한다(지도는 내일 40㎜ 인데 카드는 '예상 강수 없음'이었다).
+   고른 시군이 없으면 경남 읍면동 상위, 있으면 그 시군(들) 읍면동. ⚠️ 5km 격자라 이웃 읍면동이 같은 값이 많다 */
+const isDay = () => !CASE && kind.startsWith("shrt");
+async function fcDay() {
+  const p = new URLSearchParams({ layer: kind });
+  if (selOn()) p.set("sigun", selQ());
+  if (test) p.set("test", "1");
+  const day = kind === "shrt_today" ? "오늘" : "내일";
+  let j;
+  try { j = await getJson(`/api/grid/emdday?${p}`); }
+  catch (e) { return { mode: "day", title: `단기 ${day} 상위`, sub: e.message, labels: [], ft: [], rows: [], bt: "—", det: selOn() }; }
+  return { mode: "day", det: selOn(), title: `단기 ${day} 상위`,
+    sub: `${selOn() ? selName() + " " : ""}읍면동 · 그날 합 · 6시간씩`,
+    labels: j.labels.map((l, i) => (j.hours[i] ? l : `<s>${l}</s>`)), ft: [],
+    bt: j.test ? "테스트" : `${+j.tmfc.slice(8, 10)}시 발표`,
+    empty: `${day} 예상 강수 없음`,
+    rows: j.rows.filter(r => r.sum != null).map(r => ({ sig: r.sig, label: r.name, tag: !selOn() || multi() ? r.sig : "",
+      d: r.w, sum: r.sum, pos: r.col != null ? { x: r.col, y: r.row } : null })) };
 }
 /* 지금 오는 비 — 경남 전체는 기상청 매분자료(지점, 가장 빠르다) */
 async function nowMinute() {
@@ -1910,14 +1945,15 @@ async function cardsFromTest() {
   try {
     acc = ACC_BASIS === "grid" ? await accGrid(SET.acc_hours, fcT) : await accAws(SET.acc_hours, fcT);
   } catch (e) { acc.note = e.message; }
+  const day = isDay() ? await fcDay() : null;
   if (selOn()) {
     const rowsE = fcT.emd_sigun.map(e => ({ sig: e.sigun, label: e.emd, tag: multi() ? e.sigun : "", d: e.d, sum: sumv(e.d) }));
-    return { acc, now: nowE, fc: { det: true, rows: rowsE, labels: ft.map(fmtH), ft, bt: FLOW.tmfc ? `${hm(FLOW.tmfc)} 발표` : "—" } };
+    return { acc, now: nowE, fc: day || { det: true, rows: rowsE, labels: ft.map(fmtH), ft, bt: FLOW.tmfc ? `${hm(FLOW.tmfc)} 발표` : "—" } };
   }
   return {
     acc,
     now: { r15, r60, tm: lastObs >= 0 ? hm(FLOW.frames[lastObs].t) : "—" },
-    fc: { rows: FLOW.series.map(s => { const d = fcI.map(i => s.max[i] ?? 0); return { sig: s.sigun, emd: "", d, sum: sumv(d) }; }),
+    fc: day || { rows: FLOW.series.map(s => { const d = fcI.map(i => s.max[i] ?? 0); return { sig: s.sigun, emd: "", d, sum: sumv(d) }; }),
           labels: ft.map(fmtH), ft, bt: FLOW.tmfc ? `${hm(FLOW.tmfc)} 발표` : "—" },
   };
 }
@@ -1951,9 +1987,9 @@ function renderCards() {
     $("acc-b").innerHTML = `<div class="empty-note">불러오지 못했다 — ${CARDS.err}</div>`;
     return;
   }
-  $("fc-h").textContent = CASE ? "호우 기준" : "예측 상위";
+  $("fc-h").textContent = CASE ? "호우 기준" : CARDS.fc?.title || "예측 상위";
   $("fc-sub").textContent = CASE ? (selOn() ? `산출 — ${selName()}` : "산출 — 격자 3시간·12시간 합")
-    : CARDS.fc?.det ? `${selName()} 읍면동 · 초단기 6시간` : "초단기 · 앞으로 6시간";
+    : CARDS.fc?.sub || (CARDS.fc?.det ? `${selName()} 읍면동 · 초단기 6시간` : "초단기 · 앞으로 6시간");
   $("now-sub").textContent = CARDS.now.sub || "기상청 매분자료";
   // 누적 카드는 남는 높이를 다 쓴다 — 다른 둘을 먼저 채운 뒤에 재야 줄 수가 맞는다
   renderNow(); CASE ? renderCrit() : renderFc(); renderAcc();
@@ -1967,10 +2003,14 @@ function renderAcc() {
   for (const b of $("acc-h").querySelectorAll(".bs b")) b.classList.toggle("on", b.dataset.b === (A.basis || ACC_BASIS));
   $("acc-sel").hidden = !A.sel;
   $("acc-sel").textContent = A.sel ? `${A.sel} ✕` : "";
-  $("acc-sub").textContent = A.sub || `다우지점 · 지난 ${A.H}시간 + 예상 6시간`;
+  const fcOn = fcShown();
+  $("acc-fc").hidden = !!CASE;                     // 사례에는 예상이 없다
+  $("acc-fc").classList.toggle("on", fcOn); $("acc-fc").setAttribute("aria-pressed", fcOn);
+  const sub = A.sub || `다우지점 · 지난 ${A.H}시간 + 예상 6시간`;
+  $("acc-sub").textContent = fcOn ? sub : sub.replace(" + 예상 6시간", "");
   $("acc-src").textContent = A.src; $("acc-src").classList.toggle("fell", !!A.fell);
   $("acc-bt").textContent = A.bt;
-  const rows = A.rows.slice().sort((a, b) => (b.sum + b.fc) - (a.sum + a.fc));
+  const rows = A.rows.map(r => (fcOn ? r : { ...r, fc: 0, fcd: [], ft: [] })).sort((a, b) => (b.sum + b.fc) - (a.sum + a.fc));
   if (!rows.length || !rows[0].dt.length) {
     body.innerHTML = `<div class="empty-note">${A.sel ? `${A.sel} — ${A.basis === "grid" ? "읍면동" : "지점"} 자료가 없다` : "강수 자료가 아직 없다"}</div>`
       + (A.note ? `<div class="case-note">${A.note}</div>` : "");
@@ -2024,6 +2064,14 @@ function renderAcc() {
   rowEvents(body);
   hovEvents(body);
 }
+/* 예상(앞으로 6시간)을 누적 카드에 보이나 — 서버 설정 acc_fc(기본 켬). 사례는 예상이 없다 */
+const fcShown = () => !CASE && SET.acc_fc !== false;
+function toggleAccFc() {
+  if (CASE) return;
+  SET.acc_fc = !fcShown();
+  saveSetting({ acc_fc: SET.acc_fc });
+  if (CARDS && !CARDS.err && CARDS.acc) { renderAcc(); drawRanks(); cardsPlayhead(); }
+}
 /* 누적 줄 선 그래프 위를 지나가면 — 모든 줄에 그 시각 선, 예상 구간이면 예측 상위의 그 시각 열을 짚는다 */
 let HOVT = null;
 function hovEvents(body) {
@@ -2075,17 +2123,22 @@ function renderFc() {
   const F = CARDS.fc;
   $("fc-bt").textContent = F.bt;
   const rows = F.rows.slice().sort((a, b) => b.sum - a.sum).slice(0, 6);
+  const day = F.mode === "day";
   if (!rows.length || rows[0].sum <= 0) {
-    $("fc-b").innerHTML = `<div class="empty-note">앞으로 6시간 예상 강수 없음</div>`;
+    $("fc-b").innerHTML = `<div class="empty-note">${F.empty || "앞으로 6시간 예상 강수 없음"}</div>`;
     return;
   }
+  // 칸 색 — 초단기는 1시간 눈금, 단기는 6시간 합이라 하루 눈금(지도 단기 층과 같은 자)
+  const steps = day ? STEPS.day : STEPS.m60;
   const cell = v => {
-    const k = stepIdx(v, STEPS.m60);
+    if (v == null) return `<i class="na"></i>`;           // 오늘의 지난 구간(발표 앞)
+    const k = stepIdx(v, steps);
     const txt = v >= 1 ? (Number.isInteger(v) ? v : v.toFixed(1)) : "";
     return `<i style="${k ? `background:var(--rain-${k});color:${k >= 4 ? "var(--on-accent)" : "var(--ink)"}` : ""}">${txt}</i>`;
   };
-  $("fc-b").innerHTML = `<div class="fh"><span>시군</span><div class="cells">${F.labels.map(l => `<span>${l}</span>`).join("")}</div><span style="text-align:right">합</span></div>`
-    + rows.map(r => `<div class="fr${F.det ? " det" : ""}" data-s="${r.sig}"><span class="nm2">${r.label ? `${r.tag ? `<small>${r.tag}</small>` : ""}${r.label}` : `${r.sig}<small>${r.emd || ""}</small>`}</span>
+  $("fc-b").style.setProperty("--n", F.labels.length || 6);
+  $("fc-b").innerHTML = `<div class="fh"><span>${day && !F.det ? "읍면동" : "시군"}</span><div class="cells">${F.labels.map(l => `<span>${l}</span>`).join("")}</div><span style="text-align:right">합</span></div>`
+    + rows.map(r => `<div class="fr${F.det ? " det" : ""}" data-s="${r.sig}"${r.pos ? ` data-x="${r.pos.x}" data-y="${r.pos.y}"` : ""}><span class="nm2">${r.label ? `${r.tag ? `<small class="pre">${r.tag}</small>` : ""}${r.label}` : `${r.sig}<small>${r.emd || ""}</small>`}</span>
       <div class="cells">${r.d.map(cell).join("")}</div><span class="sum">${(+r.sum).toFixed(r.sum % 1 ? 1 : 0)}</span></div>`).join("");
   rowEvents($("fc-b"));
 }
@@ -2118,8 +2171,8 @@ function drawRanks() {
   if (!g) return;
   if (!tlOn || SET.panel === "timeline" || !CARDS || CARDS.err || !CARDS.acc || !V) { g.innerHTML = ""; return; }
   const det = !!CARDS.acc.sel;
-  const rows = CARDS.acc.rows.slice().sort((a, b) => (b.sum + b.fc) - (a.sum + a.fc)).slice(0, 3)
-    .filter(r => r.sum + r.fc >= 0.1);
+  const tot = r => r.sum + (fcShown() ? r.fc : 0);
+  const rows = CARDS.acc.rows.slice().sort((a, b) => tot(b) - tot(a)).slice(0, 3).filter(r => tot(r) >= 0.1);
   const r0 = FSN * 0.46;
   g.innerHTML = rows.map((r, i) => {
     let x, y;
@@ -2903,7 +2956,7 @@ function openPrefs() {
       <button data-th="dark" class="${th !== "light" ? "on" : ""}">어둡게</button>
       <button data-th="light" class="${th === "light" ? "on" : ""}">밝게</button></span></div>
     <div class="row"><span class="k">시군 누르면</span>${seg("sel_zoom", [[true, "확대 — 읍면동 경계·이름"], [false, "테두리만"]])}</div>
-    <div class="keys"><kbd>1</kbd>~<kbd>7</kbd> 층 · <kbd>Space</kbd> 재생 · <kbd>←</kbd><kbd>→</kbd> 한 장씩 · <kbd>L</kbd> 패널 · <kbd>A</kbd> 특보 · <kbd>S</kbd> 관측소 · <kbd>V</kbd> 지점 값 · <kbd>B</kbd> 누적 기준 · <kbd>T</kbd> 테스트 · <kbd>?</kbd> 도움말 · <kbd>Ctrl</kbd>+<kbd>,</kbd> 설정</div>
+    <div class="keys"><kbd>1</kbd>~<kbd>7</kbd> 층 · <kbd>Space</kbd> 재생 · <kbd>←</kbd><kbd>→</kbd> 한 장씩 · <kbd>L</kbd> 패널 · <kbd>A</kbd> 특보 · <kbd>S</kbd> 관측소 · <kbd>V</kbd> 지점 값 · <kbd>B</kbd> 누적 기준 · <kbd>F</kbd> 누적 예상 · <kbd>T</kbd> 테스트 · <kbd>?</kbd> 도움말 · <kbd>Ctrl</kbd>+<kbd>,</kbd> 설정</div>
   </div>`;
   $("prefs").hidden = false;
   $("pf-x").onclick = closePrefs;
@@ -3012,6 +3065,7 @@ $("tl-stat").onclick = () => { SET.tl_stat = SET.tl_stat === "mean" ? "max" : "m
 $("b-prefs").onclick = openPrefs;
 $("b-help").onclick = () => ($("help").hidden ? openHelp() : closeHelp());
 $("acc-h").onclick = toggleBasis;
+$("acc-fc").onclick = ev => { ev.stopPropagation(); toggleAccFc(); };
 $("acc-sel").onclick = ev => { ev.stopPropagation(); selectSig(null); };
 document.addEventListener("keydown", ev => {
   if (ev.target.closest?.("input, textarea")) return;
@@ -3030,6 +3084,7 @@ document.addEventListener("keydown", ev => {
   else if (ev.key === "s" || ev.key === "S") setOverlay("stations", !OV.has("stations"));
   else if ((ev.key === "v" || ev.key === "V") && OV.has("stations")) setOverlay("stnval", !OV.has("stnval"));
   else if (ev.key === "b" || ev.key === "B") toggleBasis();
+  else if (ev.key === "f" || ev.key === "F") toggleAccFc();
   else if (ev.key === " " && FLOWK.has(kind)) { ev.preventDefault(); playing ? stopPlay() : startPlay(); }
   else if ((ev.key === "ArrowRight" || ev.key === "ArrowLeft") && FLOW && FLOWK.has(kind)) {
     stopPlay();
