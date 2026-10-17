@@ -9,9 +9,11 @@ import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DATA = ROOT / "data"
-CACHE = DATA / "cache"
-DB_PATH = DATA / "gnweather.db"
+DATA = ROOT / "data"                     # 저장소에 든 읽기 전용 자료(지도 경계·사례·지점 목록)
+# 쌓이는 자료(DB·격자 캐시) — 서버(도커)에서는 GN_STATE 로 바깥 폴더에 둔다(컨테이너를 갈아도 남게)
+STATE = Path(os.environ["GN_STATE"]) if os.environ.get("GN_STATE") else DATA
+CACHE = STATE / "cache"
+DB_PATH = STATE / "gnweather.db"
 
 # 기관용 키는 이 호스트에서만 동작한다. 구 호스트(apihub.kma.go.kr)에 쓰면 403.
 KMA_HOST = "https://apihub-pub.kma.go.kr"

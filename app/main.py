@@ -81,7 +81,13 @@ async def lifespan(app: FastAPI):
         return
     sched = AsyncIOScheduler(timezone="Asia/Seoul")   # 시각은 전부 KST. UTC로 바꾸지 않는다.
     app.state.sched = sched
+    # 수집기 골라 끄기 — SKIP_COLLECT=bangjae 처럼(쉼표). 언레이드(집)에서는 스방(내부망)에 닿지 않아 실패만 쌓인다
+    skip = {x.strip() for x in os.environ.get("SKIP_COLLECT", "").split(",") if x.strip()}
+    if skip:
+        log.info("수집기 끔(SKIP_COLLECT): %s", ", ".join(sorted(skip)))
     for kind, sec in db.get_setting("intervals", INTERVALS).items():
+        if kind in skip:
+            continue
         sched.add_job(run_one, "interval", seconds=sec, args=[kind],
                       id=kind, max_instances=1, coalesce=True)
     # 하루 한 번 묵은 자료 치우기 — 안 하면 DB 와 이미지 캐시가 계속 자란다
@@ -90,7 +96,8 @@ async def lifespan(app: FastAPI):
     sched.start()
     # 뜨자마자 한 번씩 받아 둔다 — 빈 화면으로 시작하지 않게
     for kind in COLLECTORS:
-        asyncio.create_task(run_one(kind))
+        if kind not in skip:
+            asyncio.create_task(run_one(kind))
     log.info("수집기 시작: %s", INTERVALS)
     try:
         yield

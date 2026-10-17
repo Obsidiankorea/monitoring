@@ -7,3 +7,4 @@
 # 맥·리눅스 스크립트는 LF 여야 한다. CRLF 로 체크아웃되면 셔뱅이 깨진다.
 *.command text eol=lf
 *.sh      text eol=lf
+Dockerfile text eol=lf
