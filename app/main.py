@@ -17,10 +17,11 @@ from pathlib import Path
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, HTTPException, Query
+from fastapi import Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import db, demo, gridcase, gridstore, gridview, maint, queries, update
+from . import db, demo, gridcase, gridstore, gridview, maint, origin, queries, update
 from .collectors import alerts, bangjae_rain, forecast, grid_rain, qpf, rain, shortfc
 from .config import CACHE, INTERVALS, POLL_DEFAULT
 
@@ -83,6 +84,7 @@ async def lifespan(app: FastAPI):
     app.state.sched = sched
     # 수집기 골라 끄기 — SKIP_COLLECT=bangjae 처럼(쉼표). 언레이드(집)에서는 스방(내부망)에 닿지 않아 실패만 쌓인다
     skip = {x.strip() for x in os.environ.get("SKIP_COLLECT", "").split(",") if x.strip()}
+    app.state.skip = skip
     if skip:
         log.info("수집기 끔(SKIP_COLLECT): %s", ", ".join(sorted(skip)))
     for kind, sec in db.get_setting("intervals", INTERVALS).items():
@@ -94,11 +96,16 @@ async def lifespan(app: FastAPI):
     sched.add_job(_nightly, "cron", hour=4, minute=20, id="maint",
                   max_instances=1, coalesce=True)
     sched.start()
-    # 뜨자마자 한 번씩 받아 둔다 — 빈 화면으로 시작하지 않게
-    for kind in COLLECTORS:
-        if kind not in skip:
-            asyncio.create_task(run_one(kind))
-    log.info("수집기 시작: %s", INTERVALS)
+    if origin.remote():
+        # 설정 '서버에서 받기' — 이 PC 는 수집하지 않는다(같은 키로 호출이 두 배가 되지 않게)
+        sched.pause()
+        log.info("자료는 서버(%s)에서 받는다 — 이 PC 수집기 멈춤", origin.remote())
+    else:
+        # 뜨자마자 한 번씩 받아 둔다 — 빈 화면으로 시작하지 않게
+        for kind in COLLECTORS:
+            if kind not in skip:
+                asyncio.create_task(run_one(kind))
+        log.info("수집기 시작: %s", INTERVALS)
     try:
         yield
     finally:
@@ -465,6 +472,59 @@ async def api_refresh(kind: str, force: bool = False):
     일어나지 않는다(pitfalls ★3). 여기서는 항상 수집기를 직접 부른다.
     """
     return await run_one(kind, force=force)
+
+
+# ── 자료를 어디서 받나(이 PC / 서버) — app/origin.py ────────────────────────────
+def _collecting() -> bool:
+    sch = getattr(app.state, "sched", None)
+    return bool(sch) and sch.running and sch.state == 1          # 1 = STATE_RUNNING(멈춤 2)
+
+
+@app.get("/api/origin")
+async def api_origin_get():
+    return {**origin.cfg(), "collecting": _collecting()}
+
+
+@app.put("/api/origin")
+async def api_origin_put(body: dict):
+    """받는 곳 바꾸기 — 서버면 이 PC 수집기를 멈추고, 이 PC 면 다시 돌려 곧바로 한 번씩 받는다."""
+    try:
+        c = origin.put(body)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    sch = getattr(app.state, "sched", None)
+    if sch and sch.running:
+        if c["mode"] == "server" and sch.state == 1:
+            sch.pause()
+            log.info("자료는 서버(%s)에서 받는다 — 이 PC 수집기 멈춤", c["url"])
+        elif c["mode"] == "local" and sch.state == 2:
+            sch.resume()
+            for kind in COLLECTORS:
+                if kind not in getattr(app.state, "skip", set()):
+                    asyncio.create_task(run_one(kind))
+            log.info("이 PC 에서 다시 수집한다")
+    return {**c, "collecting": _collecting()}
+
+
+@app.post("/api/origin/test")
+async def api_origin_test(body: dict):
+    """그 주소에 대시보드 서버가 있나(받는 곳을 바꾸기 전에 눌러 본다)."""
+    try:
+        return await origin.test(str(body.get("url") or origin.cfg()["url"]))
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@app.middleware("http")
+async def from_server(request: Request, call_next):
+    """'서버에서 받기'면 화면이 부르는 /api/… 를 서버로 넘긴다(받는 곳 설정·업데이트·저장공간은 이 PC)."""
+    base = origin.remote()
+    if not base or not origin.should_proxy(request.url.path):
+        return await call_next(request)
+    body = await request.body() if request.method in ("POST", "PUT", "PATCH", "DELETE") else b""
+    code, content, head = await origin.forward(base, request.method, request.url.path,
+                                               request.url.query, body, request.headers.get("content-type"))
+    return Response(content=content, status_code=code, headers=head)
 
 
 @app.middleware("http")

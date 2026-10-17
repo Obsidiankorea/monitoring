@@ -424,6 +424,13 @@ a.mb-item .ext { opacity: .55; margin-left: -1px; }
   white-space: nowrap;
 }
 .mb-when span { font-size: 10.5px; color: var(--ink-3); }
+/* 서버에서 받는 중 — 이 PC 가 아니라 언레이드가 받은 자료라는 표시 */
+.mb-origin { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 600; color: var(--accent); white-space: nowrap;
+  border: 1px solid color-mix(in oklab, var(--accent) 45%, var(--line));
+  background: color-mix(in oklab, var(--accent) 10%, transparent); }
+.mb-origin[hidden] { display: none; }
+.mb-origin.bad { color: var(--lv-fail); border-color: color-mix(in oklab, var(--lv-fail) 45%, var(--line)); }
 .mb-when b { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--ink); margin-left: 3px; }
 .mb-when .w2 b { color: var(--accent); }
 .mb-when.stale b { color: var(--lv-fail); }
@@ -1587,6 +1594,7 @@ body.editing .panel {
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.8"/><path d="M12 7.5V12l3 1.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span id="lb-period">10분</span><svg class="chev" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
 
+    <span class="mb-origin" id="mb-origin" hidden title="자료를 서버에서 받는 중 — 설정(Ctrl+,) › 자료"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="4" width="16" height="6.5" rx="1.5" stroke="currentColor" stroke-width="1.9"/><rect x="4" y="13.5" width="16" height="6.5" rx="1.5" stroke="currentColor" stroke-width="1.9"/><circle cx="8" cy="7.25" r="1.1" fill="currentColor"/><circle cx="8" cy="16.75" r="1.1" fill="currentColor"/></svg><span>서버</span></span>
     <span class="mb-when" id="mb-when" title="이 판의 자료를 언제 받았고, 언제 기준인지">
       <span class="w1">조회 <b id="w-got">—</b></span>
       <span class="w2">기준 <b id="w-base">—</b></span>
@@ -1897,7 +1905,29 @@ body.editing .panel {
       </div>
 
       <div class="prefs-pane" id="pane-data" role="tabpanel" hidden>
-        <h4>자료원</h4>
+        <h4>자료 받는 곳</h4>
+        <p class="note"><b>이 PC 에서 수집</b>하면 이 PC 가 기상청을 직접 부른다. <b>서버에서 받기</b>면 언레이드 서버가
+          받아 둔 것을 보고, 이 PC 는 수집을 멈춘다 — 둘 다 수집하면 같은 키로 기상청 호출이 두 배가 된다.
+          화면은 이 PC 것을 그대로 쓴다. 업데이트 · 저장공간은 언제나 이 PC 것이다.</p>
+        <div class="prefs-row">
+          <span class="lbl">받는 곳</span>
+          <span class="val">
+            <select id="pf-origin">
+              <option value="local">이 PC 에서 수집</option>
+              <option value="server">서버에서 받기 (언레이드)</option>
+            </select>
+            <span class="hint" id="pf-origin-n"></span>
+          </span>
+        </div>
+        <div class="prefs-row">
+          <span class="lbl">서버 주소</span>
+          <span class="val">
+            <input id="pf-server" type="text" spellcheck="false" placeholder="http://100.106.116.92:8000" style="width:220px">
+            <button class="sbtn" id="pf-srv-test" type="button">연결 확인</button>
+            <span class="hint" id="pf-srv-msg"></span>
+          </span>
+        </div>
+        <h4 style="margin-top:16px">자료원</h4>
         <p class="note">두 관측망은 <b>다른 것을 재고 있다.</b> 기상청은 시군 대표지점 한 곳,
           스방은 경남 자체 AWS까지 합친 265개소다. 다우지점 후보가 다섯 배라
           <b>스방 쪽이 훨씬 촘촘하다</b> — 고성 학림 500.5㎜를 기상청 AWS는 아예 못 본다.</p>
@@ -4168,8 +4198,56 @@ function syncPrefs() {
   document.getElementById("pf-src-n").textContent = SRCLABEL ? "현재 " + SRCLABEL : "";
   const d = document.getElementById("pf-depth");
   if (d) d.textContent = "화면이 고른 구간(" + rng().l + ")만큼 서버가 과거를 채운다";
+  loadDataOrigin();
 }
 document.getElementById("pf-src").addEventListener("change", e => setSrc(e.target.value));
+
+/* 자료 받는 곳 — 이 PC(수집) / 서버(언레이드). 설정은 이 PC 에 둔다(/api/origin 은 서버로 넘기지 않는다).
+   바꾸면 화면을 다시 읽는다 — 자료가 통째로 다른 곳에서 오므로 */
+let DATA_ORIGIN = { mode: "local", url: "" };
+async function loadDataOrigin() {
+  try { DATA_ORIGIN = await (await fetch("/api/origin", { cache: "no-store" })).json(); } catch { return; }
+  const chip = document.getElementById("mb-origin");
+  chip.hidden = DATA_ORIGIN.mode !== "server";
+  chip.title = `자료를 서버(${DATA_ORIGIN.url})에서 받는 중 — 설정(Ctrl+,) › 자료`;
+  const sel = document.getElementById("pf-origin"), inp = document.getElementById("pf-server");
+  if (sel) sel.value = DATA_ORIGIN.mode;
+  if (inp && document.activeElement !== inp) inp.value = DATA_ORIGIN.url || "";
+  const n = document.getElementById("pf-origin-n");
+  if (n) n.textContent = DATA_ORIGIN.mode === "server" ? "이 PC 수집 멈춤" : DATA_ORIGIN.collecting ? "이 PC 가 수집 중" : "";
+}
+async function testDataOrigin() {
+  const msg = document.getElementById("pf-srv-msg"), url = document.getElementById("pf-server").value.trim();
+  msg.textContent = "확인 중…";
+  try {
+    const r = await fetch("/api/origin/test", { method: "POST", headers: { "Content-Type": "application/json" },
+                                                body: JSON.stringify({ url }) });
+    const j = await r.json();
+    msg.textContent = !r.ok ? (j.detail || "주소가 이상하다")
+      : j.ok ? `됨 — 서버 수집 ${j.collect_ok.length}/${j.n} 정상` : `안 됨 — ${j.error}`;
+    return r.ok && j.ok;
+  } catch (e) { msg.textContent = "안 됨 — " + e.message; return false; }
+}
+async function setDataOrigin(mode) {
+  const url = document.getElementById("pf-server").value.trim();
+  if (mode === "server" && !(await testDataOrigin())) {        // 닿지 않는 서버로 바꾸면 화면이 텅 빈다
+    document.getElementById("pf-origin").value = DATA_ORIGIN.mode;
+    return;
+  }
+  const r = await fetch("/api/origin", { method: "PUT", headers: { "Content-Type": "application/json" },
+                                         body: JSON.stringify({ mode, url }) });
+  if (!r.ok) { document.getElementById("pf-srv-msg").textContent = (await r.json()).detail || "저장 못 함"; return; }
+  location.reload();
+}
+document.getElementById("pf-origin").addEventListener("change", e => setDataOrigin(e.target.value));
+document.getElementById("pf-srv-test").addEventListener("click", testDataOrigin);
+document.getElementById("pf-server").addEventListener("change", async e => {
+  // 서버에서 받는 중에 주소만 바꾸면 — 닿는지 보고 저장, 다시 읽는다
+  if (DATA_ORIGIN.mode === "server") setDataOrigin("server");
+  else fetch("/api/origin", { method: "PUT", headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ url: e.target.value.trim() }) }).then(loadDataOrigin);
+});
+loadDataOrigin();
 document.getElementById("pf-slot").addEventListener("change", e => setSlot(e.target.value));
 document.getElementById("pf-side").addEventListener("change", e => { sidePos = e.target.value; applySide(); });
 document.getElementById("pf-mncount").addEventListener("change", e => {

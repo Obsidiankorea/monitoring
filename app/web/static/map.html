@@ -112,6 +112,7 @@ button { font-family: inherit; }
 .badge.warn { color: var(--lv-fail); border-color: color-mix(in oklab, var(--lv-fail) 55%, var(--line)); }
 .badge.test { color: #fff; background: var(--test); border-color: var(--test); }
 .badge.past { color: var(--accent); border-color: color-mix(in oklab, var(--accent) 50%, var(--line)); }
+.badge.srv { color: var(--accent); border-color: color-mix(in oklab, var(--accent) 50%, var(--line)); font-size: 12px; }
 #hd .sp { flex: 1; }
 
 /* 오른쪽 위 층 메뉴 */
@@ -1166,7 +1167,7 @@ function paintHead() {
     if (CUR && +CUR.capped > 0) b.push(`<span class="badge" title="단기예보 PCP 는 30 에서 막힌다 — 30㎜ 이상">30㎜ 이상 든 칸 ${CUR.capped} · 합계는 하한</span>`);
   }
   if (kind === "obs15" && x4) b.push(`<span class="badge">×4 환산</span>`);
-  $("badges").innerHTML = b.join(" ");
+  $("badges").innerHTML = b.join(" ") + (ORIGIN_BADGE ? " " + ORIGIN_BADGE : "");
   $("stage").classList.toggle("late", !test && !past && !!L.stale);
   $("testrib").hidden = !test;
   $("stage").classList.toggle("test", test);
@@ -3306,8 +3307,17 @@ new ResizeObserver(() => {
   accRz = setTimeout(() => { if (CARDS && !CARDS.err && tlOn && SET.panel !== "timeline") { renderAcc(); drawRanks(); cardsPlayhead(); } }, 80);
 }).observe($("acc-b"));
 
+/* 자료를 서버(언레이드)에서 받는 중이면 머리에 표시 — 설정은 종합 화면(Ctrl+,) › 자료 */
+async function originBadge() {
+  try {
+    const o = await getJson("/api/origin");
+    if (o.mode === "server") ORIGIN_BADGE = `<span class="badge srv" title="자료를 서버(${o.url})에서 받는 중 — 종합 화면 설정 › 자료">서버</span>`;
+  } catch {}
+}
+let ORIGIN_BADGE = "";
 async function boot() {
   applyTheme();
+  await originBadge();
   try {
     [META, TOPO, GEO, SITES] = await Promise.all([getJson("/api/grid/meta"),
       getJson("/api/grid/geo/gyeongnam.topo.json"), getJson("/api/grid/geo/grids.json"),
