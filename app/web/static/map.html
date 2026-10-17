@@ -127,6 +127,14 @@ button { font-family: inherit; }
 #menu button.none { opacity: .45; }
 #menu button.late::after { content: "·"; color: var(--lv-fail); font-weight: 800; margin-left: 3px; }
 #tools { display: flex; gap: 6px; position: relative; }
+/* FHD 를 125~150% 로 띄우면(1280~1536px) 머리가 두 줄로 접혀 지도·카드 높이를 먹었다 — 좁으면 글자를 줄이고
+   긴 출처 글은 감춘다(제목에 올리면 나온다) */
+@media (max-width: 1400px) {
+  #hd { gap: 12px; padding: 8px 14px; min-height: 54px; }
+  #lname { font-size: 24px; } #ltime { font-size: 16px; } #lsrc { display: none; }
+  #menu { gap: 8px; } #menu .gl { margin-right: 1px; }
+  #menu button, #tools button { font-size: 13px; padding: 4px 8px; }
+}
 /* 데모 — 실황이 아닌 화면을 한 메뉴에: 테스트(합성) · 재현 사례(지난 호우). 종합 화면 '데모 시연'과 같은 말 */
 #demo-menu { position: absolute; right: 0; top: calc(100% + 8px); z-index: 30; width: 360px; }
 #demo-menu a { display: block; padding: 9px 12px; border-radius: 8px; color: var(--ink); text-decoration: none; }
@@ -295,6 +303,9 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 .ch { display: flex; align-items: center; gap: 10px; padding: calc(12px * var(--k, 1)) calc(16px * var(--k, 1)) calc(6px * var(--k, 1)); }
 .ch h3 { margin: 0; font-size: calc(16px * var(--k, 1)); font-weight: 700; white-space: nowrap; }
 .ch .sub { font-size: calc(12px * var(--k, 1)); color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* 강수 누적 — 머리(제목·기준·단추·시군·출처·시각)가 한 줄을 다 쓰니 설명은 그 아래 한 줄로 */
+#c-acc .ch { flex-wrap: wrap; row-gap: 1px; }
+#c-acc .ch .sub { order: 10; flex: 1 0 100%; padding-left: calc(16px * var(--k, 1)); }
 .ch .sp { flex: 1; }
 .ch .bt { font: 600 calc(12px * var(--k, 1)) var(--mono); color: var(--ink-2); border: 1px solid var(--line); border-radius: 6px; padding: 1px 7px; white-space: nowrap; }
 .ch .src { font: 600 calc(11px * var(--k, 1)) var(--sans); color: var(--accent); white-space: nowrap; }
@@ -408,7 +419,7 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
    ⚠️ 지도 한가운데 큰 글자를 얹었더니 옅게 해도 비구름처럼 보였다.
    ⚠️ 보라 테두리는 특보(중대경보 보라)와 헷갈렸다 — 색을 빼고 선 모양으로만 알린다. */
 #stage.test { outline: 5px dashed var(--test); outline-offset: -5px; }
-#testrib { position: absolute; left: 50%; top: 0; transform: translateX(-50%); pointer-events: none; z-index: 3;
+#testrib { position: absolute; left: var(--playx, 50%); top: 0; transform: translateX(-50%); pointer-events: none; z-index: 3;
   padding: 5px 18px 6px; border-radius: 0 0 10px 10px; white-space: nowrap;
   font: 800 18px var(--sans); letter-spacing: .12em; color: var(--ink);
   background: repeating-linear-gradient(135deg, color-mix(in oklab, var(--test) 34%, var(--panel)) 0 10px,
@@ -531,6 +542,11 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 #acc-h .bs b { font: 700 calc(11px * var(--k, 1)) var(--sans); color: var(--ink-3); padding: 1px 8px; border-radius: 999px;
   transition: background .25s, color .25s; }
 #acc-h .bs b.on { color: var(--on-accent); background: var(--accent); }
+/* AWS = 관측소 좌표(겨눔 표), 격자 = 칸 — 글자 대신 그림 */
+#acc-h .bs b { display: inline-grid; place-items: center; padding: 2px 7px; }
+#acc-h .bs b svg { width: calc(13px * var(--k, 1)); height: calc(13px * var(--k, 1)); fill: none; stroke: currentColor;
+  stroke-width: 1.6; stroke-linecap: round; }
+#acc-h .bs b svg .f { fill: currentColor; stroke: none; }
 #acc-h:hover .bs { border-color: var(--accent); }
 /* 단기 오늘·내일 — 위 카드가 그날 예보 합이 된다. 기준(AWS|격자)·예상 단추는 뜻이 없어 감춘다 */
 #acc-h.day { cursor: default; } #acc-h.day .bs { display: none; }
@@ -643,7 +659,7 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
   <svg id="links"></svg>
   <div id="rail" aria-label="강수 모니터링">
     <section class="card" id="c-acc">
-      <div class="ch"><span class="live"></span><h3 id="acc-h" title="눌러서 기준 바꾸기 — AWS 관측소 ↔ 격자(500m)"><span id="acc-t">강수 누적</span><span class="bs"><b data-b="aws">AWS</b><b data-b="grid">격자</b></span></h3>
+      <div class="ch"><span class="live"></span><h3 id="acc-h" title="눌러서 기준 바꾸기 — AWS 관측소 ↔ 격자(500m)"><span id="acc-t">강수 누적</span><span class="bs"><b data-b="aws" title="AWS 관측소 — 지점(좌표) 값"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="4.3"/><path d="M8 1.3v3M8 11.7v3M1.3 8h3M11.7 8h3"/><circle class="f" cx="8" cy="8" r="1.2"/></svg></b><b data-b="grid" title="격자 500m — 칸 값"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.2" y="2.2" width="11.6" height="11.6" rx="1.2"/><path d="M6.07 2.2v11.6M9.93 2.2v11.6M2.2 6.07h11.6M2.2 9.93h11.6"/></svg></b></span></h3>
         <button id="acc-fc" class="fctg on" aria-pressed="true" title="예상(앞으로 6시간) 보이기 — 막대의 연한 부분 · 선 그래프 점선 · 합 (F)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 12.5 7.5 8"/><path class="d" d="M8 8l5.5-5"/></svg></button>
         <button id="acc-h1" class="fctg on" aria-pressed="true" title="실측 중 최근 1시간 빗금으로 강조 (H)"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.6"/><path d="M8 5v3.2l2.2 1.4"/></svg></button>
         <span class="selchip" id="acc-sel" hidden title="경남 전체로 (Esc)"></span><span class="sub" id="acc-sub"></span>
@@ -1121,6 +1137,7 @@ function paintHead() {
   $("lname").textContent = L.label || kind;
   $("ltime").textContent = when(CUR);
   $("lsrc").textContent = test ? "합성 격자 — 실제 자료 아님" : (L.src || "");
+  $("lname").title = $("lsrc").textContent;     // 좁은 화면에서는 출처 글을 감춘다 — 제목에 올리면 나온다
   const b = [];
   const past = isPast();
   if (CASE) b.push(`<span class="badge past">재현 · ${CASEM?.title || CASE}</span>`);
@@ -1366,6 +1383,7 @@ function playHead() {
 function buildPlay() {
   const p = $("play");
   if (!FLOWK.has(kind) || !FLOW || !FLOW.frames.length) { p.hidden = true; p.dataset.sig = ""; return; }
+  const wasHidden = p.hidden;
   p.hidden = false;
   const sig = `${FLOW.now}|${FLOW.frames.length}|${FLOW.step}|${FLOW.hours}|${document.documentElement.dataset.theme}`;
   if (p.dataset.sig === sig) { playHead(); return; }
@@ -1396,6 +1414,7 @@ function buildPlay() {
     <div class="lab"></div>`;
   $("b-pp").onclick = () => playing ? stopPlay() : startPlay();
   playHead();
+  if (wasHidden) placePlay();              // 막대가 막 나타났다 — 이제야 폭을 잴 수 있다
   requestAnimationFrame(() => requestAnimationFrame(() => $("trk") && $("trk").classList.remove("noanim")));
   const trk = $("trk");
   const at = ev => {
@@ -1426,9 +1445,7 @@ function applyTL(animate = true) {
   document.body.classList.toggle("panel-cards", cards);
   document.body.classList.toggle("panel-tl", !cards);
   camGo(animate);
-  // 재생 막대는 지도 가운데 아래로. ⚠️ 막대에 zoom(--k)이 걸려 있어 left 도 그만큼 곱해진다 — 나눠 둔다
-  const cx = tlOn ? (V.W - w) / 2 : V.W / 2;
-  $("stage").style.setProperty("--playx", (cx / V.k).toFixed(0) + "px");
+  placePlay();
   if (tlOn && !cards) buildTL();
   if (tlOn && cards) { if (CARDS) renderCards(); else loadCards(); }
   drawRanks();
@@ -1627,6 +1644,20 @@ function drawEmdNames(taken) {
   g.innerHTML = out.join("");
 }
 
+/* 재생 막대 — 범례 오른쪽 ~ 패널 왼쪽 빈자리 가운데. 막대(약 880px)가 그보다 넓으면 눈금 줄(TRK.Wt)을 줄인다.
+   ⚠️ FHD 를 125%(1536px)로 띄우고 패널을 열면 지도 칸이 976px — 막대 왼끝이 범례(결측·비 없음) 밑으로 들어갔다.
+   ⚠️ 막대에 zoom(--k)이 걸려 있어 left 도 그만큼 곱해진다 — 나눠 둔다 */
+function placePlay() {
+  if (!V) return;
+  const p = $("play"), st = $("stage").getBoundingClientRect(), lg = $("legend").getBoundingClientRect();
+  const x0 = (lg.width ? lg.right - st.left : 0) + 14, x1 = (tlOn ? V.W - tlWidth() : V.W) - 16;
+  if (!p.hidden && p.offsetWidth) {
+    const pw = p.getBoundingClientRect().width;
+    const want = Math.round(Math.max(240, Math.min(640, TRK.Wt - (pw - (x1 - x0)) / V.k)));
+    if (Math.abs(want - TRK.Wt) > 3) { TRK.Wt = want; p.dataset.sig = ""; buildPlay(); }
+  }
+  $("stage").style.setProperty("--playx", ((x0 + x1) / 2 / V.k).toFixed(0) + "px");
+}
 function setTL(on, save = true) {
   tlOn = on;
   if (save) saveSetting({ tl_on: on });
@@ -1854,6 +1885,10 @@ async function accDay() {
   let j;
   try { j = await dayJson(); }
   catch (e) { return { ...base, bt: "—", sub: e.message }; }
+  // ⚠️ 화면(정적 파일)은 저장소에서 바로 읽히는데 서버는 다시 켜야 바뀐다 — 옛 서버면 매시 값(times·h)이 없다
+  if (!Array.isArray(j.times) || !j.rows.every(r => Array.isArray(r.h)))
+    return { ...base, bt: "—", sub: "서버를 다시 켜야 나온다",
+             note: "대시보드 서버가 이 화면보다 옛 버전이다(단기 매시 값이 없다) — 대시보드(run.bat)를 닫았다 다시 켜면 된다" };
   const dt = j.times.map(tOf), dd = `${+j.day.slice(4, 6)}.${+j.day.slice(6, 8)}.`;
   const row = r => ({ sig: r.sig, stn: r.name, d: r.h, dt, fcd: [], ft: [], sum: r.sum ?? 0, fc: 0,
                       pos: r.col != null ? { x: r.col, y: r.row } : null });
@@ -2078,7 +2113,7 @@ function renderAcc() {
   $("acc-bt").textContent = A.bt;
   const rows = A.rows.map(r => (fcOn ? r : { ...r, fc: 0, fcd: [], ft: [] })).sort((a, b) => (b.sum + b.fc) - (a.sum + a.fc));
   if (!rows.length || !rows[0].dt.length) {
-    body.innerHTML = `<div class="empty-note">${A.sel ? `${A.sel} — ${A.basis === "grid" ? "읍면동" : "지점"} 자료가 없다` : "강수 자료가 아직 없다"}</div>`
+    body.innerHTML = (A.day && A.note ? "" : `<div class="empty-note">${A.sel ? `${A.sel} — ${A.basis === "grid" ? "읍면동" : "지점"} 자료가 없다` : "강수 자료가 아직 없다"}</div>`)
       + (A.note ? `<div class="case-note">${A.note}</div>` : "");
     A.sp = null; return;
   }
@@ -2193,6 +2228,9 @@ function hovEvents(body) {
 
 /* 지금 오는 비 — 15분 │ 60분 상위. 단계는 종합 화면과 같다(15분과 60분이 다른 자) */
 const MN_STEPS = { 15: [0.5, 2, 5, 8, 12, 18, 25], 60: [1, 5, 10, 20, 30, 50, 70] };
+/* 지금 오는 비 · 예측 상위 줄 수 — 패널이 낮으면(FHD 150% = 720px 등) 줄여서 강수 누적 카드에 자리를 남긴다.
+   ⚠️ 1280×720 에서 둘이 6줄씩 다 쓰자 강수 누적은 머리만 남았다(본문 11px) */
+const cardRows = () => { const h = $("rail")?.clientHeight || 900; return h < 560 ? 3 : h < 800 ? 4 : 6; };
 function renderNow() {
   const N = CARDS.now;
   $("now-bt").textContent = N.tm || "—";
@@ -2200,7 +2238,7 @@ function renderNow() {
     const mx = Math.max(...list.map(x => x.mm), 0.1);
     if (!list.length || mx <= 0.1 && !list.some(x => x.mm > 0))
       return `<div class="empty-note">비 없음</div>`;
-    return list.slice(0, 6).map(x => {
+    return list.slice(0, cardRows()).map(x => {
       const c = rampVar(x.mm, MN_STEPS[kk]) || "var(--ink-3)";
       const sm = N.det ? x.tag : x.sig, at = x.pos ? ` data-x="${x.pos.x}" data-y="${x.pos.y}"` : "";
       return `<div class="mr${N.det ? " det" : ""}" data-s="${x.sig}"${at}><span class="bg" style="width:${(x.mm / mx * 100).toFixed(0)}%;background:${c}"></span>
@@ -2223,7 +2261,7 @@ function renderNow() {
 function renderFc() {
   const F = CARDS.fc;
   $("fc-bt").textContent = F.bt;
-  const rows = F.rows.slice().sort((a, b) => b.sum - a.sum).slice(0, 6);
+  const rows = F.rows.slice().sort((a, b) => b.sum - a.sum).slice(0, cardRows());
   const day = F.mode === "day";
   if (!rows.length || rows[0].sum <= 0) {
     $("fc-b").innerHTML = `<div class="empty-note">${F.empty || "앞으로 6시간 예상 강수 없음"}</div>`;
@@ -2435,7 +2473,7 @@ function renderCrit() {
     return `<div class="g"><i style="width:${w.toFixed(1)}%"></i><s style="left:${m.toFixed(1)}%"></s><span>${v.toFixed(1)}</span></div>`;
   };
   $("fc-b").innerHTML = `<div class="crit h"><span>시군</span><span>3시간 (경보 ${W.warn.h3})</span><span>12시간 (경보 ${W.warn.h12})</span><span style="text-align:right">산출</span></div>`
-    + C.rows.map(r => `<div class="crit" data-s="${r.sig}"><span class="nm2">${r.sig}</span>
+    + C.rows.slice(0, cardRows()).map(r => `<div class="crit" data-s="${r.sig}"><span class="nm2">${r.sig}</span>
         ${g(r.h3, 180, W.warn.h3)}${g(r.h12, 450, W.warn.h12)}
         <span class="lv ${r.lv || "none"}">${r.lv === "warn" ? "경보" : r.lv === "watch" ? "주의보" : "—"}</span></div>`).join("");
   rowEvents($("fc-b"));

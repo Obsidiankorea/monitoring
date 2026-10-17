@@ -310,7 +310,7 @@ body {
   flex: none;
   height: 34px;
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 14px;
   padding: 0 12px 0 13px;
@@ -365,8 +365,10 @@ th.tlh { overflow: visible; }
 /* 활성 창의 것들 — 가운데. 창을 바꾸면 이 구역이 통째로 바뀐다. */
 .mb-center {
   display: flex; align-items: center; gap: 8px;
-  justify-self: center; min-width: 0;
+  justify-self: stretch; justify-content: safe center; min-width: 0; overflow: hidden;
 }
+/* ⚠️ FHD 를 150% 로 띄우면 1280px — 가운데가 앱 이름·오른쪽 단추를 덮었다. 좁으면 앱 이름은 마크만 */
+@media (max-width: 1400px) { .mb-brand b { display: none; } }
 .mb-win-name { font-size: 12.5px; font-weight: 600; color: var(--ink); white-space: nowrap; }
 .mb-panelmenus { display: flex; align-items: center; gap: 2px; }
 .mb-item[hidden] { display: none; }
@@ -606,6 +608,8 @@ td.totc .tot { width: auto; display: block; }
 /* 기준 구간 표기 — 조정 막대가 없어져 머리글로 올라왔다 */
 .rangeval { font-family: var(--mono); font-size: calc(10.5px * var(--fs, 1)); color: var(--ink-3); white-space: nowrap; }
 .rangeval b { color: var(--ink-2); font-weight: 500; }
+.fcmark { display: inline-flex; align-items: center; gap: 2px; margin-left: 7px; color: var(--ink-3); }
+.fcmark svg { flex: none; }
 
 /* ── 화면 꾸미기 ──────────────────────────────────────────────────
    기관마다 글꼴·색이 다르고 벽면은 보는 거리도 다르다. 코드를 고치지 않고
@@ -1718,7 +1722,7 @@ body.editing .panel {
       <header>
         <h2>강수 타임라인</h2>
         <span class="basetime"><span class="livedot"></span>실측 <b>—</b></span>
-        <span class="origin db" id="rain-origin">DB 조회</span>
+        <span class="origin db" id="rain-origin" hidden>DB 조회</span>
         <span class="fetched" data-kind="rain"></span>
         <span class="rangeval" id="rangeval">02:00~<b>14:20</b> · 예측 ~20:00</span>
         <span class="src">awsh.php · nph-aws2_min · nph-dfs_vsrt_grd</span>
@@ -3712,7 +3716,7 @@ function paintRange() {
   const from = cut();
   const day = dayOf(from) < 2 ? DAYS[dayOf(from)] + " " : "";
   document.querySelector("#p-rain header .rangeval").innerHTML =
-    `${day}${HOURS[from]}:00~<b>${HOURS[SLOTS - 1]}</b> · 예측 <b>+${fcHours}h</b>`;
+    `${day}${HOURS[from]}:00~<b>${HOURS[SLOTS - 1]}</b><span class="fcmark" title="예측(초단기) ${fcHours}시간"><svg class="fcmk" width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 17c3-1 4-8 7.5-8S15 15 21 13" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="3.2 2.8"/><path d="M15.5 4.5 19 8l-3.5 3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><b>+${fcHours}</b></span>`;
   syncMeta();
 }
 
@@ -4830,6 +4834,8 @@ function setOrigin(kind, text, ok) {
   if (kind === "rain" && el) {
     el.textContent = text;
     el.classList.toggle("db", ok && text !== "API 직조회");
+    // 평소 'DB 조회'는 알 필요가 없다(늘 그렇다) — 실패나 수동 조회처럼 평소와 다를 때만 띄운다
+    el.hidden = ok && text === "DB 조회";
   }
   const bt = document.querySelector((FEEDS[kind].panel ? `#${FEEDS[kind].panel}` : "#p-rain") + " header .basetime");
   if (bt) bt.classList.toggle("stale", !ok);
