@@ -232,11 +232,12 @@ def _win_of(tmef: str) -> int:
 
 
 def emd_day(layer: str, sigun: str | None = None, test: bool = False, now: datetime | None = None) -> dict:
-    """단기 오늘·내일 — **읍면동마다** 그날 합과 6시간 구간 합(00~06·06~12·12~18·18~24시)의 최대.
+    """단기 오늘·내일 — **읍면동마다** 그날 합, 6시간 구간 합(00~06·06~12·12~18·18~24시), 매시 값의 최대.
 
-    지도 '단기 오늘/내일'을 볼 때 오른쪽 '예측 상위'가 이것으로 바뀐다. sigun 이 없으면 경남 읍면동 전부.
+    지도 '단기 오늘/내일'을 볼 때 오른쪽 카드가 이것으로 바뀐다 — 위 카드(그날 합 · 매시 선 그래프)와
+    '단기 상위'(6시간 칸). sigun 이 없으면 경남 읍면동 전부.
     ⚠️ 5km 격자라 이웃 읍면동이 같은 값이 많다(한 칸이 여러 읍면동에 걸친다).
-    ⚠️ 오늘은 발표 뒤 남은 시간만 — 지난 구간은 hours 0(값 None)."""
+    ⚠️ 오늘은 발표 뒤 남은 시간만 — 지난 구간은 hours 0(값 None), 매시 값도 남은 시간만(times)."""
     kind, _ = split(layer)
     if not kind.startswith("shrt_"):
         raise LookupError(f"단기 오늘·내일만: {layer}")
@@ -245,8 +246,11 @@ def emd_day(layer: str, sigun: str | None = None, test: bool = False, now: datet
     day = (now + timedelta(days=0 if kind == "shrt_today" else 1)).strftime("%Y%m%d")
     if test:
         tot = synth(kind, "dfs", 0)
-        wins = [tot * f for f in (0.15, 0.35, 0.3, 0.2)]             # 합성 — 하루를 대충 나눈 모양
-        tmfc, counts = now.strftime("%Y%m%d%H"), [6, 6, 6, 6]
+        d0 = datetime.strptime(day, "%Y%m%d")
+        times = [(d0 + timedelta(hours=h)).strftime("%Y%m%d%H") for h in range(1, 25)]
+        wt = np.exp(-((np.arange(1, 25) - 17) / 5.0) ** 2)               # 합성 — 오후에 몰리는 모양
+        hourly = [tot * (w / wt.sum()) for w in wt]
+        tmfc = now.strftime("%Y%m%d%H")
     else:
         tmfc, tmefs = shrt_run()
         if not tmfc:
@@ -257,28 +261,33 @@ def emd_day(layer: str, sigun: str | None = None, test: bool = False, now: datet
         ck = (tmfc, day, tuple(sg))
         if ck in _DAYC:
             return _DAYC[ck]
-        wins, counts = [None] * 4, [0] * 4
+        times, hourly = [], []
         for t in hours:
             a = gridstore.load("shrt", f"{tmfc}_{t}")
-            if a is None:
-                continue
-            w = _win_of(t)
-            wins[w] = a.copy() if wins[w] is None else wins[w] + a     # NaN 은 NaN 으로 남는다
-            counts[w] += 1
-        got = [w for w in wins if w is not None]
-        tot = got[0].copy() if got else None
-        for w in got[1:]:
-            tot = tot + w
-        if tot is None:
+            if a is not None:
+                times.append(t)
+                hourly.append(a)
+        if not hourly:
             raise LookupError(f"{tmfc} 발표분 {day} 격자를 읽지 못했다")
+    wins, counts = [None] * 4, [0] * 4
+    for t, a in zip(times, hourly):
+        w = _win_of(t)
+        wins[w] = a.copy() if wins[w] is None else wins[w] + a          # NaN 은 NaN 으로 남는다
+        counts[w] += 1
+    got = [w for w in wins if w is not None]
+    tot = got[0].copy()
+    for w in got[1:]:
+        tot = tot + w
     total = gridstore.emd_stats(gridstore.to_hr(tot), sg)
     per = [gridstore.emd_stats(gridstore.to_hr(w), sg) if w is not None else None for w in wins]
+    hr = [gridstore.emd_stats(gridstore.to_hr(a), sg) for a in hourly]
     rows = []
     for i, r in enumerate(total):
-        rows.append({**r, "sum": r["max"], "w": [p[i]["max"] if p else None for p in per]})
+        rows.append({**r, "sum": r["max"], "w": [p[i]["max"] if p else None for p in per],
+                     "h": [x[i]["max"] for x in hr]})
     rows.sort(key=lambda r: -(r["sum"] or 0))
     out = {"layer": layer, "tmfc": tmfc, "day": day, "labels": list(DAY_WIN), "hours": counts,
-           "siguns": sg if sigun else [], "test": test, "rows": rows}
+           "times": times, "siguns": sg if sigun else [], "test": test, "rows": rows}
     if not test:
         if len(_DAYC) > 32:
             _DAYC.pop(next(iter(_DAYC)))
@@ -646,6 +655,8 @@ SETTING_DEFAULT = {"layer": "obs60", "x4": False, "vsrt_n": 1,
                    "sel_zoom": True,
                    # 누적 카드에 예상(앞으로 6시간)을 붙이나 — 카드 머리 AWS|격자 옆 단추(F)
                    "acc_fc": True,
+                   # 누적 막대의 실측 중 최근 1시간을 빗금으로 강조하나(H)
+                   "acc_h1": True,
                    # 지도 위에 겹칠 레이어(왼쪽 위 '레이어'에서 켠다). 차츰 늘린다.
                    "overlays": []}
 OVERLAYS = ("alerts", "stations", "stnval")   # stnval = 관측소 옆 값 글자(관측소에 딸림)
@@ -665,7 +676,7 @@ def put_setting(body: dict) -> dict:
     if "layer" in body:
         split(str(body["layer"]))            # 모르는 층이면 LookupError
         cur["layer"] = str(body["layer"])
-    for k in ("x4", "tl_on", "sel_zoom", "acc_fc"):
+    for k in ("x4", "tl_on", "sel_zoom", "acc_fc", "acc_h1"):
         if k in body:
             cur[k] = bool(body[k])
     if "vsrt_n" in body:

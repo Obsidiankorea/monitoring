@@ -108,3 +108,13 @@ def test_acc_fc_setting(monkeypatch):
     monkeypatch.setattr(gridview.db, "put_setting", lambda k, v: None)
     assert gridview.SETTING_DEFAULT["acc_fc"] is True
     assert gridview.put_setting({"acc_fc": False})["acc_fc"] is False
+
+
+def test_emd_day_hourly(monkeypatch):
+    r = gridview.emd_day("shrt_tomorrow", "의령", test=True)
+    assert len(r["times"]) == 24 and r["times"][-1].endswith("00")       # 01시 … 다음 날 00시(=24시)
+    x = r["rows"][0]
+    assert len(x["h"]) == 24 and abs(sum(v or 0 for v in x["h"]) - x["sum"]) < 1.0   # 매시 최대의 합 ≈ 그날 합
+    monkeypatch.setattr(gridview.db, "get_setting", lambda k, d: dict(d))
+    monkeypatch.setattr(gridview.db, "put_setting", lambda k, v: None)
+    assert gridview.SETTING_DEFAULT["acc_h1"] is True and gridview.put_setting({"acc_h1": 0})["acc_h1"] is False
