@@ -1,7 +1,7 @@
 # 경남 기상 대시보드
 
 경상남도 18개 시군의 강수·특보·초단기예측을 한 화면에 표출하는 재난상황실 대시보드.
-맥미니 상주 서버 하나로 수집·저장·표출을 모두 한다.
+상주 서버 하나로 수집·저장·표출을 모두 한다 — 지금은 언레이드(도커, 아래 '언레이드 서버').
 
 ## 실행
 
@@ -43,6 +43,24 @@ mkdir -p config && cp handoff-mac/config/api_keys.txt config/   # 키는 저장�
 ```
 
 윈도는 `.venv\Scripts\python.exe -m app.main`.
+
+### 언레이드 서버(도커) — 어디서든 브라우저로
+
+집 언레이드(tower, Tailscale `100.106.116.92`)에 컨테이너 `gn-monitor` 로 상주한다(2026-10-17~).
+**화면 `http://100.106.116.92:8000/` · 지도 `/map.html`** — Tailscale 이 켜진 기기면 어디서든 연다.
+언레이드 웹 화면 Docker 탭의 `gn-monitor` 아이콘 → WebUI 로도 열린다.
+
+| | |
+|---|---|
+| 폴더 | `/mnt/user/appdata/gn-monitor/` — `repo/`(받은 저장소) · `config/api_keys.txt`(ORG_API_KEY, PC 에서 SSH 로 복사) · `state/`(DB · 격자 캐시 — 컨테이너를 갈아도 남는다) |
+| 갱신 | GitHub 에 올린 뒤 `bash /mnt/user/appdata/gn-monitor/repo/deploy/unraid/deploy.sh` — 받기(ff-only) → 빌드 → 갈아끼우기 → `/api/status` 확인 |
+| 이미지 | `Dockerfile`(python 3.14.3-slim + tzdata, KST). 키·DB 는 굽지 않는다(`.dockerignore`) — 실행할 때 연결 |
+| 쌓이는 자료 | `GN_STATE=/state` — DB·격자 캐시만 바깥에. 지도 경계·사례(`data/geo`·`data/demo`)는 이미지 안 |
+| 스방 | 집에서는 내부망에 닿지 않는다 — `SKIP_COLLECT=bangjae`(쉼표로 여럿). 누적 카드 AWS 는 기상청으로 물러선다 |
+
+⚠️ **PC 와 서버가 둘 다 수집하면 기상청 호출이 두 배**다(같은 키). 서버가 수집을 맡으면 PC 는 서버 화면을
+보거나 `--no-collect` 로 띄운다. 첫 배포 때 PC 의 DB(설정·기록)를 SQLite 백업으로 떠서 옮겨 두었다.
+⚠️ 화면의 '업데이트' 단추는 서버(컨테이너)에서는 안 된다(git 이 없다) — 서버 갱신은 deploy.sh.
 
 ## 구조 — 수집과 표출을 분리한다
 
