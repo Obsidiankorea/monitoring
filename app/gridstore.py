@@ -25,6 +25,7 @@ from functools import lru_cache
 
 import numpy as np
 
+from . import clock
 from .config import CACHE, DATA
 from .domain import gridproj
 
@@ -136,7 +137,7 @@ def prune(layers=None, now: datetime | None = None) -> dict[str, int]:
     수집기가 받을 때마다 제 층만 치운다 — 초단기는 10분마다 6장씩 쌓여 새벽 정리만
     기다리면 하루 860장이 된다. 새벽 정리(maint)는 전부 한 번 더 돈다.
     """
-    now = now or datetime.now()
+    now = now or clock.now()
     cut = (now - timedelta(days=KEEP_DAYS)).strftime("%Y%m%d%H%M")
     removed: dict[str, int] = {}
     for layer in layers or GRID_OF:

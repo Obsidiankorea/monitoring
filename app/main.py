@@ -8,9 +8,18 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import gzip
 import logging
 import os
+import sys
+
+# ⚠️ 시연(--snap)은 설정(config)을 읽기 **전에** 정해야 한다 — python -m app.main 은 이 파일을 먼저 돌려
+#    config 를 읽어 버리고, uvicorn 이 app.main 을 다시 부를 때는 이미 읽힌 config 를 그대로 쓴다
+if __name__ == "__main__" and "--snap" in sys.argv:
+    os.environ["GN_SNAP"] = sys.argv[sys.argv.index("--snap") + 1]
+    if "--port" not in sys.argv:
+        os.environ.setdefault("PORT", "8001")
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -21,7 +30,7 @@ from fastapi import Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import db, demo, gridcase, gridstore, gridview, maint, origin, queries, update
+from . import clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, update
 from .collectors import alerts, bangjae_rain, forecast, grid_rain, qpf, rain, shortfc
 from .config import CACHE, INTERVALS, POLL_DEFAULT
 
@@ -52,6 +61,9 @@ _locks = {k: asyncio.Lock() for k in COLLECTORS}
 async def run_one(kind: str, force: bool = False) -> dict:
     if kind not in COLLECTORS:
         raise HTTPException(404, f"모르는 수집기: {kind}")
+    if config.SNAP:
+        # 시연 — 기상청을 부르지 않는다(굳힌 시각 뒤 자료가 끼면 '가장 새 것'이 바뀐다). 수동 조회·과거 메우기도
+        return {"ok": False, "kind": kind, "error": "시연 — 수집하지 않는다"}
     async with _locks[kind]:
         try:
             fn = COLLECTORS[kind]
@@ -128,7 +140,7 @@ async def api_rain(hours: int = Query(12, ge=1, le=72),
     out = queries.rain(hours, src=src)
     # 빈 시각이 있으면 지금 채운다. 이미 받는 중이면 겹쳐 부르지 않는다.
     kind = "bangjae" if src == "bangjae" else "rain"
-    if (grew or out.get("missing")) and not _locks[kind].locked():
+    if (grew or out.get("missing")) and not _locks[kind].locked() and not config.SNAP:
         asyncio.create_task(run_one(kind))
         out["filling"] = True
     return out
@@ -475,6 +487,29 @@ async def api_refresh(kind: str, force: bool = False):
     return await run_one(kind, force=force)
 
 
+# ── 시연(스냅숏) — 시계와 목록 ─────────────────────────────────────────────
+@app.get("/api/clock.js")
+async def api_clock_js():
+    """화면이 맨 먼저 읽는 작은 스크립트 — 시연이면 멈춘 시각(ms)과 그 시연, 실황이면 null."""
+    snap = {k: config.SNAP_META[k] for k in ("name", "title", "now", "note")} if config.SNAP_META else None
+    body = f"window.GN_NOW={json.dumps(clock.epoch_ms())};window.GN_SNAP={json.dumps(snap, ensure_ascii=False)};"
+    return Response(body, media_type="application/javascript", headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/snaps")
+async def api_snaps():
+    """굳혀 둔 시연 목록(data/demo/snap/*/meta.json) — 새 것부터. 시연 서버 주소는 화면이 정한다(같은 주소의 8001)."""
+    out = []
+    for m in sorted((config.DATA / "demo" / "snap").glob("*/meta.json")):
+        try:
+            j = json.loads(m.read_text("utf-8"))
+        except ValueError:
+            continue
+        out.append({k: j.get(k) for k in ("name", "title", "now", "note")})
+    out.sort(key=lambda x: x["now"] or "", reverse=True)
+    return {"snaps": out, "this": config.SNAP}
+
+
 # ── 자료를 어디서 받나(이 PC / 서버) — app/origin.py ────────────────────────────
 def _collecting() -> bool:
     sch = getattr(app.state, "sched", None)
@@ -560,5 +595,8 @@ if __name__ == "__main__":
         os.environ["NO_COLLECT"] = "1"
     if "--port" in argv:
         os.environ["PORT"] = argv[argv.index("--port") + 1]
+    if "--snap" in argv:                  # 시연 — 굳혀 둔 그 시각 자료로(수집 안 함). 기본 포트 8001
+        os.environ["GN_SNAP"] = argv[argv.index("--snap") + 1]
+        os.environ.setdefault("PORT", "8001")
     uvicorn.run("app.main:app", host=os.environ.get("HOST", "127.0.0.1"),
                 port=int(os.environ.get("PORT", "8000")))

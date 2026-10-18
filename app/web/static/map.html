@@ -128,6 +128,7 @@ button { font-family: inherit; }
 .badge.test { color: #fff; background: var(--test); border-color: var(--test); }
 .badge.past { color: var(--accent); border-color: color-mix(in oklab, var(--accent) 50%, var(--line)); }
 .badge.srv { color: var(--accent); border-color: color-mix(in oklab, var(--accent) 50%, var(--line)); font-size: 12px; }
+.badge.snap { color: #fff; background: #7B5CD6; border-color: #7B5CD6; }
 /* 층 메뉴 — 유리판이 제목 밑에서 살짝 커지며 내려오고, 줄이 하나씩 따라 들어온다 */
 #lmenu { position: absolute; left: -10px; top: calc(100% + 8px); z-index: 30; width: 360px; padding: 6px;
   border-radius: 14px; border: 1px solid var(--line); text-shadow: none;
@@ -769,6 +770,7 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 <div id="help" hidden></div>
 <div id="pop" hidden></div>
 
+<script src="/api/clock.js"></script>
 <script src="vendor/d3-array.min.js"></script>
 <script src="vendor/d3-geo.min.js"></script>
 <script src="vendor/topojson-client.min.js"></script>
@@ -1172,6 +1174,11 @@ function buildLegend() {
 }
 
 /* ── 머리 ─────────────────────────────────────────────────────────── */
+/* 지금 시각 — 시연(스냅숏)이면 서버가 멈춰 둔 그 시각(/api/clock.js 가 맨 먼저 window.GN_NOW 를 둔다) */
+const NOWD = () => (window.GN_NOW ? new Date(window.GN_NOW) : new Date());
+/* 시연 서버 주소 — 같은 주소의 8001(언레이드 gn-demo · PC python -m app.main --snap). 실황은 8000 */
+const SNAP_URL = (path = "") => `${location.protocol}//${location.hostname}:8001${path}`;
+const LIVE_URL = (path = "") => `${location.protocol}//${location.hostname}:8000${path}`;
 const hm = t => t ? `${t.slice(8, 10)}:${t.slice(10, 12)}` : "—";
 const md = t => t ? `${+t.slice(4, 6)}.${+t.slice(6, 8)}.` : "";
 function when(gr) {
@@ -1210,6 +1217,7 @@ function paintHead() {
   $("lsrc").textContent = test ? "합성 격자 — 실제 자료 아님" : (L.src || "");
   const b = [];
   const past = isPast();
+  if (window.GN_SNAP) b.push(`<span class="badge snap" title="${window.GN_SNAP.title} — ${window.GN_SNAP.note || ""}">시연 · ${md(window.GN_SNAP.now)} ${hm(window.GN_SNAP.now)} 저장</span>`);
   if (CASE) b.push(`<span class="badge past">재현 · ${CASEM?.title || CASE}</span>`);
   else if (test) b.push(`<span class="badge test">테스트</span>`);
   else if (pinned(kind)) b.push(`<span class="badge past">지난 시각 보기 (tm=${PIN_TM})</span>`);
@@ -1931,7 +1939,7 @@ const sumv = a => a.reduce((x, v) => x + (typeof v === "number" ? v : 0), 0);
 
 /* 시각 글자('12', '13', …, '23:36') → 시각(ms). 끝에서부터 거슬러 올라가며 날을 넘긴다 */
 function labelTimes(labels, lastHM) {
-  const out = new Array(labels.length), now = new Date();
+  const out = new Array(labels.length), now = NOWD();
   const [lh, lm] = (lastHM || `${now.getHours()}:00`).split(":").map(Number);
   const t = new Date(now); t.setHours(lh, lm || 0, 0, 0);
   if (t - now > 3600e3) t.setDate(t.getDate() - 1);
@@ -1960,7 +1968,7 @@ function nextHours(labels, after) {          // 예측 '00','01',… → after �
    격자는 마지막 정시 격자에서 세야 맞아서 since 를 서버에 넘긴다.
    받은 매시 값은 DB(AWS obs_hourly) · 파일(격자 obs60)에 남는다 — 구간을 늘리면 없는 시각만 한 번 받는다 */
 function accSpan() {
-  const f = SET.acc_from || "hours", h = new Date().getHours();
+  const f = SET.acc_from || "hours", h = NOWD().getHours();
   if (f === "today") return { H: Math.max(1, h), since: "today", label: "오늘 0시부터" };
   if (f === "yesterday") return { H: 24 + h, since: "yesterday", label: "어제 0시부터" };
   return { H: SET.acc_hours, since: null, label: `지난 ${SET.acc_hours}시간` };
@@ -2281,7 +2289,7 @@ function renderAcc() {
     const p = pts.map(([t, v]) => `${sx(t).toFixed(1)},${sy(v).toFixed(1)}`);
     return { d: "M" + p.join("L"), a: `M${sx(pts[0][0]).toFixed(1)},${SH}L${p.join("L")}L${sx(pts.at(-1)[0]).toFixed(1)},${SH}Z` };
   };
-  const tnow = Date.now(), xn = A.day ? (tnow > t0 && tnow < t1 ? sx(tnow) : -99) : sx(rows[0].dt.at(-1));
+  const tnow = NOWD().getTime(), xn = A.day ? (tnow > t0 && tnow < t1 ? sx(tnow) : -99) : sx(rows[0].dt.at(-1));
   // 다시 그리기 전 줄 자리 — 예상을 켜고 끄거나(합이 바뀐다) 시각이 바뀌어 순서가 달라지면 새 자리로 미끄러지게
   const before = new Map([...body.querySelectorAll(".ar[data-k]")].map(e => [e.dataset.k, e.getBoundingClientRect().top]));
   const lastNum = d => { for (let j = d.length - 1; j >= 0; j--) if (typeof d[j] === "number") return d[j]; return 0; };
@@ -2634,8 +2642,16 @@ function setTest(on) {
 async function fillDemo(box) {
   let list = [];
   try { list = (await getJson("/api/grid/cases")).cases; } catch {}
-  box.innerHTML = `<a href="/map.html" data-live class="${!CASE && !test ? "on" : ""}"><b>실황(지금)</b><small>수집 중인 자료</small></a>
-    <a href="/map.html?test=1" data-test class="t ${test ? "on" : ""}"><b>테스트 — 합성</b><small>비 없는 날 화면 점검 · 합성 격자 · 특보 · 지점(스방 흉내) · T 키</small></a>
+  let snaps = [];
+  try { snaps = (await getJson("/api/snaps")).snaps; } catch {}
+  const S = window.GN_SNAP;
+  box.innerHTML = (S ? `<a href="${LIVE_URL("/map.html")}"><b>실황(지금)으로</b><small>시연을 끝내고 수집 중인 화면으로(:8000)</small></a>` : "")
+    + `<div class="dh">시연 — 그때를 굳혀 둔 것(:8001)</div>`
+    + (snaps.length ? snaps.map(x => `<a class="${S && S.name === x.name ? "on" : ""}" href="${SNAP_URL("/map.html")}" target="${S ? "_self" : "gn-snap"}">
+        <b>${x.title}</b><small>${x.note || ""}</small></a>`).join("") : `<div class="al-none" style="padding:6px 10px">굳혀 둔 시연이 없다(tools/snapshot.py)</div>`)
+    + (S ? "" : `<div class="dh">이 화면</div><a href="/map.html" data-live class="${!CASE && !test ? "on" : ""}"><b>실황(지금)</b><small>수집 중인 자료</small></a>`)
+    + `
+<a href="/map.html?test=1" data-test class="t ${test ? "on" : ""}"><b>테스트 — 합성</b><small>비 없는 날 화면 점검 · 합성 격자 · 특보 · 지점(스방 흉내) · T 키</small></a>
     <div class="dh">재현 사례 — 지난 호우</div>`
     + list.map(c => `<a class="${c.slug === CASE ? "on" : ""}"
       href="/map.html?case=${c.slug}&layer=acc&tl=1&ov=alerts"><b>${c.title}</b>

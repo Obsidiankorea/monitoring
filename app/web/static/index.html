@@ -430,6 +430,7 @@ a.mb-item .ext { opacity: .55; margin-left: -1px; }
   border: 1px solid color-mix(in oklab, var(--accent) 45%, var(--line));
   background: color-mix(in oklab, var(--accent) 10%, transparent); }
 .mb-origin[hidden] { display: none; }
+.mb-origin.snap { color: #fff; background: #7B5CD6; border-color: #7B5CD6; }
 .mb-origin.bad { color: var(--lv-fail); border-color: color-mix(in oklab, var(--lv-fail) 45%, var(--line)); }
 .mb-when b { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--ink); margin-left: 3px; }
 .mb-when .w2 b { color: var(--accent); }
@@ -1594,6 +1595,7 @@ body.editing .panel {
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.8"/><path d="M12 7.5V12l3 1.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span id="lb-period">10분</span><svg class="chev" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
 
+    <span class="mb-origin snap" id="mb-snap" hidden></span>
     <span class="mb-origin" id="mb-origin" hidden title="자료를 서버에서 받는 중 — 설정(Ctrl+,) › 자료"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="4" width="16" height="6.5" rx="1.5" stroke="currentColor" stroke-width="1.9"/><rect x="4" y="13.5" width="16" height="6.5" rx="1.5" stroke="currentColor" stroke-width="1.9"/><circle cx="8" cy="7.25" r="1.1" fill="currentColor"/><circle cx="8" cy="16.75" r="1.1" fill="currentColor"/></svg><span>서버</span></span>
     <span class="mb-when" id="mb-when" title="이 판의 자료를 언제 받았고, 언제 기준인지">
       <span class="w1">조회 <b id="w-got">—</b></span>
@@ -2029,6 +2031,7 @@ body.editing .panel {
   </div>
 </div>
 
+<script src="/api/clock.js"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════
    초안용 표본 자료. 실제로는 서버가 수집해 SQLite에 넣은 값을 읽는다.
@@ -2081,7 +2084,7 @@ function buildAxis(labels) {
     const mm = lb.length > 2 ? +lb.slice(3, 5) : 0;
     SLOT_MIN.push(day * 1440 + hh * 60 + mm);
   });
-  const d0 = new Date();
+  const d0 = NOWD();
   for (let k = 0; k <= day; k++) {
     const d = new Date(d0); d.setDate(d.getDate() - (day - k));
     DAYS.push(`${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
@@ -2482,7 +2485,12 @@ const inkOn = v => (v >= 10 ? "var(--on-fill)" : "var(--ink)");
       막대의 점선을 그 값에 긋기 위해서였는데, 이제 점선은 그때그때 시군 분포에서
       뽑는다(drawRain 의 quant). 고정값은 지웠다 — 남겨 두면 안 쓰는 기준이
       코드에 남아 다음 사람이 그걸 믿는다. */
-const today0 = () => new Date().getHours() + 1;
+/* 지금 시각 — 시연(스냅숏)이면 서버가 멈춰 둔 그 시각(/api/clock.js 가 맨 먼저 window.GN_NOW 를 둔다) */
+const NOWD = () => (window.GN_NOW ? new Date(window.GN_NOW) : new Date());
+/* 시연 서버 주소 — 같은 주소의 8001(언레이드 gn-demo · PC python -m app.main --snap). 실황은 8000 */
+const SNAP_URL = (path = "") => `${location.protocol}//${location.hostname}:8001${path}`;
+const LIVE_URL = (path = "") => `${location.protocol}//${location.hostname}:8000${path}`;
+const today0 = () => NOWD().getHours() + 1;
 const RANGE = [
   { k: "3",  l: "3시간", get slots() { return 3; }             },
   { k: "6",  l: "6시간", get slots() { return 6; }             },
@@ -4248,6 +4256,13 @@ document.getElementById("pf-server").addEventListener("change", async e => {
                               body: JSON.stringify({ url: e.target.value.trim() }) }).then(loadDataOrigin);
 });
 loadDataOrigin();
+/* 시연(스냅숏) 화면이면 메뉴바에 늘 — 발표 화면이 실황으로 읽히지 않게 */
+if (window.GN_SNAP) {
+  const c = document.getElementById("mb-snap"), n = window.GN_SNAP.now;
+  c.textContent = `시연 · ${+n.slice(4, 6)}.${+n.slice(6, 8)}. ${n.slice(8, 10)}:${n.slice(10, 12)} 저장`;
+  c.title = window.GN_SNAP.title + (window.GN_SNAP.note ? " — " + window.GN_SNAP.note : "");
+  c.hidden = false;
+}
 document.getElementById("pf-slot").addEventListener("change", e => setSlot(e.target.value));
 document.getElementById("pf-side").addEventListener("change", e => { sidePos = e.target.value; applySide(); });
 document.getElementById("pf-mncount").addEventListener("change", e => {
@@ -4266,7 +4281,17 @@ async function loadDemoList() {
   box.innerHTML = `<p class="note">불러오는 중…</p>`;
   try {
     const j = await getJson("/api/demo");
-    box.innerHTML = j.cases.map(c => `
+    let snaps = [];
+    try { snaps = (await getJson("/api/snaps")).snaps; } catch {}
+    const S = window.GN_SNAP;
+    box.innerHTML = (S ? `<div class="demo-card"><div class="d"><b>실황으로 돌아가기</b><div class="n">시연을 끝내고 수집 중인 화면(:8000)</div></div>
+        <a class="sbtn primary" href="${LIVE_URL("/")}">실황</a></div>` : "")
+      + snaps.map(x => `
+      <div class="demo-card">
+        <div class="d"><b>${x.title}</b> <span class="tagx">시연</span><div class="n">${x.note || ""}</div></div>
+        <a class="sbtn primary" href="${SNAP_URL("/")}" target="${S ? "_self" : "gn-snap"}">${S && S.name === x.name ? "지금 보는 중" : "열기"}</a>
+      </div>`).join("")
+      + j.cases.map(c => `
       <div class="demo-card${c.fake ? " fake" : ""}">
         <div class="d">
           <b>${c.title}</b>${c.fake ? ` <span class="tagx">가상</span>` : ""}
@@ -4889,7 +4914,7 @@ async function pull(kind, how) {
     if (how === "수동") await fetch(`/api/refresh/${kind}?force=true`, { method: "POST" });
     await f.load();
     f.after();
-    f.got = new Date().toTimeString().slice(0, 5);
+    f.got = NOWD().toTimeString().slice(0, 5);
     f.failed = false;
     loadStatus().catch(() => {});
     setOrigin(kind, how === "수동" ? "API 직조회" : "DB 조회", true);
@@ -5047,7 +5072,7 @@ applySide(); applySlot(); applySkin(false); paintFsCss(); showView('all');
 
 (async () => {
   await Promise.allSettled([loadRain(), loadForecast(), loadAlerts(), loadQpf(), loadSettings(), loadStatus()]);
-  const t0 = new Date().toTimeString().slice(0, 5);
+  const t0 = NOWD().toTimeString().slice(0, 5);
   for (const k in FEEDS) FEEDS[k].got ??= t0;
   paintRange(); repaint(); drawWrns(); drawQpf(); applyCrop(false);
   startTimer(); paintCd();

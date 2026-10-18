@@ -41,6 +41,15 @@ docker run -d --name "$NAME" --restart unless-stopped --memory 2g -p "$PORT:8000
   -l net.unraid.docker.webui="http://[IP]:[PORT:8000]/" \
   "$NAME:$V" >/dev/null
 
+# 시연 — 굳혀 둔 것(data/demo/snap) 가운데 가장 새 것을 :8001 로. 같은 이미지, 수집 안 함 · 시계 멈춤 · 키 없음.
+#   실황 DB(state/)는 연결하지 않는다 — 굳힌 것을 컨테이너 안 사본(/tmp/snap)으로 떠서 쓴다(띄울 때마다 처음으로)
+SNAP=$(ls -1 "$D/repo/data/demo/snap" 2>/dev/null | sort | tail -1)
+docker rm -f gn-demo >/dev/null 2>&1 || true
+if [ -n "$SNAP" ]; then
+  docker run -d --name gn-demo --restart unless-stopped --memory 1g -p 8001:8000     -e TZ=Asia/Seoul -e GN_SNAP="$SNAP" -e GN_SNAP_STATE=/tmp/snap     -l net.unraid.docker.webui="http://[IP]:[PORT:8001]/"     "$NAME:$V" >/dev/null
+  echo "[deploy] 시연 gn-demo($SNAP) → http://<서버>:8001/"
+fi
+
 # 옛 판 이미지 정리(지금 판 · latest 만 남긴다)
 docker image ls "$NAME" --format '{{.Tag}}' | grep -vE "^($V|latest)$" \
   | xargs -r -I{} docker rmi "$NAME:{}" >/dev/null 2>&1 || true

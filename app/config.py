@@ -5,13 +5,30 @@
 """
 from __future__ import annotations
 
+import json
 import os
+import shutil
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"                     # 저장소에 든 읽기 전용 자료(지도 경계·사례·지점 목록)
 # 쌓이는 자료(DB·격자 캐시) — 서버(도커)에서는 GN_STATE 로 바깥 폴더에 둔다(컨테이너를 갈아도 남게)
 STATE = Path(os.environ["GN_STATE"]) if os.environ.get("GN_STATE") else DATA
+
+# 시연(스냅숏) — GN_SNAP=<이름>(또는 --snap) 이면 data/demo/snap/<이름>/ 에 굳혀 둔 그 시각 자료로 띄운다
+# (tools/snapshot.py 가 만든다). 수집하지 않고 시계를 그 시각에 멈춘다(clock.py, GN_NOW).
+# ⚠️ 굳힌 것은 손대지 않는다 — 뜰 때마다 쓰는 사본(GN_SNAP_STATE, 기본 data/cache/snap-<이름>)으로 새로 떠서 쓴다.
+#    발표 중에 바꾼 설정(층 · 시군 등)은 다음에 띄우면 처음으로 돌아간다. 실황 DB(GN_STATE)는 절대 쓰지 않는다.
+SNAP = os.environ.get("GN_SNAP") or None
+SNAP_META: dict | None = None
+if SNAP:
+    _src = DATA / "demo" / "snap" / SNAP
+    SNAP_META = json.loads((_src / "meta.json").read_text("utf-8"))
+    os.environ["GN_NOW"] = SNAP_META["now"]
+    os.environ["NO_COLLECT"] = "1"
+    STATE = Path(os.environ.get("GN_SNAP_STATE") or (DATA / "cache" / f"snap-{SNAP}"))
+    shutil.rmtree(STATE, ignore_errors=True)
+    shutil.copytree(_src / "state", STATE)
 CACHE = STATE / "cache"
 DB_PATH = STATE / "gnweather.db"
 

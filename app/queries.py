@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from . import db, sites
+from . import clock, db, sites
 from .bangjae import as_of as bj_as_of
 from .domain.regions import ORDER, REP_STN, ZONES, by_sigun, grids, stations
 
@@ -30,7 +30,7 @@ def rain(hours: int = 12, now: datetime | None = None, src: str = "kma") -> dict
     """
     if src == "bangjae":
         return _rain_bangjae(hours, now)
-    now = now or datetime.now()
+    now = now or clock.now()
     slots = _slots(hours, now)
     lo, hi = slots[0], slots[-1]
 
@@ -109,7 +109,7 @@ def _rain_bangjae(hours: int, now: datetime | None = None) -> dict:
        (H-1):00~H:00 이다. 그래서 기상청 H시 칸에는 스방 (H-1)시를 넣는다.
        (진행 중인 마지막 칸은 밀지 않는다 — 같은 구간이라서)
     """
-    now = now or datetime.now()
+    now = now or clock.now()
     slots = _slots(hours, now)                       # 기상청 표기 칸
     back = {s: (datetime.strptime(s, "%Y-%m-%d %H:00")
                 - timedelta(hours=1)).strftime("%Y-%m-%d %H:00") for s in slots}
@@ -215,7 +215,7 @@ def forecast(hours: int = 6, now: datetime | None = None, sigun: str | None = No
 
         # ⚠️ 발표가 한 박자 늦으면 첫 예측 시각이 이미 지나간 시각이다.
         #    그대로 그리면 예측이 현재보다 뒤에 놓여 한 시간씩 밀린다. 지난 것은 버린다.
-        now_h = (now or datetime.now()).strftime("%Y%m%d%H")
+        now_h = (now or clock.now()).strftime("%Y%m%d%H")
         tmefs = [r["tmef"] for r in con.execute(
             "SELECT DISTINCT tmef FROM fcst_rn1 WHERE tmfc=? ORDER BY tmef", (tmfc,))
             if r["tmef"] > now_h][:hours]
@@ -411,7 +411,7 @@ def short(now: datetime | None = None) -> dict:
     ⚠️ 직전 발표 대비(▲▼)는 **같은 시간대끼리** 견준다. 직전 발표는 오늘의 더 이른
        시간을 담고 있어 그냥 견주면 늘 줄어든 것처럼 보인다.
     """
-    now = now or datetime.now()
+    now = now or clock.now()
     today = now.replace(hour=0, minute=0, second=0, microsecond=0)
     days = [(today + timedelta(days=i)).strftime("%Y%m%d") for i in range(3)]
     groups = _short_groups()

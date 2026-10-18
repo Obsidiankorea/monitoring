@@ -13,6 +13,19 @@
       "port": 8010
     },
     {
+      "name": "dashboard-snap",
+      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeArgs": [
+        "-m",
+        "app.main",
+        "--snap",
+        "live-20261018-1536",
+        "--port",
+        "8011"
+      ],
+      "port": 8011
+    },
+    {
       "name": "dashboard-collect",
       "runtimeExecutable": ".venv/Scripts/python.exe",
       "runtimeArgs": [

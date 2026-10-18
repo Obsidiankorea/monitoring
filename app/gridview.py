@@ -18,7 +18,7 @@ from functools import lru_cache
 
 import numpy as np
 
-from . import db, gridstore, sites
+from . import clock, db, gridstore, sites
 from .collectors.shortfc import base_of
 from .domain import gridproj
 
@@ -125,7 +125,7 @@ def frame(layer: str, tm: str | None = None, now: datetime | None = None,
     """{'grid', 'tm', 'tmfc'?, 'store'+'key'(파일 그대로) 또는 'arr'(계산한 것)}. 없으면 LookupError."""
     kind, n = split(layer)
     info = BY_ID[kind]
-    now = now or datetime.now()
+    now = now or clock.now()
     if test:
         # tm 을 주면 그 시각만큼 흘린 모양 — 재생해 보면 덩어리가 움직인다.
         # tm 이 없으면 실제 수집과 같은 '최신' 칸(6분 물러선 10분 칸) — 재생 막대의 마지막 실측과 맞게
@@ -242,7 +242,7 @@ def emd_day(layer: str, sigun: str | None = None, test: bool = False, now: datet
     if not kind.startswith("shrt_"):
         raise LookupError(f"단기 오늘·내일만: {layer}")
     sg = siguns_of(sigun) or [s["name"] for s in gridstore.geo()["sigun"] if s["kind"] == "gn"]
-    now = now or datetime.now()
+    now = now or clock.now()
     day = (now + timedelta(days=0 if kind == "shrt_today" else 1)).strftime("%Y%m%d")
     if test:
         tot = synth(kind, "dfs", 0)
@@ -342,7 +342,7 @@ def test_rain(hours: int = 12, now: datetime | None = None) -> dict:
     스방 흉내 지점은 실제 스방처럼 위치를 이름으로 짐작한다(sites.position — 읍면동 가운데, est).
     비 없는 날 내부망 목록 모양(한 시군 여러 지점, 위치 모르는 지점)을 미리 보려는 것 — 실제 자료가 아니다.
     """
-    now = now or datetime.now()
+    now = now or clock.now()
     top = now.replace(minute=0, second=0, microsecond=0)
     slots = [top - timedelta(hours=h) for h in range(hours - 1, -1, -1)]
     frames = [synth("obs60", "hr", (t - now).total_seconds() / 60) for t in slots]
@@ -498,7 +498,7 @@ def acc(hours: int = 12, sigun: str | None = None, now: datetime | None = None,
         test: bool = False, since: str | None = None) -> dict:
     """지난 hours 시간(가장 최근 정시 격자까지) 격자 누적 — 시군 줄, 또는 sigun 의 읍면동 줄.
     since=today|yesterday 면 그날 0시부터(시간 수는 마지막 정시 격자에서 센다)."""
-    now = now or datetime.now()
+    now = now or clock.now()
     if test:
         last = _floor10(now - timedelta(minutes=6)).replace(minute=0)
     else:
@@ -561,7 +561,7 @@ GRID_OF_STORE = gridstore.GRID_OF
 
 
 def flow(hours: int = 6, step: int = 10, now: datetime | None = None, test: bool = False) -> dict:
-    now = now or datetime.now()
+    now = now or clock.now()
     start = now - timedelta(hours=hours)
     frames: list[dict] = []
     # ⚠️ 가장 최근 실측은 간격과 상관없이 늘 넣는다. 30분 간격에 최신이 23:40 이면
@@ -612,7 +612,7 @@ def flow(hours: int = 6, step: int = 10, now: datetime | None = None, test: bool
 
 # ── 목록 · 지연 ─────────────────────────────────────────────────────────
 def meta(now: datetime | None = None) -> dict:
-    now = now or datetime.now()
+    now = now or clock.now()
     g = gridstore.geo()
     out = []
     for info in LAYERS:
