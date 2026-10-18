@@ -483,9 +483,21 @@ def acc_table(acc: np.ndarray, frames: list, sigun: str | None = None) -> list[d
 _ACC_CACHE: dict[tuple, dict] = {}
 
 
+def span_hours(since: str | None, end: datetime, hours: int = 12) -> int:
+    """누적 구간 시간 수 — since 가 today/yesterday 면 그날 0시부터 end(마지막 정시)까지, 아니면 hours.
+
+    ⚠️ 정시 'H시' 한 장은 (H-1)~H시다. 0시부터 15시까지는 01·02 … 15시 열다섯 장이다.
+       0시 정각이면 오늘 몫이 아직 없다 — 한 장(어제 23~24시)이라도 보여 준다."""
+    if since not in ("today", "yesterday"):
+        return max(1, min(48, int(hours)))
+    d0 = end.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1 if since == "yesterday" else 0)
+    return max(1, min(48, int((end - d0).total_seconds() // 3600)))
+
+
 def acc(hours: int = 12, sigun: str | None = None, now: datetime | None = None,
-        test: bool = False) -> dict:
-    """지난 hours 시간(가장 최근 정시 격자까지) 격자 누적 — 시군 줄, 또는 sigun 의 읍면동 줄."""
+        test: bool = False, since: str | None = None) -> dict:
+    """지난 hours 시간(가장 최근 정시 격자까지) 격자 누적 — 시군 줄, 또는 sigun 의 읍면동 줄.
+    since=today|yesterday 면 그날 0시부터(시간 수는 마지막 정시 격자에서 센다)."""
     now = now or datetime.now()
     if test:
         last = _floor10(now - timedelta(minutes=6)).replace(minute=0)
@@ -494,6 +506,7 @@ def acc(hours: int = 12, sigun: str | None = None, now: datetime | None = None,
         if not ks:
             raise LookupError("정시 60분 격자가 아직 없다")
         last = _dt(ks[-1])
+    hours = span_hours(since, last, hours)
     want = [(last - timedelta(hours=h)).strftime("%Y%m%d%H%M") for h in range(hours - 1, -1, -1)]
     have = want if test else [k for k in want if gridstore.has("obs60", k)]
     ck = (tuple(have), hours, sigun, test, now.strftime("%Y%m%d%H") if test else "")
@@ -649,6 +662,8 @@ SETTING_DEFAULT = {"layer": "obs60", "x4": False, "vsrt_n": 1,
                    # 오른쪽 패널 — 켬/끔, 방식(카드: 종합 화면 판을 작게 / 타임라인: 격자 시군 선),
                    # 타임라인의 시군 '최대'/'평균', 카드의 누적 구간(시간)
                    "tl_on": False, "panel": "cards", "tl_stat": "max", "acc_hours": 12,
+                   # 누적 구간을 어디서부터 — hours(지난 acc_hours 시간) · today(오늘 0시부터) · yesterday(어제 0시부터)
+                   "acc_from": "hours",
                    # 누적 카드 기준 — aws: 관측소 다우지점(스방 265 → 기상청 56) / grid: 격자 누적 최대 칸
                    "acc_basis": "aws",
                    # 시군을 누르면 그 시군으로 확대(읍면동 경계·이름이 나온다). 끄면 테두리만
@@ -663,8 +678,9 @@ OVERLAYS = ("alerts", "stations", "stnval")   # stnval = 관측소 옆 값 글�
 _CHOICES = {"flow_step": (10, 20, 30, 60), "flow_hours": (1, 3, 6, 12),
             "play_ms": (600, 1200, 2000), "tl_stat": ("max", "mean"),
             "panel": ("cards", "timeline"), "acc_hours": (6, 12, 24, 48),
+            "acc_from": ("hours", "today", "yesterday"),
             "acc_basis": ("aws", "grid")}
-_TEXT = {"tl_stat", "panel", "acc_basis"}
+_TEXT = {"tl_stat", "panel", "acc_basis", "acc_from"}
 
 
 def setting() -> dict:

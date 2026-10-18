@@ -241,13 +241,14 @@ async def api_grid_stations(layer: str, tm: str | None = None, test: bool = Fals
 
 @app.get("/api/grid/acctable")
 async def api_grid_acctable(hours: int = Query(12, ge=1, le=48), sigun: str | None = None,
-                       test: bool = False, case: str | None = None, tm: str | None = None):
+                       test: bool = False, case: str | None = None, tm: str | None = None,
+                       since: str | None = Query(None, pattern="^(today|yesterday)$")):
     """격자 누적 — 시군 줄(누적 최대 칸·읍면동·그 칸의 매시 값), `sigun=` 이면 그 시군 읍면동 줄.
     `case=` 면 재현 사례 처음부터 tm 까지. 받지 못한 정시가 있으면 missing 시간 수(합은 하한)."""
     try:
         if case:
             return await asyncio.to_thread(gridcase.acc_rows, case, tm, sigun)
-        return await asyncio.to_thread(gridview.acc, hours, sigun, None, test)
+        return await asyncio.to_thread(gridview.acc, hours, sigun, None, test, since)
     except LookupError as e:
         raise HTTPException(404, str(e)) from e
 

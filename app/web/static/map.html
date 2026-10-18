@@ -347,6 +347,21 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 /* 강수 누적 — 머리(제목·기준·단추·시군·출처·시각)가 한 줄을 다 쓰니 설명은 그 아래 한 줄로 */
 #c-acc .ch { flex-wrap: wrap; row-gap: 1px; }
 #c-acc .ch .sub { order: 10; flex: 1 0 100%; padding-left: calc(16px * var(--k, 1)); }
+/* 누적 구간 고르기 — 설명 글자를 누르면 */
+#acc-sub.pick { cursor: pointer; }
+#acc-sub.pick::after { content: " ▾"; color: var(--ink-3); }
+#acc-sub.pick:hover { color: var(--ink); }
+.rng-pop { position: absolute; z-index: 20; min-width: 180px; padding: 6px; border-radius: 12px; zoom: var(--k, 1);
+  border: 1px solid var(--line); background: color-mix(in oklab, var(--panel) 94%, transparent);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 18px 44px rgba(0,0,0,.32);
+  transform-origin: 20px -6px; opacity: 0; transform: translateY(-6px) scale(.97);
+  transition: opacity .16s var(--ease), transform .22s var(--ease); }
+.rng-pop.open { opacity: 1; transform: none; }
+.rng-pop .g { font: 700 11px var(--sans); letter-spacing: .12em; color: var(--ink-3); padding: 6px 10px 4px; }
+.rng-pop button { display: block; width: 100%; text-align: left; padding: 7px 10px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--ink); font: 600 14px var(--sans); cursor: pointer; }
+.rng-pop button:hover { background: color-mix(in oklab, var(--accent) 11%, transparent); }
+.rng-pop button.on { background: color-mix(in oklab, var(--accent) 18%, transparent); box-shadow: inset 3px 0 0 var(--accent); }
 .ch .sp { flex: 1; }
 .ch .bt { font: 600 calc(12px * var(--k, 1)) var(--mono); color: var(--ink-2); border: 1px solid var(--line); border-radius: 6px; padding: 1px 7px; white-space: nowrap; }
 .ch .src { font: 600 calc(11px * var(--k, 1)) var(--sans); color: var(--accent); white-space: nowrap; }
@@ -695,9 +710,10 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
       <div class="ch"><span class="live"></span><h3 id="acc-h" title="눌러서 기준 바꾸기 — AWS 관측소 ↔ 격자(500m)"><span id="acc-t">강수 누적</span><span class="bs"><b data-b="aws" title="AWS 관측소 — 지점(좌표) 값"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="4.3"/><path d="M8 1.3v3M8 11.7v3M1.3 8h3M11.7 8h3"/><circle class="f" cx="8" cy="8" r="1.2"/></svg></b><b data-b="grid" title="격자 500m — 칸 값"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.2" y="2.2" width="11.6" height="11.6" rx="1.2"/><path d="M6.07 2.2v11.6M9.93 2.2v11.6M2.2 6.07h11.6M2.2 9.93h11.6"/></svg></b></span></h3>
         <button id="acc-fc" class="fctg on" aria-pressed="true" title="예상(앞으로 6시간) 보이기 — 막대의 연한 부분 · 선 그래프 점선 · 합 (F)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 12.5 7.5 8"/><path class="d" d="M8 8l5.5-5"/></svg></button>
         <button id="acc-h1" class="fctg on" aria-pressed="true" title="실측 중 최근 1시간 빗금으로 강조 (H)"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.6"/><path d="M8 5v3.2l2.2 1.4"/></svg></button>
-        <span class="selchip" id="acc-sel" hidden title="경남 전체로 (Esc)"></span><span class="sub" id="acc-sub"></span>
+        <span class="selchip" id="acc-sel" hidden title="경남 전체로 (Esc)"></span><span class="sub" id="acc-sub" title="눌러서 누적 구간 고르기 — 지난 N시간 · 오늘 0시부터 · 어제 0시부터"></span>
         <span class="sp"></span><span class="src" id="acc-src"></span><span class="bt" id="acc-bt">—</span></div>
       <div class="cb" id="acc-b"></div>
+      <div class="rng-pop" id="acc-rng" hidden role="menu"></div>
     </section>
     <section class="card" id="c-now">
       <div class="ch"><h3>지금 오는 비</h3><span class="sub" id="now-sub">기상청 매분자료</span><span class="sp"></span><span class="bt" id="now-bt">—</span></div>
@@ -783,7 +799,7 @@ const NOWL = CASE ? "끝" : "지금";
 const COLLECT_OF = { obs15: "grid", obs60: "grid", obsday: "grid", odam: "odam", vsrt: "forecast",
                      shrt_today: "short", shrt_tomorrow: "short" };
 const SET_DEFAULT = { flow_step: 10, flow_hours: 6, play_ms: 1200, tl_on: false, tl_stat: "max",
-                      panel: "cards", acc_hours: 12, acc_basis: "aws", sel_zoom: true, acc_fc: true, acc_h1: true };
+                      panel: "cards", acc_hours: 12, acc_from: "hours", acc_basis: "aws", sel_zoom: true, acc_fc: true, acc_h1: true };
 
 let META = null, TOPO = null, GEO = null, MSIG = null, MEMD = null, EMDN = null;
 let SET = { ...SET_DEFAULT };
@@ -1939,8 +1955,42 @@ function nextHours(labels, after) {          // 예측 '00','01',… → after �
   return out;
 }
 
+/* 누적 구간 — 지난 6·12·24·48시간 / 오늘 0시부터 / 어제 0시부터(서버 설정 acc_from · acc_hours).
+   AWS 는 '지금' 칸까지라 시간 수를 여기서 센다(0시부터 지금 시각까지 H 칸, 진행 중인 칸은 따로 붙는다).
+   격자는 마지막 정시 격자에서 세야 맞아서 since 를 서버에 넘긴다.
+   받은 매시 값은 DB(AWS obs_hourly) · 파일(격자 obs60)에 남는다 — 구간을 늘리면 없는 시각만 한 번 받는다 */
+function accSpan() {
+  const f = SET.acc_from || "hours", h = new Date().getHours();
+  if (f === "today") return { H: Math.max(1, h), since: "today", label: "오늘 0시부터" };
+  if (f === "yesterday") return { H: 24 + h, since: "yesterday", label: "어제 0시부터" };
+  return { H: SET.acc_hours, since: null, label: `지난 ${SET.acc_hours}시간` };
+}
+const RNG_OPTS = [["hours", 6, "지난 6시간"], ["hours", 12, "지난 12시간"], ["hours", 24, "지난 24시간"],
+                  ["hours", 48, "지난 48시간"], ["today", null, "오늘 0시부터"], ["yesterday", null, "어제 0시부터"]];
+const rngOn = ([f, h]) => (SET.acc_from || "hours") === f && (f !== "hours" || +SET.acc_hours === h);
+function setRange(f, h) {
+  SET.acc_from = f;
+  const body = { acc_from: f };
+  if (h) { SET.acc_hours = h; body.acc_hours = h; }
+  saveSetting(body);
+  CARDS = null; loadCards();
+}
+function rangePop(open = $("acc-rng").hidden) {
+  const pop = $("acc-rng");
+  if (!open) { pop.classList.remove("open"); pop.hidden = true; return; }
+  pop.innerHTML = `<div class="g">누적 구간</div>` + RNG_OPTS.map((o, i) =>
+    `<button data-i="${i}" class="${rngOn(o) ? "on" : ""}" style="--i:${i}">${o[2]}</button>`).join("");
+  const sb = $("acc-sub").getBoundingClientRect(), cb = $("c-acc").getBoundingClientRect();
+  pop.style.left = (sb.left - cb.left) / V.k + "px"; pop.style.top = (sb.bottom - cb.top + 4) / V.k + "px";
+  pop.hidden = false; void pop.offsetWidth; pop.classList.add("open");
+  for (const b of pop.querySelectorAll("button")) b.onclick = ev => {
+    ev.stopPropagation();
+    const [f, h] = RNG_OPTS[+b.dataset.i];
+    rangePop(false); setRange(f, h);
+  };
+}
 async function cardsFromApi() {
-  const H = SET.acc_hours;
+  const { H } = accSpan();
   const fq = selOn() ? `&sigun=${encodeURIComponent(selQ())}` : "";
   const [fc, now] = await Promise.all([getJson(`/api/forecast?hours=6${fq}`), selOn() ? nowEmd() : nowMinute()]);
   const acc = isDay() ? await accDay() : ACC_BASIS === "grid" ? await accGrid(H, fc) : await accAws(H, fc);
@@ -2053,7 +2103,7 @@ async function accAws(H, fc) {
       const fcd = (FC[s]?.d || []).slice(0, 6).map(qRN1);
       return { sig: s, stn: st.name, d: st.d, dt, fcd, ft, sum: st.sum, fc: sumv(fcd), bad: st.bad, pos: sitePos(st.stn), h1: st.m60 };
     });
-    return { ...base, rows, sub: `다우지점 · 지난 ${H}시간 + 예상 6시간` };
+    return { ...base, rows, sub: `다우지점 · ${accSpan().label} + 예상 6시간` };
   }
   // 그 시군(들) 지점 전부 — 내부망이면 스방 지점이 다 나온다(기상청 지점 포함). 기상청 지점은 읍면동·위치·예상이
   // 붙는다. 스방 자체 지점은 위치를 몰라 **이름이 가리키는 읍면동 가운데에 임시로** 둔다(서버 sites.position, est)
@@ -2068,7 +2118,7 @@ async function accAws(H, fc) {
   const nk = rows.filter(r => r.kma).length, est = rows.filter(r => r.pos?.est).length;
   const nopos = rows.length - rows.filter(r => r.pos).length;
   return { ...base, rows, sel: selName(),
-    sub: `${selName()} AWS ${rows.length}곳${own ? ` (기상청 ${nk} · 스방 ${rows.length - nk})` : ""} · 지난 ${H}시간`,
+    sub: `${selName()} AWS ${rows.length}곳${own ? ` (기상청 ${nk} · 스방 ${rows.length - nk})` : ""} · ${accSpan().label}`,
     note: [est ? `스방 지점 ${est}곳은 위치를 몰라 이름이 가리키는 읍면동 가운데에 임시로 둔다` : "",
            nopos ? `${nopos}곳은 이름으로 읍면동을 못 찾아 지도에 짚지 않는다` : ""].filter(Boolean).join(" · ") };
 }
@@ -2079,6 +2129,7 @@ async function accGrid(H, fc) {
   const p = new URLSearchParams({ hours: H });
   if (selOn()) p.set("sigun", selQ());
   if (test) p.set("test", "1");
+  if (accSpan().since) p.set("since", accSpan().since);
   const j = await getJson(`/api/grid/acctable?${p}`);
   const dt = j.frames.map(tOf), ft = nextHours(fc.labels || [], dt.at(-1));
   const [FC, FE] = fcMaps(fc);
@@ -2090,7 +2141,7 @@ async function accGrid(H, fc) {
   });
   return { rows, H, ft, basis: "grid", fell: false, sel: selOn() ? selName() : null, src: j.test ? "테스트" : "격자 500m",
     bt: `${hm(j.tm)} 정각까지`,
-    sub: selOn() ? `${selName()} 읍면동 ${rows.length} · 누적 최대 칸 · 지난 ${H}시간` : `시군 누적 최대 칸 · 지난 ${H}시간 + 예상 6시간`,
+    sub: selOn() ? `${selName()} 읍면동 ${rows.length} · 누적 최대 칸 · ${accSpan().label}` : `시군 누적 최대 칸 · ${accSpan().label} + 예상 6시간`,
     note: j.missing ? `정시 격자 ${j.missing}시간 빠짐 — 합은 하한이다(수집기가 한 번에 4장씩 메운다)` : "" };
 }
 
@@ -2127,7 +2178,7 @@ async function cardsFromTest() {
   // 테스트에서 시군을 누르면 내부망(스방)에서 보일 목록 모양을 미리 본다
   let acc = { rows, H: dt.length, src: "테스트", fell: false, basis: ACC_BASIS, bt: lastObs >= 0 ? `${hm(FLOW.frames[lastObs].t)} 실측` : "—" };
   try {
-    acc = isDay() ? await accDay() : ACC_BASIS === "grid" ? await accGrid(SET.acc_hours, fcT) : await accAws(SET.acc_hours, fcT);
+    acc = isDay() ? await accDay() : ACC_BASIS === "grid" ? await accGrid(accSpan().H, fcT) : await accAws(accSpan().H, fcT);
   } catch (e) { acc.note = e.message; }
   const day = isDay() ? await fcDay() : null;
   if (selOn()) {
@@ -2196,7 +2247,9 @@ function renderAcc() {
   $("acc-h1").hidden = !!A.day;
   $("acc-h1").classList.toggle("on", h1On); $("acc-h1").setAttribute("aria-pressed", h1On);
   $("acc-fc").classList.toggle("on", fcOn); $("acc-fc").setAttribute("aria-pressed", fcOn);
-  const sub = A.sub || `다우지점 · 지난 ${A.H}시간 + 예상 6시간`;
+  const sub = A.sub || `다우지점 · ${accSpan().label} + 예상 6시간`;
+  // 설명을 누르면 누적 구간을 고른다(실황·테스트의 강수 누적만 — 단기·사례는 구간이 정해져 있다)
+  $("acc-sub").classList.toggle("pick", !CASE && !A.day);
   $("acc-sub").textContent = fcOn ? sub : sub.replace(" + 예상 6시간", "");
   $("acc-src").textContent = A.src; $("acc-src").classList.toggle("fell", !!A.fell);
   $("acc-bt").textContent = A.bt;
@@ -3210,7 +3263,8 @@ function openPrefs() {
     <h4>오른쪽 패널</h4>
     <div class="row"><span class="k">표시</span>${seg("tl_on", [[true, "켬"], [false, "끔"]])}</div>
     <div class="row"><span class="k">방식</span>${seg("panel", [["cards", "카드 — 종합 화면 판"], ["timeline", "타임라인 — 시군 선"]])}</div>
-    <div class="row"><span class="k">누적 구간</span>${seg("acc_hours", [[6, "6시간"], [12, "12시간"], [24, "24시간"], [48, "48시간"]])}</div>
+    <div class="row"><span class="k">누적 구간</span><span class="seg">${RNG_OPTS.map((o, i) =>
+      `<button data-rng="${i}" class="${rngOn(o) ? "on" : ""}">${o[2].replace("지난 ", "")}</button>`).join("")}</span></div>
     <div class="row"><span class="k">타임라인 값</span>${seg("tl_stat", [["max", "시군 최대"], ["mean", "시군 평균"]])}</div>
     <h4>화면</h4>
     <div class="row"><span class="k">테마</span><span class="seg">
@@ -3242,6 +3296,7 @@ function openPrefs() {
   };
   for (const b of $("prefs").querySelectorAll("button[data-th]")) b.onclick = () => { setTheme(b.dataset.th); openPrefs(); };
   for (const b of $("prefs").querySelectorAll("button[data-tools]")) b.onclick = () => { setTools(b.dataset.tools); openPrefs(); };
+  for (const b of $("prefs").querySelectorAll("button[data-rng]")) b.onclick = () => { const [f, h] = RNG_OPTS[+b.dataset.rng]; setRange(f, h); openPrefs(); };
   fillDemo($("pf-demo"));
 }
 /* 오른쪽 위 도구 — 이 화면(브라우저)마다 기억. 기본은 '마우스를 움직이면'(벽면 화면이 깔끔하게) */
@@ -3352,6 +3407,10 @@ $("b-prefs").onclick = openPrefs;
 $("b-help").onclick = () => ($("help").hidden ? openHelp() : closeHelp());
 $("acc-h").onclick = toggleBasis;
 $("acc-fc").onclick = ev => { ev.stopPropagation(); toggleAccFc(); };
+$("acc-sub").onclick = ev => { if ($("acc-sub").classList.contains("pick")) { ev.stopPropagation(); rangePop(); } };
+document.addEventListener("pointerdown", ev => {
+  if (!$("acc-rng").hidden && !ev.target.closest?.("#acc-rng, #acc-sub")) rangePop(false);
+});
 $("acc-h1").onclick = ev => { ev.stopPropagation(); toggleAccH1(); };
 $("acc-sel").onclick = ev => { ev.stopPropagation(); selectSig(null); };
 document.addEventListener("keydown", ev => {

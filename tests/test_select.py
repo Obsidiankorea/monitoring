@@ -118,3 +118,24 @@ def test_emd_day_hourly(monkeypatch):
     monkeypatch.setattr(gridview.db, "get_setting", lambda k, d: dict(d))
     monkeypatch.setattr(gridview.db, "put_setting", lambda k, v: None)
     assert gridview.SETTING_DEFAULT["acc_h1"] is True and gridview.put_setting({"acc_h1": 0})["acc_h1"] is False
+
+
+def test_span_hours_today_yesterday():
+    from datetime import datetime
+    end = datetime(2026, 10, 18, 15, 0)
+    assert gridview.span_hours(None, end, 12) == 12
+    assert gridview.span_hours("today", end) == 15                  # 01 … 15시 정시 열다섯 장(0시~15시)
+    assert gridview.span_hours("yesterday", end) == 39               # 어제 0시부터
+    assert gridview.span_hours("today", datetime(2026, 10, 18, 0, 0)) == 1    # 0시 정각 — 한 장이라도
+    assert gridview.span_hours("yesterday", datetime(2026, 10, 18, 23, 0)) == 47
+    r = gridview.acc(12, None, datetime(2026, 10, 18, 15, 20), True, "today")
+    assert len(r["frames"]) == 15 and r["frames"][0].endswith("0100") and r["frames"][-1].endswith("1500")
+
+
+def test_acc_from_setting(monkeypatch):
+    monkeypatch.setattr(gridview.db, "get_setting", lambda k, d: dict(d))
+    monkeypatch.setattr(gridview.db, "put_setting", lambda k, v: None)
+    assert gridview.SETTING_DEFAULT["acc_from"] == "hours"
+    assert gridview.put_setting({"acc_from": "today"})["acc_from"] == "today"
+    with pytest.raises(ValueError):
+        gridview.put_setting({"acc_from": "week"})

@@ -114,8 +114,11 @@ async def stations_at(tms, at: str) -> tuple[int, list[str]]:
 
 async def _backfill_hours(now: datetime, failed: list[str]) -> int:
     """누적 구간 안의 빠진 60분 정각을 최근 것부터 BACKFILL 장까지. 아직 없는 시각(None)은 건너뛴다."""
-    hours = int((db.get_setting("map", {}) or {}).get("acc_hours", 12))
+    st = db.get_setting("map", {}) or {}
     top = (now - timedelta(minutes=LAG_MIN)).replace(minute=0, second=0, microsecond=0)
+    # 누적 구간 — 지난 N시간 또는 오늘·어제 0시부터(화면이 고른 대로). 이미 받은 정각은 파일에서 다시 쓴다
+    from ..gridview import span_hours
+    hours = span_hours(st.get("acc_from"), top, int(st.get("acc_hours", 12)))
     n = 0
     for h in range(min(48, max(1, hours))):
         tm = (top - timedelta(hours=h)).strftime("%Y%m%d%H%M")
