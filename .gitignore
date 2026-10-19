@@ -17,3 +17,6 @@ __pycache__/
 
 # 경남 지도 경계 원본(tools/build_geo.py 가 받는다, 45MB)
 tools/.cache/
+
+# 시연(굳힌 것) — 서버 /state/snaps · PC data/snaps. 저장소에 넣지 않는다(화면의 지금 저장 · 지우기)
+data/snaps/

@@ -65,32 +65,3 @@ def test_server_unreachable_is_502(tdb, monkeypatch):
     origin.put({"mode": "server", "url": "http://srv:8000"})
     r = TestClient(main.app).get("/api/alerts")
     assert r.status_code == 502 and "닿지 않는다" in r.json()["detail"]
-
-
-def test_snapshot_mode(tmp_path, monkeypatch):
-    """시연 — 굳혀 둔 것을 사본으로 떠서 쓰고, 시계를 멈추고, 수집하지 않는다."""
-    import importlib
-    import json as _j
-    import shutil
-    from pathlib import Path
-    from app import config
-    snap = Path(config.DATA) / "demo" / "snap"
-    names = sorted(p.name for p in snap.iterdir() if (p / "meta.json").exists())
-    assert names, "굳혀 둔 시연이 하나는 있다"
-    meta = _j.loads((snap / names[-1] / "meta.json").read_text("utf-8"))
-    monkeypatch.setenv("GN_SNAP", names[-1])
-    monkeypatch.setenv("GN_SNAP_STATE", str(tmp_path / "s"))
-    monkeypatch.delenv("GN_NOW", raising=False)
-    try:
-        importlib.reload(config)
-        from app import clock
-        importlib.reload(clock)
-        assert config.STATE == tmp_path / "s" and (tmp_path / "s" / "gnweather.db").exists()
-        assert clock.now().strftime("%Y%m%d%H%M") == meta["now"] and clock.epoch_ms()
-        assert (snap / names[-1] / "state" / "gnweather.db").exists()         # 원본은 그대로
-    finally:
-        monkeypatch.delenv("GN_SNAP", raising=False)
-        monkeypatch.delenv("GN_NOW", raising=False)
-        importlib.reload(config)
-        importlib.reload(clock)
-        shutil.rmtree(tmp_path / "s", ignore_errors=True)

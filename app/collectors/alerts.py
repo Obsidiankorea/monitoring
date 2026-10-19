@@ -1,6 +1,8 @@
 """기상특보 수집 — wrn_now_data.php.
 
-⚠️ 응답 인코딩은 euc-kr.
+⚠️ 응답 모양이 둘이다. disp=1 은 2026.10 무렵부터 **JSON(UTF-8)** 으로 온다 — 예전엔 콤마 글(euc-kr)이었다.
+   글로 읽으면 행이 0개라 '특보 없음'이 된다(09.30~10.19 내내 호우주의보를 못 봤다). 둘 다 읽고,
+   읽은 행이 없는데 본문에 자료가 있으면 실패로 올린다 — 모양이 또 바뀌어도 '특보 없음'으로 숨지 않게.
 ⚠️ 레벨은 '경보'/'주의'다. '주의보'로 매칭하면 표가 통째로 빈다.
 ⚠️ 예비특보(CMD='예비')가 같은 응답에 섞여 온다. TM_EF는 시각이 아니라 시간대 코드다.
 ⚠️ 아직 발효 전인 특보도 함께 온다 — 집계에는 TM_EF <= 기준시각만 넣는다.
@@ -8,17 +10,45 @@
 """
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime
 
 from .. import db
 from ..domain.regions import ORDER, in_gyeongnam, pre_slot, sigun_of, split_level
-from ..kma import KmaError, fetch_text
+from ..kma import KmaError, fetch_bytes
 
 log = logging.getLogger("collect.alerts")
 
-# 컬럼 인덱스 — 실측으로 확인한 자리
+# 컬럼 인덱스 — 실측으로 확인한 자리(JSON 은 같은 차례의 키로 온다)
 I_REG_UP, I_REG, I_TM_FC, I_TM_EF, I_WRN, I_LVL, I_CMD = 1, 3, 4, 5, 6, 7, 8
+KEYS = ("REG_UP", "REG_UP_KO", "REG_ID", "REG_KO", "TM_FC", "TM_EF", "WRN", "LVL", "CMD", "ED_TM")
+
+
+def parse(raw: bytes | str) -> list[list[str]]:
+    """응답 → 행(글자 칸 목록). JSON(UTF-8) · 콤마/공백 글(euc-kr) 둘 다.
+    읽은 행이 없는데 본문에 자료 줄이 있으면 KmaError — 모양이 낯선 것을 '특보 없음'으로 넘기지 않는다."""
+    if isinstance(raw, bytes):
+        head = raw.lstrip()[:1]
+        raw = raw.decode("utf-8" if head in (b"[", b"{") else "euc-kr", errors="replace")
+    t = raw.strip()
+    if t[:1] in ("[", "{"):
+        try:
+            j = json.loads(t)
+        except ValueError as e:
+            raise KmaError(f"특보 JSON 을 못 읽었다: {e}") from e
+        if isinstance(j, dict):                       # {"data": [...]} 처럼 감싸 올 때
+            j = next((v for v in j.values() if isinstance(v, list)), None)
+        if not isinstance(j, list):
+            raise KmaError("특보 JSON 모양이 낯설다(목록이 아니다)")
+        rows = [[str(x.get(k) or "").strip() for k in KEYS] for x in j if isinstance(x, dict)]
+        if len(rows) != len(j) or any(not r[I_WRN] for r in rows):
+            raise KmaError("특보 JSON 키가 낯설다(REG_UP_KO · WRN …)")
+        return rows
+    rows = _rows(t)
+    if not rows and any(ln.strip() and not ln.strip().startswith("#") for ln in t.splitlines()):
+        raise KmaError(f"특보 응답 모양이 낯설다: {t[:80]!r}")
+    return rows
 
 
 def _rows(text: str) -> list[list[str]]:
@@ -34,13 +64,13 @@ def _rows(text: str) -> list[list[str]]:
     return out
 
 
-def normalize(text: str, now: datetime) -> dict:
-    """행 → 화면이 바로 쓸 모양. 집계는 시군 수로만 센다."""
+def normalize(raw: bytes | str, now: datetime) -> dict:
+    """응답 → 화면이 바로 쓸 모양. 집계는 시군 수로만 센다."""
     groups: dict[tuple[str, str], dict] = {}
     pending: list[dict] = []
     stamp = now.strftime("%Y%m%d%H%M")
 
-    for p in _rows(text):
+    for p in parse(raw):
         reg_up, reg = p[I_REG_UP], p[I_REG]
         if not in_gyeongnam(reg_up, reg):
             continue
@@ -102,13 +132,13 @@ async def collect(now: datetime | None = None) -> dict:
     at = now.strftime("%Y-%m-%d %H:%M")
     try:
         # tm 을 비우면 '현재 발효 중'. 특보는 예외 없이 실행 시점 최신으로 조회한다.
-        text = await fetch_text("/api/typ01/url/wrn_now_data.php",
+        raw = await fetch_bytes("/api/typ01/url/wrn_now_data.php",
                                 {"fe": "f", "tm": "", "disp": "1", "help": "0"})
+        data = normalize(raw, now)
     except KmaError as e:
         db.log_collect("alerts", False, at, str(e))
         raise
 
-    data = normalize(text, now)
     db.put_snapshot("alerts", at, at, data)
     db.log_collect("alerts", True, at, f"{len(data['groups'])}종")
     return data

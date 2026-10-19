@@ -6,7 +6,7 @@
 # 폴더(/mnt/user/appdata/gn-monitor):
 #   repo/      저장소 받은 것(이 서버에서는 고치지 않는다 — ff-only 로만 당긴다)
 #   config/    api_keys.txt(기상청 API허브 기관용 키 ORG_API_KEY) — PC 에서 SSH 로 복사해 둔다
-#   state/     DB(gnweather.db) · 격자 캐시 — 컨테이너를 갈아도 남는다(GN_STATE)
+#   state/     DB(gnweather.db) · 격자 캐시 · 시연(snaps/) — 컨테이너를 갈아도 남는다(GN_STATE)
 # 화면: http://<서버>:8000/  (지도: /map.html)
 # ⚠️ 스방(내부망)은 집 서버에서 닿지 않는다 — 수집기를 끈다(SKIP_COLLECT=bangjae, Dockerfile).
 # ⚠️ PC 에서도 수집기가 돌면 기상청 호출이 두 배가 된다(같은 키).
@@ -16,7 +16,7 @@ REPO=https://github.com/Obsidiankorea/monitoring.git
 NAME=gn-monitor
 PORT=${PORT:-8000}
 
-mkdir -p "$D/config" "$D/state"
+mkdir -p "$D/config" "$D/state/snaps"
 # ⚠️ 받은 뒤에는 **새로 받은 이 스크립트로 다시** 시작한다 — bash 는 스크립트를 읽어 가며 돌아서,
 #    도는 중에 git 이 이 파일을 바꾸면 나머지가 옛 내용으로 돈다.
 if [ -z "${DEPLOY_PULLED:-}" ]; then
@@ -41,14 +41,12 @@ docker run -d --name "$NAME" --restart unless-stopped --memory 2g -p "$PORT:8000
   -l net.unraid.docker.webui="http://[IP]:[PORT:8000]/" \
   "$NAME:$V" >/dev/null
 
-# 시연 — 굳혀 둔 것(data/demo/snap) 가운데 가장 새 것을 :8001 로. 같은 이미지, 수집 안 함 · 시계 멈춤 · 키 없음.
-#   실황 DB(state/)는 연결하지 않는다 — 굳힌 것을 컨테이너 안 사본(/tmp/snap)으로 떠서 쓴다(띄울 때마다 처음으로)
-SNAP=$(ls -1 "$D/repo/data/demo/snap" 2>/dev/null | sort | tail -1)
-docker rm -f gn-demo >/dev/null 2>&1 || true
-if [ -n "$SNAP" ]; then
-  docker run -d --name gn-demo --restart unless-stopped --memory 1g -p 8001:8000     -e TZ=Asia/Seoul -e GN_SNAP="$SNAP" -e GN_SNAP_STATE=/tmp/snap     -l net.unraid.docker.webui="http://[IP]:[PORT:8001]/"     "$NAME:$V" >/dev/null
-  echo "[deploy] 시연 gn-demo($SNAP) → http://<서버>:8001/"
-fi
+# 시연 서버 gn-demo :8001 — 굳혀 둔 것(state/snaps, 실황 화면의 '지금 저장')을 읽기 전용으로 받아 띄운다.
+#   처음엔 가장 새 것, /snap/<이름> 으로 열면 그것으로 갈아 탄다(같은 컨테이너 안에서 다시 뜬다).
+#   같은 이미지, 수집 안 함 · 시계 멈춤 · 키 없음. 실황 DB 는 연결하지 않는다 — 굳힌 것을 /tmp/snap 사본으로 떠서 쓴다.
+for c in $(docker ps -a --format '{{.Names}}' | grep -E '^gn-demo(-[0-9]+)?$'); do docker rm -f "$c" >/dev/null; done
+docker run -d --name gn-demo --restart unless-stopped --memory 1g -p 8001:8000   -e TZ=Asia/Seoul -e GN_DEMO=1 -e GN_SNAPS=/snaps -e GN_SNAP_STATE=/tmp/snap   -v "$D/state/snaps:/snaps:ro"   -l net.unraid.docker.webui="http://[IP]:[PORT:8001]/"   "$NAME:$V" >/dev/null
+echo "[deploy] 시연 gn-demo($(ls -1 "$D/state/snaps" 2>/dev/null | grep -vc '^\.tmp' || true)개) → http://<서버>:8001/"
 
 # 옛 판 이미지 정리(지금 판 · latest 만 남긴다)
 docker image ls "$NAME" --format '{{.Tag}}' | grep -vE "^($V|latest)$" \

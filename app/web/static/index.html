@@ -406,6 +406,12 @@ th.tlh { overflow: visible; }
 @media (max-width: 1100px) { .mb-meta .src { display: none; } }
 
 .mb-icon { width: 26px; padding: 0; justify-content: center; }
+/* 켜고 끄는 단추(향후 예측 · 최근 1시간) — 켜지면 강조색, 꺼지면 흐리게 */
+.mb-item.tg[aria-pressed="true"] { color: var(--accent); background: color-mix(in oklab, var(--accent) 13%, transparent); }
+.mb-item.tg[aria-pressed="true"]:hover { background: color-mix(in oklab, var(--accent) 22%, transparent); }
+.mb-item.tg[aria-pressed="false"] { color: var(--ink-3); }
+.mb-item.tg[aria-pressed="false"] > svg:first-child { opacity: .55; }
+.mb-item.tg svg .d { stroke-dasharray: 1.6 2.2; }
 /* 경남 지도 — 링크라서 밑줄·방문색을 걷어 메뉴 단추와 같게 */
 a.mb-item { text-decoration: none; }
 a.mb-item .ext { opacity: .55; margin-left: -1px; }
@@ -573,6 +579,20 @@ tr[data-lv] .seg.obs::after { opacity: 1; animation: flow 5.6s linear infinite; 
   transition: left .5s cubic-bezier(.4,0,.2,1), width .5s cubic-bezier(.4,0,.2,1);
 }
 .seg.fc span { color: var(--rain-6); }
+
+/* 최근 1시간 — 실측 막대의 끝 부분을 빗금으로 가른다(경남 지도의 '최근 1시간'과 같은 말).
+   막대 색(파랑 · 주의보 노랑 · 경보 빨강) 위에 겹치므로 어느 색에서도 보이게 어두운 빗금 + 흰 금 하나 */
+.seg.obs .h1 {
+  position: absolute; top: 0; bottom: 0; right: 0; pointer-events: none;
+  background: repeating-linear-gradient(45deg, rgb(0 0 0 / .27) 0 3px, transparent 3px 6px);
+  box-shadow: inset 1.5px 0 0 rgb(255 255 255 / .6);
+  transition: width .5s cubic-bezier(.4,0,.2,1);
+}
+.seg.obs span { position: relative; z-index: 1; }
+/* 빗금 위에 얹힌 값 — 막대 색 테두리를 둘러 읽히게 */
+.seg.obs .h1 ~ span { text-shadow: 0 0 2px var(--rain-3), 0 0 5px var(--rain-3), 0 0 8px var(--rain-3); }
+tr[data-lv="watch"] .seg.obs .h1 ~ span { text-shadow: 0 0 2px var(--lv-watch), 0 0 5px var(--lv-watch); }
+tr[data-lv="warn"]  .seg.obs .h1 ~ span { text-shadow: 0 0 2px var(--lv-warn), 0 0 5px var(--lv-warn); }
 
 /* 특보 기준선 — 합계가 이 선을 넘으면 그게 곧 판단 근거다 */
 .th { position: absolute; top: -1px; bottom: -1px; width: 0; border-left: 1px dashed; }
@@ -810,6 +830,17 @@ td.totc .tot { width: auto; display: block; }
 .demo-card .d { flex: 1; }
 .demo-card .n { font-size: 11px; color: var(--ink-3); margin-top: 2px; line-height: 1.5; }
 .demo-card.fake { border-color: color-mix(in oklab, var(--lv-warn) 55%, var(--line)); }
+/* 시연 — 지금 저장 · 줄마다 지우기 */
+.snap-h { margin: 14px 0 6px; }
+.snapsave { display: grid; grid-template-columns: 1fr auto; gap: 6px 8px; margin-bottom: 8px; }
+.snapsave input { min-width: 0; font: inherit; font-size: 12.5px; color: var(--ink); background: var(--panel-2);
+  border: 1px solid var(--line); border-radius: 7px; padding: 6px 9px; }
+.snapsave input:focus { outline: none; border-color: var(--accent); }
+.snapsave .sbtn:disabled { opacity: .6; cursor: progress; }
+.snapsave .n { grid-column: 1 / -1; font-size: 11px; color: var(--ink-3); line-height: 1.5; }
+.snapsave .ok { grid-column: 1 / -1; font-size: 11.5px; color: var(--lv-ok); }
+.demo-card .sw { color: var(--lv-watch); }
+.demo-card .snapdel { margin-left: 4px; }
 .warnx { color: var(--lv-warn); font-weight: 600; }
 .prefs-row code {
   font-family: var(--mono); font-size: 11.5px; color: var(--ink);
@@ -1533,6 +1564,12 @@ body.editing .panel {
       <button class="mb-item" id="m-view" type="button" data-owner="p-rain" aria-haspopup="menu" aria-expanded="false">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 16c3-1 4.5-8 7.5-8S15 16 18 16s3-2 3-2" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 20h18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity=".45"/></svg><span id="lb-view">타임라인</span><svg class="chev" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
+      <button class="mb-item tg" id="m-fcshow" type="button" data-owner="p-rain" aria-pressed="true" title="향후 예측 보이기 — 막대의 빗금 · 합계 · 정렬 · 칸 · 선에 넣는다 (F)">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12.5 7.5 8"/><path class="d" d="M8 8l5.5-5"/></svg><span>예측</span>
+      </button>
+      <button class="mb-item tg" id="m-h1" type="button" data-owner="p-rain" aria-pressed="true" title="실측 중 최근 1시간을 막대에 빗금으로 (H)">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="5.6"/><path d="M8 5v3.2l2.2 1.4"/></svg><span>1시간</span>
+      </button>
       <button class="mb-item" id="m-fc" type="button" data-owner="p-rain p-fcsig" aria-haspopup="menu" aria-expanded="false">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 18c3-1 4-9 8-9s5 6 8 6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="3 2.5"/><path d="M12 3v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span id="lb-fc">예측 6h</span><svg class="chev" width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
@@ -1969,9 +2006,7 @@ body.editing .panel {
       <div class="prefs-pane" id="pane-demo" role="tabpanel" hidden>
         <h4>데모 시연</h4>
         <p class="note">비가 안 오는 날에는 화면이 온통 0.0 이라 무엇을 보여 주는 화면인지 알 수 없다.
-          실제로 호우가 내렸던 때를 그대로 되돌려 띄운다. <b>강수량은 실측</b>이다.
-          다만 기상청 특보 이력 API는 이 키로 403 이라 과거 발표 내역을 받을 수 없어,
-          <b>특보는 담긴 강수량에 호우 기준(3시간 60/90㎜, 12시간 110/180㎜)을 적용해 산출</b>한다.</p>
+          비가 올 때 <b>굳혀 둔 시연</b>(그 시각 실측 · 예측 · 특보 그대로)이나 <b>지난 호우 재현</b>으로 띄운다. <b>강수량은 실측</b>이다.</p>
         <div id="pf-demos"></div>
       </div>
 
@@ -2488,7 +2523,12 @@ const inkOn = v => (v >= 10 ? "var(--on-fill)" : "var(--ink)");
 /* 지금 시각 — 시연(스냅숏)이면 서버가 멈춰 둔 그 시각(/api/clock.js 가 맨 먼저 window.GN_NOW 를 둔다) */
 const NOWD = () => (window.GN_NOW ? new Date(window.GN_NOW) : new Date());
 /* 시연 서버 주소 — 같은 주소의 8001(언레이드 gn-demo · PC python -m app.main --snap). 실황은 8000 */
-const SNAP_URL = (path = "") => `${location.protocol}//${location.hostname}:8001${path}`;
+/* ⚠️ PC 가 서버에서 받는 중이면 시연도 그 서버의 것이다 — 이 PC 의 8001 이 아니라 서버의 8001 */
+let SNAP_HOST = location.hostname;
+if (!window.GN_SNAP) getJson("/api/origin").then(o => { if (o.mode === "server" && o.url) SNAP_HOST = new URL(o.url).hostname; }).catch(() => {});
+const SNAP_URL = (path = "") => `${location.protocol}//${SNAP_HOST}:8001${path}`;
+/* 그 시연으로 연다 — 시연 서버가 다른 것을 띄우고 있으면 갈아 탄다(몇 초) */
+const SNAP_OPEN = (name, to) => SNAP_URL(`/snap/${encodeURIComponent(name)}?to=${encodeURIComponent(to)}`);
 const LIVE_URL = (path = "") => `${location.protocol}//${location.hostname}:8000${path}`;
 const today0 = () => NOWD().getHours() + 1;
 const RANGE = [
@@ -2500,7 +2540,28 @@ const RANGE = [
   { k: "d3", l: "3일",   get slots() { return today0() + 48; } },
 ];
 let rangeKey   = "12";
+/* 시연(스냅숏)이 누적 구간을 정해 두었으면 그것으로 연다 — 발표 화면이 처음부터 그 비를 담게.
+   오늘 0시부터 → 당일 · 어제 0시부터 → 2일.
+   ⚠️ 지도의 '지난 6시간'은 마지막 정시까지 정시 여섯 장(00:24 면 18~24시)이다. 여기 칸은 덜 찬 지금 시간까지
+      담으므로 같은 18시부터가 되려면 한 칸 더(18 … 23 · 00시 칸). 이름도 '18시부터'로 */
+{
+  const A = window.GN_SNAP?.acc;
+  if (A?.from === "today") rangeKey = "d1";
+  else if (A?.from === "yesterday") rangeKey = "d2";
+  else if (A?.hours) {
+    const n = new Date(window.GN_NOW), h = +A.hours, slots = h + (n.getMinutes() ? 1 : 0);
+    const from = (n.getHours() - h + 24) % 24;
+    RANGE.push({ k: "cu", l: `${from}시부터`, slots });
+    rangeKey = "cu";
+  }
+}
 let fcHours    = 6;         // 향후 예측 시간 — 3 또는 6
+/* 강수 타임라인 — 향후 예측을 보일지 · 실측 중 최근 1시간을 빗금으로 가를지(경남 지도의 두 단추와 같다).
+   예측을 끄면 막대 · 합계 · 정렬 · 칸 · 선에서 다 뺀다 — 실측만으로 줄을 세운다.
+   ⚠️ 예측 패널(p-fcsig)은 그대로다 — 이 둘은 강수 타임라인만 바꾼다 */
+let fcShow = true, h1Show = true;
+try { fcShow = localStorage.getItem("gn-fcshow") !== "0"; h1Show = localStorage.getItem("gn-h1") !== "0"; } catch {}
+const fcN = () => (fcShow ? fcHours : 0);
 let fsShape    = "line";   // 예측 곡선 모양: line | bar
 try { fsShape = localStorage.getItem("gn-fsshape") || "line"; } catch {}
 let tkCount    = 12;        // 예측 순위 줄에 펼칠 읍면동 수
@@ -2612,9 +2673,19 @@ const qRN1 = v => RN1_STEPS.reduce((a, b) => (Math.abs(b - v) < Math.abs(a - v) 
 
 function fcFor(sig, f = 1) {
   const base = FCSIG[sig] ? FCSIG[sig].d : [];
-  return base.slice(0, fcHours).map(v => qRN1(v * f));
+  return base.slice(0, fcN()).map(v => qRN1(v * f));
 }
 const sumOf = a => a.reduce((x, y) => x + y, 0);
+/* 최근 1시간 — 직전 60분(기상청 매분 자료 · 마지막 칸이 덜 찼을 때)이 있으면 그것, 없으면 마지막 칸.
+   시군 평균은 지점들의 직전 60분 평균. 막대 안에 그리므로 누적보다 크지 않게 */
+function h1Of(r) {
+  let v = typeof r.m60 === "number" ? r.m60 : r.d[r.d.length - 1];
+  if (r.avg) {
+    const ms = stationsOf(r.sig).map(x => x.m60).filter(x => typeof x === "number");
+    if (ms.length) v = sumOf(ms) / ms.length;
+  }
+  return typeof v === "number" && v > 0 ? Math.min(v, r.sum) : 0;
+}
 /* 아직 안 받았거나 지점이 없는 시군이 있어도 그리기가 멈추면 안 된다 */
 const stationsOf = sig => SIG[sig]?.stations ?? [];
 
@@ -2643,7 +2714,7 @@ function heatCols() {
     i = j;
   }
   for (; i < SLOTS; i++) cols.push({ kind: "obs", idx: [i], label: HOURS[i].slice(0, 2) });
-  FC_HOURS.slice(0, fcHours).forEach((h, j) => cols.push({ kind: "fc", idx: [j], label: h, first: j === 0 }));
+  FC_HOURS.slice(0, fcN()).forEach((h, j) => cols.push({ kind: "fc", idx: [j], label: h, first: j === 0 }));
   return cols;
 }
 
@@ -2674,8 +2745,19 @@ function avgSeries(sig) {
   return { d, bad };
 }
 
-/* 화면에 그릴 행. 지점마다 자기 격자의 예측을 들고 간다. */
+/* 화면에 그릴 행 — 누적순이면 줄을 다시 세운다. 예측을 보이면 실측+예측, 끄면 실측으로.
+   시군 펼친 줄(extra)은 제 시군 밑에 딸려 간다.
+   ⚠️ 전에는 다우지점(시군 펼침)에서만 먹었다 — 대표지점 · 시군 평균에서 누적순을 골라도 그대로였다.
+   전 지점 한 줄(flat)은 원래 많이 온 순이다 */
 function buildRows() {
+  const rows = rowsOf();
+  if (sortMode !== "acc" || (flat && metric === "max")) return rows;
+  const mains = rows.filter(r => r.kind === "main").sort((x, y) => (y.sum + y.fc) - (x.sum + x.fc));
+  return mains.flatMap(m => [m, ...rows.filter(r => r.kind === "extra" && r.sig === m.sig)]);
+}
+
+/* 행 만들기. 지점마다 자기 격자의 예측을 들고 간다. */
+function rowsOf() {
   if (metric === "avg")
     return ORDER.filter(sig => stationsOf(sig).length).map(sig => {
       const a = avgSeries(sig);
@@ -2719,10 +2801,6 @@ function buildRows() {
       rows.push({ sig, kind: k === 0 ? "main" : "extra", stn: st.name,
                   d: st.d, m60: st.m60, ...accOf(st.d), fcd, fc: sumOf(fcd) });
     });
-  }
-  if (sortMode === "acc") {
-    const mains = rows.filter(r => r.kind === "main").sort((x, y) => (y.sum + y.fc) - (x.sum + x.fc));
-    return mains.flatMap(m => [m, ...rows.filter(r => r.kind === "extra" && r.sig === m.sig)]);
   }
   return rows;
 }
@@ -2999,7 +3077,7 @@ function drawRain(animate) {
       ACC_MAX[n] = Math.max(ACC_MAX[n] || 0, sum);
     }
   }
-  const grip = `<span class="grip" id="tot-grip" title="끌어서 합계 자리를 옮긴다"><i>⋮⋮</i><b>＋예상 ${fcHours}h</b></span>`;
+  const grip = `<span class="grip" id="tot-grip" title="끌어서 합계 자리를 옮긴다"><i>⋮⋮</i><b>${fcShow ? `＋예상 ${fcHours}h` : "실측 합"}</b></span>`;
   const head = document.getElementById("rain-head");
   head.innerHTML =
     `<th class="l metric-h" id="metric-h" style="width:146px"
@@ -3024,7 +3102,7 @@ function drawRain(animate) {
   if (view === "tl") {
     const mins = [];
     for (let i = cut(); i < N(); i++) mins.push(obsMin(i));
-    const nFc = Math.min(fcHours, FC_HOURS.length);
+    const nFc = Math.min(fcN(), FC_HOURS.length);
     for (let j = 0; j < nFc; j++) mins.push(fcMin(j));
     setAxis(mins);
     const nObs = N() - cut();
@@ -3100,6 +3178,7 @@ function drawRain(animate) {
          ? `<i class="brk" style="left:${(KNEE_AT * 100).toFixed(1)}%" title="여기서 눈금을 꺾었다 — 뒤쪽은 눌러 그린다"></i>` : "");
 
     const oIn = ow > 21, fIn = fw > 14;
+    const h1 = h1Show ? h1Of(r) : 0, hw = h1 > 0 && ow > 0 ? (ow - xOf(r.sum - h1)) / ow * 100 : 0;
     const outs = [];
     if (!oIn) outs.push(`<b>${r.sum.toFixed(1)}</b>`);
     if (r.fc && !fIn) outs.push(`<i>+${r.fc}</i>`);
@@ -3108,7 +3187,7 @@ function drawRain(animate) {
     const totHtml = `<span class="tot"${r.bad ? ` title="${r.bad}시간은 자료가 없어 빼고 더했다"` : ""}>${tot.toFixed(1)}</span>`;
     const bar = `<div class="accwrap">
       <div class="abar">
-        <div class="seg obs" style="width:${ow}%">${oIn ? `<span>${r.sum.toFixed(1)}</span>` : ""}</div>
+        <div class="seg obs" style="width:${ow}%">${hw > 0 ? `<i class="h1" style="width:${hw.toFixed(1)}%"></i>` : ""}${oIn ? `<span>${r.sum.toFixed(1)}</span>` : ""}</div>
         ${r.fc ? `<div class="seg fc" style="left:${ow}%;width:${fw}%">${fIn ? `<span>+${r.fc}</span>` : ""}</div>` : ""}
         ${outs.length ? `<span class="barout" style="left:calc(${(ow + fw).toFixed(1)}% + 6px)">${outs.join("")}</span>` : ""}
         ${marks}
@@ -3752,9 +3831,14 @@ function openCustomRange() {
 function paintRange() {
   paintSrcLabel();
   const from = cut();
-  const day = dayOf(from) < 2 ? DAYS[dayOf(from)] + " " : "";
+  /* 칸 이름은 기상청 'H시' — (H-1)~H시 한 시간이다. 누적은 첫 칸 앞 정시부터 시작한다.
+     ⚠️ 첫 칸 이름을 그대로 적었더니 18시부터 모은 비가 '19:00~'로 읽혔다. 0시 칸이면 전날 23시부터 */
+  const h0 = +String(HOURS[from]).slice(0, 2);
+  const d = NOWD();
+  d.setDate(d.getDate() - (DAYS.length - 1 - dayOf(from)) - (h0 === 0 ? 1 : 0));
+  const day = `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} `;
   document.querySelector("#p-rain header .rangeval").innerHTML =
-    `${day}${HOURS[from]}:00~<b>${HOURS[SLOTS - 1]}</b><span class="fcmark" title="예측(초단기) ${fcHours}시간"><svg class="fcmk" width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 17c3-1 4-8 7.5-8S15 15 21 13" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="3.2 2.8"/><path d="M15.5 4.5 19 8l-3.5 3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><b>+${fcHours}</b></span>`;
+    `${day}${String((h0 + 23) % 24).padStart(2, "0")}:00~<b>${HOURS[SLOTS - 1]}</b>` + (!fcShow ? "" : `<span class="fcmark" title="예측(초단기) ${fcHours}시간"><svg class="fcmk" width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 17c3-1 4-8 7.5-8S15 15 21 13" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="3.2 2.8"/><path d="M15.5 4.5 19 8l-3.5 3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><b>+${fcHours}</b></span>`);
   syncMeta();
 }
 
@@ -3766,6 +3850,33 @@ bindMenu("m-range", "lb-range", "누적 구간",
     rangeKey = k;
     pull("rain").then(paintRange);
   });
+
+/* 향후 예측 · 최근 1시간 — 켜고 끄면 다시 줄 세운다(예측을 켜면 실측+예측, 끄면 실측 순) */
+function paintToggles() {
+  document.getElementById("m-fcshow").setAttribute("aria-pressed", String(fcShow));
+  document.getElementById("m-h1").setAttribute("aria-pressed", String(h1Show));
+}
+function setFcShow(on) {
+  fcShow = on;
+  try { localStorage.setItem("gn-fcshow", on ? "1" : "0"); } catch {}
+  paintToggles(); drawRain(true); paintRange();
+}
+function setH1Show(on) {
+  h1Show = on;
+  try { localStorage.setItem("gn-h1", on ? "1" : "0"); } catch {}
+  paintToggles(); drawRain(false);
+}
+document.getElementById("m-fcshow").addEventListener("click", () => setFcShow(!fcShow));
+document.getElementById("m-h1").addEventListener("click", () => setH1Show(!h1Show));
+addEventListener("keydown", e => {
+  if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+  if (e.target.closest?.("input, textarea, select, [contenteditable]") || !prefs.hidden) return;
+  if (!document.getElementById("p-rain")?.offsetParent) return;      // 강수 타임라인이 화면에 있을 때만
+  const k = e.key.toLowerCase();
+  if (k === "f") setFcShow(!fcShow);
+  else if (k === "h") setH1Show(!h1Show);
+});
+paintToggles();
 
 bindMenu("m-fc", "lb-fc", "예측 구간",
   () => [3, 6].map(h => ({ k: h, l: "예측 " + h + "h", on: h === fcHours })),
@@ -4276,21 +4387,87 @@ document.getElementById("pf-metric").addEventListener("change", e => setMetric(e
 const fmtMB = b => (b >= 1048576 ? (b / 1048576).toFixed(1) + "MB"
                                  : Math.max(1, Math.round(b / 1024)) + "KB");
 
-async function loadDemoList() {
+/* 시연(굳힌 것) 한 줄 설명 — 시각 · 누적 구간 · 특보 · 빠진 것 · 크기 */
+const ACCL = a => !a ? "" : a.from === "today" ? "오늘 0시부터" : a.from === "yesterday" ? "어제 0시부터" : `지난 ${a.hours}시간`;
+const snapWhen = t => t ? `${+t.slice(4, 6)}.${+t.slice(6, 8)}. ${t.slice(8, 10)}:${t.slice(10, 12)}` : "";
+function snapSub(x) {
+  return [snapWhen(x.now), x.acc ? "누적 " + ACCL(x.acc) : "", (x.alerts || []).join(", "), x.mb ? x.mb + "MB" : ""]
+    .filter(Boolean).join(" · ")
+    + ((x.warn || []).length ? ` <span class="sw">${x.warn.join(" · ")}</span>` : "")
+    + (x.note ? `<br>${x.note}` : "");
+}
+/* 이 화면의 누적 구간 → 시연에 담을 구간(지도와 같은 말로). 지도에 없는 구간(3시간 · 3일 …)은 담지 않는다 */
+function accOfRange() {
+  if (rangeKey === "d1") return { from: "today", hours: 12 };
+  if (rangeKey === "d2") return { from: "yesterday", hours: 12 };
+  const h = rng().slots;
+  return [6, 12, 24, 48].includes(h) ? { from: "hours", hours: h } : null;
+}
+/* 지금 저장 — 서버가 뒤에서 굳힌다(수십 초). 끝날 때까지 /api/snaps 의 job 을 본다 */
+async function snapSave(btn, title, acc, say) {
+  const label = btn.textContent;
+  btn.disabled = true; btn.textContent = "굳히는 중…";
+  const post = overwrite => fetch("/api/snaps", { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ title, ...(acc ? { acc } : {}), overwrite }) });
+  try {
+    let r = await post(false);
+    if (r.status === 409) {
+      const d = (await r.json().catch(() => ({}))).detail || "";
+      if (!/이미 있다/.test(d) || !confirm(d + "\n덮어쓸까요?")) throw new Error(d || "저장하지 않았다");
+      r = await post(true);
+    }
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.status);
+    const t0 = Date.now();
+    for (;;) {
+      await new Promise(res => setTimeout(res, 1200));
+      const j = await getJson("/api/snaps");
+      if (!j.job || j.job.done) {
+        if (j.job?.error) throw new Error(j.job.error);
+        const m = j.job?.meta;
+        say(`저장했다 — ${m ? m.title : ""}${m?.warn?.length ? " (" + m.warn.join(" · ") + ")" : ""}`);
+        return true;
+      }
+      btn.textContent = `굳히는 중… ${Math.round((Date.now() - t0) / 1000)}초`;
+    }
+  } catch (e) {
+    alert("시연을 저장하지 못했다: " + e.message);
+    return false;
+  } finally {
+    btn.disabled = false; btn.textContent = label;
+  }
+}
+async function snapDel(name, title) {
+  if (!confirm(`시연 «${title}» 을 지울까요?\n서버에서 지워져 되돌릴 수 없습니다.`)) return false;
+  const r = await fetch(`/api/snaps/${encodeURIComponent(name)}`, { method: "DELETE" });
+  if (!r.ok) { alert("지우지 못했다: " + ((await r.json().catch(() => ({}))).detail || r.status)); return false; }
+  return true;
+}
+
+let SNAPS = [];
+async function loadDemoList(msg = "") {
   const box = document.getElementById("pf-demos");
-  box.innerHTML = `<p class="note">불러오는 중…</p>`;
+  if (!box.children.length) box.innerHTML = `<p class="note">불러오는 중…</p>`;
   try {
     const j = await getJson("/api/demo");
-    let snaps = [];
-    try { snaps = (await getJson("/api/snaps")).snaps; } catch {}
-    const S = window.GN_SNAP;
+    let job = null, demo = false;
+    SNAPS = [];
+    try { ({ snaps: SNAPS, job, demo } = await getJson("/api/snaps")); } catch {}
+    const S = window.GN_SNAP, busy = job && !job.done, ro = S || demo;
     box.innerHTML = (S ? `<div class="demo-card"><div class="d"><b>실황으로 돌아가기</b><div class="n">시연을 끝내고 수집 중인 화면(:8000)</div></div>
         <a class="sbtn primary" href="${LIVE_URL("/")}">실황</a></div>` : "")
-      + snaps.map(x => `
+      + `<h4 class="snap-h">시연 — 그때를 굳혀 둔 것</h4>`
+      + (ro ? "" : `<div class="snapsave">
+          <input id="sv-title" type="text" maxlength="80" placeholder="제목 — 비우면 시각 · 특보로">
+          <button class="sbtn primary" id="sv-go" type="button"${busy ? " disabled" : ""}>${busy ? "굳히는 중…" : "지금 저장"}</button>
+          <div class="n">지금 실측 · 그전까지 온 비(72시간) · 초단기 · 단기(오늘~모레) · 예측 분포 · 특보 · 이 화면 누적 구간(${rng().l})을 서버에 굳혀 둔다</div>
+          ${msg ? `<div class="ok">${msg}</div>` : ""}</div>`)
+      + (SNAPS.length ? SNAPS.map(x => `
       <div class="demo-card">
-        <div class="d"><b>${x.title}</b> <span class="tagx">시연</span><div class="n">${x.note || ""}</div></div>
-        <a class="sbtn primary" href="${SNAP_URL("/")}" target="${S ? "_self" : "gn-snap"}">${S && S.name === x.name ? "지금 보는 중" : "열기"}</a>
-      </div>`).join("")
+        <div class="d"><b>${x.title}</b> <span class="tagx">시연</span><div class="n">${snapSub(x)}</div></div>
+        <a class="sbtn primary" href="${SNAP_OPEN(x.name, "/")}" target="${S ? "_self" : "gn-snap"}">${S && S.name === x.name ? "지금 보는 중" : "열기"}</a>
+        ${ro ? "" : `<button class="sbtn ghost snapdel" type="button" data-del="${x.name}" title="지우기 — 서버에서 지운다(되돌릴 수 없다)">지우기</button>`}
+      </div>`).join("") : `<p class="note">굳혀 둔 시연이 없다${ro ? "" : " — 비가 올 때 '지금 저장'"}</p>`)
+      + `<h4 class="snap-h">재현 사례 — 지난 호우</h4><p class="note">특보는 발표 내역이 아니라 담긴 강수량에 호우 기준(3시간 60/90㎜, 12시간 110/180㎜)을 적용해 <b>산출</b>한다.</p>`
       + j.cases.map(c => `
       <div class="demo-card${c.fake ? " fake" : ""}">
         <div class="d">
@@ -4307,6 +4484,18 @@ async function loadDemoList() {
 
 document.getElementById("pf-demos").addEventListener("click", async e => {
   if (e.target.id === "pf-demo-off") return demoOff();
+  if (e.target.id === "sv-go") {
+    let msg = "";
+    const ok = await snapSave(e.target, document.getElementById("sv-title").value.trim(), accOfRange(), m => { msg = m; });
+    if (ok) loadDemoList(msg);
+    return;
+  }
+  const del = e.target.closest("[data-del]");
+  if (del) {
+    const x = SNAPS.find(y => y.name === del.dataset.del);
+    if (x && await snapDel(x.name, x.title)) loadDemoList(`지웠다 — ${x.title}`);
+    return;
+  }
   const b = e.target.closest("[data-demo]");
   if (!b) return;
   b.disabled = true; b.textContent = "받는 중…";

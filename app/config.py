@@ -15,20 +15,44 @@ DATA = ROOT / "data"                     # 저장소에 든 읽기 전용 자료
 # 쌓이는 자료(DB·격자 캐시) — 서버(도커)에서는 GN_STATE 로 바깥 폴더에 둔다(컨테이너를 갈아도 남게)
 STATE = Path(os.environ["GN_STATE"]) if os.environ.get("GN_STATE") else DATA
 
-# 시연(스냅숏) — GN_SNAP=<이름>(또는 --snap) 이면 data/demo/snap/<이름>/ 에 굳혀 둔 그 시각 자료로 띄운다
-# (tools/snapshot.py 가 만든다). 수집하지 않고 시계를 그 시각에 멈춘다(clock.py, GN_NOW).
+# 시연(스냅숏) — 굳혀 둔 것은 SNAPS(서버 /state/snaps, PC data/snaps)에 쌓인다(app/snaps.py · 화면의 '지금 저장').
+# GN_SNAP=<이름>(또는 --snap) 이면 그것으로 띄운다 — 수집하지 않고 시계를 그 시각에 멈춘다(clock.py, GN_NOW).
+# GN_DEMO=1(또는 --demo) 은 시연 서버(:8001) — 이름이 없으면 가장 새 것, /snap/<이름> 으로 갈아 탄다(main).
 # ⚠️ 굳힌 것은 손대지 않는다 — 뜰 때마다 쓰는 사본(GN_SNAP_STATE, 기본 data/cache/snap-<이름>)으로 새로 떠서 쓴다.
 #    발표 중에 바꾼 설정(층 · 시군 등)은 다음에 띄우면 처음으로 돌아간다. 실황 DB(GN_STATE)는 절대 쓰지 않는다.
+SNAPS = Path(os.environ["GN_SNAPS"]) if os.environ.get("GN_SNAPS") else STATE / "snaps"
+DEMO = bool(os.environ.get("GN_DEMO")) or bool(os.environ.get("GN_SNAP"))
 SNAP = os.environ.get("GN_SNAP") or None
 SNAP_META: dict | None = None
-if SNAP:
-    _src = DATA / "demo" / "snap" / SNAP
-    SNAP_META = json.loads((_src / "meta.json").read_text("utf-8"))
-    os.environ["GN_NOW"] = SNAP_META["now"]
+
+
+def _newest_snap() -> str | None:
+    best = None
+    for m in SNAPS.glob("*/meta.json") if SNAPS.exists() else []:
+        if m.parent.name.startswith(".tmp"):
+            continue
+        try:
+            t = json.loads(m.read_text("utf-8")).get("now") or ""
+        except ValueError:
+            continue
+        if best is None or (t, m.parent.name) > best:
+            best = (t, m.parent.name)
+    return best[1] if best else None
+
+
+if DEMO and not SNAP:
+    SNAP = _newest_snap()
+if DEMO:
     os.environ["NO_COLLECT"] = "1"
-    STATE = Path(os.environ.get("GN_SNAP_STATE") or (DATA / "cache" / f"snap-{SNAP}"))
+    STATE = Path(os.environ.get("GN_SNAP_STATE") or (DATA / "cache" / f"snap-{SNAP or 'none'}"))
     shutil.rmtree(STATE, ignore_errors=True)
-    shutil.copytree(_src / "state", STATE)
+    if SNAP:
+        _src = SNAPS / SNAP
+        SNAP_META = json.loads((_src / "meta.json").read_text("utf-8"))
+        os.environ["GN_NOW"] = SNAP_META["now"]
+        shutil.copytree(_src / "state", STATE)
+    else:                                  # 굳힌 것이 하나도 없다 — 빈 화면(수집 안 함)
+        STATE.mkdir(parents=True, exist_ok=True)
 CACHE = STATE / "cache"
 DB_PATH = STATE / "gnweather.db"
 

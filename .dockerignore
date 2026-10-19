@@ -7,6 +7,7 @@ data/*.db
 data/*.db-wal
 data/*.db-shm
 data/cache/
+data/snaps/
 
 # 실행에 안 쓰는 것
 .git

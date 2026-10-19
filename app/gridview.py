@@ -2,6 +2,8 @@
 
 층(화면 이름)             저장 층   격자   기준시각
   obs15 · obs60 · obsday   같은 이름  500m   tm
+  acc                      obs60     500m   누적 구간(강수 누적 카드와 같은 것 — 지난 N시간 · 오늘/어제 0시부터)의
+                                            정시 60분 격자를 칸마다 더한 것. 마지막 정시까지
   odam                     odam      5km    tm(10분 발표)
   vsrt+N (N=1~6)           vsrt      5km    가장 최근 발표분의 N번째 대상시각
   shrt_today · _tomorrow   shrt      5km    가장 최근 발표분의 그날 PCP 합
@@ -29,6 +31,8 @@ LAYERS = [
      "src": "기상청 고해상도 격자(500m)", "stale_min": 30},
     {"id": "obsday", "label": "오늘 누적", "short": "오늘", "group": "실측", "grid": "hr",
      "src": "기상청 고해상도 격자(500m)", "stale_min": 30},
+    {"id": "acc", "label": "강수 누적", "short": "누적", "group": "실측", "grid": "hr",
+     "src": "기상청 고해상도 격자(500m) · 매시 60분 합", "stale_min": 90},
     {"id": "odam", "label": "실황 1시간(5km)", "short": "실황 5km", "group": "실측", "grid": "dfs",
      "src": "기상청 동네예보 실황 RN1(5km)", "stale_min": 30},
     {"id": "vsrt", "label": "초단기 예측", "short": "초단기", "group": "예측", "grid": "dfs",
@@ -121,11 +125,16 @@ def shrt_sum(tmfc: str, tmefs: list[str], day: str) -> dict:
 
 # ── 한 층의 한 장 ────────────────────────────────────────────────────────
 def frame(layer: str, tm: str | None = None, now: datetime | None = None,
-          test: bool = False) -> dict:
-    """{'grid', 'tm', 'tmfc'?, 'store'+'key'(파일 그대로) 또는 'arr'(계산한 것)}. 없으면 LookupError."""
+          test: bool = False, hours: int | None = None, since: str | None = None) -> dict:
+    """{'grid', 'tm', 'tmfc'?, 'store'+'key'(파일 그대로) 또는 'arr'(계산한 것)}. 없으면 LookupError.
+    acc(누적) 층은 hours · since(today|yesterday) — 없으면 지도 설정(강수 누적 카드의 구간)."""
     kind, n = split(layer)
     info = BY_ID[kind]
     now = now or clock.now()
+    if kind == "acc":
+        s = acc_sum(*acc_window(hours, since), now=now, test=test)
+        return {"grid": "hr", "tm": s["want"][-1], "from": s["want"][0], "arr": s["total"],
+                "n": len(s["want"]), "missing": len(s["want"]) - len(s["have"]), **({"test": True} if test else {})}
     if test:
         # tm 을 주면 그 시각만큼 흘린 모양 — 재생해 보면 덩어리가 움직인다.
         # tm 이 없으면 실제 수집과 같은 '최신' 칸(6분 물러선 10분 칸) — 재생 막대의 마지막 실측과 맞게
@@ -295,9 +304,10 @@ def emd_day(layer: str, sigun: str | None = None, test: bool = False, now: datet
     return out
 
 
-def sigun(layer: str, tm: str | None = None, test: bool = False, case: str | None = None) -> dict:
+def sigun(layer: str, tm: str | None = None, test: bool = False, case: str | None = None,
+          hours: int | None = None, since: str | None = None) -> dict:
     from . import gridcase
-    fr = gridcase.frame(case, layer, tm) if case else frame(layer, tm, test=test)
+    fr = gridcase.frame(case, layer, tm) if case else frame(layer, tm, test=test, hours=hours, since=since)
     a = array(fr)
     hr = a if fr["grid"] == "hr" else gridstore.to_hr(a)
     out = {k: v for k, v in fr.items() if k not in ("arr", "store", "key")}
@@ -372,6 +382,32 @@ def test_rain(hours: int = 12, now: datetime | None = None) -> dict:
             "minute_tm": None, "missing": 0, "rows": rows}
 
 
+def _acc_station_values(hours: int, since: str | None, base: list[dict]) -> dict:
+    """누적 층의 관측소 값 — 같은 구간(격자와 같은 정시들)의 정시 강수량(rn_hr1) 합.
+    한 시간이라도 빠지면 q='part'(하한), 다 빠지면 missing/none."""
+    want, _ = _acc_keys(hours, since, clock.now(), False)
+    tms = [_minute_key(k) for k in want]
+    vals: dict[str, list] = {}
+    with db.tx() as con:
+        for r in con.execute(f"SELECT stn, tm, rn_hr1, quality FROM obs_hourly WHERE tm IN ({','.join('?' * len(tms))})",
+                             tms):
+            v = r["rn_hr1"]
+            vals.setdefault(r["stn"], []).append(None if v is None or v < 0 or r["quality"] != "ok" else v)
+    rows = []
+    for b in base:
+        got = vals.get(b["stn"])
+        if not got:
+            rows.append({**b, "v": None, "q": "none"})
+            continue
+        ok = [v for v in got if v is not None]
+        if not ok:
+            rows.append({**b, "v": None, "q": "missing"})
+        else:
+            rows.append({**b, "v": round(sum(ok), 1), "q": "ok" if len(ok) == len(want) else "part"})
+    return {"tm": want[-1], "from": want[0], "status": "ok" if vals else "none",
+            "src": f"기상청 정시자료 {len(want)}시간 합" if vals else "", "rows": rows}
+
+
 def _test_station_values(layer: str, tm: str | None, base: list[dict]) -> dict:
     """테스트 — 합성 격자를 지점 칸에서 읽고 지점마다 늘 같은 비율(0.7~1.3)을 곱한다.
     관측소와 격자가 어긋나 보이는 모양까지 점검하려고(실제 자료가 아니다)."""
@@ -388,7 +424,8 @@ def _test_station_values(layer: str, tm: str | None, base: list[dict]) -> dict:
     return {"tm": fr["tm"], "status": "test", "src": "합성 — 실제 자료 아님", "rows": rows}
 
 
-def stations(layer: str, tm: str | None = None, test: bool = False, case: str | None = None) -> dict:
+def stations(layer: str, tm: str | None = None, test: bool = False, case: str | None = None,
+             hours: int | None = None, since: str | None = None) -> dict:
     sites = station_sites()
     base = [{k: s[k] for k in ("stn", "name", "sigun", "x", "y", "ht")} for s in sites["stations"]]
     head = {"layer": layer, "sites": sites["source"], "unsited": sites.get("missing", [])}
@@ -396,6 +433,8 @@ def stations(layer: str, tm: str | None = None, test: bool = False, case: str | 
         from . import gridcase
         return {**head, **gridcase.stations(case, layer, tm, base)}
     kind, _ = split(layer)
+    if kind == "acc" and not test:
+        return {**head, **_acc_station_values(*acc_window(hours, since), base)}
     if kind not in STN_VALUE:
         return {**head, "tm": tm, "status": "forecast", "src": "",
                 "rows": [{**b, "v": None, "q": None} for b in base]}
@@ -494,11 +533,20 @@ def span_hours(since: str | None, end: datetime, hours: int = 12) -> int:
     return max(1, min(48, int((end - d0).total_seconds() // 3600)))
 
 
-def acc(hours: int = 12, sigun: str | None = None, now: datetime | None = None,
-        test: bool = False, since: str | None = None) -> dict:
-    """지난 hours 시간(가장 최근 정시 격자까지) 격자 누적 — 시군 줄, 또는 sigun 의 읍면동 줄.
-    since=today|yesterday 면 그날 0시부터(시간 수는 마지막 정시 격자에서 센다)."""
-    now = now or clock.now()
+_SUM_CACHE: dict[tuple, dict] = {}
+
+
+def acc_window(hours: int | None = None, since: str | None = None) -> tuple[int, str | None]:
+    """누적 구간 — 주지 않으면 지도 설정(강수 누적 카드가 고른 것). since 는 today | yesterday | None(지난 hours)."""
+    if hours is None or since is None:
+        st = setting()
+        hours = int(hours or st.get("acc_hours") or 12)
+        if since is None:
+            since = st.get("acc_from")
+    return int(hours), (since if since in ("today", "yesterday") else None)
+
+
+def _acc_keys(hours: int, since: str | None, now: datetime, test: bool) -> tuple[list[str], list[str]]:
     if test:
         last = _floor10(now - timedelta(minutes=6)).replace(minute=0)
     else:
@@ -509,23 +557,52 @@ def acc(hours: int = 12, sigun: str | None = None, now: datetime | None = None,
     hours = span_hours(since, last, hours)
     want = [(last - timedelta(hours=h)).strftime("%Y%m%d%H%M") for h in range(hours - 1, -1, -1)]
     have = want if test else [k for k in want if gridstore.has("obs60", k)]
-    ck = (tuple(have), hours, sigun, test, now.strftime("%Y%m%d%H") if test else "")
-    if ck in _ACC_CACHE:
-        return _ACC_CACHE[ck]
-    frames = []
-    for k in want:
-        if test:
-            frames.append(synth("obs60", "hr", (_dt(k) - now).total_seconds() / 60))
-        else:
-            frames.append(gridstore.load("obs60", k) if k in have else None)
-    got = [f for f in frames if f is not None]
+    return want, have
+
+
+def _acc_frames(want: list[str], have: list[str], now: datetime, test: bool) -> list:
+    if test:
+        return [synth("obs60", "hr", (_dt(k) - now).total_seconds() / 60) for k in want]
+    return [gridstore.load("obs60", k) if k in have else None for k in want]
+
+
+def acc_sum(hours: int = 12, since: str | None = None, now: datetime | None = None, test: bool = False) -> dict:
+    """누적 구간 정시 60분 격자를 칸마다 더한 것 — 강수 누적 카드(acc)와 지도 '누적' 층(frame acc)이 같은 합을 쓴다.
+    → {want(정시 키), have(받은 것), total}. 결측 칸은 결측으로 남는다(0 으로 치지 않는다)."""
+    now = now or clock.now()
+    want, have = _acc_keys(hours, since, now, test)
+    ck = (tuple(want), tuple(have), test, now.strftime("%Y%m%d%H") if test else "")
+    if ck in _SUM_CACHE:
+        return _SUM_CACHE[ck]
+    got = [f for f in _acc_frames(want, have, now, test) if f is not None]
     if not got:
         raise LookupError("이 구간에 받은 정시 격자가 없다")
     total = got[0].copy()
     for f in got[1:]:
         total = total + f
+    total.setflags(write=False)
+    out = {"want": want, "have": have, "total": total}
+    if len(_SUM_CACHE) > 4:                       # 한 장이 1~2MB — 몇 개만
+        _SUM_CACHE.pop(next(iter(_SUM_CACHE)))
+    _SUM_CACHE[ck] = out
+    return out
+
+
+def acc(hours: int = 12, sigun: str | None = None, now: datetime | None = None,
+        test: bool = False, since: str | None = None) -> dict:
+    """지난 hours 시간(가장 최근 정시 격자까지) 격자 누적 — 시군 줄, 또는 sigun 의 읍면동 줄.
+    since=today|yesterday 면 그날 0시부터(시간 수는 마지막 정시 격자에서 센다)."""
+    now = now or clock.now()
+    want, have = _acc_keys(hours, since, now, test)
+    hours = len(want)
+    ck = (tuple(have), hours, sigun, test, now.strftime("%Y%m%d%H") if test else "")
+    if ck in _ACC_CACHE:
+        return _ACC_CACHE[ck]
+    s = acc_sum(hours, None, now=now, test=test)
+    frames = _acc_frames(want, have, now, test)
+    total = s["total"]
     out = {"basis": "grid", "hours": hours, "frames": want, "tm": want[-1], "sigun": sigun,
-           "missing": len(want) - len(got), "test": test,
+           "missing": len(want) - len(have), "test": test,
            "src": "합성 — 실제 자료 아님" if test else "기상청 고해상도 격자(500m) · 매시 60분 합",
            "rows": acc_table(total, frames, sigun)}
     if len(_ACC_CACHE) > 24:
@@ -623,6 +700,10 @@ def meta(now: datetime | None = None) -> dict:
                 tmfc, tmefs = vsrt_run()
                 row.update(tmfc=tmfc, tmefs=tmefs, tm=tmfc)
                 age = (now - _dt(tmfc)).total_seconds() / 60 if tmfc else None
+            elif kind == "acc":
+                ks = [k for k in gridstore.keys("obs60") if k.endswith("00")]
+                row.update(tm=ks[-1] if ks else None, frames=len(ks))
+                age = (now - _dt(ks[-1])).total_seconds() / 60 if ks else None
             elif kind.startswith("shrt_"):
                 fr = frame(kind, now=now)
                 row.update(tmfc=fr["tmfc"], tm=fr["tmfc"], day=fr["tm"], hours=fr["hours"],

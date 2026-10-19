@@ -90,6 +90,25 @@ def test_live_acc_sums_on_the_hour_and_counts_missing(store):
     assert max(x["sum"] or 0 for x in emd["rows"]) == 15.0
 
 
+def test_map_acc_layer_is_the_card_window(store, monkeypatch):
+    """지도 '누적' 층 = 강수 누적 카드와 같은 구간 · 같은 정시 격자 합. 구간을 안 주면 지도 설정을 따른다."""
+    gridview._ACC_CACHE.clear()
+    gridview._SUM_CACHE.clear()
+    a = np.zeros(store.shape("hr"))
+    a[10, 10] = 4.0
+    for k in ("202610022300", "202610030000", "202610031400", "202610031500"):
+        store.save("obs60", k, a)
+    now = datetime(2026, 10, 3, 15, 20)
+    fr = gridview.frame("acc", now=now, hours=2, since="hours")
+    assert (fr["from"], fr["tm"], fr["n"], fr["missing"]) == ("202610031400", "202610031500", 2, 0)
+    assert float(fr["arr"][10, 10]) == 8.0
+    fr = gridview.frame("acc", now=now, since="today")                 # 오늘 0시부터 — 00시 칸(어제 23~24시)은 빼고
+    assert fr["from"] == "202610030100" and float(fr["arr"][10, 10]) == 8.0 and fr["missing"] == 13
+    monkeypatch.setattr(gridview, "setting", lambda: {"acc_hours": 12, "acc_from": "yesterday"})
+    fr = gridview.frame("acc", now=now)                                 # 카드 설정 — 어제 0시부터
+    assert fr["from"] == "202610020100" and float(fr["arr"][10, 10]) == 16.0
+
+
 def test_put_setting_basis_and_station_layers(monkeypatch):
     monkeypatch.setattr(gridview.db, "get_setting", lambda k, d: dict(d))
     monkeypatch.setattr(gridview.db, "put_setting", lambda k, v: None)

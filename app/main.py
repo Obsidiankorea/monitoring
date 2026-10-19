@@ -16,8 +16,10 @@ import sys
 
 # ⚠️ 시연(--snap)은 설정(config)을 읽기 **전에** 정해야 한다 — python -m app.main 은 이 파일을 먼저 돌려
 #    config 를 읽어 버리고, uvicorn 이 app.main 을 다시 부를 때는 이미 읽힌 config 를 그대로 쓴다
-if __name__ == "__main__" and "--snap" in sys.argv:
-    os.environ["GN_SNAP"] = sys.argv[sys.argv.index("--snap") + 1]
+if __name__ == "__main__" and ("--snap" in sys.argv or "--demo" in sys.argv):
+    os.environ["GN_DEMO"] = "1"
+    if "--snap" in sys.argv:
+        os.environ["GN_SNAP"] = sys.argv[sys.argv.index("--snap") + 1]
     if "--port" not in sys.argv:
         os.environ.setdefault("PORT", "8001")
 from contextlib import asynccontextmanager
@@ -27,10 +29,10 @@ from pathlib import Path
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, HTTPException, Query
 from fastapi import Request
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, update
+from . import clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, snaps, update
 from .collectors import alerts, bangjae_rain, forecast, grid_rain, qpf, rain, shortfc
 from .config import CACHE, INTERVALS, POLL_DEFAULT
 
@@ -61,7 +63,7 @@ _locks = {k: asyncio.Lock() for k in COLLECTORS}
 async def run_one(kind: str, force: bool = False) -> dict:
     if kind not in COLLECTORS:
         raise HTTPException(404, f"모르는 수집기: {kind}")
-    if config.SNAP:
+    if config.DEMO:
         # 시연 — 기상청을 부르지 않는다(굳힌 시각 뒤 자료가 끼면 '가장 새 것'이 바뀐다). 수동 조회·과거 메우기도
         return {"ok": False, "kind": kind, "error": "시연 — 수집하지 않는다"}
     async with _locks[kind]:
@@ -140,7 +142,7 @@ async def api_rain(hours: int = Query(12, ge=1, le=72),
     out = queries.rain(hours, src=src)
     # 빈 시각이 있으면 지금 채운다. 이미 받는 중이면 겹쳐 부르지 않는다.
     kind = "bangjae" if src == "bangjae" else "rain"
-    if (grew or out.get("missing")) and not _locks[kind].locked() and not config.SNAP:
+    if (grew or out.get("missing")) and not _locks[kind].locked() and not config.DEMO:
         asyncio.create_task(run_one(kind))
         out["filling"] = True
     return out
@@ -230,23 +232,28 @@ async def api_grid_case(slug: str):
         raise HTTPException(404, str(e)) from e
 
 
+_SINCE = "^(today|yesterday|hours)$"         # 누적(acc) 층의 구간 — 강수 누적 카드와 같은 말
+
+
 @app.get("/api/grid/sigun")
 async def api_grid_sigun(layer: str, tm: str | None = None, test: bool = False,
-                         case: str | None = None):
+                         case: str | None = None, hours: int | None = Query(None, ge=1, le=48),
+                         since: str | None = Query(None, pattern=_SINCE)):
     """시군별 최대(+그 칸의 읍면동)·평균. 결측 칸은 평균에서 뺀다."""
     try:
-        return await asyncio.to_thread(gridview.sigun, layer, tm, test, case)
+        return await asyncio.to_thread(gridview.sigun, layer, tm, test, case, hours, since)
     except LookupError as e:
         raise HTTPException(404, str(e)) from e
 
 
 @app.get("/api/grid/stations")
 async def api_grid_stations(layer: str, tm: str | None = None, test: bool = False,
-                            case: str | None = None):
+                            case: str | None = None, hours: int | None = Query(None, ge=1, le=48),
+                            since: str | None = Query(None, pattern=_SINCE)):
     """관측소(경남 AWS) — 위치와 **격자와 같은 시각**의 실측값. 예측 층이면 위치만(status 'forecast').
     행마다 q = ok | missing(기상청 결측) | none(그 시각 값을 못 받음) | part(사례 누적, 일부 결측 — 하한)."""
     try:
-        return await asyncio.to_thread(gridview.stations, layer, tm, test, case)
+        return await asyncio.to_thread(gridview.stations, layer, tm, test, case, hours, since)
     except LookupError as e:
         raise HTTPException(404, str(e)) from e
 
@@ -313,15 +320,18 @@ async def api_grid_geo(name: str):
 
 @app.get("/api/grid/{layer}")
 async def api_grid(layer: str, tm: str | None = None, test: bool = False,
-                   case: str | None = None):
+                   case: str | None = None, hours: int | None = Query(None, ge=1, le=48),
+                   since: str | None = Query(None, pattern=_SINCE)):
     """한 층의 격자 — 0.1㎜ uint16(65535 = 결측), 행은 남→북, gzip.
 
-    layer = obs15 | obs60 | obsday | odam | vsrt+N(1~6) | shrt_today | shrt_tomorrow
+    layer = obs15 | obs60 | obsday | acc | odam | vsrt+N(1~6) | shrt_today | shrt_tomorrow
+    acc(누적)는 hours · since(today|yesterday|hours) 구간 — 없으면 지도 설정(강수 누적 카드와 같은 구간).
     `test=1` 이면 합성 격자(비 없는 날 화면 점검용).
     `case=사례` 면 재현 사례 — layer = obs60(1시간) | acc(사례 누적).
     """
     def build():
-        fr = gridcase.frame(case, layer, tm) if case else gridview.frame(layer, tm, test=test)
+        fr = gridcase.frame(case, layer, tm) if case else gridview.frame(layer, tm, test=test, hours=hours,
+                                                                         since=since)
         if "arr" in fr:
             body = gzip.compress(gridstore.encode(fr["arr"]), 6)
         else:
@@ -491,23 +501,108 @@ async def api_refresh(kind: str, force: bool = False):
 @app.get("/api/clock.js")
 async def api_clock_js():
     """화면이 맨 먼저 읽는 작은 스크립트 — 시연이면 멈춘 시각(ms)과 그 시연, 실황이면 null."""
-    snap = {k: config.SNAP_META[k] for k in ("name", "title", "now", "note")} if config.SNAP_META else None
+    snap = None
+    if config.SNAP_META:
+        m = config.SNAP_META
+        snap = {k: m.get(k) for k in ("name", "title", "now", "note", "alerts")}
+        snap["acc"] = m.get("acc") or ({"from": "hours", "hours": m["hours"]} if m.get("hours") else None)
     body = f"window.GN_NOW={json.dumps(clock.epoch_ms())};window.GN_SNAP={json.dumps(snap, ensure_ascii=False)};"
     return Response(body, media_type="application/javascript", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/snaps")
 async def api_snaps():
-    """굳혀 둔 시연 목록(data/demo/snap/*/meta.json) — 새 것부터. 시연 서버 주소는 화면이 정한다(같은 주소의 8001)."""
-    out = []
-    for m in sorted((config.DATA / "demo" / "snap").glob("*/meta.json")):
-        try:
-            j = json.loads(m.read_text("utf-8"))
-        except ValueError:
-            continue
-        out.append({k: j.get(k) for k in ("name", "title", "now", "note")})
-    out.sort(key=lambda x: x["now"] or "", reverse=True)
-    return {"snaps": out, "this": config.SNAP}
+    """굳혀 둔 시연 목록(app/snaps.py, 새 것부터) · 지금 굳히는 중인 것(job) · 이 서버가 시연 서버인가(demo)."""
+    return {"snaps": await asyncio.to_thread(snaps.list_all), "this": config.SNAP,
+            "demo": config.DEMO, "job": snaps.JOB}
+
+
+@app.post("/api/snaps")
+async def api_snaps_make(body: dict | None = None):
+    """지금을 굳힌다(뒤에서) — 화면은 /api/snaps 의 job 이 끝날 때까지 본다.
+    body: title · note · acc {from: hours|today|yesterday, hours} · overwrite"""
+    if config.DEMO:
+        raise HTTPException(403, "시연 화면에서는 저장하지 않는다 — 실황(:8000)에서 저장한다")
+    b = body or {}
+    acc = b.get("acc")
+    if acc is not None:
+        if not isinstance(acc, dict) or acc.get("from", "hours") not in ("hours", "today", "yesterday")                 or int(acc.get("hours") or 12) not in (3, 6, 12, 24, 48):
+            raise HTTPException(400, "acc 는 {from: hours|today|yesterday, hours: 3·6·12·24·48}")
+    try:
+        job = snaps.start(title=str(b.get("title") or ""), note=str(b.get("note") or ""), acc=acc,
+                          overwrite=bool(b.get("overwrite")))
+    except FileExistsError as e:
+        raise HTTPException(409, f"같은 시각 시연이 이미 있다({e})")
+    except (RuntimeError, ValueError) as e:
+        raise HTTPException(409, str(e))
+    return job
+
+
+@app.delete("/api/snaps/{name}")
+async def api_snaps_delete(name: str):
+    """굳힌 것을 지운다 — 서버 폴더째(되돌릴 수 없다). 지금 띄워 보는 중인 시연 서버는 제 사본으로 계속 돈다."""
+    if config.DEMO:
+        raise HTTPException(403, "시연 화면에서는 지우지 않는다 — 실황(:8000)에서 지운다")
+    try:
+        await asyncio.to_thread(snaps.delete, name)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except FileNotFoundError:
+        raise HTTPException(404, f"그런 시연이 없다({name})")
+    return {"ok": True, "name": name}
+
+
+def _reexec(name: str) -> None:
+    """시연 서버를 그 시연으로 다시 띄운다 — 같은 프로세스 자리에서(도커 PID 1 그대로). 설정은 config 가 읽을 때 정해서
+    도는 중에는 못 바꾼다. ⚠️ 윈도에는 exec 이 없어 새로 띄우고 나간다(PC 시험용)."""
+    os.environ["GN_SNAP"] = name
+    argv = list(getattr(sys, "orig_argv", [sys.executable, "-m", "app.main"]))[1:]
+    if "--snap" in argv:
+        argv[argv.index("--snap") + 1] = name
+    log.info("시연 서버를 %s 로 다시 띄운다", name)
+    if os.name == "nt":
+        import subprocess
+        subprocess.Popen([sys.executable, *argv])
+        os._exit(0)
+    os.execv(sys.executable, [sys.executable, *argv])
+
+
+_SWITCH = """<!doctype html><meta charset="utf-8"><title>시연 여는 중</title>
+<style>body{{margin:0;height:100vh;display:grid;place-items:center;background:#0f141b;color:#cfd8e3;font:15px system-ui,sans-serif}}
+b{{color:#fff}}small{{display:block;margin-top:8px;color:#7d8a99}}</style>
+<div><b>시연 «{title}»</b> 을 여는 중…<small>시연 서버를 그 시각 자료로 다시 띄운다(몇 초)</small></div>
+<script>
+const want = {name}, to = {to};
+async function poll() {{
+  try {{ const j = await (await fetch("/api/snaps", {{cache: "no-store"}})).json();
+         if (j.this === want) return location.replace(to); }} catch (e) {{}}
+  setTimeout(poll, 700);
+}}
+setTimeout(poll, 1200);
+</script>"""
+
+
+@app.get("/snap/{name}")
+async def snap_open(name: str, to: str = "/"):
+    """시연 서버(:8001)에서 그 시연으로 연다 — 지금 띄운 것이 다르면 갈아 탄다(다시 띄우는 동안 기다림 화면)."""
+    if not to.startswith("/") or to.startswith("//"):
+        to = "/"
+    if not config.DEMO:
+        raise HTTPException(404, "시연 서버(:8001)에서 연다")
+    try:
+        snaps.check_name(name)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if config.SNAP == name:
+        return RedirectResponse(to, status_code=302)
+    meta = config.SNAPS / name / "meta.json"
+    if not meta.exists():
+        raise HTTPException(404, f"그런 시연이 없다({name})")
+    title = json.loads(meta.read_text("utf-8")).get("title") or name
+    asyncio.get_running_loop().call_later(0.6, _reexec, name)
+    import html
+    return HTMLResponse(_SWITCH.format(title=html.escape(title), name=json.dumps(name), to=json.dumps(to)),
+                        headers={"Cache-Control": "no-store"})
 
 
 # ── 자료를 어디서 받나(이 PC / 서버) — app/origin.py ────────────────────────────
@@ -595,8 +690,10 @@ if __name__ == "__main__":
         os.environ["NO_COLLECT"] = "1"
     if "--port" in argv:
         os.environ["PORT"] = argv[argv.index("--port") + 1]
-    if "--snap" in argv:                  # 시연 — 굳혀 둔 그 시각 자료로(수집 안 함). 기본 포트 8001
-        os.environ["GN_SNAP"] = argv[argv.index("--snap") + 1]
+    if "--snap" in argv or "--demo" in argv:   # 시연 서버 — 굳혀 둔 그 시각 자료로(수집 안 함). 기본 포트 8001
+        os.environ["GN_DEMO"] = "1"
+        if "--snap" in argv:
+            os.environ["GN_SNAP"] = argv[argv.index("--snap") + 1]
         os.environ.setdefault("PORT", "8001")
     uvicorn.run("app.main:app", host=os.environ.get("HOST", "127.0.0.1"),
                 port=int(os.environ.get("PORT", "8000")))

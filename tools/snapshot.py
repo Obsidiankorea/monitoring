@@ -1,121 +1,45 @@
-"""지금 시점을 시연용으로 굳힌다 — 서버(또는 PC)의 쌓인 자료(DB · 격자 · 예측 그림)를 떠서 그 시각으로 잘라 둔다.
+"""떠 온 서버 자료로 시연을 굳힌다 — 화면의 '지금 저장'(app/snaps.py)과 같은 일을 PC 에서.
 
-    .venv\\Scripts\\python.exe tools\\snapshot.py <떠 온 폴더> <이름> --now 202610181536 --title "…"
+    .venv\\Scripts\\python.exe tools\\snapshot.py <떠 온 폴더> --now 202610190024 [--name …] [--title …]
+        [--acc 6 | today | yesterday]   시연을 열면 이 누적 구간(지도 설정 · 종합 화면). 없으면 굳힐 때 설정 그대로
+        [--alerts db]                   특보를 모아 둔 것으로(기본은 그 시각으로 기상청에서 다시 읽는다)
+        [--out <폴더>]                   기본 config.SNAPS(PC data/snaps) — 서버로는 scp 로 /state/snaps 에
 
 <떠 온 폴더> = gnweather.db + cache/ (서버 GN_STATE 를 SQLite 백업 · cp 로 뜬 것).
-만드는 것: data/demo/snap/<이름>/{meta.json, state/gnweather.db, state/cache/{grid,qpf}}
-띄우기:   python -m app.main --snap <이름>     (수집 안 함 · 시계를 그 시각에 멈춘다 · 기본 포트 8001)
-          서버는 deploy.sh 가 gn-demo 컨테이너(:8001)로 가장 새 시연을 띄운다.
-
-잘라 두는 것(그 시각 T 이후는 다 버린다 — 화면이 '가장 새 것'을 고르므로 뒤 자료가 남으면 안 된다):
-  관측 매시 72시간 · 매분 50시간 · 격자 실측 72시간
-  초단기(읍면동 · 격자) · 단기 · 예측 분포 그림은 T 이전 마지막 두 발표분(그림은 마지막 하나)
-  특보 스냅숏은 T 이전 마지막 몇 개 · 설정 · 수집 기록은 그대로
+보통은 이것을 쓰지 않는다 — 실황 화면(지도 설정 › 데모 · 종합 화면 설정 › 데모 시연)의 '지금 저장'이 서버에서 바로 굳힌다.
 """
 from __future__ import annotations
 
 import argparse
 import json
-import shutil
-import sqlite3
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT / "data" / "demo" / "snap"
+sys.path.insert(0, str(ROOT))
 
-
-def _keys_upto(names, t, n=None):
-    ks = sorted(k for k in names if k <= t)
-    return set(ks[-n:]) if n else set(ks)
-
-
-def prune_db(db: Path, now: datetime) -> dict:
-    T = now.strftime("%Y-%m-%d %H:%M")
-    T12, T10 = now.strftime("%Y%m%d%H%M"), now.strftime("%Y%m%d%H")
-    c = sqlite3.connect(db)
-    out = {}
-    h72 = (now - timedelta(hours=72)).strftime("%Y-%m-%d %H:%M")
-    h50 = (now - timedelta(hours=50)).strftime("%Y-%m-%d %H:%M")
-    c.execute("DELETE FROM obs_hourly WHERE tm > ? OR tm < ?", (T, h72))
-    c.execute("DELETE FROM obs_minute WHERE tm > ? OR tm < ?", (T, h50))
-    for tbl, col, t, n in (("fcst_rn1", "tmfc", T12, 2), ("fcst_short", "tmfc", T10, 2),
-                           ("fcst_short_run", "tmfc", T10, 2), ("qpf_frame", "tmfc", T12, 1)):
-        keep = _keys_upto([r[0] for r in c.execute(f"SELECT DISTINCT {col} FROM {tbl}")], t, n)
-        q = ",".join("?" * len(keep)) or "''"
-        c.execute(f"DELETE FROM {tbl} WHERE {col} NOT IN ({q})", tuple(keep))
-        out[tbl] = sorted(keep)
-    c.execute("DELETE FROM qpf_publish WHERE tmfc > ?", (T12,))
-    c.execute("DELETE FROM qpf_publish WHERE rowid NOT IN (SELECT rowid FROM qpf_publish ORDER BY tmfc DESC LIMIT 200)")
-    c.execute("DELETE FROM snapshot WHERE base_time > ? OR fetched_at > ?", (T, T))
-    c.execute("DELETE FROM snapshot WHERE rowid NOT IN (SELECT rowid FROM snapshot ORDER BY fetched_at DESC LIMIT 6)")
-    for tbl in ("bangjae_rain", "bangjae_hourly"):
-        c.execute(f"DELETE FROM {tbl} WHERE tm > ?", (T,))
-    c.commit()
-    c.execute("VACUUM")
-    out["rows"] = {t: c.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
-                   for (t,) in c.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
-    c.close()
-    return out
-
-
-def copy_cache(src: Path, dst: Path, now: datetime, kept: dict) -> dict:
-    T12, T10 = now.strftime("%Y%m%d%H%M"), now.strftime("%Y%m%d%H")
-    h72 = (now - timedelta(hours=72)).strftime("%Y%m%d%H%M")
-    n = {}
-    for kind in ("obs15", "obs60", "obsday", "odam"):
-        d = src / "grid" / kind
-        for f in sorted(d.glob("*.u16.gz")) if d.exists() else []:
-            k = f.name[:12]
-            if h72 <= k <= T12:
-                (dst / "grid" / kind).mkdir(parents=True, exist_ok=True)
-                shutil.copy2(f, dst / "grid" / kind / f.name)
-                n[kind] = n.get(kind, 0) + 1
-    for kind, tl, last in (("vsrt", 12, T12), ("shrt", 10, T10)):
-        d = src / "grid" / kind
-        files = sorted(d.glob("*.u16.gz")) if d.exists() else []
-        runs = _keys_upto({f.name.split("_")[0] for f in files}, last, 2)
-        for f in files:
-            if f.name.split("_")[0] in runs:
-                (dst / "grid" / kind).mkdir(parents=True, exist_ok=True)
-                shutil.copy2(f, dst / "grid" / kind / f.name)
-                n[kind] = n.get(kind, 0) + 1
-    for tmfc in kept.get("qpf_frame", []):
-        s = src / "qpf" / tmfc
-        if s.exists():
-            shutil.copytree(s, dst / "qpf" / tmfc, dirs_exist_ok=True)
-            n["qpf"] = n.get("qpf", 0) + len(list(s.iterdir()))
-    return n
+from app import config, snaps  # noqa: E402
 
 
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("src", type=Path)
-    ap.add_argument("name")
     ap.add_argument("--now", required=True, help="시연 시각 YYYYMMDDHHMM(KST)")
-    ap.add_argument("--title", required=True)
+    ap.add_argument("--name")
+    ap.add_argument("--title", default="")
     ap.add_argument("--note", default="")
+    ap.add_argument("--acc", help="6 · 12 · 24 · 48 · today · yesterday")
+    ap.add_argument("--alerts", choices=("kma", "db"), default="kma")
+    ap.add_argument("--out", type=Path, default=config.SNAPS)
+    ap.add_argument("--overwrite", action="store_true")
     a = ap.parse_args(argv)
-    now = datetime.strptime(a.now, "%Y%m%d%H%M")
-    out = OUT / a.name
-    if out.exists():
-        shutil.rmtree(out)
-    (out / "state" / "cache").mkdir(parents=True)
-    db = out / "state" / "gnweather.db"
-    src = sqlite3.connect(f"file:{a.src / 'gnweather.db'}?mode=ro", uri=True)
-    dst = sqlite3.connect(db)
-    src.backup(dst)
-    dst.close()
-    src.close()
-    kept = prune_db(db, now)
-    n = copy_cache(a.src / "cache", out / "state" / "cache", now, kept)
-    meta = {"name": a.name, "title": a.title, "now": a.now, "note": a.note,
-            "made_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
-            "kept": {k: v for k, v in kept.items() if k != "rows"}, "rows": kept["rows"], "files": n}
-    (out / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1), "utf-8")
-    size = sum(f.stat().st_size for f in out.rglob("*") if f.is_file())
-    print(json.dumps({"out": str(out), "MB": round(size / 1048576, 1), "rows": kept["rows"], "files": n},
+    acc = None
+    if a.acc:
+        acc = {"from": a.acc, "hours": 12} if a.acc in ("today", "yesterday") else {"from": "hours", "hours": int(a.acc)}
+    meta = snaps.make(now=datetime.strptime(a.now, "%Y%m%d%H%M"), name=a.name, title=a.title, note=a.note,
+                      acc=acc, src=a.src, overwrite=a.overwrite, alerts=a.alerts, out_root=a.out)
+    print(json.dumps({k: meta[k] for k in ("name", "title", "now", "acc", "alerts", "warn", "mb", "files")},
                      ensure_ascii=False, indent=1))
 
 

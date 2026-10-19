@@ -191,6 +191,19 @@ body.tools-auto.moving #tools { opacity: 1; pointer-events: auto; }
 .demo-list a b { display: block; font-size: 14.5px; }
 .demo-list a small { color: var(--ink-3); font: 500 12px var(--sans); }
 .demo-list .dh { font: 700 11px var(--sans); color: var(--ink-3); letter-spacing: .1em; padding: 10px 10px 2px; }
+/* 시연 — 지금 저장 · 줄마다 지우기 */
+.snapsave { display: grid; grid-template-columns: 1fr auto; gap: 6px 8px; padding: 6px 10px 10px; }
+.snapsave input { min-width: 0; font: 500 13px var(--sans); color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; padding: 6px 9px; }
+.snapsave input:focus { outline: none; border-color: var(--accent); }
+.snapsave button { font: 600 13px var(--sans); color: var(--on-accent); background: var(--accent); border: 0; border-radius: 7px; padding: 6px 14px; cursor: pointer; white-space: nowrap; }
+.snapsave button:disabled { opacity: .6; cursor: progress; }
+.snapsave small { grid-column: 1 / -1; color: var(--ink-3); font: 500 11.5px var(--sans); line-height: 1.5; }
+.snaprow { display: flex; align-items: stretch; gap: 2px; }
+.snaprow a { flex: 1; min-width: 0; }
+.snaprow .sw { font-style: normal; color: #C9A227; }
+.snapdel { flex: none; width: 30px; display: grid; place-items: center; background: transparent; border: 0; border-radius: 8px; color: var(--ink-3); cursor: pointer; }
+.snapdel svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.snapdel:hover { color: #E5484D; background: color-mix(in oklab, #E5484D 12%, transparent); }
 .crit { display: grid; grid-template-columns: calc(110px * var(--k, 1)) 1fr 1fr calc(70px * var(--k, 1)); align-items: center;
   gap: 10px; height: calc(30px * var(--k, 1)); padding: 0 6px; border-radius: 6px; cursor: pointer; }
 .crit:hover, .crit.hov { background: color-mix(in oklab, var(--accent) 13%, transparent); }
@@ -795,10 +808,12 @@ const STEPS = {
 /* 재현 사례(?case=) — 지난 호우를 격자 그대로 되돌려 본다(data/demo/map/). 실황 설정은 건드리지 않는다 */
 const CASE = /^[a-z0-9-]{1,64}$/.test(Q.get("case") || "") ? Q.get("case") : null;
 let CASEM = null;                                       // 사례 meta(시군 시계열·산출 특보)
-const KINDS = CASE ? ["obs60", "acc"] : ["obs15", "obs60", "obsday", "odam", "vsrt", "shrt_today", "shrt_tomorrow"];
+/* 실황의 '누적'(acc)은 오른쪽 강수 누적 카드와 **같은 구간**(지난 N시간 · 오늘/어제 0시부터)을 같은 격자 합으로 그린다 —
+   카드에서 구간을 바꾸면 지도도 따라 바뀐다. 예전 '오늘 누적'(obsday)은 이것의 '오늘 0시부터'다(설정에 남은 obsday 는 acc 로) */
+const KINDS = CASE ? ["obs60", "acc"] : ["obs15", "obs60", "acc", "odam", "vsrt", "shrt_today", "shrt_tomorrow"];
 const FLOWK = new Set(CASE ? ["obs60", "acc"] : ["obs60", "vsrt"]);   // 재생 흐름에 드는 층
 const NOWL = CASE ? "끝" : "지금";
-const COLLECT_OF = { obs15: "grid", obs60: "grid", obsday: "grid", odam: "odam", vsrt: "forecast",
+const COLLECT_OF = { obs15: "grid", obs60: "grid", obsday: "grid", acc: "grid", odam: "odam", vsrt: "forecast",
                      shrt_today: "short", shrt_tomorrow: "short" };
 const SET_DEFAULT = { flow_step: 10, flow_hours: 6, play_ms: 1200, tl_on: false, tl_stat: "max",
                       panel: "cards", acc_hours: 12, acc_from: "hours", acc_basis: "aws", sel_zoom: true, acc_fc: true, acc_h1: true };
@@ -823,7 +838,7 @@ let FEAT = null;                        // 시군 GeoJSON(강조용)
 
 const layerKey = () => kind === "vsrt" ? `vsrt+${vsrtN}` : kind;
 const metaOf = k => (META?.layers || []).find(x => x.id === k) || {};
-const stepsOf = k => k === "acc" ? STEPS.event : k === "obs15" ? (x4 ? STEPS.m60 : STEPS.m15)
+const stepsOf = k => k === "acc" ? (CASE ? STEPS.event : STEPS.day) : k === "obs15" ? (x4 ? STEPS.m60 : STEPS.m15)
   : (k === "obsday" || k.startsWith("shrt")) ? STEPS.day : STEPS.m60;
 const factor = () => (kind === "obs15" && x4) ? 4 : 1;
 const tOf = key => new Date(+key.slice(0, 4), +key.slice(4, 6) - 1, +key.slice(6, 8),
@@ -1176,8 +1191,13 @@ function buildLegend() {
 /* ── 머리 ─────────────────────────────────────────────────────────── */
 /* 지금 시각 — 시연(스냅숏)이면 서버가 멈춰 둔 그 시각(/api/clock.js 가 맨 먼저 window.GN_NOW 를 둔다) */
 const NOWD = () => (window.GN_NOW ? new Date(window.GN_NOW) : new Date());
-/* 시연 서버 주소 — 같은 주소의 8001(언레이드 gn-demo · PC python -m app.main --snap). 실황은 8000 */
-const SNAP_URL = (path = "") => `${location.protocol}//${location.hostname}:8001${path}`;
+/* 시연 서버(:8001 — 언레이드 gn-demo · PC python -m app.main --demo) 주소. 실황은 8000.
+   ⚠️ PC 가 서버에서 받는 중이면 시연도 그 서버의 것이다 — 이 PC 의 8001 이 아니라 서버의 8001 */
+let SNAP_HOST = location.hostname;
+if (!window.GN_SNAP) getJson("/api/origin").then(o => { if (o.mode === "server" && o.url) SNAP_HOST = new URL(o.url).hostname; }).catch(() => {});
+const SNAP_URL = (path = "") => `${location.protocol}//${SNAP_HOST}:8001${path}`;
+/* 그 시연으로 연다 — 시연 서버가 다른 것을 띄우고 있으면 갈아 탄다(몇 초) */
+const SNAP_OPEN = (name, to) => SNAP_URL(`/snap/${encodeURIComponent(name)}?to=${encodeURIComponent(to)}`);
 const LIVE_URL = (path = "") => `${location.protocol}//${location.hostname}:8000${path}`;
 const hm = t => t ? `${t.slice(8, 10)}:${t.slice(10, 12)}` : "—";
 const md = t => t ? `${+t.slice(4, 6)}.${+t.slice(6, 8)}.` : "";
@@ -1206,9 +1226,11 @@ function when(gr) {
 function isPast() {                     // 일부러 지난 시각을 보는 중 — 지연이 아니다
   return !CASE && (pinned(kind) || (kind === "obs60" && OBS_TM && OBS_TM !== metaOf("obs60").tm));
 }
+/* 층 이름 — 실황 누적은 카드 구간으로 부른다('어제 0시부터 누적') */
+const labelOf = k => (k === "acc" && !CASE) ? `${accSpan().label} 누적` : (metaOf(k).label || k);
 function paintHead() {
   const L = metaOf(kind);
-  const nm = L.label || kind, el = $("lname");
+  const nm = labelOf(kind), el = $("lname");
   if (el.textContent !== nm) {             // 층이 바뀌면 제목이 스며 올라온다
     el.textContent = nm;
     el.classList.remove("swap"); void el.offsetWidth; el.classList.add("swap");
@@ -1239,7 +1261,7 @@ function paintHead() {
 /* ── 층 메뉴 — 지도 위 제목을 누르면 내려온다(실측 · 예측). 숫자 키 1~7 은 그대로 ── */
 const LDESC = { obs15: "격자 500m · 15분 합", obs60: "격자 500m · 1시간 합", obsday: "격자 500m · 0시부터 오늘 합",
   odam: "동네예보 실황 5km · 1시간", vsrt: "초단기예보 5km · 앞으로 6시간", shrt_today: "단기예보 5km · 오늘 합",
-  shrt_tomorrow: "단기예보 5km · 내일 합", acc: "사례 처음부터 칸마다 더함" };
+  shrt_tomorrow: "단기예보 5km · 내일 합", acc: CASE ? "사례 처음부터 칸마다 더함" : "격자 500m · 강수 누적 카드와 같은 구간 · 정시 합" };
 const tmLabel = L => !L.tm ? "아직 없음" : L.tm.length >= 12 ? hm(L.tm) : L.tm.length === 10 ? `${+L.tm.slice(8, 10)}시` : md(L.tm);
 function buildMenu() {
   let i = 0;
@@ -1249,7 +1271,7 @@ function buildMenu() {
     const tip = (L.src || "") + (L.stale ? " · 자료 지연" : "")
       + (k.startsWith("shrt") && on ? " · 한 번 더 누르면 풀고 앞 층(강수 누적)으로" : "");
     return `<button class="${cls}" role="menuitemradio" aria-checked="${on}" data-k="${k}" style="--i:${i++}" title="${tip}">
-      <span><b>${L.label || k}</b><small>${LDESC[k] || L.short || ""}</small></span>
+      <span><b>${labelOf(k)}</b><small>${LDESC[k] || L.short || ""}</small></span>
       <span class="t">${tmLabel(L)}</span><kbd>${KINDS.indexOf(k) + 1}</kbd></button>`;
   };
   const grp = (label, ks) => `<div class="g">${label}</div>` + ks.map(item).join("");
@@ -1311,11 +1333,20 @@ function reqTm(key) {
   if (key === "obs60" && OBS_TM) return OBS_TM;
   return pinned(key) ? PIN_TM : null;
 }
+/* 누적(acc) 층 요청에 카드의 구간을 싣는다 — 저장한 설정이 서버에 닿기 전에도 같은 구간을 그리게 */
+function accParams(p, key) {
+  if (key !== "acc" || CASE) return p;
+  p.set("hours", String(SET.acc_hours || 12));
+  p.set("since", SET.acc_from || "hours");
+  return p;
+}
+const accSig = key => key === "acc" && !CASE ? `|${SET.acc_from || "hours"}:${SET.acc_hours || 12}` : "";
 function qs(key, tm) {
   const p = new URLSearchParams();
   if (tm) p.set("tm", tm);
   if (test) p.set("test", "1");
   if (CASE) p.set("case", CASE);
+  accParams(p, key);
   const s = p.toString();
   return s ? "?" + s : "";
 }
@@ -1324,7 +1355,7 @@ function wantTm(key) {
   const k = key.startsWith("vsrt") ? "vsrt" : key;
   return metaOf(k).tm || "";
 }
-const ckOf = (key, tm) => key + "|" + (tm || "") + "|" + (test ? "test" : wantTm(key));
+const ckOf = (key, tm) => key + "|" + (tm || "") + "|" + (test ? "test" : wantTm(key)) + accSig(key);
 async function fetchGrid(key, tm) {
   const ck = ckOf(key, tm);
   if (GRIDS.has(ck)) return GRIDS.get(ck);
@@ -1348,6 +1379,7 @@ async function fetchStat(key, tm) {
   if (tm) p.set("tm", tm);
   if (test) p.set("test", "1");
   if (CASE) p.set("case", CASE);
+  accParams(p, key);
   const j = await getJson(`/api/grid/sigun?${p}`);
   if (STATS.size > 200) STATS.delete(STATS.keys().next().value);
   STATS.set(ck, j);
@@ -1982,6 +2014,7 @@ function setRange(f, h) {
   if (h) { SET.acc_hours = h; body.acc_hours = h; }
   saveSetting(body);
   CARDS = null; loadCards();
+  if (kind === "acc" && !CASE) show(true);       // 지도 누적 층도 같은 구간으로
 }
 function rangePop(open = $("acc-rng").hidden) {
   const pop = $("acc-rng");
@@ -2639,16 +2672,70 @@ function setTest(on) {
   if (!test) loadCards();                // 테스트는 loadFlow 가 합성 흐름으로 카드를 다시 뽑는다
 }
 /* 설정 › 데모 — 실황 · 테스트(합성) · 재현 사례 목록. 예전엔 머리줄에 단추가 따로 있었다 */
+/* 시연 한 줄의 설명 — 시각 · 누적 구간 · 특보 · 빠진 것 · 크기 */
+const ACCL = a => !a ? "" : a.from === "today" ? "오늘 0시부터" : a.from === "yesterday" ? "어제 0시부터" : `지난 ${a.hours}시간`;
+function snapSub(x) {
+  return [`${md(x.now)} ${hm(x.now)}`, x.acc ? "누적 " + ACCL(x.acc) : "", (x.alerts || []).join(", "),
+          x.mb ? x.mb + "MB" : ""].filter(Boolean).join(" · ")
+    + ((x.warn || []).length ? ` <i class="sw">${x.warn.join(" · ")}</i>` : "")
+    + (x.note ? `<br>${x.note}` : "");
+}
+/* 지금 저장 — 서버가 뒤에서 굳힌다(수십 초). 끝날 때까지 /api/snaps 의 job 을 본다 */
+async function snapSave(btn, title, acc) {
+  const label = btn.textContent;
+  btn.disabled = true; btn.textContent = "굳히는 중…";
+  const post = overwrite => fetch("/api/snaps", { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ title, ...(acc ? { acc } : {}), overwrite }) });
+  try {
+    let r = await post(false);
+    if (r.status === 409) {
+      const d = (await r.json().catch(() => ({}))).detail || "";
+      if (!/이미 있다/.test(d) || !confirm(d + "\n덮어쓸까요?")) throw new Error(d || "저장하지 않았다");
+      r = await post(true);
+    }
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.status);
+    const t0 = Date.now();
+    for (;;) {
+      await new Promise(res => setTimeout(res, 1200));
+      const j = await getJson("/api/snaps");
+      if (!j.job || j.job.done) {
+        if (j.job?.error) throw new Error(j.job.error);
+        const m = j.job?.meta;
+        toast(`시연을 저장했다 — ${m ? m.title : ""}${m?.warn?.length ? " (" + m.warn.join(" · ") + ")" : ""}`);
+        return true;
+      }
+      btn.textContent = `굳히는 중… ${Math.round((Date.now() - t0) / 1000)}초`;
+    }
+  } catch (e) {
+    alert("시연을 저장하지 못했다: " + e.message);
+    return false;
+  } finally {
+    btn.disabled = false; btn.textContent = label;
+  }
+}
+async function snapDel(name, title) {
+  if (!confirm(`시연 «${title}» 을 지울까요?\n서버에서 지워져 되돌릴 수 없습니다.`)) return false;
+  const r = await fetch(`/api/snaps/${encodeURIComponent(name)}`, { method: "DELETE" });
+  if (!r.ok) { alert("지우지 못했다: " + ((await r.json().catch(() => ({}))).detail || r.status)); return false; }
+  toast(`시연을 지웠다 — ${title}`);
+  return true;
+}
+
 async function fillDemo(box) {
   let list = [];
   try { list = (await getJson("/api/grid/cases")).cases; } catch {}
-  let snaps = [];
-  try { snaps = (await getJson("/api/snaps")).snaps; } catch {}
-  const S = window.GN_SNAP;
+  let snaps = [], job = null, demo = false;
+  try { ({ snaps, job, demo } = await getJson("/api/snaps")); } catch {}
+  const S = window.GN_SNAP, busy = job && !job.done, ro = S || demo;
   box.innerHTML = (S ? `<a href="${LIVE_URL("/map.html")}"><b>실황(지금)으로</b><small>시연을 끝내고 수집 중인 화면으로(:8000)</small></a>` : "")
-    + `<div class="dh">시연 — 그때를 굳혀 둔 것(:8001)</div>`
-    + (snaps.length ? snaps.map(x => `<a class="${S && S.name === x.name ? "on" : ""}" href="${SNAP_URL("/map.html")}" target="${S ? "_self" : "gn-snap"}">
-        <b>${x.title}</b><small>${x.note || ""}</small></a>`).join("") : `<div class="al-none" style="padding:6px 10px">굳혀 둔 시연이 없다(tools/snapshot.py)</div>`)
+    + `<div class="dh">시연 — 그때를 굳혀 둔 것</div>`
+    + (ro ? "" : `<div class="snapsave">
+        <input id="sv-title" type="text" maxlength="80" placeholder="제목 — 비우면 시각 · 특보로">
+        <button id="sv-go" type="button"${busy ? " disabled" : ""}>${busy ? "굳히는 중…" : "지금 저장"}</button>
+        <small>지금 실측 · 그전까지 온 비(72시간) · 초단기 · 단기(오늘~모레) · 예측 분포 · 특보 · 이 화면 설정(층 · 누적 구간)을 서버에 굳혀 둔다</small></div>`)
+    + (snaps.length ? snaps.map(x => `<div class="snaprow"><a class="${S && S.name === x.name ? "on" : ""}" href="${SNAP_OPEN(x.name, "/map.html")}" target="${S ? "_self" : "gn-snap"}">
+        <b>${x.title}</b><small>${snapSub(x)}</small></a>${ro ? "" : `<button class="snapdel" type="button" data-del="${x.name}" title="지우기 — 서버에서 지운다(되돌릴 수 없다)" aria-label="지우기"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5M7 7v4M9 7v4"/></svg></button>`}</div>`).join("")
+      : `<div class="al-none" style="padding:6px 10px">굳혀 둔 시연이 없다${ro ? "" : " — 비가 올 때 '지금 저장'"}</div>`)
     + (S ? "" : `<div class="dh">이 화면</div><a href="/map.html" data-live class="${!CASE && !test ? "on" : ""}"><b>실황(지금)</b><small>수집 중인 자료</small></a>`)
     + `
 <a href="/map.html?test=1" data-test class="t ${test ? "on" : ""}"><b>테스트 — 합성</b><small>비 없는 날 화면 점검 · 합성 격자 · 특보 · 지점(스방 흉내) · T 키</small></a>
@@ -2660,6 +2747,12 @@ async function fillDemo(box) {
   for (const a of box.querySelectorAll("a[data-live], a[data-test]")) a.onclick = ev => {
     if (CASE) return;                    // 사례에서는 주소로 옮긴다
     ev.preventDefault(); closePrefs(); setTest(a.hasAttribute("data-test"));
+  };
+  const go = box.querySelector("#sv-go");
+  if (go) go.onclick = async () => { if (await snapSave(go, box.querySelector("#sv-title").value.trim())) fillDemo(box); };
+  for (const b of box.querySelectorAll("[data-del]")) b.onclick = async () => {
+    const x = snaps.find(y => y.name === b.dataset.del);
+    if (await snapDel(x.name, x.title)) fillDemo(box);
   };
 }
 
@@ -2947,6 +3040,7 @@ async function stnFetch(key, tm) {
   if (tm) p.set("tm", tm);
   if (test) p.set("test", "1");
   if (CASE) p.set("case", CASE);
+  accParams(p, key);
   const ck = p.toString();
   if (STNC.has(ck)) return STNC.get(ck);
   let j;
@@ -3518,7 +3612,8 @@ async function boot() {
   renderLayers();
   vsrtN = +SET.vsrt_n || 1; x4 = !!SET.x4;
   tlOn = Q.has("tl") ? Q.get("tl") === "1" : (CASE || selOn()) ? true : !!SET.tl_on;
-  const want = Q.get("layer") || (CASE ? "acc" : SET.layer) || "obs60";   // URL 이 서버 설정보다 먼저다(화면 고정용)
+  let want = Q.get("layer") || (CASE ? "acc" : SET.layer) || "obs60";   // URL 이 서버 설정보다 먼저다(화면 고정용)
+  if (want === "obsday" && !CASE) want = "acc";                          // 예전 '오늘 누적' — 이제 카드 구간을 따르는 누적
   if (want.startsWith("vsrt")) { kind = "vsrt"; const n = +want.replace(/\D/g, ""); if (n >= 1 && n <= 6) vsrtN = n; }
   else kind = KINDS.includes(want) ? want : "obs60";
   GNB = gnBounds();

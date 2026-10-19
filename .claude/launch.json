@@ -18,12 +18,11 @@
       "runtimeArgs": [
         "-m",
         "app.main",
-        "--snap",
-        "live-20261018-1536",
+        "--demo",
         "--port",
-        "8011"
+        "8001"
       ],
-      "port": 8011
+      "port": 8001
     },
     {
       "name": "dashboard-collect",
