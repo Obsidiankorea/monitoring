@@ -113,6 +113,9 @@ def aws_match() -> dict:
             ((last or "")[:10] + " 00:00",))] if last else []
     rows = []
     for r in got:
+        sg = sites.sigun_of(r["stn"], r["sigun"])
+        if sg != r["sigun"]:
+            r["sigun_bj"], r["sigun"] = r["sigun"], sg               # 스방이 준 시군은 남겨 둔다
         kma = r["stn"] in STN_NAME
         a = sites.aws_site(r["name"], r["sigun"], kma)
         pos = None if kma else sites.position(r["stn"], r["name"], r["sigun"])
@@ -168,7 +171,7 @@ def _rain_bangjae(hours: int, now: datetime | None = None) -> dict:
         ):
             st = rows.setdefault(r["stn"], {"name": r["name"], "sigun": r["sigun"], "v": {}})
             st["v"][r["tm"]] = r["mm"]
-            st["name"], st["sigun"] = r["name"], r["sigun"]
+            st["name"], st["sigun"] = r["name"], sites.sigun_of(r["stn"], r["sigun"])
 
     # 진행 중인 칸은 값이 있을 때만 붙인다(00분 직후에는 아직 비어 있다)
     partial = any(st["v"].get(진행) is not None for st in rows.values())

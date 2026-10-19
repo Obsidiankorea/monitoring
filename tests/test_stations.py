@@ -84,13 +84,20 @@ def test_aws_layer_from_stations_only(store, tdb, monkeypatch):
 def test_aws_match_report(tdb):
     from app import queries
     with tdb.tx() as c:
-        for stn, nm, sg in (("BJ1", "학림", "고성"), ("BJ2", "없는지점이름", "고성"), ("155", "창원", "창원")):
+        for stn, nm, sg in (("BJ1", "학림", "고성"), ("BJ2", "없는지점이름", "고성"), ("155", "창원", "창원"),
+                            ("8857", "신등", "사천"), ("8299", "북상", "거창")):
             c.execute("INSERT INTO bangjae_hourly VALUES('2026-10-03 14:00', ?, ?, ?, 1, 'x')", (stn, nm, sg))
     j = queries.aws_match()
     src = {r["name"]: r["src"] for r in j["rows"]}
-    assert src == {"학림": "aws", "없는지점이름": "none", "창원": "kma"} and j["rows"][0]["name"] == "없는지점이름"
-    assert j["list"]["total"] == 270 and j["list"]["seen"] == 2 and j["list"]["unseen"] == 268   # 학림 · 기상청 창원만 봤다
-    assert not any(x["sigun"] == "고성" and x["name"] == "학림" for x in j["unseen"])
+    assert src == {"학림": "aws", "없는지점이름": "none", "창원": "kma", "신등": "aws", "북상": "aws"}
+    assert j["rows"][0]["name"] == "없는지점이름"
+    by = {r["stn"]: r for r in j["rows"]}
+    assert by["8857"]["sigun"] == "산청" and by["8857"]["sigun_bj"] == "사천" and by["8857"]["emd"] == "신등면"
+    assert by["8299"]["org"] == "gn" and by["8299"]["list_name"] == "거창북상"     # 기상청 북상(946)과 가른다
+    assert j["list"]["total"] == 270 and j["list"]["seen"] == 4 and j["list"]["unseen"] == 266   # 학림 · 창원 · 신등 · 거창북상
+    un = {(x["sigun"], x["name"], x["org"]) for x in j["unseen"]}
+    assert ("고성", "학림", "gn") not in un and ("산청", "신등", "gn") not in un and ("거창", "거창북상", "gn") not in un
+    assert ("거창", "북상", "kma") in un                                      # 기상청 북상은 안 왔다
 
 
 def test_case_stations_match_daily_check():

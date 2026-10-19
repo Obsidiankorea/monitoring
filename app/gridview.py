@@ -400,7 +400,7 @@ def _gn_hourly(want: list[str]) -> dict[str, list]:
                              back):
             if r["stn"] in kma:
                 continue
-            a = sites.aws_site(r["name"], r["sigun"])
+            a = sites.aws_site(r["name"], sites.sigun_of(r["stn"], r["sigun"]))
             g = gk.get((a["sigun"], a["name"])) if a and a["org"] == "gn" else None
             if g:
                 v = r["mm"]

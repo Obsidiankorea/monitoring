@@ -90,6 +90,27 @@ def test_aws_list_places_gn_stations_and_tells_owner():
     assert j["count"] == {"gn": 216, "kma": 54} and sum(c["stn"] is not None for c in j["kma_check"]) >= 50
 
 
+def test_aws_list_fixes_from_bangjae_check(tmp_path, monkeypatch):
+    """내부망 점검(2026-10-19) — 스방 지점과 엑셀 목록이 어긋난 곳."""
+    assert sites.aws_site("북상", "거창")["name"] == "거창북상"             # 목록 '거창북상' = 스방 '북상'(경남)
+    assert sites.aws_site("북상", "거창", kma=True)["name"] == "북상"       # 기상청 북상(946)
+    assert sites.aws_site("거창읍", "거창")["name"] == "거창읍"             # 한 글자만 남으면 앞머리를 떼지 않는다
+    # 엑셀에서 자리가 엇갈린 같은 이름 두 줄 — 맞바꿔 제 시군에
+    for sg, nm, emd in (("남해", "당항", "남면"), ("고성", "당항", "회화면"), ("거창", "장기", "위천면"),
+                        ("고성", "장기", "동해면"), ("창녕", "성산", "성산면"), ("합천", "성산", "쌍책면"),
+                        ("창녕", "도천", "도천면")):
+        assert sites.position("BJ", nm, sg)["emd"] == emd, (sg, nm)
+    assert len(json.loads((gridstore.GEO / "aws_sites.json").read_text("utf-8"))["swapped"]) == 4
+    # 스방이 시군을 잘못 주는 지점 — 8857 '사천 신등' = 산청 신등
+    assert sites.sigun_of("8857", "사천") == "산청" and sites.sigun_of("8858", "사천") == "사천"
+    f = tmp_path / "bangjae_sites.json"
+    f.write_text(json.dumps({"sites": {"BJ9": {"sigun": "산청"}}}), "utf-8")
+    monkeypatch.setattr(sites, "OVERRIDE", f)
+    assert sites.sigun_of("BJ9", "사천") == "산청"
+    p = sites.position("BJ9", "신등", "산청")                              # 시군만 바로잡으면 위치는 목록에서
+    assert p["src"] == "aws" and p["emd"] == "신등면"
+
+
 def test_test_rain_fake_stations_have_positions():
     rows = gridview.test_rain(2)["rows"]
     fake = [r for r in rows if r["stn"].startswith("T")]
