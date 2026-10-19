@@ -38,12 +38,15 @@ now() { TZ=Asia/Seoul date "+%Y-%m-%d %H:%M:%S"; }
 running() { docker inspect gn-monitor --format '{{.Config.Image}}' 2>/dev/null | sed 's/.*://'; }   # gn-monitor:<판>
 
 write_status() {                           # $1 = deploying(true|false)
-  local run head remote behind commits
+  local run head remote behind commits base
   run=$(running)
   head=$(git -C "$R" rev-parse --short HEAD 2>/dev/null)
   remote=$(git -C "$R" rev-parse --short origin/main 2>/dev/null)
-  behind=$(git -C "$R" rev-list --count HEAD..origin/main 2>/dev/null || echo 0)
-  commits=$(git -C "$R" log --format='%h%x09%cd%x09%s' --date=format:'%m-%d %H:%M' -12 HEAD..origin/main 2>/dev/null \
+  # 밀린 커밋은 **돌고 있는 판**에서 센다 — 저장소만 당기고 다시 안 띄웠으면 그것도 '새 판'이다
+  base=HEAD
+  git -C "$R" cat-file -e "${run}^{commit}" 2>/dev/null && base=$run
+  behind=$(git -C "$R" rev-list --count "$base"..origin/main 2>/dev/null || echo 0)
+  commits=$(git -C "$R" log --format='%h%x09%cd%x09%s' --date=format:'%m-%d %H:%M' -12 "$base"..origin/main 2>/dev/null \
             | jq -R -s 'split("\n") | map(select(length>0) | split("\t") | {h: .[0], at: .[1], s: .[2]})')
   [ -n "$commits" ] || commits='[]'
   jq -n --arg checked "${CHECKED:-}" --arg run "$run" --arg head "$head" --arg remote "$remote" \
