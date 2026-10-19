@@ -75,7 +75,7 @@ if [ -e "$U/request" ]; then
   git -C "$R" fetch -q origin main 2>/dev/null && CHECKED=$(now)
   jq -n --arg at "$START" --arg done "$(now)" --argjson ok "$OK" --arg who "$WHO" \
         --arg version "$(git -C "$R" rev-parse --short HEAD 2>/dev/null)" \
-        --arg tail "$(grep -v 'swap limit' "$U/deploy.log" | tail -8)" \
+        --arg tail "$(grep -v 'swap limit|curl: (56)' "$U/deploy.log" | tail -8)" \
         '{at: $at, done: $done, ok: $ok, version: $version, who: $who, log: $tail}' > "$U/last.json"
   write_status false
 fi
