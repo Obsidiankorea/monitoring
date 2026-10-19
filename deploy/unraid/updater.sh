@@ -1,5 +1,5 @@
 #!/bin/bash
-# 서버 갱신 대행 — 언레이드 예약 작업이 1분마다 돌린다(/boot/config/plugins/gn-monitor/gn-monitor.cron).
+# 서버 갱신 대행 — 언레이드 예약 작업이 1분마다 돌린다(/boot/config/plugins/dynamix/gn-monitor.cron).
 #
 #   화면(설정 › 업데이트 › 서버)이 state/update/request 를 두면 → deploy.sh 로 갱신
 #   10분마다(또는 state/update/check 가 있으면) GitHub 를 보고 → state/update/status.json
@@ -11,7 +11,9 @@ set -uo pipefail
 D=/mnt/user/appdata/gn-monitor
 U=$D/state/update
 R=$D/repo
-CRON=/boot/config/plugins/gn-monitor/gn-monitor.cron
+# ⚠️ update_cron 은 dynamix 폴더와 '설치된 플러그인' 폴더의 *.cron 만 모은다 — 따로 만든 폴더는 무시한다.
+#    그래서 dynamix 폴더에 **우리 것 한 파일**(gn-monitor.cron)만 둔다. 다른 파일은 건드리지 않는다
+CRON=/boot/config/plugins/dynamix/gn-monitor.cron
 
 if [ "${1:-}" = "--install" ]; then
   mkdir -p "$(dirname "$CRON")" "$U"

@@ -78,7 +78,7 @@ mkdir -p config && cp handoff-mac/config/api_keys.txt config/   # 키는 저장�
 > [!tip] 서버 갱신 — 화면에서
 > 종합 화면 **설정 › 업데이트 › 서버(언레이드)** — 지금 판 · GitHub 최신 · 밀린 커밋 · 마지막 갱신 기록, [다시 확인] [서버 갱신].
 > 누르면 컨테이너가 `state/update/request` 파일만 두고, **언레이드 예약 작업**(`deploy/unraid/updater.sh`, 1분마다 —
-> `/boot/config/plugins/gn-monitor/gn-monitor.cron`)이 `deploy.sh` 로 다시 빌드해 띄운다(1~2분, 시연 :8001 도). 10분마다 GitHub 를 본다.
+> `/boot/config/plugins/dynamix/gn-monitor.cron`)이 `deploy.sh` 로 다시 빌드해 띄운다(1~2분, 시연 :8001 도). 10분마다 GitHub 를 본다.
 > 자동 갱신은 하지 않는다(누를 때만). 컨테이너에는 도커 권한을 주지 않는다. PC 가 서버에서 받는 중이면 PC 화면에서도 서버를 갱신한다.
 > 예약 설치/해제: `bash /mnt/user/appdata/gn-monitor/repo/deploy/unraid/updater.sh --install`(`--uninstall`). 화면에 '갱신 장치가 N분째 조용하다'가 뜨면 다시 설치.
 
