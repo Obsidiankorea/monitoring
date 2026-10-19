@@ -6,7 +6,7 @@
 # 폴더(/mnt/user/appdata/gn-monitor):
 #   repo/      저장소 받은 것(이 서버에서는 고치지 않는다 — ff-only 로만 당긴다)
 #   config/    api_keys.txt(기상청 API허브 기관용 키 ORG_API_KEY) — PC 에서 SSH 로 복사해 둔다
-#   state/     DB(gnweather.db) · 격자 캐시 · 시연(snaps/) — 컨테이너를 갈아도 남는다(GN_STATE)
+#   state/     DB(gnweather.db) · 격자 캐시 · 시연(snaps/) · 갱신 부탁/상태(update/ — updater.sh) — 컨테이너를 갈아도 남는다(GN_STATE)
 # 화면: http://<서버>:8000/  (지도: /map.html)
 # ⚠️ 스방(내부망)은 집 서버에서 닿지 않는다 — 수집기를 끈다(SKIP_COLLECT=bangjae, Dockerfile).
 # ⚠️ PC 에서도 수집기가 돌면 기상청 호출이 두 배가 된다(같은 키).
@@ -16,7 +16,7 @@ REPO=https://github.com/Obsidiankorea/monitoring.git
 NAME=gn-monitor
 PORT=${PORT:-8000}
 
-mkdir -p "$D/config" "$D/state/snaps"
+mkdir -p "$D/config" "$D/state/snaps" "$D/state/update"
 # ⚠️ 받은 뒤에는 **새로 받은 이 스크립트로 다시** 시작한다 — bash 는 스크립트를 읽어 가며 돌아서,
 #    도는 중에 git 이 이 파일을 바꾸면 나머지가 옛 내용으로 돈다.
 if [ -z "${DEPLOY_PULLED:-}" ]; then

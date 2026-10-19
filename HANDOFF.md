@@ -55,6 +55,7 @@ BANGJAE_BASE=스방 주소(내부망)
 - **언레이드 도커**: `gn-monitor` :8000(수집, 스방 끔) · `gn-demo` :8001(시연). 갱신은 푸시 뒤
   `ssh -i ~/.ssh/unraid_tower root@100.106.116.92 'bash /mnt/user/appdata/gn-monitor/repo/deploy/unraid/deploy.sh'`
   (호스트명 tower 는 known_hosts 문제로 안 됨 — IP 로).
+  **또는 화면에서**: 종합 화면 설정 › 업데이트 › 서버(언레이드) › [서버 갱신] — 언레이드 예약 작업(updater.sh)이 집어 간다.
 - PC 설정 › 자료: 이 PC 수집 / 서버에서 받기(`app/origin.py`, `/api/*` 를 서버로 넘김).
 - 런처(재난상황보고서 `plugins/dashboard.py`): [대시보드][지도] 단추, ⚙ 자체 호스팅/서버.
 - **특보 수집 고침(10-19)**: `wrn_now_data disp=1` 이 JSON 으로 와서 09.30~10.19 내내 '없음'이었다. 이제 JSON·글 둘 다, 모양이 낯설면 수집 실패로 남긴다(`tests/test_alerts.py`). 지난 특보는 `tm=YYYYMMDDHHMM` 으로 조회된다.

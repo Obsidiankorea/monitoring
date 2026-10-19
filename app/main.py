@@ -32,7 +32,7 @@ from fastapi import Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, snaps, update
+from . import clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, serverupdate, snaps, update
 from .collectors import alerts, bangjae_rain, forecast, grid_rain, qpf, rain, shortfc
 from .config import CACHE, INTERVALS, POLL_DEFAULT
 
@@ -362,6 +362,28 @@ async def api_settings_map(body: dict):
         return {"map": gridview.put_setting(body)}
     except (LookupError, ValueError) as e:
         raise HTTPException(400, str(e)) from e
+
+
+@app.get("/api/server-update")
+async def api_server_update():
+    """서버(언레이드) 갱신 상태 — 지금 판 · GitHub 최신 · 밀린 커밋 · 마지막 갱신(app/serverupdate.py).
+    PC 가 서버에서 받는 중이면 서버로 넘어간다(LOCAL_ONLY 가 아니다) — PC 화면에서도 서버를 갱신한다."""
+    return await asyncio.to_thread(serverupdate.status)
+
+
+@app.post("/api/server-update")
+async def api_server_update_ask(body: dict | None = None, request: Request = None):
+    """action = deploy(갱신 부탁) | check(GitHub 다시 확인). 1분 안에 언레이드 예약 작업이 집어 간다."""
+    if config.DEMO:
+        raise HTTPException(403, "시연 화면에서는 갱신하지 않는다 — 실황(:8000)에서")
+    action = str((body or {}).get("action") or "deploy")
+    who = request.client.host if request and request.client else ""
+    try:
+        return await asyncio.to_thread(serverupdate.ask, action, who)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e))
 
 
 @app.get("/api/aws/match")

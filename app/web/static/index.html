@@ -2016,6 +2016,7 @@ body.editing .panel {
           여기서 최신 코드를 받을 수 있다(<b>git pull</b>).
           ⚠️ 이 PC 에서 파일을 손댔으면 <b>받지 않는다</b> — 억지로 합치다 어중간한
           상태로 남는 것보다, 안 받고 이유를 알리는 편이 낫다.</p>
+        <div id="pf-srvup"></div>
         <div id="pf-up"></div>
       </div>
 
@@ -4540,7 +4541,72 @@ document.getElementById("demo-off").addEventListener("click", demoOff);
 /* ── 업데이트 ──────────────────────────────────────────────────────
    ⚠️ 확인 실패를 '최신'으로 읽지 않는다. 모르는 것과 최신은 다르다 —
       인터넷이 막힌 내부망 PC 에서 '최신입니다'라고 적으면 거짓말이 된다. */
+/* 서버(언레이드 도커) 갱신 — 단추를 누르면 서버에 부탁만 한다(state/update/request).
+   언레이드 예약 작업(deploy/unraid/updater.sh, 1분마다)이 deploy.sh 로 갱신하고 결과를 남긴다.
+   자동 갱신은 없다 — '새 판 있음'을 보이고 누를 때만. PC 가 서버에서 받는 중이면 이 칸이 서버를 가리킨다. */
+let SRVUP = null, SRVUP_WAIT = null;
+const esc = t => String(t ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
+async function loadServerUpdate() {
+  const box = document.getElementById("pf-srvup");
+  try { SRVUP = await getJson("/api/server-update"); } catch { SRVUP = null; }
+  const u = SRVUP;
+  if (!u?.available) { box.innerHTML = ""; return; }
+  const row = (k, v) => `<div class="prefs-row"><span class="lbl">${k}</span><span class="val">${v}</span></div>`;
+  const busy = u.deploying || u.requested;
+  const L = u.last;
+  box.innerHTML = `<h4 style="margin-top:4px">서버(언레이드)</h4>`
+    + row("지금 판", `<code>${esc(u.version || u.running || "—")}</code>`)
+    + row("GitHub", u.remote ? `<code>${esc(u.remote)}</code> <span class="hint">${esc(u.checked_at || "")} 확인</span>` : `<span class="warnx">확인 못 함</span>`)
+    + (u.behind ? row("새 판", `<b>${u.behind}개</b> 밀려 있다<div class="hint" style="margin-top:4px">${(u.commits || []).map(c =>
+        `<div>· <code>${esc(c.h)}</code> ${esc(c.at)} ${esc(c.s)}</div>`).join("")}</div>`)
+      : u.remote ? row("상태", `최신이다`) : "")
+    + (u.updater_stale ? row("주의", `<span class="warnx">갱신 장치가 ${Math.round(u.updater_age_s / 60)}분째 조용하다</span>
+        <div class="hint">언레이드 예약 작업이 안 돈다 — <code>bash …/deploy/unraid/updater.sh --install</code></div>`) : "")
+    + (busy ? row("진행", `<b>${u.deploying ? "갱신 중… (1~2분, 화면이 잠깐 끊긴다)" : "부탁함 — 1분 안에 시작한다"}</b>`) : "")
+    + (L ? row("마지막 갱신", `${L.ok ? "" : `<span class="warnx">실패</span> `}${esc(L.done || L.at)} → <code>${esc(L.version)}</code>
+        <details style="margin-top:3px"><summary class="hint">기록</summary><pre class="hint" style="white-space:pre-wrap;margin:4px 0">${esc(L.log)}</pre></details>`) : "")
+    + row("", `<button class="sbtn" id="pf-srv-check" type="button"${busy ? " disabled" : ""}>다시 확인</button>
+        <button class="sbtn primary" id="pf-srv-go" type="button"${busy || u.updater_stale ? " disabled" : ""}>서버 갱신</button>
+        <span class="hint" id="pf-srv-umsg">GitHub 최신 판으로 다시 빌드해 띄운다(시연 :8001 도)</span>`);
+}
+async function askServer(action) {
+  const r = await fetch("/api/server-update", { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ action }) });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.status);
+  return r.json();
+}
+document.getElementById("pf-srvup").addEventListener("click", async e => {
+  const msg = document.getElementById("pf-srv-umsg");
+  if (e.target.id === "pf-srv-check") {
+    try { await askServer("check"); msg.textContent = "부탁함 — 1분 안에 GitHub 를 본다"; } catch (err) { msg.textContent = err.message; }
+    setTimeout(loadServerUpdate, 65000);
+    return;
+  }
+  if (e.target.id !== "pf-srv-go") return;
+  const u = SRVUP || {};
+  if (!confirm((u.behind ? `새 판 ${u.behind}개로 서버를 갱신합니다.` : "새 판이 없습니다. 그래도 서버를 다시 빌드해 띄울까요?")
+               + "\n\n1~2분 동안 서버 화면이 끊깁니다(시연 :8001 도).")) return;
+  try { await askServer("deploy"); } catch (err) { msg.textContent = "부탁하지 못했다: " + err.message; return; }
+  const from = u.version || u.running, t0 = Date.now();
+  await loadServerUpdate();
+  clearInterval(SRVUP_WAIT);
+  /* 끝날 때까지 본다 — 도는 동안 서버가 내려가 응답이 끊긴다. 다시 살아나 판이 바뀌면(또는 마지막 갱신이 새로 적히면) 끝 */
+  SRVUP_WAIT = setInterval(async () => {
+    let j = null;
+    try { j = await getJson("/api/server-update"); } catch {}
+    const m = document.getElementById("pf-srv-umsg");
+    if (m) m.textContent = j ? (j.deploying ? "갱신 중…" : j.requested ? "곧 시작…" : "") : `다시 띄우는 중… ${Math.round((Date.now() - t0) / 1000)}초`;
+    if (j && !j.deploying && !j.requested && j.last && (j.version !== from || Date.parse(j.last.done) > t0 - 60000)) {
+      clearInterval(SRVUP_WAIT);
+      SRVUP = j; loadServerUpdate();
+      if (j.last.ok && confirm(`서버를 ${j.version} 으로 갱신했습니다. 화면을 새로고침할까요?`)) location.reload();
+    }
+    if (Date.now() - t0 > 6 * 60000) { clearInterval(SRVUP_WAIT); if (m) m.textContent = "6분이 지나도 끝나지 않았다 — 서버를 확인하세요"; }
+  }, 4000);
+});
+
 async function loadUpdate(check = true) {
+  await loadServerUpdate();
   const box = document.getElementById("pf-up");
   box.innerHTML = `<p class="note">${check ? "확인하는 중…" : "읽는 중…"}</p>`;
   let u;
@@ -4548,7 +4614,8 @@ async function loadUpdate(check = true) {
   catch (e) { box.innerHTML = `<p class="note">확인하지 못했다: ${e.message}</p>`; return; }
 
   if (!u.available) {
-    box.innerHTML = `<p class="note">${u.reason || "업데이트를 쓸 수 없다"}</p>`;
+    // 서버(도커)는 git 저장소가 아니다 — 서버 갱신 칸이 대신한다. 그때는 이 PC 칸을 비운다
+    box.innerHTML = SRVUP?.available ? "" : `<p class="note">${u.reason || "업데이트를 쓸 수 없다"}</p>`;
     return;
   }
   const h = u.here || {};
@@ -4575,7 +4642,7 @@ async function loadUpdate(check = true) {
   if (u.ahead)
     rows.push(["", `<span class="hint">이 PC 에만 있는 커밋이 ${u.ahead}개 있다</span>`]);
 
-  box.innerHTML = rows.map(([k, v]) =>
+  box.innerHTML = (SRVUP?.available ? `<h4 style="margin-top:14px">이 PC</h4>` : "") + rows.map(([k, v]) =>
     `<div class="prefs-row"><span class="lbl">${k}</span><span class="val">${v}</span></div>`).join("")
     + `<div class="prefs-row"><span class="lbl"></span><span class="val">
         <button class="sbtn" id="pf-up-check" type="button">다시 확인</button>

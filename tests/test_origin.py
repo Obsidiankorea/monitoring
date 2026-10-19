@@ -65,3 +65,23 @@ def test_server_unreachable_is_502(tdb, monkeypatch):
     origin.put({"mode": "server", "url": "http://srv:8000"})
     r = TestClient(main.app).get("/api/alerts")
     assert r.status_code == 502 and "닿지 않는다" in r.json()["detail"]
+
+
+def test_server_update_asks_by_file(tmp_path, monkeypatch):
+    """서버 갱신 — 컨테이너는 state/update 에 부탁 파일만 둔다(언레이드 updater.sh 가 집어 간다)."""
+    import json as _j
+    from app import config, main, serverupdate
+    monkeypatch.setattr(config, "STATE", tmp_path)
+    c = TestClient(main.app)
+    assert c.get("/api/server-update").json()["available"] is False        # 장치가 없으면(PC) 칸을 숨긴다
+    assert c.post("/api/server-update", json={"action": "deploy"}).status_code == 404
+    (tmp_path / "update").mkdir()
+    (tmp_path / "update" / "status.json").write_text(_j.dumps({"running": "abc1234", "remote": "def5678", "behind": 2,
+                                                               "commits": [], "deploying": False, "last": None}), "utf-8")
+    j = c.get("/api/server-update").json()
+    assert j["available"] and j["behind"] == 2 and j["requested"] is False and j["updater_stale"] is False
+    assert c.post("/api/server-update", json={"action": "deploy"}).json()["requested"] is True
+    assert (tmp_path / "update" / "request").exists()
+    assert c.post("/api/server-update", json={"action": "check"}).json()["checking"] is True
+    assert c.post("/api/server-update", json={"action": "rm"}).status_code == 400
+    assert serverupdate.STALE_S == 300
