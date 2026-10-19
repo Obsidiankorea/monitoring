@@ -89,6 +89,8 @@ def test_aws_match_report(tdb):
     j = queries.aws_match()
     src = {r["name"]: r["src"] for r in j["rows"]}
     assert src == {"학림": "aws", "없는지점이름": "none", "창원": "kma"} and j["rows"][0]["name"] == "없는지점이름"
+    assert j["list"]["total"] == 270 and j["list"]["seen"] == 2 and j["list"]["unseen"] == 268   # 학림 · 기상청 창원만 봤다
+    assert not any(x["sigun"] == "고성" and x["name"] == "학림" for x in j["unseen"])
 
 
 def test_case_stations_match_daily_check():

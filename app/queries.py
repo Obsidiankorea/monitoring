@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta
 
 from . import clock, db, sites
@@ -121,9 +122,27 @@ def aws_match() -> dict:
     order = {"none": 0, "emd": 1, "fix": 2, "aws": 3, "kma": 4}
     rows.sort(key=lambda x: (order.get(x["src"], 9), x["sigun"], x["name"]))
     n = {k: sum(x["src"] == k for x in rows) for k in order}
+    # 목록(엑셀)에는 있는데 그날 스방에서 값이 한 번도 안 온 지점 — 수집기는 값이 있는 시각만 쌓는다
+    # (고장 · 점검 · 강우계 없음이면 줄 자체가 없다). 이름이 달라 못 짝지은 것도 여기 든다(위 rows 의 none · emd 와 견줘 본다)
+    seen = set()
+    for r in rows:
+        a = sites.aws_site(r["name"], r["sigun"], r["src"] == "kma")
+        if a:
+            seen.add((a["sigun"], a["name"], a["org"]))
+    try:
+        listed = json.loads(sites.AWS.read_text("utf-8"))["sites"]
+    except (OSError, ValueError, KeyError):
+        listed = []
+    unseen = [{"sigun": x["sigun"], "name": x["name"], "org": x["org"], "addr": x.get("addr", "")}
+              for x in listed if (x["sigun"], x["name"], x["org"]) not in seen]
+    unseen.sort(key=lambda x: (x["org"], ORDER.index(x["sigun"]) if x["sigun"] in ORDER else 99, x["name"]))
     return {"day": (last or "")[:10] or None, "count": len(rows), "by_src": n,
+            "list": {"total": len(listed), "seen": len(seen), "unseen": len(unseen),
+                     "unseen_gn": sum(x["org"] == "gn" for x in unseen), "unseen_kma": sum(x["org"] == "kma" for x in unseen)},
             "note": "src: kma 기상청 지점번호(기상청 목록 위치) · aws 경남 AWS 목록(엑셀) · fix bangjae_sites.json · "
-                    "emd 목록에 없어 읍면동 가운데(임시) · none 위치 없음", "rows": rows}
+                    "emd 목록에 없어 읍면동 가운데(임시) · none 위치 없음. "
+                    "unseen = 목록에는 있는데 그날 스방에서 값이 한 번도 안 온 지점(고장 · 점검 · 이름이 달라 못 짝지음)",
+            "rows": rows, "unseen": unseen}
 
 
 def _rain_bangjae(hours: int, now: datetime | None = None) -> dict:
