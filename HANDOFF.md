@@ -1,0 +1,82 @@
+---
+title: 이어받기 — 경남 기상 대시보드
+updated: 2026-10-19
+tags: [handoff, monitoring]
+---
+
+# 이어받기 — 다른 PC에서 개발을 이어 갈 때
+
+> [!tip] 새 PC 의 Claude 에게
+> 이 파일 → [[README]] 순서로 읽고 시작한다. 최근 흐름은 `git log --oneline -20`.
+> 키는 `config/api_keys.txt` 에만 두고 **절대 커밋하지 않는다**(로그에도 찍지 않는다).
+
+## 1. 새 PC 준비
+
+```bash
+git clone https://github.com/Obsidiankorea/monitoring.git
+cd monitoring
+python -m venv .venv
+.venv\Scripts\pip install -r requirements.txt
+```
+
+`config/api_keys.txt`(git 에 없다 — 직접 만든다):
+
+```
+ORG_API_KEY=기상청 API허브 기관용 키
+BANGJAE_ID=스방 계정
+BANGJAE_PW=스방 비밀번호
+BANGJAE_BASE=스방 주소(내부망)
+```
+
+실행: `.venv\Scripts\python.exe -m app.main` → `http://localhost:8000/`(종합) · `/map.html`(지도).
+수집 없이 화면만: `--no-collect`. 시연 서버: `--demo`(:8001).
+
+> [!warning] 수집은 한 곳만
+> 내부망 PC 와 집 언레이드 서버가 **같은 기상청 키로 둘 다 수집하면 호출이 두 배**다.
+> 한쪽은 설정 › 자료 › '서버에서 받기'로 두거나 `--no-collect`.
+> 단, **스방은 내부망에서만 닿는다** — 서버는 스방을 끄고(`SKIP_COLLECT=bangjae`) 돈다.
+
+## 2. 지금 어디까지 왔나(2026-10-15 ~ 10-19)
+
+### 경남 강수 지도(`app/web/static/map.html`)
+- 머리줄 없이 지도 위 제목 — 누르면 층 메뉴(실측 15분 · 60분 · **누적** · 실황 / 예측 초단기 · 단기 오늘 · 내일).
+- **누적 층 = 오른쪽 강수 누적 카드 구간**(지난 6·12·24·48시간 · 오늘/어제 0시부터). 카드에서 바꾸면 지도·시군 값·관측소 값이 같이 바뀐다(`gridview.acc_sum` 공용). 예전 '오늘 누적'(obsday)은 이것의 오늘 0시부터.
+- 시군 클릭 확대(설정에서 끔) + 읍면동 경계, Ctrl+클릭 3곳 비교, 지금 오는 비·예측 상위를 읍면동으로.
+- 강수 누적 카드: 예측(F) · 최근 1시간 빗금(H) 단추, 켜고 끄면 재정렬, 단기 오늘/내일 카드(한 번 더 누르면 해제), 구간은 카드 글자를 눌러 고른다(서버 DB 설정에 저장).
+- 레이어/특보는 아이콘으로 접힘, 경계는 히트맵 위에서도 보이게(halo), 오른쪽 위 도구는 마우스를 움직일 때만.
+
+### 종합 화면(`app/web/static/index.html`)
+- 강수 타임라인에 예측 · 1시간 단추(지도와 같은 말). 누적순이 대표지점·시군 평균에서도 먹게.
+- 구간 표시는 첫 칸 앞 정시부터(기상청 'H시' 칸 = (H-1)~H).
+- FHD 에서 글자 겹침·잘림 정리, 'DB 조회' 뺌, 예측은 아이콘 + `+6`.
+
+### 서버 · 자료
+- **언레이드 도커**: `gn-monitor` :8000(수집, 스방 끔) · `gn-demo` :8001(시연). 갱신은 푸시 뒤
+  `ssh -i ~/.ssh/unraid_tower root@100.106.116.92 'bash /mnt/user/appdata/gn-monitor/repo/deploy/unraid/deploy.sh'`
+  (호스트명 tower 는 known_hosts 문제로 안 됨 — IP 로).
+- PC 설정 › 자료: 이 PC 수집 / 서버에서 받기(`app/origin.py`, `/api/*` 를 서버로 넘김).
+- 런처(재난상황보고서 `plugins/dashboard.py`): [대시보드][지도] 단추, ⚙ 자체 호스팅/서버.
+- **특보 수집 고침(10-19)**: `wrn_now_data disp=1` 이 JSON 으로 와서 09.30~10.19 내내 '없음'이었다. 이제 JSON·글 둘 다, 모양이 낯설면 수집 실패로 남긴다(`tests/test_alerts.py`). 지난 특보는 `tm=YYYYMMDDHHMM` 으로 조회된다.
+
+### 시연(스냅숏) — [[README]] '시연' 절
+- 실황 화면 설정의 **`지금 저장`** → 서버가 지금(실측·72시간 비·초단기·단기 오늘~모레·예측 분포·그 시각 특보·설정)을 굳힌다(약 20초, 10MB 안팎). 휴지통으로 지우기.
+- 쌓이는 곳: 서버 `/mnt/user/appdata/gn-monitor/state/snaps/`, PC `data/snaps/` — git 에 없다.
+- `:8001/snap/<이름>` 으로 열면 시연 서버가 그것으로 갈아 탄다(한 번에 하나).
+- 있는 것: `live-20261019-0024`(10.18. 18~24시 비 · 고성·남해 호우주의보 23:05~00:30), `live-20261018-1536`.
+- ⚠️ 지난 시각으로는 못 굳힌다(서버가 예측 격자·그림을 최근 몇 발표분만 남김) — 비 올 때 그 자리에서 저장.
+- 내부망 PC 가 언레이드에 안 닿으면 데모 목록이 비어 보인다(정상).
+
+## 3. 남은 일
+
+1. **재난상황보고서(jaenan-weather) ← gn-monitor 자료 먼저**(사용자가 고른 3번안): 같은 언레이드의 `server/`, `emergency/*`(qpf · forecast · rain · alerts · vsrt_img · combo_data)가 gn-monitor API(`http://100.106.116.92:8000` 또는 컨테이너 이름)를 먼저 부르고, 실패하면 기상청 직접. Immich 의 PostgreSQL 은 쓰지 않는다.
+2. 스방 지점 실제 좌표 → `data/geo/bangjae_sites.json`(지금은 읍면동 이름으로 가운데에 임시, `app/sites.py`). **내부망 PC 에서 할 수 있는 일.**
+3. 스방 수집 점검 — 서버에서는 꺼져 있어 내부망 PC 에서만 확인된다.
+
+## 4. 지켜 온 약속
+
+- 키 · 토큰은 커밋하지 않고 화면·로그에 찍지 않는다(텔레그램 봇 토큰은 사용자가 그대로 두기로 함 — 재발급을 권하지 않는다).
+- 커밋·푸시·서버 갱신은 사용자가 말할 때만.
+- 사용자의 실행 중인 대시보드(:8000, `run.bat` — CP949, 손대지 않는다)를 끄지 않는다. 시험 서버는 `--no-collect`.
+- 언레이드: `/mnt/user/appdata/{gn-monitor,jaenan-weather}` 밖은 건드리지 않는다(호스트 시간대 · 다른 컨테이너 그대로).
+- 시험 중 바꾼 공유 DB 설정은 원래대로 돌린다.
+- 문서는 옵시디언 스타일(frontmatter · `[[위키링크]]` · 콜아웃).
