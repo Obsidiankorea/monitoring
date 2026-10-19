@@ -691,6 +691,13 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 #prefs .top b { font-size: 18px; }
 #prefs .top .sp { flex: 1; }
 #prefs .top button { background: transparent; border: 0; color: var(--ink-2); font-size: 20px; cursor: pointer; }
+#prefs .box { max-height: calc(100vh - 32px); display: flex; flex-direction: column; }
+#prefs .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: 0 0 8px; flex: none; }
+#prefs .tabs button { background: transparent; border: 0; border-bottom: 2px solid transparent; color: var(--ink-3);
+  font: 600 14px var(--sans); padding: 8px 12px; cursor: pointer; margin-bottom: -1px; }
+#prefs .tabs button.on { color: var(--ink); border-bottom-color: var(--accent); }
+#prefs .panes { overflow-y: auto; min-height: 0; flex: 1; }
+#prefs .pane[hidden] { display: none; }
 #prefs h4 { margin: 16px 0 6px; font-size: 12px; color: var(--ink-3); letter-spacing: .12em; }
 #prefs .row { display: flex; align-items: center; gap: 12px; padding: 6px 0; }
 #prefs .row .k { width: 92px; color: var(--ink-2); flex: none; }
@@ -3383,6 +3390,33 @@ document.addEventListener("click", ev => {
 }, true);
 
 /* ── 설정(Ctrl+,) — 서버에 둔다(어느 PC 에서 열어도 같게) ─────────────────── */
+/* 설정을 탭으로 — 머리글(h4)마다 한 탭. 길어서 화면 밖으로 잘리던 것을 나눈다. 고른 탭은 기억한다 */
+let PF_TAB = 0;
+function prefTabs() {
+  const box = $("prefs").querySelector(".box"), top = box.querySelector(".top");
+  const panes = [];
+  let cur = null;
+  for (const el of [...box.children]) {
+    if (el === top) continue;
+    if (el.tagName === "H4") { cur = document.createElement("div"); cur.className = "pane"; panes.push([el.textContent, cur]); el.remove(); continue; }
+    if (cur) cur.appendChild(el);
+  }
+  if (PF_TAB >= panes.length) PF_TAB = 0;
+  const bar = document.createElement("div");
+  bar.className = "tabs";
+  bar.innerHTML = panes.map(([t], i) => `<button data-tab="${i}" class="${i === PF_TAB ? "on" : ""}">${t}</button>`).join("");
+  const body = document.createElement("div");
+  body.className = "panes";
+  panes.forEach(([, el], i) => { el.hidden = i !== PF_TAB; body.appendChild(el); });
+  top.after(bar, body);
+  bar.onclick = ev => {
+    const b = ev.target.closest("[data-tab]");
+    if (!b) return;
+    PF_TAB = +b.dataset.tab;
+    bar.querySelectorAll("button").forEach((x, i) => x.classList.toggle("on", i === PF_TAB));
+    panes.forEach(([, el], i) => { el.hidden = i !== PF_TAB; });
+  };
+}
 function openPrefs() {
   stopPlay();
   const seg = (key, opts) => `<span class="seg">${opts.map(([v, l]) =>
@@ -3413,6 +3447,7 @@ function openPrefs() {
     <div class="demo-list" id="pf-demo"><div class="al-none">읽는 중…</div></div>
     <div class="keys"><kbd>1</kbd>~<kbd>8</kbd> 층 · <kbd>Space</kbd> 재생 · <kbd>←</kbd><kbd>→</kbd> 한 장씩 · <kbd>L</kbd> 패널 · <kbd>A</kbd> 특보 · <kbd>S</kbd> 관측소 · <kbd>V</kbd> 지점 값 · <kbd>B</kbd> 누적 기준 · <kbd>F</kbd> 누적 예상 · <kbd>H</kbd> 최근 1시간 · <kbd>T</kbd> 테스트 · <kbd>?</kbd> 도움말 · <kbd>Ctrl</kbd>+<kbd>,</kbd> 설정</div>
   </div>`;
+  prefTabs();
   $("prefs").hidden = false;
   $("pf-x").onclick = closePrefs;
   for (const b of $("prefs").querySelectorAll("button[data-k]")) b.onclick = () => {
