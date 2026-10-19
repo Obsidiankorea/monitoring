@@ -76,6 +76,18 @@ def aws_site(name: str, sigun: str, kma: bool = False) -> dict | None:
     return next((s for s in hit if s["org"] == want), hit[0])
 
 
+@lru_cache(maxsize=1)
+def gn_sites() -> list[dict]:
+    """경남 AWS(관리기관 경상남도) 지점 — 지도 관측소 층에 기상청 지점과 함께 짚는다. stn 은 'G<차례>'."""
+    try:
+        sites = json.loads(AWS.read_text("utf-8"))["sites"]
+    except (OSError, ValueError, KeyError):
+        return []
+    return [{"stn": f"G{i}", "name": s["name"], "sigun": s["sigun"], "x": s["x"], "y": s["y"],
+             "ht": s.get("ht") or 0, "org": "gn", "addr": s.get("addr", ""), "place": s.get("place", "")}
+            for i, s in enumerate(x for x in sites if x["org"] == "gn")]
+
+
 def org_of(stn: str, name: str, sigun: str, kma: bool) -> str:
     """관리기관 — 'kma'(기상청 AWS) | 'gn'(경남 AWS). 기상청 지점번호로 오면 기상청, 아니면 목록, 목록에 없으면 경남."""
     if kma:

@@ -5,7 +5,7 @@ from datetime import datetime
 import numpy as np
 import pytest
 
-from app import gridcase, gridview
+from app import gridcase, gridview, sites
 from app.collectors import grid_rain, rain
 from app.domain import gridproj
 
@@ -49,7 +49,46 @@ def test_hourly_fallback_only_on_the_hour(tdb):
 
 def test_forecast_layers_give_positions_only():
     r = gridview.stations("vsrt+2")
-    assert r["status"] == "forecast" and len(r["rows"]) == 55 and all(x["v"] is None for x in r["rows"])
+    assert r["status"] == "forecast" and len(r["rows"]) == 55 + 216 and all(x["v"] is None for x in r["rows"])
+    assert sum(x["org"] == "gn" for x in r["rows"]) == 216                 # 경남 AWS 도 자리를 짚는다
+
+
+def test_aws_layer_from_stations_only(store, tdb, monkeypatch):
+    """AWS 누적 면 — 기상청(obs_hourly) + 경남 AWS(스방, 목록 위치)의 구간 합을 IDW. 땅 밖은 0, 관측소 자리는 그 값 가까이."""
+    gridview._ACC_CACHE.clear(); gridview._SUM_CACHE.clear(); gridview._AWS_CACHE.clear()
+    monkeypatch.setattr(gridview, "setting", lambda: {"acc_hours": 2, "acc_from": "hours"})
+    a = np.zeros(store.shape("hr"))
+    for k in ("202610031400", "202610031500"):
+        store.save("obs60", k, a)
+    hl = next(s for s in sites.gn_sites() if s["sigun"] == "고성" and s["name"] == "학림")
+    with tdb.tx() as c:
+        for tm in ("2026-10-03 14:00", "2026-10-03 15:00"):                       # 기상청 창원 10㎜씩
+            c.execute("INSERT INTO obs_hourly VALUES('155', ?, 10, 0, 0, 'ok', 'x')", (tm,))
+        for tm in ("2026-10-03 13:00", "2026-10-03 14:00"):                       # 스방 13시 = 기상청 14시 칸
+            c.execute("INSERT INTO bangjae_hourly VALUES(?, 'BJ7', '학림', '고성', 30, 'x')", (tm,))
+        c.execute("INSERT INTO bangjae_hourly VALUES('2026-10-03 14:00', '155', '창원', '창원', 99, 'x')")  # 기상청 번호 — 뺀다
+    now = datetime(2026, 10, 3, 15, 20)
+    monkeypatch.setattr(gridview.clock, "now", lambda: now)
+    st = gridview.stations("aws")
+    by = {x["stn"]: x for x in st["rows"]}
+    assert by["155"]["v"] == 20.0 and by[hl["stn"]]["v"] == 60.0 and by[hl["stn"]]["org"] == "gn"
+    assert "경남 AWS" in st["src"]
+    fr = gridview.frame("aws", now=now)
+    assert fr["n"] == 2 and fr["n_gn"] == 1 and fr["from"] == "202610031400"
+    hb = store.geo()["hr"]["bbox"]
+    v = fr["arr"][round(hl["y"]) - hb["j0"], round(hl["x"]) - hb["i0"]]
+    assert 45 < v <= 60                                                      # 학림 자리 — 그 값 가까이
+    assert float(fr["arr"][0, 0]) == 0.0                                     # 경남 땅 밖은 칠하지 않는다
+
+
+def test_aws_match_report(tdb):
+    from app import queries
+    with tdb.tx() as c:
+        for stn, nm, sg in (("BJ1", "학림", "고성"), ("BJ2", "없는지점이름", "고성"), ("155", "창원", "창원")):
+            c.execute("INSERT INTO bangjae_hourly VALUES('2026-10-03 14:00', ?, ?, ?, 1, 'x')", (stn, nm, sg))
+    j = queries.aws_match()
+    src = {r["name"]: r["src"] for r in j["rows"]}
+    assert src == {"학림": "aws", "없는지점이름": "none", "창원": "kma"} and j["rows"][0]["name"] == "없는지점이름"
 
 
 def test_case_stations_match_daily_check():

@@ -345,7 +345,7 @@ async def api_grid(layer: str, tm: str | None = None, test: bool = False,
     h, w = gridstore.shape(fr["grid"])
     hd = {"Content-Encoding": "gzip", "X-Grid": fr["grid"], "X-Grid-Shape": f"{h},{w}",
           "X-Grid-Tm": fr["tm"], "Cache-Control": "no-cache"}
-    for k in ("tmfc", "capped", "from", "case"):
+    for k in ("tmfc", "capped", "from", "case", "n"):
         if k in fr:
             hd[f"X-Grid-{k.capitalize()}"] = str(fr[k])
     if "hours" in fr:
@@ -362,6 +362,12 @@ async def api_settings_map(body: dict):
         return {"map": gridview.put_setting(body)}
     except (LookupError, ValueError) as e:
         raise HTTPException(400, str(e)) from e
+
+
+@app.get("/api/aws/match")
+async def api_aws_match():
+    """경남 AWS(스방) 지점마다 경남 AWS 목록과 짝지어졌나 — 위치 출처(kma · aws · emd 임시 · none). 내부망 점검용."""
+    return await asyncio.to_thread(queries.aws_match)
 
 
 @app.get("/api/bangjae")

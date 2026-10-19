@@ -102,6 +102,30 @@ def rain(hours: int = 12, now: datetime | None = None, src: str = "kma") -> dict
     }
 
 
+def aws_match() -> dict:
+    """경남 AWS(스방) 지점이 경남 AWS 목록(aws_sites.json)과 짝지어졌나 — 내부망에서 한눈에 보려고.
+    가장 최근 날 bangjae_hourly 의 지점마다 관리기관 · 위치 출처(kma 기상청 목록 | aws 목록 | emd 읍면동 가운데 | none)."""
+    with db.tx() as con:
+        last = con.execute("SELECT MAX(tm) t FROM bangjae_hourly").fetchone()["t"]
+        got = [dict(r) for r in con.execute(
+            "SELECT stn, name, sigun FROM bangjae_hourly WHERE tm >= ? GROUP BY stn",
+            ((last or "")[:10] + " 00:00",))] if last else []
+    rows = []
+    for r in got:
+        kma = r["stn"] in STN_NAME
+        a = sites.aws_site(r["name"], r["sigun"], kma)
+        pos = None if kma else sites.position(r["stn"], r["name"], r["sigun"])
+        rows.append({**r, "org": sites.org_of(r["stn"], r["name"], r["sigun"], kma),
+                     "src": "kma" if kma else (pos or {}).get("src", "none"),
+                     "list_name": a["name"] if a else None, "emd": (pos or {}).get("emd")})
+    order = {"none": 0, "emd": 1, "fix": 2, "aws": 3, "kma": 4}
+    rows.sort(key=lambda x: (order.get(x["src"], 9), x["sigun"], x["name"]))
+    n = {k: sum(x["src"] == k for x in rows) for k in order}
+    return {"day": (last or "")[:10] or None, "count": len(rows), "by_src": n,
+            "note": "src: kma 기상청 지점번호(기상청 목록 위치) · aws 경남 AWS 목록(엑셀) · fix bangjae_sites.json · "
+                    "emd 목록에 없어 읍면동 가운데(임시) · none 위치 없음", "rows": rows}
+
+
 def _rain_bangjae(hours: int, now: datetime | None = None) -> dict:
     """스방 265개소로 같은 모양을 만든다.
 
