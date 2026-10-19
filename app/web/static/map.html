@@ -33,6 +33,7 @@
   --accent: #2FA3DC;
   /* 누적 막대 — 실측 · 그중 최근 1시간(빗금 두 색) */
   --acc-past: #2280B8; --acc-h1a: #96DBF6; --acc-h1b: #2FA3DC;
+  --acc-kma: #1F9E8C; --acc-kma-h1a: #A6EBDD; --acc-kma-h1b: #2DBBA4;
   --rain-0: #16202C; --rain-1: #1B3A55; --rain-2: #1E5B87; --rain-3: #2280B8;
   --rain-4: #2FA3DC; --rain-5: #5EC3EE; --rain-6: #96DBF6; --rain-7: #D7F0FC;
   --lv-fail: #FF8A5B; --lv-ok: #3FB98A;
@@ -67,6 +68,7 @@
   --ink: #101821; --ink-2: #47596D; --ink-3: #7688A0;
   --accent: #1B7FBF;
   --acc-past: #4A8CC4; --acc-h1a: #0E4A73; --acc-h1b: #2E86C2;
+  --acc-kma: #3AA897; --acc-kma-h1a: #0C5C50; --acc-kma-h1b: #2E9E8C;
   --rain-0: #F1F5FA; --rain-1: #DDEDF8; --rain-2: #BADCF1; --rain-3: #86C0E4;
   --rain-4: #2E86C2; --rain-5: #1B6698; --rain-6: #0E4A73; --rain-7: #073050;
   --lv-fail: #C4521E; --lv-ok: #12805A;
@@ -402,11 +404,15 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 .abar .h { position: absolute; top: 0; bottom: 0;
   background: repeating-linear-gradient(45deg, var(--acc-h1a) 0 3px, var(--acc-h1b) 3px 6px); }
 .abar .o.all { border-radius: 5px; }
+/* 기상청 AWS 지점 줄 — 막대를 청록으로(경남 AWS 는 그대로 파랑). 같은 시군에 둘이 섞여도 어느 관측망인지 바로 */
+.ar.kma .abar .o { background: var(--acc-kma); }
+.ar.kma .abar .h { background: repeating-linear-gradient(45deg, var(--acc-kma-h1a) 0 3px, var(--acc-kma-h1b) 3px 6px); }
 .abar .h.end { border-radius: 0 5px 5px 0; } .abar .h.all { border-radius: 5px 0 0 5px; } .abar .h.end.all { border-radius: 5px; }
 /* 막대 범례 — 카드 맨 아래 한 줄 */
 .acc-lg { display: flex; gap: calc(14px * var(--k, 1)); padding: 4px 8px 0; font-size: calc(11.5px * var(--k, 1)); color: var(--ink-3); }
 .acc-lg i { display: inline-block; width: calc(14px * var(--k, 1)); height: calc(8px * var(--k, 1)); border-radius: 2px; margin-right: 5px; vertical-align: 0; }
 .acc-lg .p { background: var(--acc-past); }
+.acc-lg .pk { background: var(--acc-kma); }
 .acc-lg .h { background: repeating-linear-gradient(45deg, var(--acc-h1a) 0 3px, var(--acc-h1b) 3px 6px); }
 .acc-lg .f { background: repeating-linear-gradient(135deg, color-mix(in oklab, var(--rain-4) 42%, transparent) 0 3px,
                                                      color-mix(in oklab, var(--rain-4) 22%, transparent) 3px 6px); }
@@ -2134,15 +2140,18 @@ async function accAws(H, fc) {
   const [FC, FE] = fcMaps(fc);
   const live = r => r.bad < r.d.length;              // 자료를 아예 안 주는 지점이 0으로 1등이 되지 않게
   const base = { H, ft, basis: "aws", fell, bt: `${lastHM} 실측`,
-                 src: test ? "테스트" : fell ? "스방 안 됨→기상청" : rain.src === "bangjae" ? `스방 ${rain.count}` : "기상청 56" };
-  const own = rain.src === "bangjae" || rain.src === "test";      // 스방(내부망) — 기상청 번호가 아닌 지점은 위치를 모른다
+                 src: test ? "테스트" : fell ? "경남 AWS 안 됨→기상청" : rain.src === "bangjae" ? `경남+기상청 AWS ${rain.count}` : "기상청 AWS 56" };
+  const own = rain.src === "bangjae" || rain.src === "test";      // 경남 AWS(스방, 내부망)까지 든 자료
+  /* 관리기관 — 서버가 준 org(경남 AWS 목록 · 기상청 지점번호), 없으면 기상청 지점번호면 기상청 */
+  const orgOf = r => r.org || (SITEBY.has(r.stn) || !own ? "kma" : "gn");
   if (!selOn()) {
     const by = {};
     for (const r of rain.rows) (by[r.sigun] ||= []).push(r);
     const rows = ORDER_GN().filter(s => by[s]).map(s => {
       const st = by[s].slice().sort((a, b) => (live(b) - live(a)) || (b.sum - a.sum))[0];
       const fcd = (FC[s]?.d || []).slice(0, 6).map(qRN1);
-      return { sig: s, stn: st.name, d: st.d, dt, fcd, ft, sum: st.sum, fc: sumv(fcd), bad: st.bad, pos: sitePos(st.stn), h1: st.m60 };
+      return { sig: s, stn: st.name, d: st.d, dt, fcd, ft, sum: st.sum, fc: sumv(fcd), bad: st.bad, h1: st.m60, org: orgOf(st),
+               pos: sitePos(st.stn) || (st.pos ? { x: st.pos.x, y: st.pos.y, est: st.pos.est } : null) };
     });
     return { ...base, rows, sub: `다우지점 · ${accSpan().label} + 예상 6시간` };
   }
@@ -2151,16 +2160,16 @@ async function accAws(H, fc) {
   const rows = rain.rows.filter(r => isSel(r.sigun)).map(r => {
     const site = SITEBY.get(r.stn), emd = site?.emd || r.pos?.emd, e = emd ? FE[`${r.sigun}|${emd}`] : null;
     const fcd = e ? e.d.slice(0, 6).map(qRN1) : [];
-    const tag = site ? (site.emd || "기상청") : own ? "스방" : "";
+    const tag = site ? (site.emd || "기상청") : own ? (r.pos?.emd || "경남") : "";
     return { sig: r.sigun, tag: multi() ? `${r.sigun} ${tag}` : tag, stn: r.name, d: r.d, dt, fcd,
-             ft: fcd.length ? ft : [], sum: r.sum, fc: sumv(fcd), bad: r.bad, dead: !live(r), kma: !!site, h1: r.m60,
+             ft: fcd.length ? ft : [], sum: r.sum, fc: sumv(fcd), bad: r.bad, dead: !live(r), kma: !!site, h1: r.m60, org: orgOf(r),
              pos: sitePos(r.stn) || (r.pos ? { x: r.pos.x, y: r.pos.y, est: r.pos.est } : null), det: true };
   });
-  const nk = rows.filter(r => r.kma).length, est = rows.filter(r => r.pos?.est).length;
+  const nk = rows.filter(r => r.org === "kma").length, est = rows.filter(r => r.pos?.est).length;
   const nopos = rows.length - rows.filter(r => r.pos).length;
   return { ...base, rows, sel: selName(),
-    sub: `${selName()} AWS ${rows.length}곳${own ? ` (기상청 ${nk} · 스방 ${rows.length - nk})` : ""} · ${accSpan().label}`,
-    note: [est ? `스방 지점 ${est}곳은 위치를 몰라 이름이 가리키는 읍면동 가운데에 임시로 둔다` : "",
+    sub: `${selName()} AWS ${rows.length}곳${own ? ` (기상청 ${nk} · 경남 ${rows.length - nk})` : ""} · ${accSpan().label}`,
+    note: [est ? `경남 AWS ${est}곳은 목록에 없어 이름이 가리키는 읍면동 가운데에 임시로 둔다` : "",
            nopos ? `${nopos}곳은 이름으로 읍면동을 못 찾아 지도에 짚지 않는다` : ""].filter(Boolean).join(" · ") };
 }
 
@@ -2337,7 +2346,7 @@ function renderAcc() {
     const rank = i < 3 && tot >= 0.1 ? `<span class="rk">${i + 1}</span>` : "";
     const ge = r.part ? "≥" : "";
     const at = r.pos ? ` data-x="${r.pos.x}" data-y="${r.pos.y}"` : "";
-    return `<div class="ar${r.det ? " det" : ""}" data-s="${r.sig}" data-k="${r.sig}|${r.stn}"${at} title="${r.det ? "" : `${r.sig} — 눌러서 이 시군 ${A.basis === "grid" ? "읍면동" : "지점"} 보기`}">
+    return `<div class="ar${r.det ? " det" : ""}${A.basis === "aws" && r.org === "kma" ? " kma" : ""}" data-s="${r.sig}" data-k="${r.sig}|${r.stn}"${at} title="${r.det ? "" : `${r.sig} — 눌러서 이 시군 ${A.basis === "grid" ? "읍면동" : "지점"} 보기`}">
       <div class="nm2">${rank}<small>${r.tag ?? r.sig}</small>${r.stn}</div>
       <div class="abar"><div class="o${A.day ? " dayb" : hw >= o - 0.05 && !r.fc ? " all" : ""}" style="width:${o.toFixed(1)}%"></div>
         ${h1 >= 0.1 ? `<div class="h${r.fc ? "" : " end"}${hw >= o - 0.05 ? " all" : ""}" style="left:${(o - hw).toFixed(1)}%;width:${hw.toFixed(1)}%" title="그중 최근 1시간 ${h1.toFixed(1)}㎜"></div>` : ""}
@@ -2353,7 +2362,9 @@ function renderAcc() {
   }).join("") + (n < rows.length ? `<div class="case-note">외 ${rows.length - n}${A.basis === "grid" && A.sel ? "개 읍면동" : "곳"} — 적은 순이라 생략</div>` : "")
     + (A.note ? `<div class="case-note">${A.note}</div>` : "")
     + (A.day ? `<div class="acc-lg"><span><i class="d"></i>그날 예보 합(단기 PCP 매시 합 · 읍면동 최대)</span><span>선 그래프: 매시 값</span></div>`
-      : `<div class="acc-lg"><span><i class="p"></i>실측</span>${h1On ? `<span><i class="h"></i>그중 최근 1시간</span>` : ""}${fcOn && rows.some(r => r.fc) ? `<span><i class="f"></i>앞으로 6시간</span>` : ""}</div>`);
+      : `<div class="acc-lg">${A.basis === "aws"
+          ? (rows.some(r => r.org !== "kma") ? `<span><i class="p"></i>경남 AWS</span>` : "") + (rows.some(r => r.org === "kma") ? `<span><i class="pk"></i>기상청 AWS</span>` : "")
+          : `<span><i class="p"></i>실측</span>`}${h1On ? `<span><i class="h"></i>그중 최근 1시간</span>` : ""}${fcOn && rows.some(r => r.fc) ? `<span><i class="f"></i>앞으로 6시간</span>` : ""}</div>`);
   rowEvents(body);
   hovEvents(body);
   slideRows(body, before);
@@ -2738,7 +2749,7 @@ async function fillDemo(box) {
       : `<div class="al-none" style="padding:6px 10px">굳혀 둔 시연이 없다${ro ? "" : " — 비가 올 때 '지금 저장'"}</div>`)
     + (S ? "" : `<div class="dh">이 화면</div><a href="/map.html" data-live class="${!CASE && !test ? "on" : ""}"><b>실황(지금)</b><small>수집 중인 자료</small></a>`)
     + `
-<a href="/map.html?test=1" data-test class="t ${test ? "on" : ""}"><b>테스트 — 합성</b><small>비 없는 날 화면 점검 · 합성 격자 · 특보 · 지점(스방 흉내) · T 키</small></a>
+<a href="/map.html?test=1" data-test class="t ${test ? "on" : ""}"><b>테스트 — 합성</b><small>비 없는 날 화면 점검 · 합성 격자 · 특보 · 지점(경남 AWS 흉내) · T 키</small></a>
     <div class="dh">재현 사례 — 지난 호우</div>`
     + list.map(c => `<a class="${c.slug === CASE ? "on" : ""}"
       href="/map.html?case=${c.slug}&layer=acc&tl=1&ov=alerts"><b>${c.title}</b>
@@ -2771,7 +2782,7 @@ const TIPS = new Map([
   ["ov-stations", `<b>관측소</b> — 경남 AWS 55곳의 실측을 지금 그린 격자와 <b>같은 시각</b>으로.
     마름모 속은 지도와 같은 색 단계라 둘레와 색이 다르면 격자와 실측이 어긋난 곳이다.
     ◇ 0 · × 기상청 결측 · 점선 = 그 시각 값을 못 받음. 점에 마우스를 올리면 실측 · 그 칸 격자 · 차이.
-    예측 층에서는 자리만. 스방(내부망) 자체 지점은 위치를 몰라 지도에 없다 — 시군을 누르면 오른쪽 패널에 목록으로 나온다.`],
+    예측 층에서는 자리만. 경남 AWS(내부망) 지점은 이 층에 없다 — 시군을 누르면 오른쪽 패널에 목록으로 나온다(막대 파랑 경남 · 청록 기상청).`],
   ["ov-stnval", `<b>지점 강수량 글자</b> — 관측소 옆에 값을 단다. 센 곳부터 빈자리에만, 상위 셋은 지점 이름도.
     시군을 골랐으면 그 시군 지점만. 켜면 지도가 붐빌 수 있어 기본은 끔 — 점 색만으로도 단계는 읽힌다.`],
 ]);
@@ -3148,7 +3159,7 @@ function renderStnLegend() {
     + `면(격자)은 관측소 사이를 메운 분석값이라 관측소 자리에서도 다르다 — 점에 마우스를 올리면 실측 · 그 칸 격자 · 차이.
        값이 없을 때: ◇ 0 · × 기상청 결측 · 점선 = 그 시각 값을 못 받음(수집기가 격자와 같은 시각으로 받는다).`
     + (un ? `<br>위치 없음: ${un} — 어느 API 에도 값이 없는 지점.` : "")
-    + `<br>스방(내부망) 자체 지점은 위치를 몰라 지도에 없다 — 시군을 누르면 오른쪽 패널에 목록으로.`);
+    + `<br>경남 AWS(내부망) 지점은 이 층에 없다 — 시군을 누르면 오른쪽 패널에 목록으로.`);
   box.innerHTML = `<div class="hd2" title="눌러서 닫기"><b>관측소</b><span class="k">AWS ${n}곳</span><i class="inf" data-tip="stn-now">i</i>`
     + `<span>${STN && !STN.err && STN.tm && STN.status !== "forecast" ? (CASE ? `${md(STN.tm)} ` : "") + hm(STN.tm) : ""}</span></div>`
     + keys + nt;
@@ -3266,9 +3277,10 @@ function helpHtml(tab) {
       <td>경남 AWS 56곳(위치 55 — 사천공항(161)은 이 API 들에 자료가 없다). 지도 층은 격자와 <b>같은 시각</b>의 매분자료, 없으면 정시자료</td>
       <td>매분. 지도 수집기가 격자를 받은 시각에 맞춰 같이 받는다</td>
       <td>날씨누리 지도 '관측 › 일강수'는 AWS 지점값(전국 약 720곳)을 화면에서 면으로 칠한 것 ✔</td></tr>
-    <tr><td><b>스방</b><div class="k">내부망</div></td><td>경남 스마트 통합 방재시스템</td>
-      <td><b>기상청 자료가 아니다.</b> 경남 자체 AWS 212곳 + 기상청 53곳 = 265곳의 시간 강우량</td><td>10분마다</td>
-      <td>상황실 내부망에서만. 안 되면 기상청 56곳으로 물러서고 '스방 안 됨→기상청'이라 적는다</td></tr>
+    <tr><td><b>경남 AWS</b><div class="k">내부망</div></td><td>경남 스마트 통합 방재시스템(스방)</td>
+      <td>경남 AWS(도 자체) + 기상청 AWS ≈ 265곳의 시간 강우량. 강수 누적 카드 막대 <b>파랑 = 경남 AWS · 청록 = 기상청 AWS</b>.
+        위치는 경남 AWS 목록(<code>data/geo/aws_sites.json</code>, 시군 + 장치명)</td><td>10분마다</td>
+      <td>상황실 내부망에서만. 안 되면 기상청 AWS 56곳으로 물러서고 '경남 AWS 안 됨→기상청'이라 적는다</td></tr>
     <tr><td><b>기상특보</b><div class="k">레이어 A</div></td><td><code>wrn_now_data.php</code></td>
       <td>발효 중 특보 · 예비특보. 재현 사례의 특보는 <b>산출</b>(격자 3·12시간 합에 호우 기준) — 이력 API 가 이 키로 403</td>
       <td>1분마다</td><td>기상청 특보 발표 원자료</td></tr>
@@ -3293,14 +3305,14 @@ function helpHtml(tab) {
     <dt>시각</dt><dd>모두 한국 표준시(KST)</dd></dl>`;
   const how = `<dl>
     <dt>시군 누르기</dt><dd>오른쪽 패널이 그 시군으로 — 격자 기준이면 읍면동, AWS 기준이면 그 시군 지점 전부
-      (내부망이면 스방 지점까지 — 위치를 모르는 스방 지점은 지도에 짚지 않고 목록에만. 카드 안에서 굴린다). 다시 누르거나 바다를 누르거나 <code>Esc</code> 면 경남 전체</dd>
+      (내부망이면 경남 AWS 지점까지 — 경남 AWS 목록에 없는 지점은 이름이 가리키는 읍면동 가운데에 임시로. 카드 안에서 굴린다). 다시 누르거나 바다를 누르거나 <code>Esc</code> 면 경남 전체</dd>
     <dt>'강수 누적' 누르기</dt><dd>기준을 바꾼다 — AWS(관측소 다우지점) ↔ 격자(누적 최대 칸). <code>B</code> 도 같다</dd>
     <dt>줄에 마우스</dt><dd>지도에 그 시군 · 지점 · 칸까지 선이 그어진다</dd>
     <dt>관측소에 마우스</dt><dd>실측과 그 칸 격자 값, 차이(격자 − 관측)</dd>
     <dt>왼쪽 위 제목</dt><dd>누르면 층 메뉴 — 실측(15분 · 60분 · 오늘 · 실황) · 예측(초단기 · 단기 오늘 · 단기 내일). ↑↓ · Enter, 숫자 <code>1</code>~<code>7</code> 도 된다</dd>
     <dt>오른쪽 위 아이콘</dt><dd>창 = 오른쪽 패널(<code>L</code>) · ? = 이 창 · 톱니 = 설정. 설정 › 화면에서 항상 · 마우스를 움직이면 · 숨김(제목 메뉴 아래에도 있다)</dd>
     <dt>데모</dt><dd>설정 › 데모 — 실황 · 테스트(합성, <code>T</code>) · 재현 사례(지난 호우).
-      테스트에서 시군을 누르면 내부망(스방)에서 보일 지점 목록 모양을 합성 지점으로 미리 본다</dd>
+      테스트에서 시군을 누르면 내부망(경남 AWS)에서 보일 지점 목록 모양을 합성 지점으로 미리 본다</dd>
     <dt>ⓘ</dt><dd>레이어 · 범례 옆 <code>i</code> 에 올리거나 누르면 설명이 뜬다(누르면 고정, 밖을 누르면 닫힘)</dd>
     <dt>레이어</dt><dd>왼쪽 위. 기상특보 <code>A</code> · 관측소 <code>S</code> · 지점 강수량 글자 <code>V</code>(관측소를 켰을 때, 기본은 끔 — 점 색만으로도 단계가 읽힌다)</dd>
     <dt>층 · 재생</dt><dd><code>1</code>~<code>7</code> 층 · <code>Space</code> 재생 · <code>←</code><code>→</code> 한 장씩 · <code>L</code> 패널 · <code>T</code> 테스트</dd>

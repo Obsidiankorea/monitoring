@@ -69,8 +69,25 @@ def test_bangjae_override_wins(tmp_path, monkeypatch):
     f.write_text(json.dumps({"sites": {"BJ9": {"lon": 127.7, "lat": 35.45}}}), "utf-8")
     monkeypatch.setattr(sites, "OVERRIDE", f)
     p = sites.position("BJ9", "마천", "함양")
-    assert p["est"] is False and "emd" not in p
+    assert p["est"] is False and p["src"] == "fix"
     assert sites.position("BJ8", "마천", "함양")["est"] is True             # 적지 않은 지점은 그대로 짐작
+
+
+def test_aws_list_places_gn_stations_and_tells_owner():
+    """경남 AWS 목록(aws_sites.json, 엑셀) — 시군 + 장치명으로 위치 · 관리기관. 같은 이름 둘이면 지점번호로 가른다."""
+    p = sites.position("BJ1", "학림", "고성")                             # 고성 학림 — 경남 AWS
+    assert p["src"] == "aws" and p["est"] is False and p["emd"] == "하일면"
+    assert sites.org_of("BJ1", "학림", "고성", kma=False) == "gn"
+    assert sites.aws_site("합천", "합천")["org"] == "gn"                   # 합천 — 경남 · 기상청 둘 다
+    assert sites.aws_site("합천", "합천", kma=True)["org"] == "kma"
+    assert sites.org_of("285", "합천", "합천", kma=True) == "kma"
+    assert sites.aws_site("김해시", "김해", kma=True)["org"] == "kma"      # '김해시' = 기상청 김해(253)
+    assert sites.aws_site(" 덕 곡 ", "거제")["name"] == "덕곡"             # 띄어쓰기는 떼고 본다
+    assert sites.aws_site("학림(가상)", "고성") is None                    # 테스트 합성 지점은 짝짓지 않는다
+    assert sites.position("BJ2", "없는지점", "산청") is None               # 목록에도 읍면동에도 없으면 없음
+    assert sites.position("BJ3", "지리산", "산청")["src"] == "aws"        # 산청 지리산 — 경남 AWS(읍면동 이름은 아니다)
+    j = json.loads((gridstore.GEO / "aws_sites.json").read_text("utf-8"))
+    assert j["count"] == {"gn": 216, "kma": 54} and sum(c["stn"] is not None for c in j["kma_check"]) >= 50
 
 
 def test_test_rain_fake_stations_have_positions():

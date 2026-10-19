@@ -78,7 +78,7 @@ def rain(hours: int = 12, now: datetime | None = None, src: str = "kma") -> dict
             vals.append(minute.get(stn))
         ok = [v for v in vals if v is not None]
         out.append({
-            "stn": stn, "name": name, "sigun": STN_SIGUN[stn],
+            "stn": stn, "name": name, "sigun": STN_SIGUN[stn], "org": "kma",
             "rep": REP_STN.get(STN_SIGUN[stn]) == stn,
             "d": vals,
             "m60": m60.get(stn) if partial else None,   # 참고 — 툴팁에만 쓴다
@@ -143,7 +143,9 @@ def _rain_bangjae(hours: int, now: datetime | None = None) -> dict:
             "d": vals, "m60": None,
             "sum": round(sum(ok), 1),
             "bad": len(vals) - len(ok),
-            # 위치 — 받은 정확한 값이 없으면 이름이 가리키는 읍면동 가운데(임시, est). 기상청 번호면 화면이 안다
+            # 관리기관 — kma(기상청 AWS) | gn(경남 AWS). 화면이 막대 색을 가른다
+            "org": sites.org_of(stn, st["name"], st["sigun"], stn in STN_NAME),
+            # 위치 — 경남 AWS 목록(시군 + 장치명), 없으면 이름이 가리키는 읍면동 가운데(임시, est). 기상청 번호면 화면이 안다
             "pos": None if stn in STN_NAME else sites.position(stn, st["name"], st["sigun"]),
         })
     out.sort(key=lambda r: (ORDER.index(r["sigun"]) if r["sigun"] in ORDER else 99, r["name"]))
@@ -154,7 +156,7 @@ def _rain_bangjae(hours: int, now: datetime | None = None) -> dict:
             필요)}
     return {
         "labels": labels, "hours": hours, "src": "bangjae",
-        "src_label": f"스방 {len(out)}개소", "count": len(out),
+        "src_label": f"경남+기상청 AWS {len(out)}개소", "count": len(out),
         "base_hour": slots[-1][11:16],
         "minute_tm": 기준.strftime("%H:%M") if partial else None,
         "missing": sum(1 for s in slots if back[s] not in have),
@@ -287,7 +289,7 @@ def bangjae_rain() -> dict:
         row = con.execute("SELECT MAX(tm) AS t FROM bangjae_rain").fetchone()
         tm = row["t"] if row else None
         if not tm:
-            return {"tm": None, "period": None, "source": "스방", "rows": []}
+            return {"tm": None, "period": None, "source": "경남 AWS", "rows": []}
         rows = list(con.execute(
             """SELECT sigun, mm, daw_name, daw_mm, fr, to_date, hour, fetched_at
                FROM bangjae_rain WHERE tm=? ORDER BY mm DESC, sigun""", (tm,)))
@@ -297,7 +299,7 @@ def bangjae_rain() -> dict:
         "fetched_at": first["fetched_at"] if first else None,
         "period": ({"fr": first["fr"], "to": first["to_date"], "hour": first["hour"]}
                    if first else None),
-        "source": "스방(경남 스마트 통합 방재시스템) 시군 평균",
+        "source": "경남 AWS(경남 스마트 통합 방재시스템) 시군 평균",
         # daw = 그 시군 다우지점. 비가 안 오면 이름이 비어 온다 → None.
         "rows": [{"sigun": r["sigun"], "mm": r["mm"],
                   "daw": ({"name": r["daw_name"], "mm": r["daw_mm"]}

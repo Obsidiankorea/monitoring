@@ -32,6 +32,7 @@ BANGJAE_BASE=스방 주소(내부망)
 수집 없이 화면만: `--no-collect`. 시연 서버: `--demo`(:8001).
 
 > [!warning] 수집은 한 곳만
+> '스방'은 화면에서 **경남 AWS**(도 자체) / **기상청 AWS** 로 부른다 — 카드 막대 파랑 · 청록.
 > 내부망 PC 와 집 언레이드 서버가 **같은 기상청 키로 둘 다 수집하면 호출이 두 배**다.
 > 한쪽은 설정 › 자료 › '서버에서 받기'로 두거나 `--no-collect`.
 > 단, **스방은 내부망에서만 닿는다** — 서버는 스방을 끄고(`SKIP_COLLECT=bangjae`) 돈다.
@@ -69,7 +70,7 @@ BANGJAE_BASE=스방 주소(내부망)
 ## 3. 남은 일
 
 1. **재난상황보고서(jaenan-weather) ← gn-monitor 자료 먼저**(사용자가 고른 3번안): 같은 언레이드의 `server/`, `emergency/*`(qpf · forecast · rain · alerts · vsrt_img · combo_data)가 gn-monitor API(`http://100.106.116.92:8000` 또는 컨테이너 이름)를 먼저 부르고, 실패하면 기상청 직접. Immich 의 PostgreSQL 은 쓰지 않는다.
-2. 스방 지점 실제 좌표 → `data/geo/bangjae_sites.json`(지금은 읍면동 이름으로 가운데에 임시, `app/sites.py`). **내부망 PC 에서 할 수 있는 일.**
+2. ~~스방 지점 실제 좌표~~ → **경남 AWS 목록(엑셀) 반영함(10-19)**: `data/geo/aws_sites.json`(`tools/build_aws_sites.py`), 시군 + 장치명으로 짝짓기. 남은 것: 내부망에서 시군을 눌러 '목록에 없어 읍면동 가운데' 로 가는 지점 이름 확인. 기상청 AWS 몇 곳(시천 · 화개 · 금남 · 도천)이 엑셀과 기상청 목록에서 1~10km 다르다 — 어느 쪽이 맞는지.
 3. 스방 수집 점검 — 서버에서는 꺼져 있어 내부망 PC 에서만 확인된다.
 
 ## 4. 지켜 온 약속

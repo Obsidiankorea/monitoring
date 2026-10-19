@@ -1926,7 +1926,7 @@ body.editing .panel {
           </span>
         </div>
         <h4 style="margin-top:16px">지금 오는 비</h4>
-        <p class="note"><b>기상청 매분자료만 쓴다</b>(스방에는 분 단위가 없다).
+        <p class="note"><b>기상청 매분자료만 쓴다</b>(경남 AWS 에는 분 단위가 없다).
           왼쪽 칸이 15분 강수량, 오른쪽 칸이 60분 강수량이다. 15분치를 앞에 두는 까닭은
           그게 제일 빠르기 때문이다 — 60분치는 이미 지나간 한 시간을 담고 있어서
           막 쏟아지기 시작한 곳을 한 박자 늦게 알린다.</p>
@@ -1968,20 +1968,20 @@ body.editing .panel {
         </div>
         <h4 style="margin-top:16px">자료원</h4>
         <p class="note">두 관측망은 <b>다른 것을 재고 있다.</b> 기상청은 시군 대표지점 한 곳,
-          스방은 경남 자체 AWS까지 합친 265개소다. 다우지점 후보가 다섯 배라
-          <b>스방 쪽이 훨씬 촘촘하다</b> — 고성 학림 500.5㎜를 기상청 AWS는 아예 못 본다.</p>
-        <p class="note"><b>다우지점과 시군 평균은 스방에서 가져온다.</b> 기상청 56개소로
+          경남 통합(스방)은 <b>경남 AWS</b>(도 자체)에 기상청 AWS까지 합친 265개소다. 다우지점 후보가 다섯 배라
+          <b>훨씬 촘촘하다</b> — 고성 학림 500.5㎜를 기상청 AWS는 아예 못 본다.</p>
+        <p class="note"><b>다우지점과 시군 평균은 경남+기상청 AWS 265개소에서 가져온다.</b> 기상청 56개소로
           다우지점을 고르면 창녕 계성 28.5㎜ 같은 값을 아예 못 보고, 평균을 내면 창원이
           5개소·진주가 3개소라 시군 평균이라고 부를 수 없다.
           대표지점만 기상청이다 — 그건 기상청 관측망의 개념이라서다.
-          스방이 멈췄을 때만 아래에서 기상청으로 고정한다.</p>
+          경남 AWS 가 멈췄을 때만 아래에서 기상청으로 고정한다.</p>
         <div class="prefs-row">
           <span class="lbl">강수량 자료원</span>
           <span class="val">
             <select id="pf-src">
               <option value="auto">지표에 맞춰 자동 (권장)</option>
               <option value="kma">기상청 AWS 56개소로 고정</option>
-              <option value="bangjae">스방 265개소로 고정</option>
+              <option value="bangjae">경남+기상청 AWS 265개소로 고정</option>
             </select>
             <span class="hint" id="pf-src-n"></span>
           </span>
@@ -3082,8 +3082,8 @@ function drawRain(animate) {
   head.innerHTML =
     `<th class="l metric-h" id="metric-h" style="width:146px"
         title="누르면 대표지점 → 다우지점 → 시군 평균 순으로 바뀐다">${METRIC[metric]}<i>⟳</i><em class="srcmark${
-          srcFell ? " fell" : ""}">${srcFell ? "스방 안 됨→기상청"
-            : srcKey === "bangjae" ? "스방 265" : "기상청 56"}</em></th>` +
+          srcFell ? " fell" : ""}">${srcFell ? "경남 AWS 안 됨→기상청"
+            : srcKey === "bangjae" ? "경남+기상청 265" : "기상청 AWS 56"}</em></th>` +
     `<th class="l" style="width:${totalPos === "bar" ? 330 : 290}px">누적 ${rng().l}` +
       // 그을 선이 없으면 이름도 적지 않는다.
       (th
@@ -3893,12 +3893,12 @@ function setSrc(v) {
   pull("rain").then(paintRange);
 }
 
-const SRCLB = { auto: "지표 따라", kma: "기상청 고정", bangjae: "스방 고정" };
+const SRCLB = { auto: "지표 따라", kma: "기상청 고정", bangjae: "경남+기상청 고정" };
 function paintSrcLabel() {
   const el = document.getElementById("lb-src");
   if (!el) return;
   el.textContent = srcMode === "auto"
-    ? (srcKey === "bangjae" ? "스방" : "기상청") + (srcFell ? " (물러섬)" : "")
+    ? (srcKey === "bangjae" ? "경남+기상청" : "기상청") + (srcFell ? " (물러섬)" : "")
     : SRCLB[srcMode];
 }
 
@@ -3906,7 +3906,7 @@ bindMenu("m-src", null, "강수량 자료원",
   () => [{ k: "auto", l: "지표에 맞춰 자동", on: srcMode === "auto" },
          { head: "고정" },
          { k: "kma", l: "기상청 AWS 56개소", on: srcMode === "kma" },
-         { k: "bangjae", l: "스방 265개소", on: srcMode === "bangjae" }],
+         { k: "bangjae", l: "경남+기상청 AWS 265개소", on: srcMode === "bangjae" }],
   k => setSrc(k));
 
 bindMenu("m-sort", "lb-sort", "정렬 기준",
@@ -4782,7 +4782,7 @@ function openSigunStations(sig) {
 
   modalHead(`${sig} 지점별 강수량`,
     `${HOURS[cut()]}시 ~ <b>${HOURS[SLOTS - 1]}</b> · 누적 ${rng().l}`,
-    srcKey === "bangjae" ? "스방 265개소" : "기상청 AWS");
+    srcKey === "bangjae" ? "경남+기상청 AWS 265개소" : "기상청 AWS");
   document.getElementById("modal-body").innerHTML =
     `<div class="stlist">` + sts.map(x => `
       <div class="strow${x.bad >= N() - cut() ? " off" : ""}">
