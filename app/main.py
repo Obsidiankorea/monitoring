@@ -203,9 +203,11 @@ async def api_grid_meta():
 
 @app.get("/api/grid/flow")
 async def api_grid_flow(hours: int = Query(6, ge=1, le=24), step: int = Query(10),
-                        test: bool = False, case: str | None = None):
+                        test: bool = False, case: str | None = None,
+                        src: str = Query("grid", pattern="^(grid|aws)$")):
     """재생 흐름 — 지난 hours 시간 실측(60분, step 분 간격) → 초단기 +1~6h.
     지도 재생과 오른쪽 타임라인이 같은 프레임 목록·같은 시군 값을 쓴다.
+    `src=aws` 면 실측이 AWS 1시간 면(정시마다 — step 은 쓰지 않는다).
     `case=` 면 재현 사례의 처음부터 끝까지(매시, 예측 없음)."""
     if case:
         try:
@@ -214,7 +216,10 @@ async def api_grid_flow(hours: int = Query(6, ge=1, le=24), step: int = Query(10
             raise HTTPException(404, str(e)) from e
     if step not in (10, 20, 30, 60):
         raise HTTPException(400, "step 은 10·20·30·60")
-    return await asyncio.to_thread(gridview.flow, hours, step, None, test)
+    try:
+        return await asyncio.to_thread(gridview.flow, hours, step, None, test, src)
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
 
 
 @app.get("/api/grid/cases")
@@ -324,7 +329,8 @@ async def api_grid(layer: str, tm: str | None = None, test: bool = False,
                    since: str | None = Query(None, pattern=_SINCE)):
     """한 층의 격자 — 0.1㎜ uint16(65535 = 결측), 행은 남→북, gzip.
 
-    layer = obs15 | obs60 | obsday | acc | odam | vsrt+N(1~6) | shrt_today | shrt_tomorrow
+    layer = obs15 | obs60 | obsday | acc | aws | aws60 | odam | vsrt+N(1~6) | shrt_today | shrt_tomorrow
+    aws60(AWS 1시간)은 tm = 정시(YYYYMMDDHH00) — 없으면 관측소 값이 든 가장 최근 정시.
     acc(누적)는 hours · since(today|yesterday|hours) 구간 — 없으면 지도 설정(강수 누적 카드와 같은 구간).
     `test=1` 이면 합성 격자(비 없는 날 화면 점검용).
     `case=사례` 면 재현 사례 — layer = obs60(1시간) | acc(사례 누적).

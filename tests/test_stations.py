@@ -81,6 +81,47 @@ def test_aws_layer_from_stations_only(store, tdb, monkeypatch):
     assert float(fr["arr"][0, 0]) == 0.0                                     # 경남 땅 밖은 칠하지 않는다
 
 
+
+def test_aws_hour_layer_is_one_hour_of_the_same_stations(store, tdb, monkeypatch):
+    """AWS 1시간 면 — 정시 하나의 관측소 값(기상청 + 경남 AWS)을 누적 층과 같은 IDW 로.
+    '지금'은 관측소 값이 든 가장 최근 정시(정시 격자가 있어도 정시자료가 아직이면 그 앞 정시)."""
+    gridview._AWS_CACHE.clear()
+    a = np.zeros(store.shape("hr"))
+    for k in ("202610031400", "202610031500"):
+        store.save("obs60", k, a)
+    hl = next(s for s in sites.gn_sites() if s["sigun"] == "고성" and s["name"] == "학림")
+    with tdb.tx() as c:
+        c.execute("INSERT INTO obs_hourly VALUES('155', '2026-10-03 14:00', 7, 0, 0, 'ok', 'x')")
+        c.execute("INSERT INTO bangjae_hourly VALUES('2026-10-03 13:00', 'BJ7', '학림', '고성', 22, 'x')")  # = 14시 칸
+    now = datetime(2026, 10, 3, 15, 20)
+    monkeypatch.setattr(gridview.clock, "now", lambda: now)
+    assert gridview.aws_hour_latest(now) == "202610031400"            # 15시 정시자료는 아직 — 14시
+    fr = gridview.frame("aws60", now=now)
+    assert (fr["tm"], fr["n"], fr["n_gn"]) == ("202610031400", 2, 1)
+    hb = store.geo()["hr"]["bbox"]
+    assert 15 < fr["arr"][round(hl["y"]) - hb["j0"], round(hl["x"]) - hb["i0"]] <= 22
+    by = {x["stn"]: x for x in gridview.stations("aws60", "202610031400")["rows"]}
+    assert by["155"]["v"] == 7.0 and by[hl["stn"]]["v"] == 22.0
+    with pytest.raises(LookupError):
+        gridview.frame("aws60", "202610031510", now=now)               # 정시만
+    with pytest.raises(LookupError):
+        gridview.frame("aws60", "202610031500", now=now)               # 그 정시에 값 있는 관측소가 없다
+    meta = {x["id"]: x for x in gridview.meta(now)["layers"]}
+    assert meta["aws60"]["tm"] == "202610031400"
+
+
+def test_flow_from_aws_is_hourly_then_vsrt():
+    """재생 흐름 src=aws — 지난 N시간 AWS 1시간(정시마다) → 초단기 +1~6h. 시군 값도 그 면에서."""
+    gridview._AWS_CACHE.clear()
+    now = datetime(2026, 10, 3, 15, 20)
+    f = gridview.flow(hours=3, now=now, test=True, src="aws")
+    obs = [x for x in f["frames"] if x["kind"] == "obs"]
+    assert [x["t"] for x in obs] == ["202610031300", "202610031400", "202610031500"]
+    assert all(x["layer"] == "aws60" for x in obs) and f["step"] == 60 and f["src"] == "aws"
+    assert [x["layer"] for x in f["frames"] if x["kind"] == "fcst"] == [f"vsrt+{n}" for n in range(1, 7)]
+    assert len(f["total"]["max"]) == len(f["frames"])
+    assert gridview.flow(hours=1, now=now, test=True)["frames"][0]["layer"] == "obs60"   # 기본은 격자 그대로
+
 def test_aws_match_report(tdb):
     from app import queries
     with tdb.tx() as c:

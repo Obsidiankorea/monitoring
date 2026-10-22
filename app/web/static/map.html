@@ -143,6 +143,20 @@ button { font-family: inherit; }
 #lmenu .g { display: flex; align-items: baseline; gap: 8px; padding: 9px 12px 4px;
   font: 700 11px var(--sans); letter-spacing: .14em; color: var(--ink-3); }
 #lmenu .g + .it { margin-top: 0; }
+/* 자료 스위치(격자 500m | AWS) — 실측 머리 오른쪽. 1시간 · 누적 줄과 오른쪽 '강수 누적' 카드가 같이 바뀐다 */
+#lmenu .g .src { margin-left: auto; display: inline-flex; align-items: center; letter-spacing: 0; font: 600 11.5px var(--sans);
+  border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+#lmenu .g .src b { padding: 3px 9px; color: var(--ink-3); cursor: pointer; font-weight: 600; }
+#lmenu .g .src b:hover { color: var(--ink); }
+#lmenu .g .src b.on { background: color-mix(in oklab, var(--accent) 24%, transparent); color: var(--ink); }
+#lmenu .g .src kbd { font: 600 10px var(--mono); color: var(--ink-3); padding: 0 7px; border-left: 1px solid var(--line); }
+/* 줄 안 작은 단추 — 1시간의 5km 실황, 단기의 오늘 · 내일 */
+#lmenu .it .chips { display: flex; gap: 5px; margin-top: 5px; }
+#lmenu .it .chip { font: 600 11.5px var(--sans); padding: 2px 8px; border: 1px solid var(--line); border-radius: 6px;
+  color: var(--ink-2); cursor: pointer; }
+#lmenu .it .chip:hover { color: var(--ink); border-color: color-mix(in oklab, var(--accent) 55%, var(--line)); }
+#lmenu .it .chip.on { color: var(--ink); border-color: var(--accent); background: color-mix(in oklab, var(--accent) 20%, transparent); }
+#lmenu .it .chip kbd { font: 600 10px var(--mono); color: var(--ink-3); margin-left: 3px; }
 #lmenu .it { position: relative; display: grid; grid-template-columns: 1fr auto 22px; align-items: center; gap: 12px;
   width: 100%; padding: 8px 12px; border: 0; border-radius: 10px; background: transparent; color: var(--ink);
   text-align: left; cursor: pointer; font: inherit;
@@ -769,7 +783,7 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
   <div id="lefttop">
     <div id="hud">
       <div class="ttl-wrap">
-        <button id="ttl" type="button" aria-haspopup="menu" aria-expanded="false" title="층 고르기 — 실측 · 예측 (숫자 1~8)">
+        <button id="ttl" type="button" aria-haspopup="menu" aria-expanded="false" title="층 고르기 — 실측 · 예측 (숫자 1~6, 자료 B)">
           <span id="lname">경남 강수 지도</span>
           <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9.5 6 6 6-6"/></svg>
         </button>
@@ -834,7 +848,7 @@ let PAL = "blue";
 let KMA_LG = null;                                      // { steps[], cols[] } — 약한 것부터. 겹친 0.1 은 뒤 칸(0.1 이상)
 const KMA_TICKS = [0.1, 1, 5, 10, 20, 30, 50, 110];     // 범례 눈금(종합 화면 예측 분포와 같다)
 const KMA_PICK = [0.1, 1, 3, 7, 15, 25, 50];            // 누적 7칸이 빌려 올 레이더 세기(㎜/h)
-const HOURLY = new Set(["obs15", "obs60", "odam", "vsrt"]);
+const HOURLY = new Set(["obs15", "obs60", "aws60", "odam", "vsrt"]);
 const kmaOn = () => PAL === "kma" && !!KMA_LG;
 async function loadKmaLegend() {
   try {
@@ -871,11 +885,26 @@ let CASEM = null;                                       // 사례 meta(시군 �
 /* 실황의 '누적'(acc)은 오른쪽 강수 누적 카드와 **같은 구간**(지난 N시간 · 오늘/어제 0시부터)을 같은 격자 합으로 그린다 —
    카드에서 구간을 바꾸면 지도도 따라 바뀐다. 예전 '오늘 누적'(obsday)은 이것의 '오늘 0시부터'다(설정에 남은 obsday 는 acc 로) */
 /* 'AWS 누적'(aws) — 같은 구간을 **관측소 값만으로** 메운 면(기상청 AWS + 경남 AWS, IDW). 격자 분석값을 쓰지 않는다 */
-const KINDS = CASE ? ["obs60", "acc"] : ["obs15", "obs60", "acc", "aws", "odam", "vsrt", "shrt_today", "shrt_tomorrow"];
+/* 'AWS 1시간'(aws60) — 정시 한 시간 몫을 같은 관측소 · 같은 IDW 로. 재생 흐름의 AWS 실측이다 */
+const KINDS = CASE ? ["obs60", "acc"] : ["obs15", "obs60", "aws60", "acc", "aws", "odam", "vsrt", "shrt_today", "shrt_tomorrow"];
 const ACCK = new Set(["acc", "aws"]);                  // 강수 누적 카드 구간을 따르는 층
-const FLOWK = new Set(CASE ? ["obs60", "acc"] : ["obs60", "vsrt"]);   // 재생 흐름에 드는 층
+const FLOWK = new Set(CASE ? ["obs60", "acc"] : ["obs60", "aws60", "vsrt"]);   // 재생 흐름에 드는 층
+const OBSK = new Set(["obs60", "aws60"]);              // 재생 흐름의 실측 — 격자 60분 | AWS 1시간
+/* 층 메뉴는 '무엇을 보나' 다섯 줄이다(15분 · 1시간 · 누적 / 초단기 · 단기). 1시간 · 누적 줄은 **자료**(격자 500m | AWS)에
+   따라 다른 층을 그린다 — 자료는 오른쪽 '강수 누적' 카드 기준과 한 몸(ACC_BASIS, B 키 · 메뉴 머리 스위치).
+   ⚠️ 예전에는 지도의 '누적 / AWS 누적' 층과 카드의 AWS↔격자 기준이 따로 놀아 둘이 다른 값을 보일 수 있었다 */
+const SRCK = { h1: { grid: "obs60", aws: "aws60" }, acc: { grid: "acc", aws: "aws" } };
+const SRC_OF = { obs60: "grid", acc: "grid", aws60: "aws", aws: "aws" };
+const rowOf = k => (k === "obs60" || k === "aws60" || k === "odam") ? "h1" : ACCK.has(k) ? "acc" : k.startsWith("shrt") ? "shrt" : k;
+const srcKind = row => SRCK[row][ACC_BASIS === "grid" ? "grid" : "aws"];
+/* 지금 자료에 맞는 층 — 1시간(5km 실황은 그대로) · 누적은 자료를 따른다 */
+const normKind = k => CASE || !SRC_OF[k] ? k : srcKind(rowOf(k));
+/* 숫자 키 — 1 15분 · 2 1시간 · 3 누적 · 4 초단기 · 5 단기 오늘 · 6 단기 내일 (사례는 1 1시간 · 2 누적) */
+const keyKind = i => CASE ? KINDS[i] : ["obs15", srcKind("h1"), srcKind("acc"), "vsrt", "shrt_today", "shrt_tomorrow"][i];
+/* 재생 흐름의 실측 — 지금 보는 실측 층을 따르고, 실측이 아니면 자료(격자 | AWS)를 따른다 */
+const flowSrc = () => OBSK.has(kind) ? SRC_OF[kind] : ACC_BASIS === "aws" ? "aws" : "grid";
 const NOWL = CASE ? "끝" : "지금";
-const COLLECT_OF = { obs15: "grid", obs60: "grid", obsday: "grid", acc: "grid", aws: "rain", odam: "odam", vsrt: "forecast",
+const COLLECT_OF = { obs15: "grid", obs60: "grid", obsday: "grid", acc: "grid", aws: "rain", aws60: "rain", odam: "odam", vsrt: "forecast",
                      shrt_today: "short", shrt_tomorrow: "short" };
 const SET_DEFAULT = { flow_step: 10, flow_hours: 6, play_ms: 1200, tl_on: false, tl_stat: "max",
                       panel: "cards", acc_hours: 12, acc_from: "hours", acc_basis: "aws", sel_zoom: true, acc_fc: true, acc_h1: true };
@@ -1305,6 +1334,7 @@ function when(gr) {
     }
     case "obs15": return `${md(t)} ${hm(t)} · 15분`;
     case "obs60": return `${md(t)} ${hm(t)} · 60분`;
+    case "aws60": return `${md(t)} ${hm(t)} · 1시간(정시)`;
     case "obsday": return `${md(t)} 00:00~${hm(t)}`;
     case "odam": return `${md(t)} ${hm(t)} · 1시간`;
     case "vsrt": return `${hm(gr.tmfc)} 발표 → ${+t.slice(8, 10)}시까지 1시간 (+${vsrtN}h)`;
@@ -1316,7 +1346,7 @@ function when(gr) {
   }
 }
 function isPast() {                     // 일부러 지난 시각을 보는 중 — 지연이 아니다
-  return !CASE && (pinned(kind) || (kind === "obs60" && OBS_TM && OBS_TM !== metaOf("obs60").tm));
+  return !CASE && (pinned(kind) || (OBSK.has(kind) && OBS_TM && OBS_TM !== metaOf(kind).tm));
 }
 /* 층 이름 — 실황 누적은 카드 구간으로 부른다('어제 0시부터 누적') */
 const labelOf = k => (k === "acc" && !CASE) ? `${accSpan().label} 누적`
@@ -1330,7 +1360,8 @@ function paintHead() {
   }
   $("ltime").textContent = when(CUR);
   $("lsrc").textContent = test ? "합성 격자 — 실제 자료 아님"
-    : kind === "aws" && CUR?.n ? `AWS ${CUR.n}곳 관측소 값만으로 메운 면(IDW, 가까운 8곳) · 정시 강수량 합` : (L.src || "");
+    : (kind === "aws" || kind === "aws60") && CUR?.n
+      ? `AWS ${CUR.n}곳 관측소 값만으로 메운 면(IDW, 가까운 8곳) · ${kind === "aws" ? "정시 강수량 합" : "정시 1시간 강수량"}` : (L.src || "");
   const b = [];
   const past = isPast();
   if (window.GN_SNAP) b.push(`<span class="badge snap" title="${window.GN_SNAP.title} — ${window.GN_SNAP.note || ""}">시연 · ${md(window.GN_SNAP.now)} ${hm(window.GN_SNAP.now)} 저장</span>`);
@@ -1352,29 +1383,54 @@ function paintHead() {
   $("b-tl").classList.toggle("on", tlOn);
 }
 
-/* ── 층 메뉴 — 지도 위 제목을 누르면 내려온다(실측 · 예측). 숫자 키 1~8 은 그대로 ── */
+/* ── 층 메뉴 — 지도 위 제목을 누르면 내려온다. 실측(15분 · 1시간 · 누적) / 예측(초단기 · 단기), 숫자 키 1~6 ── */
 const LDESC = { obs15: "격자 500m · 15분 합", obs60: "격자 500m · 1시간 합", obsday: "격자 500m · 0시부터 오늘 합",
   odam: "동네예보 실황 5km · 1시간", vsrt: "초단기예보 5km · 앞으로 6시간", shrt_today: "단기예보 5km · 오늘 합",
   shrt_tomorrow: "단기예보 5km · 내일 합", acc: CASE ? "사례 처음부터 칸마다 더함" : "격자 500m · 강수 누적 카드와 같은 구간 · 정시 합",
-  aws: "관측소 값만으로 메운 면(기상청 + 경남 AWS) · 카드와 같은 구간" };
+  aws: "AWS 관측소만으로 메운 면 · 카드와 같은 구간",
+  aws60: "AWS 관측소만으로 메운 면 · 정시 1시간" };
 const tmLabel = L => !L.tm ? "아직 없음" : L.tm.length >= 12 ? hm(L.tm) : L.tm.length === 10 ? `${+L.tm.slice(8, 10)}시` : md(L.tm);
 function buildMenu() {
   let i = 0;
-  const item = k => {
-    const L = metaOf(k), on = k === kind;
+  /* 줄 하나 — k: 이 줄을 누르면 고를 층(지금 보이는 층), key: 숫자 키, label · chips: 줄 안의 작은 단추들 */
+  const item = (k, key, label, on, chips = "") => {
+    const L = metaOf(k);
     const cls = ["it", on ? "on" : "", !L.tm ? "none" : "", L.stale ? "late" : ""].join(" ");
     const tip = (L.src || "") + (L.stale ? " · 자료 지연" : "")
       + (k.startsWith("shrt") && on ? " · 한 번 더 누르면 풀고 앞 층(강수 누적)으로" : "");
     return `<button class="${cls}" role="menuitemradio" aria-checked="${on}" data-k="${k}" style="--i:${i++}" title="${tip}">
-      <span><b>${labelOf(k)}</b><small>${LDESC[k] || L.short || ""}</small></span>
-      <span class="t">${tmLabel(L)}</span><kbd>${KINDS.indexOf(k) + 1}</kbd></button>`;
+      <span><b>${label || labelOf(k)}</b><small>${LDESC[k] || L.short || ""}</small>${chips}</span>
+      <span class="t">${tmLabel(L)}</span><kbd>${key}</kbd></button>`;
   };
-  const grp = (label, ks) => `<div class="g">${label}</div>` + ks.map(item).join("");
-  $("lmenu").innerHTML = (CASE ? grp("재현", KINDS) : grp("실측", KINDS.slice(0, 5)) + grp("예측", KINDS.slice(5)))
+  const chip = (k, txt, on, title = "") => `<span class="chip${on ? " on" : ""}" role="button" data-k="${k}" title="${title}">${txt}</span>`;
+  const grp = label => `<div class="g">${label}</div>`;
+  let html;
+  if (CASE) html = grp("재현") + KINDS.map((k, j) => item(k, j + 1, "", k === kind)).join("");
+  else {
+    const row = rowOf(kind), h1 = row === "h1" ? kind : srcKind("h1"), sk = row === "shrt" ? kind : "shrt_today";
+    const src = `<span class="src" title="1시간 · 누적 층과 오른쪽 '강수 누적' 카드가 같은 자료를 본다 — B 키로도 바꾼다">`
+      + `<b data-b="grid" class="${ACC_BASIS === "grid" ? "on" : ""}">격자 500m</b><b data-b="aws" class="${ACC_BASIS === "aws" ? "on" : ""}">AWS</b><kbd>B</kbd></span>`;
+    html = grp(`실측${src}`)
+      + item("obs15", 1, "15분 강수량", kind === "obs15")
+      + item(h1 === "odam" ? "odam" : h1, 2, "1시간 강수량", row === "h1",
+             `<span class="chips">${chip(kind === "odam" ? srcKind("h1") : "odam", "5km 실황", kind === "odam",
+                                          "동네예보 실황 5km — 다시 누르면 위 자료(격자 · AWS)로")}</span>`)
+      + item(srcKind("acc"), 3, `${accSpan().label} 누적`, row === "acc")
+      + grp("예측")
+      + item("vsrt", 4, "초단기 예측", kind === "vsrt")
+      + item(sk, "5·6", "단기 예보", row === "shrt",
+             `<span class="chips">${chip("shrt_today", "오늘 <kbd>5</kbd>", kind === "shrt_today")}${chip("shrt_tomorrow", "내일 <kbd>6</kbd>", kind === "shrt_tomorrow")}</span>`);
+  }
+  $("lmenu").innerHTML = html
     + `<div class="foot" style="--i:${i}"><button data-a="tl">패널 <kbd>L</kbd></button><button data-a="help">도움말 <kbd>?</kbd></button>`
     + `<button data-a="prefs">설정 <kbd>Ctrl ,</kbd></button></div>`;
   for (const b of $("lmenu").querySelectorAll(".it"))
     b.onclick = () => { stopPlay(); lmenu(false); pickLayer(b.dataset.k); };
+  for (const c of $("lmenu").querySelectorAll(".chip"))
+    c.onclick = ev => { ev.stopPropagation(); stopPlay(); lmenu(false); pickLayer(c.dataset.k); };
+  // 자료 스위치 — 메뉴는 열어 둔 채(무엇이 바뀌었나 줄에서 바로 보이게)
+  for (const b of $("lmenu").querySelectorAll(".src b"))
+    b.onclick = ev => { ev.stopPropagation(); if (b.dataset.b !== ACC_BASIS) toggleBasis(); };
   for (const b of $("lmenu").querySelectorAll(".foot button")) b.onclick = () => {
     lmenu(false);
     if (b.dataset.a === "tl") setTL(!tlOn); else if (b.dataset.a === "help") openHelp(); else openPrefs();
@@ -1408,7 +1464,7 @@ function lmenuKey(ev) {
    (오른쪽 위 카드도 '단기 내일' → '강수 누적'으로 돌아간다). 앞 층이 없으면 60분 */
 let PREVK = null;
 function pickLayer(k) {
-  if (k === kind && k.startsWith("shrt")) { choose(PREVK && KINDS.includes(PREVK) ? PREVK : "obs60", true); return; }
+  if (k === kind && k.startsWith("shrt")) { choose(PREVK && KINDS.includes(PREVK) ? normKind(PREVK) : srcKind("h1"), true); return; }
   if (k.startsWith("shrt") && !kind.startsWith("shrt")) PREVK = kind;
   choose(k, true);
 }
@@ -1425,7 +1481,7 @@ const PIN_TM = !CASE && /^\d{12}$/.test(Q.get("tm") || "") ? Q.get("tm") : null;
 const pinned = key => PIN_TM && !test && ["obs15", "obs60", "obsday", "odam"].includes(key);
 function reqTm(key) {
   if (CASE) return OBS_TM || CASEM?.end || null;
-  if (key === "obs60" && OBS_TM) return OBS_TM;
+  if (OBSK.has(key) && OBS_TM) return OBS_TM;
   return pinned(key) ? PIN_TM : null;
 }
 /* 누적(acc) 층 요청에 카드의 구간을 싣는다 — 저장한 설정이 서버에 닿기 전에도 같은 구간을 그리게 */
@@ -1526,11 +1582,14 @@ function choose(k, save) {
   if (save) saveSetting(k === "vsrt" ? { layer: "vsrt", vsrt_n: vsrtN } : { layer: k });
   show();
   if ((isDay() ? kind : "") !== fcWas) loadCards();   // 예측 카드: 초단기 ↔ 단기 오늘 ↔ 단기 내일
+  // 재생 흐름의 실측 자료가 바뀌었다(격자 60분 ↔ AWS 1시간) — 흐름을 그 자료로 다시 받는다
+  if (!CASE && FLOW && (FLOW.src || "grid") !== flowSrc()) loadFlow();
 }
 
 /* ── 재생 흐름 ────────────────────────────────────────────────────── */
 async function loadFlow() {
   const p = new URLSearchParams({ hours: SET.flow_hours, step: SET.flow_step });
+  if (!CASE && flowSrc() === "aws") p.set("src", "aws");   // AWS 1시간 — 정시마다(간격 설정은 격자에만)
   if (test) p.set("test", "1");
   if (CASE) p.set("case", CASE);
   try { FLOW = await getJson(`/api/grid/flow?${p}`); }
@@ -1564,7 +1623,7 @@ function curFrame() {
   const t = headT();
   if (t == null || !FLOW) return -1;
   // 같은 시각이라도 층이 맞는 프레임을 고른다(사례는 실측뿐이다)
-  const i = FLOW.frames.findIndex(f => (CASE || kind === "obs60" ? f.kind === "obs" : f.kind === "fcst" && f.n === vsrtN)
+  const i = FLOW.frames.findIndex(f => (CASE || OBSK.has(kind) ? f.kind === "obs" : f.kind === "fcst" && f.n === vsrtN)
     && tOf(f.t) === t);
   return i >= 0 ? i : nearestFrame(t);
 }
@@ -1574,8 +1633,8 @@ function seek(i, fade = true) {
   if (CASE) {
     OBS_TM = f.t;                         // 사례는 고른 층(1시간/누적) 그대로 시각만 옮긴다
   } else if (f.kind === "obs") {
-    kind = "obs60";
-    OBS_TM = f.t === metaOf("obs60").tm ? null : f.t;
+    kind = f.layer;                       // 격자 60분 | AWS 1시간 — 흐름이 고른 자료 그대로
+    OBS_TM = f.t === metaOf(kind).tm ? null : f.t;
   } else {
     kind = "vsrt"; vsrtN = f.n; OBS_TM = null;
   }
@@ -1597,8 +1656,8 @@ function stopPlay(quiet) {
 async function preloadFlow() {
   if (!FLOW) return;
   for (const f of FLOW.frames) {
-    const key = CASE ? kind : f.kind === "obs" ? "obs60" : f.layer;
-    const tm = CASE ? f.t : f.kind === "obs" && f.t !== metaOf("obs60").tm ? f.t : null;
+    const key = CASE ? kind : f.layer;
+    const tm = CASE ? f.t : f.kind === "obs" && f.t !== metaOf(f.layer).tm ? f.t : null;
     try { await Promise.all([fetchGrid(key, tm), fetchStat(key, tm)]); } catch {}
   }
 }
@@ -1616,7 +1675,7 @@ function playHead() {
   for (const el of p.querySelectorAll(".trk-head, .trk-knob")) el.style.transform = `translateX(${x.toFixed(1)}px)`;
   p.querySelector(".lab").innerHTML = !f ? `<b>—</b><small>흐름 밖</small>`
     : CASE ? `<b>${md(f.t)} ${hm(f.t)}</b><small>재현 · ${kind === "acc" ? "처음부터 누적" : "지난 1시간"}</small>`
-    : f.kind === "obs" ? `<b>${hm(f.t)}</b><small>실측 · 지난 1시간</small>`
+    : f.kind === "obs" ? `<b>${hm(f.t)}</b><small>실측 · 지난 1시간${f.layer === "aws60" ? " · AWS" : ""}</small>`
     : `<b>+${f.n}h ${fmtH(tOf(f.t))}시</b><small class="fc">예측 · 초단기</small>`;
   $("b-pp").textContent = playing ? "❚❚" : "▶";
 }
@@ -1625,7 +1684,7 @@ function buildPlay() {
   if (!FLOWK.has(kind) || !FLOW || !FLOW.frames.length) { p.hidden = true; p.dataset.sig = ""; return; }
   const wasHidden = p.hidden;
   p.hidden = false;
-  const sig = `${FLOW.now}|${FLOW.frames.length}|${FLOW.step}|${FLOW.hours}|${document.documentElement.dataset.theme}`;
+  const sig = `${FLOW.now}|${FLOW.frames.length}|${FLOW.step}|${FLOW.hours}|${FLOW.src || ""}|${document.documentElement.dataset.theme}`;
   if (p.dataset.sig === sig) { playHead(); return; }
   p.dataset.sig = sig;
   const { Wt, Ht } = TRK, x = trkX;
@@ -3283,7 +3342,7 @@ function stationTip(s) {
   const diff = has && gv !== undefined && gv !== MISSING ? gv / 10 * fac - s.v * fac : null;
   const who = s.org === "gn" ? `경남 AWS · ${s.sigun}${s.place ? ` · ${s.place}` : ""}` : `기상청 AWS ${s.stn} · ${s.sigun} ${site?.emd || ""}`;
   return `<b>${s.name} ${obs}</b> · ${who}`
-    + `<div class="d">그 칸 ${kind === "aws" ? "AWS 면" : "격자"} ${grid}${diff != null ? ` (면 − 관측 ${diff >= 0 ? "+" : ""}${diff.toFixed(1)})` : ""} · 해발 ${Math.round(s.ht || 0)}m${s.addr ? ` · ${s.addr}` : ""}${STN.src ? ` · ${STN.src}` : ""}</div>`;
+    + `<div class="d">그 칸 ${kind === "aws" || kind === "aws60" ? "AWS 면" : "격자"} ${grid}${diff != null ? ` (면 − 관측 ${diff >= 0 ? "+" : ""}${diff.toFixed(1)})` : ""} · 해발 ${Math.round(s.ht || 0)}m${s.addr ? ` · ${s.addr}` : ""}${STN.src ? ` · ${STN.src}` : ""}</div>`;
 }
 
 /* ── 시군 고르기 — 지도에서 시군을 누르면 오른쪽 패널이 그 시군으로 ──────────────────
@@ -3336,10 +3395,16 @@ function setSel(list) {
   loadCards();
 }
 function toggleBasis() {
-  if (isDay()) return;                    // 단기 오늘·내일 — 위 카드가 그날 예보 합이라 기준이 없다
   ACC_BASIS = ACC_BASIS === "aws" ? "grid" : "aws";
   if (!CASE) { SET.acc_basis = ACC_BASIS; saveSetting({ acc_basis: ACC_BASIS }); }
   for (const b of $("acc-h").querySelectorAll(".bs b")) b.classList.toggle("on", b.dataset.b === ACC_BASIS);
+  // 지도도 같은 자료로 — 1시간 · 누적 층이면 짝 층으로(격자 ↔ AWS). 다른 층은 그대로, 재생 흐름만 그 자료로
+  if (!CASE) {
+    const nk = normKind(kind);
+    if (nk !== kind) { stopPlay(); choose(nk, true); }
+    else { buildMenu(); if (FLOW && (FLOW.src || "grid") !== flowSrc()) loadFlow(); }
+  }
+  if (isDay()) return;                    // 단기 오늘·내일 — 위 카드가 그날 예보 합이라 기준이 없다(자료만 바꿔 둔다)
   if (SET.panel === "timeline") return;
   if (!tlOn) { CARDS = null; setTL(true, false); return; }
   loadCards();
@@ -3405,10 +3470,11 @@ function helpHtml(tab) {
   const how = `<dl>
     <dt>시군 누르기</dt><dd>오른쪽 패널이 그 시군으로 — 격자 기준이면 읍면동, AWS 기준이면 그 시군 지점 전부
       (내부망이면 경남 AWS 지점까지 — 경남 AWS 목록에 없는 지점은 이름이 가리키는 읍면동 가운데에 임시로. 카드 안에서 굴린다). 다시 누르거나 바다를 누르거나 <code>Esc</code> 면 경남 전체</dd>
-    <dt>'강수 누적' 누르기</dt><dd>기준을 바꾼다 — AWS(관측소 다우지점) ↔ 격자(누적 최대 칸). <code>B</code> 도 같다</dd>
+    <dt>'강수 누적' 누르기</dt><dd>기준을 바꾼다 — AWS(관측소 다우지점) ↔ 격자(누적 최대 칸). <code>B</code> · 층 메뉴의 자료 스위치와 같다 — 지도의 1시간 · 누적 층도 같이 바뀐다</dd>
     <dt>줄에 마우스</dt><dd>지도에 그 시군 · 지점 · 칸까지 선이 그어진다</dd>
     <dt>관측소에 마우스</dt><dd>실측과 그 칸 격자 값, 차이(격자 − 관측)</dd>
-    <dt>왼쪽 위 제목</dt><dd>누르면 층 메뉴 — 실측(15분 · 60분 · 오늘 · 실황) · 예측(초단기 · 단기 오늘 · 단기 내일). ↑↓ · Enter, 숫자 <code>1</code>~<code>7</code> 도 된다</dd>
+    <dt>왼쪽 위 제목</dt><dd>누르면 층 메뉴 — 실측(15분 · 1시간 · 누적) · 예측(초단기 · 단기 오늘/내일). ↑↓ · Enter, 숫자 <code>1</code>~<code>6</code> 도 된다.
+      실측 머리의 <b>자료</b>(격자 500m | AWS, <code>B</code>)가 1시간 · 누적 층과 오른쪽 '강수 누적' 카드를 같이 바꾼다. 1시간 줄의 '5km 실황'은 동네예보 실황</dd>
     <dt>오른쪽 위 아이콘</dt><dd>창 = 오른쪽 패널(<code>L</code>) · ? = 이 창 · 톱니 = 설정. 설정 › 화면에서 항상 · 마우스를 움직이면 · 숨김(제목 메뉴 아래에도 있다)</dd>
     <dt>데모</dt><dd>설정 › 데모 — 실황 · 테스트(합성, <code>T</code>) · 재현 사례(지난 호우).
       테스트에서 시군을 누르면 내부망(경남 AWS)에서 보일 지점 목록 모양을 합성 지점으로 미리 본다</dd>
@@ -3416,7 +3482,8 @@ function helpHtml(tab) {
     <dt>범례 색 띠 누르기</dt><dd>청색 ↔ 기상청 레이더 색. 시간 강수(60분 · 실황 · 초단기, 15분은 ×4)는 레이더와 같은 ㎜/h 경계,
       누적은 단계는 그대로 두고 색만 레이더에서 빌린다. 레이더 색의 노랑 · 빨강 · 보라는 특보 선 색과 겹친다. <code>?pal=kma</code> 로 고정</dd>
     <dt>레이어</dt><dd>왼쪽 위. 기상특보 <code>A</code> · 관측소 <code>S</code> · 지점 강수량 글자 <code>V</code>(관측소를 켰을 때, 기본은 끔 — 점 색만으로도 단계가 읽힌다)</dd>
-    <dt>층 · 재생</dt><dd><code>1</code>~<code>7</code> 층 · <code>Space</code> 재생 · <code>←</code><code>→</code> 한 장씩 · <code>L</code> 패널 · <code>T</code> 테스트</dd>
+    <dt>층 · 재생</dt><dd><code>1</code>~<code>6</code> 층 · <code>B</code> 자료(격자 ↔ AWS) · <code>Space</code> 재생 · <code>←</code><code>→</code> 한 장씩 · <code>L</code> 패널 · <code>T</code> 테스트.
+      AWS 로 재생하면 지난 시간은 AWS 1시간 면(정시마다), 지금 뒤는 초단기</dd>
     <dt>주소로 고정</dt><dd><code>?layer=obs60</code> · <code>?ov=alerts,stations</code> · <code>?sig=창원</code> · <code>?basis=grid</code> · <code>?pal=kma</code> · <code>?case=geoje-20260816</code> — 벽면 화면을 한 상태로 둘 때</dd>
     <dt>설정 · 도움말</dt><dd><code>Ctrl</code>+<code>,</code> 설정 · <code>?</code> 이 창</dd></dl>`;
   return tab === "terms" ? terms : tab === "how" ? how : src;
@@ -3507,7 +3574,8 @@ function openPrefs() {
     <div class="top"><b>설정 — 경남 지도</b><span class="sp"></span><button id="pf-x" title="닫기 (Esc)">✕</button></div>
     <h4>재생</h4>
     <div class="row"><span class="k">실측 간격</span>${seg("flow_step", [[10, "10분"], [20, "20분"], [30, "30분"], [60, "1시간"]])}</div>
-    <div class="row"><span class="k"></span><span class="note">예측(초단기)은 1시간 간격뿐이다 — 10분 대상시각을 주면 가까운 정시 격자가 온다.</span></div>
+    <div class="row"><span class="k"></span><span class="note">예측(초단기)은 1시간 간격뿐이다 — 10분 대상시각을 주면 가까운 정시 격자가 온다.
+      자료가 AWS 면 실측도 정시마다(경남 AWS 가 정시 자료다) — 이 간격은 격자에만 걸린다.</span></div>
     <div class="row"><span class="k">지난 시간</span>${seg("flow_hours", [[1, "1시간"], [3, "3시간"], [6, "6시간"], [12, "12시간"]])}</div>
     <div class="row"><span class="k">빠르기</span>${seg("play_ms", [[2000, "느리게"], [1200, "보통"], [600, "빠르게"]])}</div>
     <h4>오른쪽 패널</h4>
@@ -3674,8 +3742,8 @@ document.addEventListener("keydown", ev => {
   }
   if (ev.key === "?") { $("help").hidden ? openHelp() : closeHelp(); return; }
   if (!$("prefs").hidden || !$("help").hidden || ev.ctrlKey || ev.metaKey || ev.altKey) return;
-  const i = "12345678".indexOf(ev.key);
-  if (i >= 0) { stopPlay(); pickLayer(KINDS[i]); }
+  const i = (CASE ? "12" : "123456").indexOf(ev.key);
+  if (i >= 0) { stopPlay(); pickLayer(keyKind(i)); }
   else if ((ev.key === "t" || ev.key === "T") && !CASE) setTest(!test);
   else if (ev.key === "l" || ev.key === "L") setTL(!tlOn);
   else if (ev.key === "a" || ev.key === "A") setOverlay("alerts", !OV.has("alerts"));
@@ -3760,6 +3828,10 @@ async function boot() {
   if (want === "obsday" && !CASE) want = "acc";                          // 예전 '오늘 누적' — 이제 카드 구간을 따르는 누적
   if (want.startsWith("vsrt")) { kind = "vsrt"; const n = +want.replace(/\D/g, ""); if (n >= 1 && n <= 6) vsrtN = n; }
   else kind = KINDS.includes(want) ? want : "obs60";
+  if (!CASE) {
+    if (Q.get("layer") && !Q.get("basis") && SRC_OF[kind]) ACC_BASIS = SRC_OF[kind];   // ?layer=aws60 → AWS
+    else kind = normKind(kind);
+  }
   GNB = gnBounds();
   layout();
   await show();
