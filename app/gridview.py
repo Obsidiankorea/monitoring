@@ -849,6 +849,8 @@ SETTING_DEFAULT = {"layer": "obs60", "x4": False, "vsrt_n": 1,
                    "acc_fc": True,
                    # 누적 막대의 실측 중 최근 1시간을 빗금으로 강조하나(H)
                    "acc_h1": True,
+                   # 지도 색 — blue: 청색 램프 / kma: 기상청 레이더 색(예측 분포 범례에서 뽑은 색)
+                   "pal": "blue",
                    # 지도 위에 겹칠 레이어(왼쪽 위 '레이어'에서 켠다). 차츰 늘린다.
                    "overlays": []}
 OVERLAYS = ("alerts", "stations", "stnval")   # stnval = 관측소 옆 값 글자(관측소에 딸림)
@@ -856,8 +858,10 @@ _CHOICES = {"flow_step": (10, 20, 30, 60), "flow_hours": (1, 3, 6, 12),
             "play_ms": (600, 1200, 2000), "tl_stat": ("max", "mean"),
             "panel": ("cards", "timeline"), "acc_hours": (6, 12, 24, 48),
             "acc_from": ("hours", "today", "yesterday"),
-            "acc_basis": ("aws", "grid")}
-_TEXT = {"tl_stat", "panel", "acc_basis", "acc_from"}
+            "acc_basis": ("aws", "grid"),
+            # 지도 색 — 청색 램프 / 기상청 레이더 색(범례 색 띠를 누르면 바뀐다)
+            "pal": ("blue", "kma")}
+_TEXT = {"tl_stat", "panel", "acc_basis", "acc_from", "pal"}
 
 
 def setting() -> dict:

@@ -65,7 +65,10 @@ def test_put_setting_validates(monkeypatch):
     assert gridview.put_setting({"overlays": ["alerts", "alerts"]})["overlays"] == ["alerts"]
     assert gridview.SETTING_DEFAULT["sel_zoom"] is True
     assert gridview.put_setting({"sel_zoom": 0})["sel_zoom"] is False
+    # 지도 색 — 기본 청색, 범례 색 띠를 누르면 기상청 레이더 색
+    assert gridview.SETTING_DEFAULT["pal"] == "blue"
+    assert gridview.put_setting({"pal": "kma"})["pal"] == "kma"
     for bad in ({"flow_step": 15}, {"play_ms": 50}, {"tl_stat": "sum"}, {"layer": "nope"},
-                {"overlays": ["bars"]}, {"overlays": "alerts"}):
+                {"overlays": ["bars"]}, {"overlays": "alerts"}, {"pal": "rainbow"}):
         with pytest.raises((ValueError, LookupError)):
             gridview.put_setting(bad)
