@@ -3,11 +3,15 @@
 층(화면 이름)             저장 층   격자   기준시각
   obs15 · obs60 · obsday   같은 이름  500m   tm
   acc                      obs60     500m   누적 구간(강수 누적 카드와 같은 것 — 지난 N시간 · 오늘/어제 0시부터)의
-                                            정시 60분 격자를 칸마다 더한 것. 마지막 정시까지
+                                            정시 60분 격자를 칸마다 더한 것. 마지막 정시까지 + '지금' 칸(아래)
+  ⏱ 격자 누적의 '지금' 칸 — 마지막 정시 뒤 ~ 가장 최근 일강수 격자(10분 칸): 일강수(obsday) 증분(_grid_tail).
   aws                      (관측소)   500m   같은 구간의 **관측소 값만으로** 메운 면 — 기상청 AWS(obs_hourly) +
                                             경남 AWS(스방 bangjae_hourly, 목록 위치) 정시 강수량 합을 IDW 로
   aws60                    (관측소)   500m   정시 한 시간 몫을 같은 관측소 · 같은 IDW 로(재생 흐름의 AWS 실측).
                                             시각은 누적 층과 같은 정시들 — 관측소 값이 아직 없는 정시는 건너뛴다
+  ⏱ AWS 두 층의 '지금' 칸 — **실시간 감시(설정 aws_live)를 켰을 때만**, 마지막 정시 뒤 매분자료(1분 수집기 minute)까지 잇는다:
+     누적 = 정시 합 + 정시부터 지금까지(기상청 RN_DAY 증분 · 경남 AWS 스방 진행 칸), 종합 화면 강수량 판 마지막 칸과 같은 셈.
+     1시간 = 그 분의 직전 60분(기상청 RN-60m — 경남 AWS 는 정시 자료라 정시 칸에만).
   odam                     odam      5km    tm(10분 발표)
   vsrt+N (N=1~6)           vsrt      5km    가장 최근 발표분의 N번째 대상시각
   shrt_today · _tomorrow   shrt      5km    가장 최근 발표분의 그날 PCP 합
@@ -24,7 +28,7 @@ from functools import lru_cache
 
 import numpy as np
 
-from . import clock, db, gridstore, sites
+from . import clock, db, gridstore, queries, sites
 from .collectors.shortfc import base_of
 from .domain import gridproj
 
@@ -145,8 +149,9 @@ def frame(layer: str, tm: str | None = None, now: datetime | None = None,
         return aws_hour_frame(tm, now=now, test=test)
     if kind == "acc":
         s = acc_sum(*acc_window(hours, since), now=now, test=test)
-        return {"grid": "hr", "tm": s["want"][-1], "from": s["want"][0], "arr": s["total"],
-                "n": len(s["want"]), "missing": len(s["want"]) - len(s["have"]), **({"test": True} if test else {})}
+        return {"grid": "hr", "tm": s["tail"] or s["want"][-1], "from": s["want"][0], "arr": s["total"],
+                "n": len(s["want"]), "missing": len(s["want"]) - len(s["have"]),
+                **({"live": s["tail"]} if s["tail"] else {}), **({"test": True} if test else {})}
     if test:
         # tm 을 주면 그 시각만큼 흘린 모양 — 재생해 보면 덩어리가 움직인다.
         # tm 이 없으면 실제 수집과 같은 '최신' 칸(6분 물러선 10분 칸) — 재생 막대의 마지막 실측과 맞게
@@ -417,15 +422,70 @@ def _gn_hourly(want: list[str]) -> dict[str, list]:
     return out
 
 
-def _acc_station_values(hours: int, since: str | None, base: list[dict]) -> dict:
-    """누적 층의 관측소 값 — 같은 구간(격자와 같은 정시들)의 정시 강수량 합."""
-    want, _ = _acc_keys(hours, since, clock.now(), False)
-    return _station_sums(want, base)
+LIVE_MAX_MIN = 90       # 매분자료가 이보다 묵었으면 '지금' 칸을 잇지 않는다(수집이 멈췄다 — 지난 값을 지금이라 하지 않게)
 
 
-def _station_sums(want: list[str], base: list[dict]) -> dict:
+def live_on() -> bool:
+    """AWS 실시간 감시(지도 설정 aws_live) — 끄면 AWS 층은 정시까지만."""
+    return bool(setting().get("aws_live"))
+
+
+def live_minute(after: str | None, now: datetime | None = None) -> str | None:
+    """'지금' 칸 시각 'YYYYMMDDHHMI' — 실시간 감시를 켰고, 가장 최근 매분자료가 정시 after 보다 늦고 LIVE_MAX_MIN 안이면.
+    아니면 None(정시까지만)."""
+    if not live_on():
+        return None
+    now = now or clock.now()
+    with db.tx() as con:
+        r = con.execute("SELECT MAX(tm) AS tm FROM obs_minute WHERE quality='ok'").fetchone()
+    if not r or not r["tm"]:
+        return None
+    k = r["tm"].replace("-", "").replace(" ", "").replace(":", "")
+    if after and k <= after:
+        return None
+    return k if (now - _dt(k)).total_seconds() <= LIVE_MAX_MIN * 60 else None
+
+
+def _acc_tail(after: str, base: list[dict], now: datetime, at: str | None = None) -> tuple[str | None, dict]:
+    """정시 after(키) 뒤 ~ 지금(또는 at 키) — 지점마다 온 비. → ('지금' 키, {stn: 값|None}). 이을 매분자료가 없으면 (None, {}).
+    기상청 = RN_DAY 증분(queries.minute_tail, 종합 화면 강수량 판 마지막 칸과 같다). 경남 AWS = 스방 시간 칸 중
+    after 부터 지금 시각 칸까지(진행 칸 포함 — 스방 수집 10분 · 5분 물러선 값). 스방 칸이 하나도 없으면(내부망 밖) 경남은 뺀다."""
+    live = at or live_minute(after, now)
+    if not live or live <= after:
+        return None, {}
+    mt, tail, _ = queries.minute_tail(_minute_key(after), _minute_key(live))
+    if not mt:
+        return None, {}
+    out = {k: v for k, v in tail.items()}
+    t0, t1 = _dt(after), _dt(live).replace(minute=0)
+    keys, t = [], t0
+    while t <= t1:                                   # 스방 H시 칸 = 기상청 (H+1)시 키(_gn_hourly 가 한 칸 민다)
+        keys.append((t + timedelta(hours=1)).strftime("%Y%m%d%H%M"))
+        t += timedelta(hours=1)
+    gn = _gn_hourly(keys)
+    if gn:
+        for b in base:
+            if b.get("org") == "gn" or b["stn"].startswith("G"):
+                got = [v for v in gn.get(b["stn"], []) if v is not None]
+                out[b["stn"]] = round(sum(got), 1) if got else None
+    return live, out
+
+
+def _acc_station_values(hours: int, since: str | None, base: list[dict], upto: str = "minute") -> dict:
+    """누적 층의 관측소 값 — 같은 구간(격자와 같은 정시들)의 정시 강수량 합 + '지금' 칸.
+    upto = minute(AWS 누적 — 가장 최근 매분까지) | grid(격자 누적 — 격자 '지금' 칸과 같은 10분 칸까지, 그 시각
+    매분자료는 격자 수집기가 받아 둔다) | 매분 키(그 분까지 — 화면이 그린 AWS 누적 면과 같은 시각)."""
+    now = clock.now()
+    want, _ = _acc_keys(hours, since, now, False)
+    at = _grid_tail_key(want[-1]) if upto == "grid" else upto if upto not in ("minute", "grid") else None
+    lv, tail = _acc_tail(want[-1], base, now, at) if upto == "minute" or (at and at > want[-1]) else (None, {})
+    return _station_sums(want, base, tail if lv else None, lv)
+
+
+def _station_sums(want: list[str], base: list[dict], tail: dict | None = None, live: str | None = None) -> dict:
     """정시들(want)의 관측소 정시 강수량 합. 기상청 AWS 는 obs_hourly(rn_hr1), 경남 AWS 는 스방(내부망에서만 —
-    밖에서는 자리만). 한 시간이라도 빠지면 q='part'(하한), 다 빠지면 missing/none. AWS 1시간 층은 want 가 한 칸."""
+    밖에서는 자리만). 한 시간이라도 빠지면 q='part'(하한), 다 빠지면 missing/none. AWS 1시간 층은 want 가 한 칸.
+    tail = '지금' 칸(_acc_tail) — 든 지점은 한 칸 더 센다(그 칸이 비면 part), tm 은 live."""
     tms = [_minute_key(k) for k in want]
     vals: dict[str, list] = {}
     with db.tx() as con:
@@ -435,9 +495,14 @@ def _station_sums(want: list[str], base: list[dict]) -> dict:
             vals.setdefault(r["stn"], []).append(None if v is None or v < 0 or r["quality"] != "ok" else v)
     gn = _gn_hourly(want)
     vals.update(gn)
+    tail = tail or {}
     rows = []
     for b in base:
-        got = vals.get(b["stn"])
+        got = list(vals.get(b["stn"]) or [])
+        n = len(want)
+        if b["stn"] in tail:
+            got.append(tail[b["stn"]])
+            n += 1
         if not got:
             rows.append({**b, "v": None, "q": "none"})
             continue
@@ -445,10 +510,13 @@ def _station_sums(want: list[str], base: list[dict]) -> dict:
         if not ok:
             rows.append({**b, "v": None, "q": "missing"})
         else:
-            rows.append({**b, "v": round(sum(ok), 1), "q": "ok" if len(ok) == len(want) else "part",
-                         "miss": len(want) - len(ok)})                 # 빠진 시각 수 — 화면은 숫자만, 툴팁에 이것
-    return {"tm": want[-1], "from": want[0], "status": "ok" if vals else "none",
-            "src": (f"기상청 정시자료{' + 경남 AWS(스방)' if gn else ''} {len(want)}시간 합") if vals else "", "rows": rows}
+            rows.append({**b, "v": round(sum(ok), 1), "q": "ok" if len(ok) == n else "part",
+                         "miss": n - len(ok)})                         # 빠진 시각 수 — 화면은 숫자만, 툴팁에 이것
+    src = (f"기상청 정시자료{' + 경남 AWS(스방)' if gn else ''} {len(want)}시간 합") if vals else ""
+    if live and tail:
+        src += f" + {want[-1][8:10]}:00~{live[8:10]}:{live[10:12]}(매분)"
+    return {"tm": live if live and tail else want[-1], "from": want[0], "status": "ok" if vals or tail else "none",
+            "src": src, "rows": rows, **({"live": live} if live and tail else {})}
 
 
 # ── AWS 누적 면 — 관측소 값만으로(격자 분석값을 쓰지 않는다) ─────────────────────
@@ -457,6 +525,15 @@ def _station_sums(want: list[str], base: list[dict]) -> dict:
 # ⚠️ 관측소 값이 정답이고 면은 그 사이를 메운 그림이다. 기상청 56곳만 있으면(내부망 밖) 면이 거칠다 — 경남 AWS 가 들어와야 촘촘하다.
 IDW_K, IDW_POW, IDW_STEP = 8, 2.0, 2
 _AWS_CACHE: dict[tuple, dict] = {}
+
+
+def _aws_cached(ck: tuple) -> dict | None:
+    """IDW 면 기억 — 맞으면 맨 뒤로 옮긴다(가장 오래 안 쓴 것부터 버린다). 실시간 감시를 켜면 '지금' 칸이 1분마다 하나씩
+    생긴다 — 넣은 차례로 버리면 재생 흐름 정시 장들이 40분 뒤 밀려나 다시 계산했다."""
+    hit = _AWS_CACHE.pop(ck, None)
+    if hit is not None:
+        _AWS_CACHE[ck] = hit
+    return hit
 
 
 def idw_surface(pts: list[tuple[float, float, float]]) -> np.ndarray:
@@ -492,6 +569,7 @@ def aws_frame(hours: int, since: str | None, now: datetime | None = None, test: 
     """AWS 누적 면 — 강수 누적 카드 구간의 관측소 합(기상청 + 경남 AWS)을 IDW 로. 'n' = 쓴 관측소 수."""
     now = now or clock.now()
     want, _ = _acc_keys(hours, since, now, test)
+    st = {}
     if test:                                   # 합성 누적 격자를 관측소 자리에서 읽어 — 모양 점검용
         tot = acc_sum(hours, since, now=now, test=True)["total"]
         hb = gridstore.geo()["hr"]["bbox"]
@@ -502,19 +580,19 @@ def aws_frame(hours: int, since: str | None, now: datetime | None = None, test: 
             if 0 <= r < hb["h"] and 0 <= c < hb["w"] and np.isfinite(tot[r, c]):
                 pts.append((s["x"], s["y"], float(tot[r, c])))
     else:
-        st = _acc_station_values(hours, since, [{k: s[k] for k in ("stn", "name", "sigun", "x", "y", "ht")}
-                                                for s in station_sites()["stations"]] + sites.gn_sites())
+        st = _acc_station_values(hours, since, _kma_gn_base())
         pts = [(s["x"], s["y"], s["v"]) for s in st["rows"] if s["q"] in ("ok", "part") and s["v"] is not None]
-    ck = (tuple(want), test, tuple(sorted(pts)))
-    hit = _AWS_CACHE.get(ck)
+    live = None if test else st.get("live")
+    ck = (tuple(want), live, test, tuple(sorted(pts)))
+    hit = _aws_cached(ck)
     if hit is None:
         hit = {"arr": idw_surface(pts)}
-        if len(_AWS_CACHE) > 4:
+        if len(_AWS_CACHE) > 40:
             _AWS_CACHE.pop(next(iter(_AWS_CACHE)))
         _AWS_CACHE[ck] = hit
     n_gn = sum(1 for x, y, _ in pts if any(abs(x - g["x"]) < 1e-6 and abs(y - g["y"]) < 1e-6 for g in sites.gn_sites()))
-    return {"grid": "hr", "tm": want[-1], "from": want[0], "arr": hit["arr"], "n": len(pts), "n_gn": n_gn,
-            **({"test": True} if test else {})}
+    return {"grid": "hr", "tm": live or want[-1], "from": want[0], "arr": hit["arr"], "n": len(pts), "n_gn": n_gn,
+            **({"live": live} if live else {}), **({"test": True} if test else {})}
 
 
 def _hour_keys(now: datetime, test: bool) -> list[str]:
@@ -548,6 +626,31 @@ def _hour_pts(tm: str, now: datetime, test: bool) -> list[tuple[float, float, fl
     return [(s["x"], s["y"], s["v"]) for s in st["rows"] if s["q"] in ("ok", "part") and s["v"] is not None]
 
 
+def _minute_values(tm: str, base: list[dict]) -> dict:
+    """AWS 1시간 '지금' 칸 — 그 분의 직전 60분(기상청 매분자료 RN-60m). 경남 AWS 는 정시 자료라 자리만(q none)."""
+    with db.tx() as con:
+        got = {r["stn"]: (r["rn_60m"] if r["quality"] == "ok" else None) for r in con.execute(
+            "SELECT stn, rn_60m, quality FROM obs_minute WHERE tm=?", (_minute_key(tm),))}
+    rows = []
+    for b in base:
+        if b["stn"] not in got:
+            rows.append({**b, "v": None, "q": "none"})
+            continue
+        v = got[b["stn"]]
+        bad = v is None or v < 0
+        rows.append({**b, "v": None if bad else round(v, 1), "q": "missing" if bad else "ok"})
+    return {"tm": tm, "status": "ok" if got else "none", "live": tm,
+            "src": f"기상청 매분자료 {tm[8:10]}:{tm[10:12]} · 직전 60분 — 경남 AWS 는 정시 자료라 정시 칸에만" if got else "",
+            "rows": rows}
+
+
+def aws_hour_now(now: datetime | None = None, test: bool = False) -> str | None:
+    """AWS 1시간 층의 '지금' — 마지막 정시 뒤 매분자료가 있으면 그 분(직전 60분), 없으면 관측소 값이 든 마지막 정시."""
+    now = now or clock.now()
+    last = aws_hour_latest(now, test)
+    return (None if test else live_minute(last, now)) or last
+
+
 def aws_hour_latest(now: datetime | None = None, test: bool = False) -> str | None:
     """AWS 1시간 층의 '지금' — 관측소 값이 하나라도 든 가장 최근 정시(최근 넷까지만 거슬러 본다).
     ⚠️ 정시자료(awsh)는 정시 뒤 몇 분~몇십 분 늦게 온다 — 마지막 정시 격자가 있어도 관측소는 아직일 수 있다."""
@@ -560,16 +663,25 @@ def aws_hour_latest(now: datetime | None = None, test: bool = False) -> str | No
 
 
 def aws_hour_frame(tm: str | None, now: datetime | None = None, test: bool = False) -> dict:
-    """AWS 1시간 면 — 정시 tm 한 시간 몫(기상청 + 경남 AWS)을 누적 층과 같은 IDW 로. tm 이 없으면 aws_hour_latest."""
+    """AWS 1시간 면 — 정시 tm 한 시간 몫(기상청 + 경남 AWS)을 누적 층과 같은 IDW 로. tm 이 없으면 aws_hour_now.
+    정시 값이 없는 시각(정시가 아니거나 정시자료가 아직)은 그 분의 매분자료 직전 60분(기상청만) — '지금' 칸."""
     now = now or clock.now()
-    tm = tm or aws_hour_latest(now, test)
+    tm = tm or aws_hour_now(now, test)
     if not tm:
         raise LookupError("관측소 정시 강수량이 아직 없다")
-    if len(tm) != 12 or not tm.isdigit() or not tm.endswith("00"):
-        raise LookupError(f"AWS 1시간은 정시만 — YYYYMMDDHH00: {tm}")
-    pts = _hour_pts(tm, now, test)
+    if len(tm) != 12 or not tm.isdigit():
+        raise LookupError(f"시각은 YYYYMMDDHHMI: {tm}")
+    pts = _hour_pts(tm, now, test) if tm.endswith("00") else []
+    live = None
+    if not pts and not test:
+        st = _minute_values(tm, _kma_gn_base())
+        pts = [(s["x"], s["y"], s["v"]) for s in st["rows"] if s["q"] == "ok"]
+        live = tm if pts else None
+    if not pts:
+        raise LookupError(f"AWS 1시간 {tm} — 그 시각 관측소 값이 없다" if test or tm.endswith("00")
+                          else f"AWS 1시간 {tm} — 정시도 아니고 그 분 매분자료도 없다")
     ck = ("h", tm, test, tuple(sorted(pts)))
-    hit = _AWS_CACHE.get(ck)
+    hit = _aws_cached(ck)
     if hit is None:
         hit = {"arr": idw_surface(pts)}               # 값 있는 관측소가 없으면 LookupError
         if len(_AWS_CACHE) > 40:                      # 재생 한 바퀴(지난 12시간)가 다 들어가게
@@ -577,7 +689,8 @@ def aws_hour_frame(tm: str | None, now: datetime | None = None, test: bool = Fal
         _AWS_CACHE[ck] = hit
     gn = {(g["x"], g["y"]) for g in sites.gn_sites()}
     return {"grid": "hr", "tm": tm, "arr": hit["arr"], "n": len(pts),
-            "n_gn": sum(1 for x, y, _ in pts if (x, y) in gn), **({"test": True} if test else {})}
+            "n_gn": sum(1 for x, y, _ in pts if (x, y) in gn), **({"live": live} if live else {}),
+            **({"test": True} if test else {})}
 
 
 def _test_station_values(layer: str, tm: str | None, base: list[dict]) -> dict:
@@ -608,12 +721,16 @@ def stations(layer: str, tm: str | None = None, test: bool = False, case: str | 
     base = kma + sites.gn_sites()
     kind, _ = split(layer)
     if kind in ("acc", "aws") and not test:
-        return {**head, **_acc_station_values(*acc_window(hours, since), base)}
+        upto = "grid" if kind == "acc" else tm if tm and len(tm) == 12 and tm.isdigit() else "minute"
+        return {**head, **_acc_station_values(*acc_window(hours, since), base, upto)}
     if kind == "aws60" and not test:
-        tm = tm or aws_hour_latest()
+        tm = tm or aws_hour_now()
         if not tm:
             raise LookupError("관측소 정시 강수량이 아직 없다")
-        return {**head, **_station_sums([tm], base)}
+        st = _station_sums([tm], base) if tm.endswith("00") else None
+        if not st or not any(r["q"] in ("ok", "part") for r in st["rows"]):
+            st = _minute_values(tm, base)                 # '지금' 칸 — 그 분의 직전 60분(기상청만)
+        return {**head, **st}
     if kind not in STN_VALUE and not (test and kind in ("acc", "aws", "aws60")):
         return {**head, "tm": tm, "status": "forecast", "src": "",
                 "rows": [{**b, "v": None, "q": None} for b in base]}
@@ -651,8 +768,9 @@ def stations(layer: str, tm: str | None = None, test: bool = False, case: str | 
 # 시군 줄 = 그 시군 누적 최대 칸(+읍면동), 시군을 고르면 읍면동 줄 = 그 읍면동 누적 최대 칸.
 # 줄마다 그 칸의 매시 값(d)을 같이 준다 — 카드의 작은 선 그래프가 '그 자리'의 비를 그린다.
 # ⚠️ 받지 못한 정시가 있으면 합은 **하한**이다(missing 에 몇 시간인지 적는다).
-def acc_table(acc: np.ndarray, frames: list, sigun: str | None = None) -> list[dict]:
-    """acc(경남 bbox 500m 누적), frames(매시 배열 또는 None) → 줄들. 값이 없는 줄은 sum None."""
+def acc_table(acc: np.ndarray, frames: list, sigun: str | None = None, h1: np.ndarray | None = None) -> list[dict]:
+    """acc(경남 bbox 500m 누적), frames(매시 배열 또는 None) → 줄들. 값이 없는 줄은 sum None.
+    h1(그 시각 60분 격자)을 주면 줄마다 그 칸의 최근 1시간 — 마지막 칸이 '지금' 칸(한 시간이 안 되는 몫)일 때 카드 빗금용."""
     g = gridstore.geo()
     hb = g["hr"]["bbox"]
     msig, memd = gridstore.masks()
@@ -674,6 +792,8 @@ def acc_table(acc: np.ndarray, frames: list, sigun: str | None = None) -> list[d
         out.update(col=c + hb["i0"], row=r + hb["j0"],
                    d=[None if f is None or not np.isfinite(f[r, c]) else round(float(f[r, c]), 1)
                       for f in frames])
+        if h1 is not None and np.isfinite(h1[r, c]):
+            out["h1"] = round(float(h1[r, c]), 1)
         if emd_at:
             out["name"] = emd_at(r, c, sig) or ""
         return out
@@ -745,12 +865,30 @@ def _acc_frames(want: list[str], have: list[str], now: datetime, test: bool) -> 
     return [gridstore.load("obs60", k) if k in have else None for k in want]
 
 
+def _grid_tail_key(after: str) -> str | None:
+    """격자 누적 '지금' 칸의 시각 — 정시 after 뒤 같은 날의 가장 최근 일강수 격자. 뺄 기준(after 일강수)이 없으면 None.
+    after 가 0시 정각이면 기준은 0(그날 일강수가 곧 0시부터의 합). 일강수 00:00 · 00:05 는 받지 않는다(grid_rain)."""
+    ks = [k for k in gridstore.keys("obsday") if k[:8] == after[:8] and k > after]
+    if not ks or (after[8:] != "0000" and not gridstore.has("obsday", after)):
+        return None
+    return ks[-1]
+
+
+def _grid_tail(after: str, key: str) -> np.ndarray:
+    """정시 after 뒤 ~ key — 일강수 증분. 음수 칸은 0(분석 잡음 — 누적이 줄 수는 없다), 결측은 결측."""
+    cur = gridstore.load("obsday", key)
+    base = 0.0 if after[8:] == "0000" else gridstore.load("obsday", after)
+    return np.maximum(cur - base, 0.0)
+
+
 def acc_sum(hours: int = 12, since: str | None = None, now: datetime | None = None, test: bool = False) -> dict:
     """누적 구간 정시 60분 격자를 칸마다 더한 것 — 강수 누적 카드(acc)와 지도 '누적' 층(frame acc)이 같은 합을 쓴다.
-    → {want(정시 키), have(받은 것), total}. 결측 칸은 결측으로 남는다(0 으로 치지 않는다)."""
+    → {want(정시 키), have(받은 것), total, tail(지금 칸 시각|None), tail_arr}. 결측 칸은 결측으로 남는다(0 으로 치지 않는다).
+    tail — 마지막 정시 뒤 ~ 가장 최근 일강수 격자(10분 칸)의 일강수 증분을 더한다. 그래서 정시에만 바뀌던 누적이 10분마다 는다."""
     now = now or clock.now()
     want, have = _acc_keys(hours, since, now, test)
-    ck = (tuple(want), tuple(have), test, now.strftime("%Y%m%d%H") if test else "")
+    tk = None if test else _grid_tail_key(want[-1])
+    ck = (tuple(want), tuple(have), tk, test, now.strftime("%Y%m%d%H") if test else "")
     if ck in _SUM_CACHE:
         return _SUM_CACHE[ck]
     got = [f for f in _acc_frames(want, have, now, test) if f is not None]
@@ -759,8 +897,11 @@ def acc_sum(hours: int = 12, since: str | None = None, now: datetime | None = No
     total = got[0].copy()
     for f in got[1:]:
         total = total + f
+    tail = _grid_tail(want[-1], tk) if tk else None
+    if tail is not None:
+        total = np.where(np.isfinite(tail), total + tail, total)
     total.setflags(write=False)
-    out = {"want": want, "have": have, "total": total}
+    out = {"want": want, "have": have, "total": total, "tail": tk, "tail_arr": tail}
     if len(_SUM_CACHE) > 4:                       # 한 장이 1~2MB — 몇 개만
         _SUM_CACHE.pop(next(iter(_SUM_CACHE)))
     _SUM_CACHE[ck] = out
@@ -774,16 +915,23 @@ def acc(hours: int = 12, sigun: str | None = None, now: datetime | None = None,
     now = now or clock.now()
     want, have = _acc_keys(hours, since, now, test)
     hours = len(want)
-    ck = (tuple(have), hours, sigun, test, now.strftime("%Y%m%d%H") if test else "")
+    tk = None if test else _grid_tail_key(want[-1])
+    ck = (tuple(have), hours, sigun, tk, test, now.strftime("%Y%m%d%H") if test else "")
     if ck in _ACC_CACHE:
         return _ACC_CACHE[ck]
     s = acc_sum(hours, None, now=now, test=test)
     frames = _acc_frames(want, have, now, test)
     total = s["total"]
-    out = {"basis": "grid", "hours": hours, "frames": want, "tm": want[-1], "sigun": sigun,
-           "missing": len(want) - len(have), "test": test,
-           "src": "합성 — 실제 자료 아님" if test else "기상청 고해상도 격자(500m) · 매시 60분 합",
-           "rows": acc_table(total, frames, sigun)}
+    keys, h1 = list(want), None
+    if s["tail"]:                                # '지금' 칸 — 줄의 마지막 칸(한 시간이 안 되는 몫), 빗금은 그 시각 60분 격자
+        frames = frames + [s["tail_arr"]]
+        keys.append(s["tail"])
+        h1 = gridstore.load("obs60", s["tail"]) if gridstore.has("obs60", s["tail"]) else None
+    out = {"basis": "grid", "hours": hours, "frames": keys, "tm": s["tail"] or want[-1], "sigun": sigun,
+           "missing": len(want) - len(have), "test": test, **({"tail": s["tail"]} if s["tail"] else {}),
+           "src": "합성 — 실제 자료 아님" if test else "기상청 고해상도 격자(500m) · 매시 60분 합"
+                  + (f" + {want[-1][8:10]}:00~{s['tail'][8:10]}:{s['tail'][10:12]}(일강수 차)" if s["tail"] else ""),
+           "rows": acc_table(total, frames, sigun, h1)}
     if len(_ACC_CACHE) > 24:
         _ACC_CACHE.pop(next(iter(_ACC_CACHE)))
     _ACC_CACHE[ck] = out
@@ -826,8 +974,12 @@ def flow(hours: int = 6, step: int = 10, now: datetime | None = None, test: bool
     #    23:30 에서 흐름이 끝나 '지금' 화면이 재생 막대 밖으로 빠졌다.
     if src == "aws":
         last = aws_hour_latest(now, test)
+        # 관측소 값이 하나도 없는 정시(수집이 비었던 시간)는 건너뛴다 — 한 장 때문에 흐름 전체가 404 가 되지 않게
         frames = [{"t": k, "kind": "obs", "layer": "aws60", "key": k} for k in _hour_keys(now, test)
-                  if last and start <= _dt(k) <= _dt(last)]
+                  if last and start <= _dt(k) <= _dt(last) and (test or _hour_pts(k, now, False))]
+        live = None if test else live_minute(last, now)
+        if live:                                  # '지금' 칸 — 매분 직전 60분(마지막 정시 뒤, 1분마다 바뀐다)
+            frames.append({"t": live, "kind": "obs", "layer": "aws60", "key": live, "live": True})
         if test:
             tmfc = _floor10(now).strftime("%Y%m%d%H%M")
             tmefs = [(now + timedelta(hours=n)).strftime("%Y%m%d%H00") for n in range(1, 7)]
@@ -894,12 +1046,14 @@ def meta(now: datetime | None = None) -> dict:
                 row.update(tmfc=tmfc, tmefs=tmefs, tm=tmfc)
                 age = (now - _dt(tmfc)).total_seconds() / 60 if tmfc else None
             elif kind == "aws60":
-                k = aws_hour_latest(now)
-                row.update(tm=k)
+                last = aws_hour_latest(now)
+                k = live_minute(last, now) or last
+                row.update(tm=k, live=k is not None and k != last)
                 age = (now - _dt(k)).total_seconds() / 60 if k else None
             elif kind in ("acc", "aws"):
                 ks = [k for k in gridstore.keys("obs60") if k.endswith("00")]
-                row.update(tm=ks[-1] if ks else None, frames=len(ks))
+                live = (live_minute(ks[-1], now) if kind == "aws" else _grid_tail_key(ks[-1])) if ks else None
+                row.update(tm=live or (ks[-1] if ks else None), frames=len(ks), live=bool(live))
                 age = (now - _dt(ks[-1])).total_seconds() / 60 if ks else None
             elif kind.startswith("shrt_"):
                 fr = frame(kind, now=now)
@@ -956,6 +1110,9 @@ SETTING_DEFAULT = {"layer": "obs60", "x4": False, "vsrt_n": 1,
                    "acc_per": 1,
                    # 위 카드를 패널 가득(지금 오는 비 · 예측 상위를 감춘다) — 카드 머리 단추
                    "acc_full": False,
+                   # AWS 실시간 감시 — 끄면 AWS 누적 · 1시간이 정시마다, 켜면 마지막 정시 뒤 매분까지 1분마다(R).
+                   # 1분 수집기(minute)도 켠 동안만 기상청을 부른다
+                   "aws_live": False,
                    # 지도 위에 겹칠 레이어(왼쪽 위 '레이어'에서 켠다). 차츰 늘린다.
                    "overlays": []}
 OVERLAYS = ("alerts", "stations", "stnval")   # stnval = 관측소 옆 값 글자(관측소에 딸림)
@@ -980,7 +1137,7 @@ def put_setting(body: dict) -> dict:
     if "layer" in body:
         split(str(body["layer"]))            # 모르는 층이면 LookupError
         cur["layer"] = str(body["layer"])
-    for k in ("x4", "tl_on", "sel_zoom", "acc_fc", "acc_h1", "acc_full"):
+    for k in ("x4", "tl_on", "sel_zoom", "acc_fc", "acc_h1", "acc_full", "aws_live"):
         if k in body:
             cur[k] = bool(body[k])
     if "vsrt_n" in body:

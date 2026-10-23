@@ -93,6 +93,37 @@ def store_minute(tm: str, rows: dict[str, dict], at: str) -> None:
                  "ok" if r["rn_60m"] is not None else "missing", at))
 
 
+def _have_minute(tm: str) -> bool:
+    with db.tx() as con:
+        return con.execute("SELECT 1 FROM obs_minute WHERE tm=? AND quality='ok' LIMIT 1", (tm,)).fetchone() is not None
+
+
+async def collect_minute(now: datetime | None = None) -> dict:
+    """매분자료만 — '지금 −1분' 한 시각(없으면 −2분). 1분마다 돈다(수집 주기 `minute`).
+    **지도 판 AWS 실시간 감시(설정 aws_live)를 켠 동안만** 부른다 — 끄면 매분은 강수량 수집기(10분)가 받는 만큼이다.
+
+    지도의 AWS 층 '지금' 칸과 '지금 오는 비'가 1분마다 따라가게 한다. 정시 자료 · 빈 시각 메우기는
+    `collect`(10분)가 그대로 한다. 한 번에 한 번 부른다(하루 1,440회, 응답 수십 KB).
+    ⚠️ 1분 전 자료가 아직 안 올라왔으면 빈 응답이다 — 실패로 치지 않고 2분 전을 묻는다."""
+    if not (db.get_setting("map", {}) or {}).get("aws_live"):
+        return {"minute_at": None, "skipped": "실시간 감시 꺼짐"}     # 지도 판 R — 끈 동안은 기상청을 부르지 않는다
+    now = now or datetime.now()
+    at = now.strftime("%Y-%m-%d %H:%M")
+    for back in (1, 2):
+        mark = now.replace(second=0, microsecond=0) - timedelta(minutes=back)
+        tm = mark.strftime("%Y-%m-%d %H:%M")
+        if _have_minute(tm):
+            return {"minute_at": tm, "skipped": True}
+        rows = await fetch_minute(mark)          # KmaError 는 run_one 이 실패로 적는다
+        if rows:
+            store_minute(tm, rows, at)
+            n = sum(1 for r in rows.values() if r["rn_60m"] is not None)
+            db.log_collect("minute", True, at, f"{tm[11:]} · {n}곳")
+            return {"minute_at": tm, "count": n}
+    db.log_collect("minute", False, at, "빈 응답 — 아직 안 올라왔다")
+    return {"minute_at": None}
+
+
 async def collect(now: datetime | None = None, back_hours: int | None = None) -> dict:
     """정시 자료를 채우고, 마지막 정시 이후 구간을 매분자료로 보강한다.
 
@@ -149,13 +180,17 @@ async def collect(now: datetime | None = None, back_hours: int | None = None) ->
         filled += 1
 
     # 정시 이후 구간 보강 — 화면에 표시할 '실제 최신 시각'이 여기서 나온다
+    # (1분 수집기 `minute` 가 이미 받은 시각이면 다시 부르지 않는다)
     minute_at = None
     try:
         mark = now.replace(second=0, microsecond=0) - timedelta(minutes=1)
-        rows = await fetch_minute(mark)
-        if rows:
+        if _have_minute(mark.strftime("%Y-%m-%d %H:%M")):
             minute_at = mark.strftime("%Y-%m-%d %H:%M")
-            store_minute(minute_at, rows, at)
+        else:
+            rows = await fetch_minute(mark)
+            if rows:
+                minute_at = mark.strftime("%Y-%m-%d %H:%M")
+                store_minute(minute_at, rows, at)
     except KmaError as e:
         failed.append(f"매분자료: {e}")
 

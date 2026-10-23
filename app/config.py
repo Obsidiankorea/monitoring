@@ -93,6 +93,7 @@ ORG_API_KEY = KEYS.get("ORG_API_KEY", "")
 INTERVALS = {
     "alerts": 60,
     "rain": 600,
+    "minute": 60,       # 매분자료만(지금 −1분) — 지도 AWS '지금' 칸 · 지금 오는 비. 하루 1,440회, 응답 수십 KB
     "forecast": 600,
     "qpf": 60,          # 발표를 놓치지 않으려면 자주 깨야 한다.
                         # 다만 감시 구간 밖에서는 기상청을 부르지 않는다.

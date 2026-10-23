@@ -23,6 +23,9 @@ log = logging.getLogger("maint")
 RETENTION_DEFAULT = {"obs_days": 30, "log_days": 30, "auto": True}
 DAY_CHOICES = (3, 7, 14, 30, 60, 90, 0)      # 0 = 지우지 않음
 
+#: 매분자료를 1분 칸 그대로 두는 날 수 — 지나면 10분 칸만 남긴다
+MINUTE_THIN_DAYS = 2
+
 #: 날짜로 잘라내는 표 — (표, 시각칸). 시각칸은 'YYYY-MM-DD …' 로 시작한다.
 _AGED = (("obs_hourly", "tm"), ("obs_minute", "tm"),
          ("bangjae_hourly", "tm"), ("bangjae_rain", "tm"))
@@ -98,6 +101,15 @@ def usage() -> dict:
             "retention": cfg()}
 
 
+def thin_minutes(now: datetime) -> int:
+    """매분자료는 1분마다 쌓인다(수집기 minute) — MINUTE_THIN_DAYS 지난 것은 10분 칸(:00 · :10 …)만 남긴다.
+    지도 관측소 층은 격자와 같은 10분 칸을 읽고, '지금' 칸은 최근 것만 쓴다. 안 솎으면 하루 8만 줄씩 는다."""
+    with db.tx() as con:
+        cur = con.execute("DELETE FROM obs_minute WHERE tm < ? AND substr(tm, 16, 1) != '0'",
+                          ((now - timedelta(days=MINUTE_THIN_DAYS)).strftime("%Y-%m-%d %H:%M"),))
+        return cur.rowcount or 0
+
+
 def cleanup(obs_days: int | None = None, now: datetime | None = None,
             vacuum: bool = True) -> dict:
     """보관 기간이 지난 것을 지운다. 지운 줄 수와 되찾은 바이트를 돌려준다.
@@ -126,6 +138,10 @@ def cleanup(obs_days: int | None = None, now: datetime | None = None,
                               ((now - timedelta(days=max(1, days))).strftime("%Y%m%d%H%M"),))
             if cur.rowcount:
                 removed["fcst_rn1"] = cur.rowcount
+
+    n = thin_minutes(now)
+    if n:
+        removed["obs_minute_thin"] = n
 
     ld = int(c.get("log_days", 30))
     if ld > 0:

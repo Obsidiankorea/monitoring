@@ -21,16 +21,52 @@ def _slots(hours: int, now: datetime) -> list[str]:
     return [(top - timedelta(hours=i)).strftime("%Y-%m-%d %H:00") for i in range(hours - 1, -1, -1)]
 
 
-def rain(hours: int = 12, now: datetime | None = None, src: str = "kma") -> dict:
+def minute_tail(after: str, at: str | None = None) -> tuple[str | None, dict, dict]:
+    """정시 after('YYYY-MM-DD HH:00') 뒤 ~ 가장 최근 매분자료까지 지점마다 온 비 — RN_DAY 증분.
+    → (매분 시각 'YYYY-MM-DD HH:MM', {stn: 증분|None}, {stn: RN-60m|None}). 매분이 after 보다 늦지 않으면 (None, {}, {}).
+    at 을 주면 가장 최근 대신 그 매분 시각까지.
+
+    종합 화면 강수량 판의 마지막 칸('정시부터 지금까지', 21:36 이면 21:00~21:36)과 지도 AWS 누적의 '지금' 칸이 같이 쓴다.
+    ⚠️ RN-60m(직전 60분)을 쓰면 안 된다. 앞 정시 칸과 겹쳐 누적이 부풀고,
+       칸이 가리키는 구간과 값이 담고 있는 구간이 어긋난다. RN-60m 은 참고값(툴팁 · 지도 AWS 1시간 '지금')이다.
+    ⚠️ 정시자료(awsh)는 정시 뒤 몇 분~몇십 분 늦게 온다 — 그동안은 그 정시의 매분자료(1분 수집기가 받아 둔 HH:00)
+       RN_DAY 를 기준으로 쓴다. 둘 다 없으면 그 지점은 None(결측 — 0 으로 치지 않는다)."""
+    with db.tx() as con:
+        if at:                                     # 그 매분 시각으로(지도 — 고른 '지금' 칸)
+            minute_tm = at
+        else:
+            m = con.execute("SELECT MAX(tm) AS tm FROM obs_minute").fetchone()
+            minute_tm = m["tm"] if m and m["tm"] else None
+        if not minute_tm or minute_tm <= after:
+            return None, {}, {}
+        base_day = {r["stn"]: r["rn_day"] for r in con.execute(
+            "SELECT stn, rn_day FROM obs_hourly WHERE tm=? AND quality='ok'", (after,)) if r["rn_day"] is not None}
+        for r in con.execute("SELECT stn, rn_day FROM obs_minute WHERE tm=? AND quality='ok'", (after[:14] + "00",)):
+            if r["rn_day"] is not None:
+                base_day.setdefault(r["stn"], r["rn_day"])
+        tail: dict[str, float | None] = {}
+        m60: dict[str, float | None] = {}
+        for r in con.execute("SELECT stn, rn_day, rn_60m, quality FROM obs_minute WHERE tm=?", (minute_tm,)):
+            b, cur = base_day.get(r["stn"]), r["rn_day"]
+            # RN_DAY는 01시에 0으로 리셋된다 — 증분이 음수면 자정을 넘은 것이므로 버린다
+            tail[r["stn"]] = (round(cur - b, 1) if r["quality"] == "ok"
+                              and b is not None and cur is not None and cur >= b else None)
+            m60[r["stn"]] = r["rn_60m"] if r["quality"] == "ok" else None
+    return minute_tm, tail, m60
+
+
+def rain(hours: int = 12, now: datetime | None = None, src: str = "kma", tail: bool = True) -> dict:
     """지점별 시간대별 강수량 + 기간 누적.
 
     `src`
       kma      기상청 AWS 56개소. 마지막 칸은 매분자료로 보강한다.
       bangjae  스방 265개소. 후보가 다섯 배라 **다우지점이 훨씬 촘촘하다**
                (고성 학림 500.5mm를 기상청 AWS는 아예 못 본다).
+    `tail`
+      False 면 정시까지만 — 마지막 '정시 뒤 지금까지' 칸을 붙이지 않는다(지도 판 AWS 실시간 감시를 끈 동안).
     """
     if src == "bangjae":
-        return _rain_bangjae(hours, now)
+        return _rain_bangjae(hours, now, tail)
     now = now or clock.now()
     slots = _slots(hours, now)
     lo, hi = slots[0], slots[-1]
@@ -44,31 +80,13 @@ def rain(hours: int = 12, now: datetime | None = None, src: str = "kma") -> dict
                 r["rn_hr1"] if r["quality"] == "ok" else None
             )
 
-        # 정시 이후 구간 — 실제 최신 시각을 화면에 그대로 쓴다.
-        # 마지막 칸은 '정시부터 지금까지'다. 21:36이면 21:00~21:36.
-        # ⚠️ RN-60m(직전 60분)을 쓰면 안 된다. 앞 정시 칸과 겹쳐 누적이 부풀고,
-        #    칸이 가리키는 구간과 값이 담고 있는 구간이 어긋난다.
-        #    RN-60m은 참고값으로 툴팁에만 붙인다.
-        m = con.execute("SELECT MAX(tm) AS tm FROM obs_minute").fetchone()
-        minute_tm = m["tm"] if m and m["tm"] else None
-        minute: dict[str, float | None] = {}
-        m60: dict[str, float | None] = {}
-        if minute_tm:
-            base_day = {r["stn"]: r["rn_day"] for r in con.execute(
-                "SELECT stn, rn_day FROM obs_hourly WHERE tm=? AND quality='ok'", (slots[-1],))}
-            for r in con.execute(
-                "SELECT stn, rn_day, rn_60m, quality FROM obs_minute WHERE tm=?", (minute_tm,)
-            ):
-                b, cur = base_day.get(r["stn"]), r["rn_day"]
-                # RN_DAY는 01시에 0으로 리셋된다 — 증분이 음수면 자정을 넘은 것이므로 버린다
-                minute[r["stn"]] = (round(cur - b, 1) if r["quality"] == "ok"
-                                    and b is not None and cur is not None and cur >= b else None)
-                m60[r["stn"]] = r["rn_60m"] if r["quality"] == "ok" else None
+    # 정시 이후 구간 — 실제 최신 시각을 화면에 그대로 쓴다(지도 AWS 누적 '지금' 칸과 같은 셈, minute_tail).
+    minute_tm, minute, m60 = minute_tail(slots[-1]) if tail else (None, {}, {})
 
     # ⚠️ 매분 보강값으로 마지막 정시 칸을 덮으면 그 한 시간이 통째로 사라진다.
     #    칸을 하나 더 붙여야 '정시까지'와 '정시 이후 지금까지'가 둘 다 남는다.
     labels = [s[11:13] for s in slots]
-    partial = bool(minute_tm and minute_tm[11:16] > slots[-1][11:16])
+    partial = minute_tm is not None
     if partial:
         labels.append(minute_tm[11:16])
 
@@ -148,7 +166,7 @@ def aws_match() -> dict:
             "rows": rows, "unseen": unseen}
 
 
-def _rain_bangjae(hours: int, now: datetime | None = None) -> dict:
+def _rain_bangjae(hours: int, now: datetime | None = None, tail: bool = True) -> dict:
     """스방 265개소로 같은 모양을 만든다.
 
     ⚠️ **한 칸 밀어 끼운다.** 스방의 'H시'는 H:00~H:59, 기상청의 'H시'는
@@ -174,7 +192,7 @@ def _rain_bangjae(hours: int, now: datetime | None = None) -> dict:
             st["name"], st["sigun"] = r["name"], sites.sigun_of(r["stn"], r["sigun"])
 
     # 진행 중인 칸은 값이 있을 때만 붙인다(00분 직후에는 아직 비어 있다)
-    partial = any(st["v"].get(진행) is not None for st in rows.values())
+    partial = tail and any(st["v"].get(진행) is not None for st in rows.values())
     labels = [s[11:13] for s in slots] + ([기준.strftime("%H:%M")] if partial else [])
 
     out = []
@@ -194,9 +212,15 @@ def _rain_bangjae(hours: int, now: datetime | None = None) -> dict:
             # 위치 — 경남 AWS 목록(시군 + 장치명), 없으면 이름이 가리키는 읍면동 가운데(임시, est). 기상청 번호면 화면이 안다
             "pos": None if stn in STN_NAME else sites.position(stn, st["name"], st["sigun"]),
         })
+    # 스방 지점이 하나도 없으면(내부망 밖 — 서버 · 집) 빈 줄로 돌려준다. 화면이 '경남 AWS 안 됨→기상청'으로 물러서
+    # 기상청 자료(매분 보강 마지막 칸 포함)를 따로 받는다.
+    # ⚠️ 아래에서 기상청 줄을 덧붙이자 줄이 늘 차서 화면이 물러서지 않았다 — 서버 화면에서 매분 칸이 사라졌다(10-23)
+    if not rows:
+        return {"labels": labels, "hours": hours, "src": "bangjae", "src_label": "경남+기상청 AWS 0개소",
+                "count": 0, "base_hour": slots[-1][11:16], "minute_tm": None, "missing": len(slots), "rows": []}
     # 기상청 지점은 스방이 아니라 **기상청 API 값**(obs_hourly · 매분 보강)으로 — 스방이 기상청 몫을 떨군 적이 있고
     # (10.18. 11시~10.19., 54곳 다), 외부망 화면(기상청 직접)과 같은 지점이 다른 값이면 헷갈린다. 경남 AWS 만 스방에서.
-    k = rain(hours, now, src="kma")
+    k = rain(hours, now, src="kma", tail=tail)
     kp = bool(k["minute_tm"])
     for r in k["rows"]:
         d = r["d"][:len(slots)] + ([r["d"][-1] if kp else None] if partial else [])

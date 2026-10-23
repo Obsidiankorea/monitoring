@@ -48,6 +48,8 @@ STATIC = Path(__file__).parent / "web" / "static"
 RESTART_CODE = 42
 
 COLLECTORS = {"rain": rain.collect, "forecast": forecast.collect,
+              # 매분자료만 1분마다 — 지도 AWS 층 '지금' 칸과 지금 오는 비(정시 자료는 rain 이 10분마다)
+              "minute": rain.collect_minute,
               "alerts": alerts.collect, "qpf": qpf.collect,
               # 스방은 기상청과 **다른 서버**라 따로 돈다(계정 없으면 조용히 건너뜀)
               "bangjae": bangjae_rain.collect,
@@ -55,6 +57,12 @@ COLLECTORS = {"rain": rain.collect, "forecast": forecast.collect,
               "short": shortfc.collect,
               # 경남 지도 — 500m 격자(15분·60분·일)와 실황 5km. 경남 bbox 만 잘라 둔다.
               "grid": grid_rain.collect, "odam": grid_rain.collect_odam}
+
+def intervals() -> dict:
+    """수집 주기 — 저장한 것 위에 기본값을 깐다. 저장한 뒤에 생긴 수집기(minute 등)도 기본 주기로 돈다.
+    ⚠️ 저장한 것만 읽으면 새 수집기가 영영 예약되지 않는다."""
+    return {**INTERVALS, **db.get_setting("intervals", INTERVALS)}
+
 
 # 한 자료를 두 번 동시에 받지 않게 — 주기가 겹치거나 수동 조회가 끼어들 수 있다
 _locks = {k: asyncio.Lock() for k in COLLECTORS}
@@ -103,8 +111,8 @@ async def lifespan(app: FastAPI):
     app.state.skip = skip
     if skip:
         log.info("수집기 끔(SKIP_COLLECT): %s", ", ".join(sorted(skip)))
-    for kind, sec in db.get_setting("intervals", INTERVALS).items():
-        if kind in skip:
+    for kind, sec in intervals().items():
+        if kind in skip or kind not in COLLECTORS:
             continue
         sched.add_job(run_one, "interval", seconds=sec, args=[kind],
                       id=kind, max_instances=1, coalesce=True)
@@ -133,15 +141,16 @@ app = FastAPI(title="경남 기상 대시보드", lifespan=lifespan)
 
 @app.get("/api/rain")
 async def api_rain(hours: int = Query(12, ge=1, le=72),
-                   src: str = Query("kma", pattern="^(kma|bangjae)$")):
-    """지점별 강수량. `src=bangjae` 면 스방 265개소.
+                   src: str = Query("kma", pattern="^(kma|bangjae)$"), tail: bool = True):
+    """지점별 강수량. `src=bangjae` 면 스방 265개소. `tail=0` 이면 정시까지만(마지막 '정시 뒤 지금까지' 칸을 붙이지 않는다 —
+    지도 판에서 AWS 실시간 감시를 끈 동안 위 카드가 지도와 같은 정시를 보이게).
 
     화면이 더 긴 구간을 고르면 그만큼 과거를 채운다.
     ⚠️ 그 전에는 26시간 앞이 영원히 비어 있었다 — '2일'을 골라도 그래프 왼쪽이
        통째로 빈 채였다. 여기서 깊이를 올리고 곧바로 한 번 받아 온다.
     """
     grew = rain.want_depth(hours)
-    out = queries.rain(hours, src=src)
+    out = queries.rain(hours, src=src, tail=tail)
     # 빈 시각이 있으면 지금 채운다. 이미 받는 중이면 겹쳐 부르지 않는다.
     kind = "bangjae" if src == "bangjae" else "rain"
     if (grew or out.get("missing")) and not _locks[kind].locked() and not config.DEMO:
@@ -332,7 +341,9 @@ async def api_grid(layer: str, tm: str | None = None, test: bool = False,
     """한 층의 격자 — 0.1㎜ uint16(65535 = 결측), 행은 남→북, gzip.
 
     layer = obs15 | obs60 | obsday | acc | aws | aws60 | odam | vsrt+N(1~6) | shrt_today | shrt_tomorrow
-    aws60(AWS 1시간)은 tm = 정시(YYYYMMDDHH00) — 없으면 관측소 값이 든 가장 최근 정시.
+    aws60(AWS 1시간)은 tm = 정시(YYYYMMDDHH00) 또는 매분 시각(그 분의 직전 60분, 기상청만) — 없으면 '지금'
+    (마지막 정시 뒤 매분자료가 있으면 그 분, 없으면 관측소 값이 든 가장 최근 정시). aws(AWS 누적)도 '지금' 칸까지 잇는다.
+    '지금' 칸이면 X-Grid-Live = 그 매분 시각.
     acc(누적)는 hours · since(today|yesterday|hours) 구간 — 없으면 지도 설정(강수 누적 카드와 같은 구간).
     `test=1` 이면 합성 격자(비 없는 날 화면 점검용).
     `case=사례` 면 재현 사례 — layer = obs60(1시간) | acc(사례 누적).
@@ -353,7 +364,7 @@ async def api_grid(layer: str, tm: str | None = None, test: bool = False,
     h, w = gridstore.shape(fr["grid"])
     hd = {"Content-Encoding": "gzip", "X-Grid": fr["grid"], "X-Grid-Shape": f"{h},{w}",
           "X-Grid-Tm": fr["tm"], "Cache-Control": "no-cache"}
-    for k in ("tmfc", "capped", "from", "case", "n"):
+    for k in ("tmfc", "capped", "from", "case", "n", "live"):
         if k in fr:
             hd[f"X-Grid-{k.capitalize()}"] = str(fr[k])
     if "hours" in fr:
@@ -477,7 +488,7 @@ async def api_update_restart():
 @app.get("/api/status")
 async def api_status():
     return {"collect": queries.status(), "poll": POLL_DEFAULT,
-            "intervals": db.get_setting("intervals", INTERVALS),
+            "intervals": intervals(),
             "qpf": qpf.cfg(), "publish": db.publish_stats()}
 
 
@@ -487,7 +498,7 @@ async def api_settings_get():
     c = qpf.cfg()
     return {"qpf": c, "frames": len(qpf.frame_efs(c)),
             "publish": db.publish_stats(),
-            "intervals": db.get_setting("intervals", INTERVALS)}
+            "intervals": intervals()}
 
 
 @app.put("/api/settings/qpf")
@@ -511,7 +522,7 @@ async def api_settings_qpf(body: dict):
 @app.put("/api/settings/intervals")
 async def api_settings_intervals(body: dict):
     """수집 주기. ⚠️ 화면 갱신 주기와 다르다 — 이건 기상청을 실제로 부르는 간격이다."""
-    cur = db.get_setting("intervals", INTERVALS)
+    cur = intervals()
     for k in COLLECTORS:
         if k in body:
             sec = max(30, min(3600, int(body[k])))
