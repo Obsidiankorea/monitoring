@@ -96,6 +96,22 @@ def gn_sites() -> list[dict]:
             for i, s in enumerate(x for x in sites if x["org"] == "gn")]
 
 
+def off_key(stn: str, name: str, sigun: str, org: str) -> str:
+    """비활성 지점 열쇠 — 기상청 AWS 는 지점번호, 경남 AWS 는 'gn:시군:목록 이름'.
+    경남 AWS 는 스방 장치코드(카드)와 지도 관측소 번호(G…)가 달라 목록 이름으로 맞춘다."""
+    if org == "kma":
+        return str(stn)
+    a = aws_site(name, sigun)
+    return f"gn:{sigun}:{a['name'] if a else name}"
+
+
+def off_keys() -> set[str]:
+    """지도 판에서 비활성화한 AWS(서버 설정 map.aws_off) — 면 · 카드 · 지금 오는 비 계산에서 뺀다."""
+    from . import db
+    lst = (db.get_setting("map", {}) or {}).get("aws_off") or []
+    return {str(x.get("id")) for x in lst if isinstance(x, dict) and x.get("id")}
+
+
 def org_of(stn: str, name: str, sigun: str, kma: bool) -> str:
     """관리기관 — 'kma'(기상청 AWS) | 'gn'(경남 AWS). 기상청 지점번호로 오면 기상청, 아니면 목록, 목록에 없으면 경남."""
     if kma:

@@ -219,3 +219,38 @@ def test_grid_acc_stations_stay_on_the_hour_without_minute_at_the_slot(store, td
         _minute(c, "2026-10-03 15:40", "155", 12.0, 2.0)
     st = gridview.stations("acc")
     assert st["tm"] == "202610031540" and {x["stn"]: x for x in st["rows"]}["155"]["v"] == 3.0
+
+
+def test_disabled_aws_left_out_of_surface_cards_and_now(store, tdb, monkeypatch):
+    """지도에서 비활성화한 AWS(map.aws_off) — 관측소 점은 q='off'(값은 남긴다), 면(IDW) · 카드(/api/rain) ·
+    지금 오는 비에서 뺀다. 경남 AWS 는 '시군:목록 이름' 열쇠로(스방 장치코드와 지도 G 번호가 다르다)."""
+    _clear()
+    monkeypatch.setattr(gridview, "setting", lambda: {"acc_hours": 1, "acc_from": "hours"})
+    _grids(store, "202610031500")
+    hl = next(s for s in sites.gn_sites() if s["sigun"] == "고성" and s["name"] == "학림")
+    with tdb.tx() as c:
+        c.execute("INSERT INTO obs_hourly VALUES('155', '2026-10-03 15:00', 1, 1, 0, 'ok', 'x')")
+        c.execute("INSERT INTO obs_hourly VALUES('162', '2026-10-03 15:00', 12, 12, 0, 'ok', 'x')")
+        c.execute("INSERT INTO bangjae_hourly VALUES('2026-10-03 14:00', 'BJ7', '학림', '고성', 30, 'x')")
+        _minute(c, "2026-10-03 15:00", "155", 1, 1)
+        _minute(c, "2026-10-03 15:00", "162", 12, 12)
+    now = datetime(2026, 10, 3, 15, 20)
+    monkeypatch.setattr(gridview.clock, "now", lambda: now)
+    assert gridview.frame("aws", now=now)["n"] == 3
+    tdb.put_setting("map", {"aws_off": [{"id": "155", "name": "창원", "sigun": "창원", "org": "kma"},
+                                        {"id": "gn:고성:학림", "name": "학림", "sigun": "고성", "org": "gn"}]})
+    _clear()
+    by = {x["stn"]: x for x in gridview.stations("aws")["rows"]}
+    assert by["155"]["q"] == "off" and by["155"]["v"] == 1.0 and by[hl["stn"]]["q"] == "off"
+    assert by["162"]["q"] == "ok"
+    assert gridview.frame("aws", now=now)["n"] == 1                       # 162 만 — 면에서 둘을 뺐다
+    assert all(r["stn"] != "155" for r in queries.rain(1, now)["rows"])
+    assert all(r["stn"] != "155" for r in queries.minute_top(8)["r60"])
+    assert all(r["name"] != "학림" for r in queries._rain_bangjae(1, now)["rows"])
+    # 설정 검사 — 목록 · 줄 모양
+    monkeypatch.setattr(gridview, "setting", lambda: dict(gridview.SETTING_DEFAULT))
+    got = gridview.put_setting({"aws_off": [{"id": "192", "name": "진주", "sigun": "진주", "org": "kma"}] * 2})
+    assert [x["id"] for x in got["aws_off"]] == ["192"]                   # 겹치면 하나로
+    for bad in ({"aws_off": "192"}, {"aws_off": [{"name": "진주"}]}):
+        with pytest.raises(ValueError):
+            gridview.put_setting(bad)

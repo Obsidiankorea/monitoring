@@ -699,6 +699,14 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 #over .st.none path { fill: none; stroke: var(--ink-3); stroke-dasharray: 2 2; }
 #over .st.miss path { fill: none; stroke: var(--ink-3); }
 #over .st.miss line { stroke: var(--ink-2); stroke-width: 1.6; stroke-linecap: round; }
+/* 비활성화한 AWS — 계산에서 뺐다. 회색 속 · 빨간 빗금(오른쪽 클릭 → 다시 켜기) */
+#over .st.off path { fill: color-mix(in oklab, var(--ink-3) 30%, transparent); stroke: var(--lv-fail); stroke-width: 1.4; }
+#over .st.off line { stroke: var(--lv-fail); stroke-width: 1.8; stroke-linecap: round; }
+#stn-pop { z-index: 40; }
+#prefs .pf-on { font: 600 12.5px var(--sans); color: var(--ink); background: transparent; border: 1px solid var(--line);
+  border-radius: 7px; padding: 3px 10px; cursor: pointer; margin-left: auto; }
+#prefs .pf-on:hover { background: color-mix(in oklab, var(--accent) 16%, transparent); }
+#prefs .offnm small { color: var(--ink-3); margin-left: 6px; }
 #over .st text { font-family: var(--mono); font-weight: 600; fill: var(--ink); dominant-baseline: central; }
 #over .st .n { font-family: var(--sans); font-weight: 700; }
 /* 기상청 색(알록달록) — 값 글자가 색 칸처럼 읽혔다. 바탕 상자 위에 쓴다(drawStations) */
@@ -835,6 +843,7 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 </style>
 
 <main id="stage">
+  <div class="rng-pop" id="stn-pop" hidden role="menu"></div>
   <div id="mapwrap">
     <svg id="under"></svg>
     <canvas id="cv"></canvas>
@@ -1049,7 +1058,7 @@ const COLLECT_OF = { obs15: "grid", obs60: "grid", obsday: "grid", acc: "grid", 
                      shrt_today: "short", shrt_tomorrow: "short" };
 const SET_DEFAULT = { flow_step: 10, flow_hours: 6, play_ms: 1200, tl_on: false, tl_stat: "max",
                       panel: "cards", acc_hours: 12, acc_from: "hours", acc_basis: "aws", sel_zoom: true, acc_fc: true, acc_h1: true,
-                      acc_per: 1, acc_full: false, aws_live: false, acc_qpf: false, qpf_ms: 600, acc_date: "", acc_hdr_pin: true };
+                      acc_per: 1, acc_full: false, aws_live: false, acc_qpf: false, qpf_ms: 600, acc_date: "", acc_hdr_pin: true, aws_off: [] };
 
 let META = null, TOPO = null, GEO = null, MSIG = null, MEMD = null, EMDN = null;
 let SET = { ...SET_DEFAULT };
@@ -3592,6 +3601,10 @@ function drawStations() {
       const k = stepIdx(val(s), steps);
       marks.push(k ? `<g class="st${dim}"><path d="${dia(x, y, r)}" style="fill:${css[k - 1]}"/></g>`
                    : `<g class="st z${dim}"><path d="${dia(x, y, r * 0.8)}"/></g>`);
+    } else if (!fc && s.q === "off") {                     // 비활성화 — 계산에서 뺐다
+      const q = r * 0.55;
+      marks.push(`<g class="st off${dim}"><path d="${dia(x, y, r * 0.8)}"/>
+        <line x1="${(x - q).toFixed(1)}" y1="${(y + q).toFixed(1)}" x2="${(x + q).toFixed(1)}" y2="${(y - q).toFixed(1)}"/></g>`);
     } else if (!fc && s.q === "missing") {
       const q = r * 0.42;
       marks.push(`<g class="st miss${dim}"><path d="${dia(x, y, r * 0.8)}"/>
@@ -3680,6 +3693,7 @@ function stationTip(s) {
   const has = s.q === "ok" || s.q === "part";
   const gap = STN.status !== "forecast" && s.q === "part" ? ` · ${s.miss ? `${s.miss}시간` : "일부 시각"} 빠진 합(실제는 이보다 클 수 있다)` : "";
   const obs = STN.status === "forecast" ? "예측 화면" : has ? `${(s.v * fac).toFixed(1)}㎜`
+    : s.q === "off" ? `비활성 — 계산에서 뺐다${s.v != null ? `(값 ${(s.v * fac).toFixed(1)}㎜)` : ""} · 오른쪽 클릭으로 다시 켜기`
     : s.q === "missing" ? "결측" : "값 없음";
   const grid = gv === undefined ? "—" : gv === MISSING ? "결측" : `${(gv / 10 * fac).toFixed(1)}㎜`;
   const diff = has && gv !== undefined && gv !== MISSING ? gv / 10 * fac - s.v * fac : null;
@@ -3830,6 +3844,8 @@ function helpHtml(tab) {
     <dt>패널 가득</dt><dd>위 카드 머리의 네 귀 단추 · <code>G</code> — 지금 오는 비 · 예측 상위를 감추고 위 카드가 패널을 다 쓴다. 다시 누르면 돌아온다</dd>
     <dt>줄에 마우스</dt><dd>지도에 그 시군 · 지점 · 칸까지 선이 그어진다</dd>
     <dt>관측소에 마우스</dt><dd>실측과 그 칸 격자 값, 차이(격자 − 관측)</dd>
+    <dt>관측소 오른쪽 클릭</dt><dd>비활성화 — 주변과 동떨어진 AWS(고장 · 막힘)를 계산에서 뺀다. AWS 면은 둘레 관측소로 다시 메우고 강수 누적 카드 ·
+      지금 오는 비에서도 빠진다(종합 화면도). 점은 회색 · 빨간 빗금. 다시 오른쪽 클릭하거나 설정 › 관측소 목록에서 다시 켠다</dd>
     <dt>왼쪽 위 제목</dt><dd>누르면 층 메뉴 — 실측(15분 · 1시간 · 누적) · 예측(초단기 · 단기 오늘/내일). ↑↓ · Enter, 숫자 <code>1</code>~<code>6</code> 도 된다.
       실측 머리의 <b>자료</b>(격자 500m | AWS, <code>B</code>)가 1시간 · 누적 층과 오른쪽 '강수 누적' 카드를 같이 바꾼다. 1시간 줄의 '5km 실황'은 동네예보 실황</dd>
     <dt>오른쪽 위 아이콘</dt><dd>창 = 오른쪽 패널(<code>L</code>) · ? = 이 창 · 톱니 = 설정. 설정 › 화면에서 항상 · 마우스를 움직이면 · 숨김(제목 메뉴 아래에도 있다)</dd>
@@ -3968,6 +3984,12 @@ function openPrefs() {
     <div class="row"><span class="k">오른쪽 위 도구</span><span class="seg">${[["show", "항상"], ["auto", "마우스를 움직이면"], ["hide", "숨김"]]
       .map(([v, l]) => `<button data-tools="${v}" class="${TOOLS === v ? "on" : ""}">${l}</button>`).join("")}</span></div>
     <div class="row"><span class="k"></span><span class="note">패널 · 도움말 · 설정 — 숨겨도 제목 메뉴 아래와 단축키(L · ? · Ctrl+,)로 연다.</span></div>
+    <h4>관측소</h4>
+    <div class="row"><span class="k">비활성 AWS</span><span class="note">${offList().length ? `${offList().length}곳 — 면(AWS 누적 · 1시간) · 강수 누적 카드 · 지금 오는 비(종합 화면도)에서 뺐다.` : "없음."}
+      지도에서 관측소(S)를 켜고 점을 오른쪽 클릭 → 비활성화. 주변과 동떨어진 값(고장 · 막힘)을 빼고 둘레 관측소로 면을 다시 메운다.</span></div>
+    ${offList().map(x => `<div class="row"><span class="k">${x.sigun}</span><span class="offnm">${x.name}<small>${x.org === "gn" ? "경남 AWS" : `기상청 ${x.id}`}</small></span>
+      <button class="pf-on" data-id="${x.id}">다시 켜기</button></div>`).join("")}
+    ${offList().length > 1 ? `<div class="row"><span class="k"></span><button class="pf-on" data-id="*">모두 다시 켜기</button></div>` : ""}
     <h4>데모</h4>
     <div class="demo-list" id="pf-demo"><div class="al-none">읽는 중…</div></div>
     <div class="keys"><kbd>1</kbd>~<kbd>8</kbd> 층 · <kbd>Space</kbd> 재생 · <kbd>←</kbd><kbd>→</kbd> 한 장씩 · <kbd>L</kbd> 패널 · <kbd>A</kbd> 특보 · <kbd>S</kbd> 관측소 · <kbd>V</kbd> 지점 값 · <kbd>B</kbd> 누적 기준 · <kbd>F</kbd> 누적 예상 · <kbd>H</kbd> 최근 1시간 · <kbd>G</kbd> 위 카드 가득 · <kbd>R</kbd> 실시간 감시 · <kbd>Q</kbd> 초단기예측 이미지 · <kbd>T</kbd> 테스트 · <kbd>?</kbd> 도움말 · <kbd>Ctrl</kbd>+<kbd>,</kbd> 설정</div>
@@ -3996,6 +4018,10 @@ function openPrefs() {
   for (const b of $("prefs").querySelectorAll("button[data-tools]")) b.onclick = () => { setTools(b.dataset.tools); openPrefs(); };
   for (const b of $("prefs").querySelectorAll("button[data-rng]")) b.onclick = () => { const [f, h] = RNG_OPTS[+b.dataset.rng]; setRange(f, h); openPrefs(); };
   // 초단기예측 이미지 길이 — 수집 설정(서버 qpf.ahead). 다음 발표분부터 그만큼 받는다
+  for (const b of $("prefs").querySelectorAll("button.pf-on")) b.onclick = async () => {
+    await putOff(b.dataset.id === "*" ? [] : offList().filter(x => x.id !== b.dataset.id));
+    openPrefs();
+  };
   for (const b of $("prefs").querySelectorAll("button[data-ahead]")) b.onclick = async () => {
     const v = +b.dataset.ahead;
     try {
@@ -4031,6 +4057,53 @@ toolsWake();                               // 처음 뜰 때 한 번 보여 준�
 function closePrefs() { $("prefs").hidden = true; }
 $("prefs").addEventListener("click", ev => { if (ev.target.id === "prefs") closePrefs(); });
 
+/* ── AWS 비활성화 — 관측소 점 오른쪽 클릭. 주변과 동떨어진 값(진주 한 곳 1㎜, 둘레 12~14㎜ — 고장 · 막힘)을 계산에서 뺀다 ──
+   서버 설정 map.aws_off(벽면 화면 · 종합 화면도 같이) — 면(AWS 누적 · 1시간 IDW) · 강수 누적 카드 · 지금 오는 비에서 빠진다.
+   점은 남겨(회색 · 빨간 빗금) 툴팁에 그 값을 적는다. 설정(Ctrl+,) › 관측소 에 목록 · 다시 켜기 */
+const offList = () => (Array.isArray(SET.aws_off) ? SET.aws_off : []);
+const isOff = key => offList().some(x => x.id === key);
+function stnPop(close) {
+  if (close === null) { $("stn-pop").classList.remove("open"); $("stn-pop").hidden = true; }
+}
+function stnMenu(ev, st) {
+  const pop = $("stn-pop"), off = isOff(st.key), rc = $("stage").getBoundingClientRect();
+  const v = st.v != null ? `${(+st.v * factor()).toFixed(1)}㎜` : "값 없음";
+  pop.innerHTML = `<div class="g">${st.sigun} · ${st.name}</div>`
+    + `<div class="note">${st.org === "gn" ? "경남 AWS" : `기상청 AWS ${st.stn}`} · 지금 이 층 ${v}</div>`
+    + `<button data-a="t" class="${off ? "on" : ""}">${off ? "다시 켜기 — 계산에 넣기" : "비활성화 — 계산에서 빼기"}</button>`
+    + `<div class="note">${off ? "" : "이 지점 없이 둘레 관측소로 면을 다시 메운다(카드 · 지금 오는 비에서도 뺀다). "}목록은 설정(Ctrl+,) › 관측소</div>`;
+  pop.hidden = false;
+  pop.style.left = Math.max(4, Math.min(ev.clientX - rc.left, rc.width - pop.offsetWidth - 8)) + "px";
+  pop.style.top = Math.max(4, Math.min(ev.clientY - rc.top, rc.height - pop.offsetHeight - 8)) + "px";
+  void pop.offsetWidth; pop.classList.add("open");
+  pop.querySelector("button").onclick = e => {
+    e.stopPropagation(); stnPop(null);
+    putOff(off ? offList().filter(x => x.id !== st.key) : [...offList(), { id: st.key, name: st.name, sigun: st.sigun, org: st.org }]);
+  };
+}
+async function putOff(list) {
+  SET.aws_off = list;
+  try {
+    await fetch("/api/settings/map", { method: "PUT", headers: { "Content-Type": "application/json" },
+                                       body: JSON.stringify({ aws_off: list }) });
+  } catch {}
+  // 기억해 둔 면 · 통계 · 관측소 값을 버리고 새로 — 지도 · 재생 흐름 · 카드가 같이 바뀐다
+  GRIDS.clear(); STATS.clear(); STNC.clear(); OFF.clear(); EMDC.clear();
+  show(); loadFlow(); CARDS = null; loadCards();
+}
+$("stage").addEventListener("contextmenu", ev => {
+  if (CASE || !V || !GEO || ev.target.closest("#tl, #play, #legend, #layers, #rail, #pop, #stn-pop")) return;
+  const rc = $("stage").getBoundingClientRect();
+  const mx = (ev.clientX - rc.left - MT.tx) / MT.sc, my = (ev.clientY - rc.top - MT.ty) / MT.sc;
+  const st = stationAt(mx, my);
+  if (!st || !st.key) return;
+  ev.preventDefault();
+  $("tip").hidden = true;
+  stnMenu(ev, st);
+});
+document.addEventListener("pointerdown", ev => {
+  if (!$("stn-pop").hidden && !ev.target.closest?.("#stn-pop")) stnPop(null);
+});
 /* 초단기예측 이미지 길이(분) — 수집 설정 qpf.ahead(180 · 240 · 300 · 360). 설정 창을 열 때 읽는다 */
 let QCFG_AHEAD = null;
 async function loadQcfg() { try { QCFG_AHEAD = (await getJson("/api/settings")).qpf?.ahead ?? null; } catch {} }
@@ -4388,6 +4461,7 @@ document.addEventListener("keydown", ev => {
   if ((ev.ctrlKey || ev.metaKey) && ev.key === ",") { ev.preventDefault(); $("prefs").hidden ? openPrefs() : closePrefs(); return; }
   if (ev.key === "Escape") {
     if (!$("acc-ctx").hidden) { accCtx(null); return; }
+    if (!$("stn-pop").hidden) { stnPop(null); return; }
     if (!$("prefs").hidden) closePrefs(); else if (!$("help").hidden) closeHelp(); else if (selOn()) selectSig(null);
     return;
   }

@@ -516,7 +516,7 @@ def _station_sums(want: list[str], base: list[dict], tail: dict | None = None, l
     if live and tail:
         src += f" + {want[-1][8:10]}:00~{live[8:10]}:{live[10:12]}(매분)"
     return {"tm": live if live and tail else want[-1], "from": want[0], "status": "ok" if vals or tail else "none",
-            "src": src, "rows": rows, **({"live": live} if live and tail else {})}
+            "src": src, "rows": _mark_off(rows), **({"live": live} if live and tail else {})}
 
 
 # ── AWS 누적 면 — 관측소 값만으로(격자 분석값을 쓰지 않는다) ─────────────────────
@@ -573,9 +573,11 @@ def aws_frame(hours: int, since: str | None, now: datetime | None = None, test: 
     if test:                                   # 합성 누적 격자를 관측소 자리에서 읽어 — 모양 점검용
         tot = acc_sum(hours, since, now=now, test=True)["total"]
         hb = gridstore.geo()["hr"]["bbox"]
-        base = [{**s, "org": "kma"} for s in station_sites()["stations"]] + sites.gn_sites()
+        base, off = _kma_gn_base(), sites.off_keys()
         pts = []
         for s in base:
+            if s["key"] in off:
+                continue
             c, r = round(s["x"]) - hb["i0"], round(s["y"]) - hb["j0"]
             if 0 <= r < hb["h"] and 0 <= c < hb["w"] and np.isfinite(tot[r, c]):
                 pts.append((s["x"], s["y"], float(tot[r, c])))
@@ -604,17 +606,33 @@ def _hour_keys(now: datetime, test: bool) -> list[str]:
 
 
 def _kma_gn_base() -> list[dict]:
-    return [{k: s[k] for k in ("stn", "name", "sigun", "x", "y", "ht")} for s in station_sites()["stations"]] \
+    """관측소 자리 — 기상청 AWS + 경남 AWS. key = 비활성 열쇠(sites.off_key)."""
+    base = [{**{k: s[k] for k in ("stn", "name", "sigun", "x", "y", "ht")}, "org": "kma"} for s in station_sites()["stations"]] \
         + sites.gn_sites()
+    for b in base:
+        b["key"] = sites.off_key(b["stn"], b["name"], b["sigun"], b["org"])
+    return base
+
+
+def _mark_off(rows: list[dict]) -> list[dict]:
+    """지도 판에서 비활성화한 지점 — q='off'(값은 남겨 툴팁에). IDW · 카드는 q 가 ok/part 인 것만 쓰므로 빠진다.
+    ⚠️ 주변과 동떨어진 값(진주 한 곳 1㎜, 둘레 12~14㎜)이 면을 끌어내리는 것을 사람이 골라 뺀다"""
+    off = sites.off_keys()
+    if off:
+        for r in rows:
+            if r.get("key") in off:
+                r["q"] = "off"
+    return rows
 
 
 def _sampled_pts(arr: np.ndarray) -> list[tuple[float, float, float]]:
     """테스트 — 합성 격자를 관측소 자리에서 읽은 값(모양 점검용, 실제 자료가 아니다)."""
     hb = gridstore.geo()["hr"]["bbox"]
     pts = []
-    for s in [{**s, "org": "kma"} for s in station_sites()["stations"]] + sites.gn_sites():
+    off = sites.off_keys()
+    for s in _kma_gn_base():
         c, r = round(s["x"]) - hb["i0"], round(s["y"]) - hb["j0"]
-        if 0 <= r < hb["h"] and 0 <= c < hb["w"] and np.isfinite(arr[r, c]):
+        if s["key"] not in off and 0 <= r < hb["h"] and 0 <= c < hb["w"] and np.isfinite(arr[r, c]):
             pts.append((s["x"], s["y"], float(arr[r, c])))
     return pts
 
@@ -641,7 +659,7 @@ def _minute_values(tm: str, base: list[dict]) -> dict:
         rows.append({**b, "v": None if bad else round(v, 1), "q": "missing" if bad else "ok"})
     return {"tm": tm, "status": "ok" if got else "none", "live": tm,
             "src": f"기상청 매분자료 {tm[8:10]}:{tm[10:12]} · 직전 60분 — 경남 AWS 는 정시 자료라 정시 칸에만" if got else "",
-            "rows": rows}
+            "rows": _mark_off(rows)}
 
 
 def aws_hour_now(now: datetime | None = None, test: bool = False) -> str | None:
@@ -706,7 +724,7 @@ def _test_station_values(layer: str, tm: str | None, base: list[dict]) -> dict:
         f = _tfac(b["stn"])
         ok = v == v
         rows.append({**b, "v": round(v * f, 1) if ok else None, "q": "ok" if ok else "missing"})
-    return {"tm": fr["tm"], "status": "test", "src": "합성 — 실제 자료 아님", "rows": rows}
+    return {"tm": fr["tm"], "status": "test", "src": "합성 — 실제 자료 아님", "rows": _mark_off(rows)}
 
 
 def stations(layer: str, tm: str | None = None, test: bool = False, case: str | None = None,
@@ -718,7 +736,7 @@ def stations(layer: str, tm: str | None = None, test: bool = False, case: str | 
     if case:
         from . import gridcase
         return {**head, **gridcase.stations(case, layer, tm, kma)}
-    base = kma + sites.gn_sites()
+    base = _kma_gn_base()
     kind, _ = split(layer)
     if kind in ("acc", "aws") and not test:
         upto = "grid" if kind == "acc" else tm if tm and len(tm) == 12 and tm.isdigit() else "minute"
@@ -760,7 +778,7 @@ def stations(layer: str, tm: str | None = None, test: bool = False, case: str | 
             bad = v is None or v < 0                     # 음수는 기상청 결측 표기다
             rows.append({**b, "v": None if bad else round(v, 1), "q": "missing" if bad else "ok"})
     status = "ok" if got else "none"
-    return {**head, "tm": tm, "status": status, "src": src if got else "", "rows": rows}
+    return {**head, "tm": tm, "status": status, "src": src if got else "", "rows": _mark_off(rows)}
 
 
 # ── 격자 누적 표 — 오른쪽 '강수 누적' 카드의 격자 기준(관측소 기준과 바꿔 본다) ─────────
@@ -1150,6 +1168,8 @@ SETTING_DEFAULT = {"layer": "obs60", "x4": False, "vsrt_n": 1,
                    "qpf_ms": 600,
                    # 강수 누적 카드 머리(제목 · 설명 · 단추) 고정 — 끄면 마우스를 올렸을 때만, 평소에는 시군 줄만
                    "acc_hdr_pin": True,
+                   # 비활성화한 AWS — [{id, name, sigun, org}]. 지도에서 관측소 점 오른쪽 클릭 → 비활성화. 면 · 카드 · 지금 오는 비에서 뺀다
+                   "aws_off": [],
                    # 지도 위에 겹칠 레이어(왼쪽 위 '레이어'에서 켠다). 차츰 늘린다.
                    "overlays": []}
 OVERLAYS = ("alerts", "stations", "stnval")   # stnval = 관측소 옆 값 글자(관측소에 딸림)
@@ -1199,6 +1219,17 @@ def put_setting(body: dict) -> dict:
         cur["acc_date"] = d
     if cur.get("acc_from") == "date" and not valid_date(cur.get("acc_date")):
         raise ValueError("날짜 지정 누적에는 acc_date 가 있어야 한다")
+    if "aws_off" in body:
+        lst = body["aws_off"]
+        if not isinstance(lst, list) or len(lst) > 300:
+            raise ValueError("aws_off 는 목록(300곳까지)")
+        clean = []
+        for x in lst:
+            if not isinstance(x, dict) or not isinstance(x.get("id"), str) or not 0 < len(x["id"]) <= 80:
+                raise ValueError("aws_off 줄은 {id, name, sigun, org}")
+            clean.append({"id": x["id"], "name": str(x.get("name") or "")[:40], "sigun": str(x.get("sigun") or "")[:10],
+                          "org": "gn" if x.get("org") == "gn" else "kma"})
+        cur["aws_off"] = list({c["id"]: c for c in clean}.values())
     if "overlays" in body:
         ov = body["overlays"]
         if not isinstance(ov, list) or any(x not in OVERLAYS for x in ov):

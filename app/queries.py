@@ -90,8 +90,11 @@ def rain(hours: int = 12, now: datetime | None = None, src: str = "kma", tail: b
     if partial:
         labels.append(minute_tm[11:16])
 
+    off = sites.off_keys()                     # 지도 판에서 비활성화한 AWS — 카드 · 표에서 뺀다
     out = []
     for stn, name in STN_NAME.items():
+        if stn in off:
+            continue
         vals = [series.get(stn, {}).get(s) for s in slots]
         if partial:
             vals.append(minute.get(stn))
@@ -196,7 +199,11 @@ def _rain_bangjae(hours: int, now: datetime | None = None, tail: bool = True) ->
     labels = [s[11:13] for s in slots] + ([기준.strftime("%H:%M")] if partial else [])
 
     out = []
+    off = sites.off_keys()
     for stn, st in rows.items():
+        org = sites.org_of(stn, st["name"], st["sigun"], stn in STN_NAME)
+        if sites.off_key(stn, st["name"], st["sigun"], org) in off:
+            continue                                  # 지도 판에서 비활성화한 지점
         vals = [st["v"].get(back[s]) for s in slots]
         if partial:
             vals.append(st["v"].get(진행))
@@ -208,7 +215,7 @@ def _rain_bangjae(hours: int, now: datetime | None = None, tail: bool = True) ->
             "sum": round(sum(ok), 1),
             "bad": len(vals) - len(ok),
             # 관리기관 — kma(기상청 AWS) | gn(경남 AWS). 화면이 막대 색을 가른다
-            "org": sites.org_of(stn, st["name"], st["sigun"], stn in STN_NAME),
+            "org": org,
             # 위치 — 경남 AWS 목록(시군 + 장치명), 없으면 이름이 가리키는 읍면동 가운데(임시, est). 기상청 번호면 화면이 안다
             "pos": None if stn in STN_NAME else sites.position(stn, st["name"], st["sigun"]),
         })
@@ -251,6 +258,7 @@ def minute_top(n: int = 8) -> dict:
     한 시간을 담고 있어서, 막 쏟아지기 시작한 곳을 한 박자 늦게 알린다.
     """
     n = max(1, min(20, int(n)))
+    off = sites.off_keys()                     # 지도 판에서 비활성화한 AWS 는 빼고
 
     def top(con, key):
         """그 값이 **실제로 든** 가장 최근 시각을 골라 상위 n곳.
@@ -269,7 +277,7 @@ def minute_top(n: int = 8) -> dict:
                 "sigun": STN_SIGUN.get(x["stn"], ""), "mm": x[key]}
                for x in con.execute(
                    f"SELECT stn, {key} FROM obs_minute WHERE tm=? AND quality='ok'", (tm,))
-               if x[key] is not None]
+               if x[key] is not None and x["stn"] not in off]
         out.sort(key=lambda x: -x["mm"])
         return tm, out[:n]
 
