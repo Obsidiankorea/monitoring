@@ -858,6 +858,37 @@ const STEPS = {
   // 재현 사례 누적 — 이틀에 900㎜ 가 오는 비라 하루 눈금(150㎜ 끝)으로는 거제가 통째로 한 색이 된다
   event: [1, 50, 100, 200, 300, 500, 700],
 };
+/* 누적(격자 · AWS) 눈금 — **자료 크기에 맞춰 자동으로 고른다.** 일곱 자 중 하나.
+   고르는 값 = 지금 그린 면의 경남 시군 최대 중 가장 큰 것(hi). hi 가 끝 눈금의 1.25배 안에 드는 가장 작은 자.
+   커질 때는 곧바로 올라가고, 작아질 때는 끝 눈금 안에 다 들 때만 내려간다(경계에서 갱신마다 깜빡이지 않게).
+   ⚠️ 예전에는 0.1·5·10·30·50·80·150 하나였다 — 30㎜ 안팎 비는 두세 색에 묻히고, 900㎜ 호우는 거의 한 색이었다.
+   재현 사례는 사례 눈금(event) 그대로 — 재생하면서 자가 바뀌면 시각끼리 견줄 수 없다 */
+const ACC_LADDER = [
+  [0.1, 1, 2, 4, 7, 10, 15],
+  [0.1, 2, 5, 10, 15, 20, 30],
+  [0.1, 5, 10, 20, 30, 45, 60],
+  [0.1, 10, 20, 40, 60, 90, 120],
+  [0.1, 20, 50, 80, 120, 180, 250],
+  [1, 30, 80, 150, 250, 350, 500],
+  [1, 50, 150, 300, 450, 600, 800],
+];
+const ACC_TIER = {}, ACC_HI = {};                       // 층마다(acc · aws) 고른 자 · 그때 hi
+const accSteps = k => ACC_LADDER[ACC_TIER[k] ?? 3];
+/* 지금 그린 누적 면(CURSTAT)으로 자를 고른다. 바뀌었으면 true(범례를 다시 그린다) */
+function updScale() {
+  if (CASE || !ACCK.has(kind) || !CURSTAT) return false;
+  const vals = CURSTAT.rows.filter(r => r.kind === "gn" && r.max != null).map(r => r.max);
+  const hi = vals.length ? Math.max(...vals) : 0, top = i => ACC_LADDER[i].at(-1);
+  let t = ACC_LADDER.findIndex((_, i) => hi <= top(i) * 1.25);
+  if (t < 0) t = ACC_LADDER.length - 1;
+  const cur = ACC_TIER[kind];
+  if (cur != null && t < cur && hi > top(t)) t = Math.min(cur, t + 1);
+  const was = ACC_HI[kind];
+  ACC_HI[kind] = hi;
+  if (t === cur) return was !== hi;                    // 범례의 '최대' 글자만 바뀐다
+  ACC_TIER[kind] = t;
+  return true;
+}
 /* 색 — 청색 램프(기본) ↔ 기상청 레이더 색. **범례 색 띠를 누르면** 바뀐다(서버 설정 `pal` — 화면 모두 같이, ?pal= 이 먼저).
    ⚠️ 기상청 색은 흉내 내지 않는다. 서버가 기상청 예측 분포(QPF) 그림 범례에서 그대로 뽑아 둔 24단계를 받아 쓴다
       (/api/qpf/legend — 종합 화면 예측 분포 범례와 같은 것. 레이더 영상과 같은 0.1·0.5·1·…·110㎜/h 단계).
@@ -954,7 +985,7 @@ let FEAT = null;                        // 시군 GeoJSON(강조용)
 const layerKey = () => kind === "vsrt" ? `vsrt+${vsrtN}` : kind;
 const metaOf = k => (META?.layers || []).find(x => x.id === k) || {};
 const stepsOf = k => (kmaOn() && HOURLY.has(k)) ? KMA_LG.steps
-  : k === "acc" ? (CASE ? STEPS.event : STEPS.day) : k === "aws" ? STEPS.day : k === "obs15" ? (x4 ? STEPS.m60 : STEPS.m15)
+  : k === "acc" ? (CASE ? STEPS.event : accSteps("acc")) : k === "aws" ? accSteps("aws") : k === "obs15" ? (x4 ? STEPS.m60 : STEPS.m15)
   : (k === "obsday" || k.startsWith("shrt")) ? STEPS.day : STEPS.m60;
 /* 15분 ×4 — 기상청 색이면 늘 ×4 다(레이더 색은 시간당 ㎜/h 의 자다) */
 const factor = () => (kind === "obs15" && (x4 || kmaOn())) ? 4 : 1;
@@ -1313,6 +1344,7 @@ function buildLegend() {
   lg.innerHTML = `<div class="lt">${unit}${x4b}</div>
     <div class="rows"><div class="band" title="${tip}" style="height:${bh}px">${cells}</div><div class="ticks">${ticks}</div></div>
     ${PAL === "kma" && !kma ? `<div class="note">기상청 색을 아직 못 받았다 — 예측 분포 그림을 한 번 받으면 생긴다. 지금은 청색</div>` : ""}
+    ${ACCK.has(kind) && !CASE ? `<div class="note" title="누적 눈금은 자료 크기에 맞춰 자동으로 고른다(일곱 자 중 하나) — 경남 시군 최대 중 가장 큰 값이 끝 눈금 근처에 오게. 갱신해서 커지면 곧바로, 작아지면 다 들 때 바뀐다">자동 눈금${ACC_HI[kind] != null ? ` · 최대 ${(+ACC_HI[kind]).toFixed(ACC_HI[kind] >= 100 ? 0 : 1)}㎜` : ""}</div>` : ""}
     <div class="sw"><b class="h"></b>결측(땅)</div>
     <div class="sw"><b style="background:var(--land)"></b>0 · 비 없음</div>`;
   const b = $("b-x4");
@@ -1584,6 +1616,7 @@ async function show(fade = false) {
     const [gr, st] = await Promise.all([fetchGrid(key, tm), fetchStat(key, tm)]);
     if (my !== SEQ) return;                     // 그새 다른 층을 골랐다
     CUR = gr; CURSTAT = st;
+    if (updScale()) buildLegend();          // 누적 — 자료 크기에 맞춘 눈금(바뀌면 범례 · 면 · 관측소 점이 같이)
     $("empty").hidden = true;
   } catch (e) {
     if (my !== SEQ) return;
@@ -3658,6 +3691,8 @@ function helpHtml(tab) {
     <dt>데모</dt><dd>설정 › 데모 — 실황 · 테스트(합성, <code>T</code>) · 재현 사례(지난 호우).
       테스트에서 시군을 누르면 내부망(경남 AWS)에서 보일 지점 목록 모양을 합성 지점으로 미리 본다</dd>
     <dt>ⓘ</dt><dd>레이어 · 범례 옆 <code>i</code> 에 올리거나 누르면 설명이 뜬다(누르면 고정, 밖을 누르면 닫힘)</dd>
+    <dt>누적 눈금은 자동</dt><dd>누적(격자 · AWS)은 자료 크기에 맞춰 일곱 자(끝 15 · 30 · 60 · 120 · 250 · 500 · 800㎜) 중 하나를 고른다 —
+      경남 시군 최대 중 가장 큰 값이 끝 눈금 근처에 오게. 커지면 곧바로, 작아지면 다 들 때 바뀐다. 범례 밑 '자동 눈금 · 최대'. 재현 사례는 고정</dd>
     <dt>범례 색 띠 누르기</dt><dd>청색 ↔ 기상청 레이더 색. 시간 강수(60분 · 실황 · 초단기, 15분은 ×4)는 레이더와 같은 ㎜/h 경계,
       누적은 단계는 그대로 두고 색만 레이더에서 빌린다. 레이더 색의 노랑 · 빨강 · 보라는 특보 선 색과 겹친다. <code>?pal=kma</code> 로 고정</dd>
     <dt>레이어</dt><dd>왼쪽 위. 기상특보 <code>A</code> · 관측소 <code>S</code> · 지점 강수량 글자 <code>V</code>(관측소를 켰을 때, 기본은 끔 — 점 색만으로도 단계가 읽힌다)</dd>
