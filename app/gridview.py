@@ -442,7 +442,8 @@ def _station_sums(want: list[str], base: list[dict]) -> dict:
         if not ok:
             rows.append({**b, "v": None, "q": "missing"})
         else:
-            rows.append({**b, "v": round(sum(ok), 1), "q": "ok" if len(ok) == len(want) else "part"})
+            rows.append({**b, "v": round(sum(ok), 1), "q": "ok" if len(ok) == len(want) else "part",
+                         "miss": len(want) - len(ok)})                 # 빠진 시각 수 — 화면은 숫자만, 툴팁에 이것
     return {"tm": want[-1], "from": want[0], "status": "ok" if vals else "none",
             "src": (f"기상청 정시자료{' + 경남 AWS(스방)' if gn else ''} {len(want)}시간 합") if vals else "", "rows": rows}
 

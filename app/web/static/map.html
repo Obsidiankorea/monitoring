@@ -608,6 +608,8 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 #over .st.miss line { stroke: var(--ink-2); stroke-width: 1.6; stroke-linecap: round; }
 #over .st text { font-family: var(--mono); font-weight: 600; fill: var(--ink); dominant-baseline: central; }
 #over .st .n { font-family: var(--sans); font-weight: 700; }
+/* 기상청 색(알록달록) — 값 글자가 색 칸처럼 읽혔다. 바탕 상자 위에 쓴다(drawStations) */
+#over .st rect.pill { fill: var(--panel); fill-opacity: .9; stroke: var(--line); stroke-width: 1; }
 #over .st.dim { opacity: .3; }
 /* 고른 시군 — 밖을 바다색으로 가라앉히고(스포트라이트) 밝은 겹선을 두른다.
    ⚠️ 강조색(파랑) 선 하나는 청색 강수 면에 묻혀 안 보였다 */
@@ -2492,14 +2494,14 @@ function renderAcc() {
     const lastObs = r.d.reduce((a, v, j) => (typeof v === "number" ? [r.dt[j], v] : a), null);
     const po = sline(r.dt, r.d), pf = sline(r.ft, r.fcd, lastObs);
     const rank = i < 3 && tot >= 0.1 ? `<span class="rk">${i + 1}</span>` : "";
-    const ge = r.part ? "≥" : "";
+    const ge = r.part ? ` title="일부 시각이 빠진 합 — 실제는 이보다 클 수 있다"` : "";
     const at = r.pos ? ` data-x="${r.pos.x}" data-y="${r.pos.y}"` : "";
     return `<div class="ar${r.det ? " det" : ""}${A.basis === "aws" && r.org === "kma" ? " kma" : ""}" data-s="${r.sig}" data-k="${r.sig}|${r.stn}"${at} title="${r.det ? "" : `${r.sig} — 눌러서 이 시군 ${A.basis === "grid" ? "읍면동" : "지점"} 보기`}">
       <div class="nm2">${rank}<small>${r.tag ?? r.sig}</small>${r.stn}</div>
       <div class="abar"><div class="o${A.day ? " dayb" : hw >= o - 0.05 && !r.fc ? " all" : ""}" style="width:${o.toFixed(1)}%"></div>
         ${h1 >= 0.1 ? `<div class="h${r.fc ? "" : " end"}${hw >= o - 0.05 ? " all" : ""}" style="left:${(o - hw).toFixed(1)}%;width:${hw.toFixed(1)}%" title="그중 최근 1시간 ${h1.toFixed(1)}㎜"></div>` : ""}
         ${r.fc ? `<div class="f" style="left:${o.toFixed(1)}%;width:${f.toFixed(1)}%"></div>` : ""}
-        <span class="v" style="${vpos}">${ge}${r.sum.toFixed(1)}${r.fc ? `<i>+${r.fc}</i>` : ""}</span></div>
+        <span class="v" style="${vpos}"${ge}>${r.sum.toFixed(1)}${r.fc ? `<i>+${r.fc}</i>` : ""}</span></div>
       <svg viewBox="0 0 ${SW.toFixed(0)} ${SH.toFixed(0)}" preserveAspectRatio="none">
         <path class="sp-a" d="${po.a}"/><path class="sp-l" d="${po.d}"/>
         <path class="sp-fa" d="${pf.a}"/><path class="sp-fl" d="${pf.d}"/>
@@ -2773,7 +2775,7 @@ function caseAccAws(i, dt, from) {
              sum: Math.round(sumv(seg) * 10) / 10, fc: 0, pos: { x: s.x, y: s.y }, det: selOn(),
              part: have.length > 0 && have.length < seg.length, dead: !have.length };
   });
-  const note = "기상청 정시자료(awsh) 매시 1시간 강수의 합" + (all.some(r => r.part) ? " · ≥ 는 일부 시각 결측(하한)" : "");
+  const note = "기상청 정시자료(awsh) 매시 1시간 강수의 합" + (all.some(r => r.part) ? " · 일부 시각이 빠진 지점은 있는 시각만 더했다(하한)" : "");
   if (selOn()) {
     const rows = all.filter(r => isSel(r.sig));
     return { rows, sel: selName(), sub: `${selName()} AWS ${rows.length}곳 · ${from}`, note };
@@ -3269,8 +3271,9 @@ function drawStations() {
   const placed = LABELBOX.concat(boxes), out = [];
   const hit = b => placed.some(p => b.x0 < p.x1 && b.x1 > p.x0 && b.y0 < p.y1 && b.y1 > p.y0);
   const inside = b => b.x0 >= 4 && b.y0 >= 4 && b.x1 <= V.W - 4 && b.y1 <= V.H - 4;
+  const pill = kmaOn();                  // 기상청 색(알록달록) 면 위에서는 글자에 바탕 상자 — 색 칸과 글자가 섞여 보이지 않게
   for (const s of wet) {
-    const t = (s.q === "part" ? "≥" : "") + val(s).toFixed(1);
+    const t = val(s).toFixed(1);         // 숫자만 — 빠진 시각이 있으면 툴팁에(몇 시간 빠졌나)
     const nm = selOn() || named.has(s.stn) ? s.name : "";
     const w = t.length * fs * 0.6 + (nm ? nm.length * fs * 0.98 + fs * 0.3 : 0) + 4, h = fs * 1.2;
     const ax = V.toX(s.x), ay = V.toY(s.y), gap = r + 3;
@@ -3281,6 +3284,8 @@ function drawStations() {
     }
     if (!best) continue;                 // 자리가 없으면 글자는 뺀다 — 점(색)은 남는다. 마우스를 올리면 값이 나온다
     placed.push(best);
+    if (pill) out.push(`<rect class="pill" x="${(best.x0 - 1).toFixed(1)}" y="${best.y0.toFixed(1)}" width="${(best.x1 - best.x0 + 1).toFixed(1)}"
+      height="${h.toFixed(1)}" rx="${(h * 0.25).toFixed(1)}"/>`);
     out.push(`<text x="${(best.x0 + 2).toFixed(1)}" y="${(best.y0 + h / 2).toFixed(1)}"
       style="font-size:${fs.toFixed(1)}px;stroke-width:${(fs * 0.2).toFixed(1)}px">${t}${nm ? `<tspan class="n" dx="${(fs * 0.3).toFixed(1)}">${nm}</tspan>` : ""}</text>`);
   }
@@ -3308,7 +3313,8 @@ function renderStnLegend() {
   else if (STN.status === "none") nt = `<div class="nt w">${hm(STN.tm)} 값을 아직 못 받았다</div>`;
   else {
     const ok = STN.rows.filter(s => s.q === "ok" || s.q === "part").length;
-    src = `${STN.src} · ${ok}곳 값 있음${STN.rows.some(s => s.q === "part") ? " · ≥ 는 일부 시각 결측(하한)" : ""}.<br>`;
+    const np = STN.rows.filter(s => s.q === "part").length;
+    src = `${STN.src} · ${ok}곳 값 있음${np ? ` · ${np}곳은 일부 시각이 빠진 합(실제는 이보다 클 수 있다 — 점에 올리면 몇 시간)` : ""}.<br>`;
   }
   const un = (STN?.unsited || SITES?.missing || []).map(m => `${m.name}(${m.stn})`).join(" · ");
   TIPS.set("stn-now", src
@@ -3336,12 +3342,13 @@ function stationAt(mx, my) {
 function stationTip(s) {
   const fac = factor(), gv = valueAt(s.x, s.y), site = SITEBY.get(s.stn);
   const has = s.q === "ok" || s.q === "part";
-  const obs = STN.status === "forecast" ? "예측 화면" : has ? `${s.q === "part" ? "≥" : ""}${(s.v * fac).toFixed(1)}㎜`
+  const gap = STN.status !== "forecast" && s.q === "part" ? ` · ${s.miss ? `${s.miss}시간` : "일부 시각"} 빠진 합(실제는 이보다 클 수 있다)` : "";
+  const obs = STN.status === "forecast" ? "예측 화면" : has ? `${(s.v * fac).toFixed(1)}㎜`
     : s.q === "missing" ? "결측" : "값 없음";
   const grid = gv === undefined ? "—" : gv === MISSING ? "결측" : `${(gv / 10 * fac).toFixed(1)}㎜`;
   const diff = has && gv !== undefined && gv !== MISSING ? gv / 10 * fac - s.v * fac : null;
   const who = s.org === "gn" ? `경남 AWS · ${s.sigun}${s.place ? ` · ${s.place}` : ""}` : `기상청 AWS ${s.stn} · ${s.sigun} ${site?.emd || ""}`;
-  return `<b>${s.name} ${obs}</b> · ${who}`
+  return `<b>${s.name} ${obs}</b>${gap} · ${who}`
     + `<div class="d">그 칸 ${kind === "aws" || kind === "aws60" ? "AWS 면" : "격자"} ${grid}${diff != null ? ` (면 − 관측 ${diff >= 0 ? "+" : ""}${diff.toFixed(1)})` : ""} · 해발 ${Math.round(s.ht || 0)}m${s.addr ? ` · ${s.addr}` : ""}${STN.src ? ` · ${STN.src}` : ""}</div>`;
 }
 
@@ -3461,7 +3468,7 @@ function helpHtml(tab) {
     <dt>누적 최대 칸</dt><dd>격자 기준 누적에서 그 시군(읍면동) 안 가장 큰 칸과 그 칸이 든 읍면동. 선 그래프는 그 칸의 매시 값</dd>
     <dt>0 · 결측 · 값 없음</dt><dd>0은 비가 안 온 것, 결측은 기상청이 값을 못 낸 것(지도 빗금 · 관측소 ×), 값 없음 · 조회 실패는 우리가 못 받은 것(점선). 셋을 섞지 않는다</dd>
     <dt>×4 환산</dt><dd>15분 값 × 4 — 시간당 기세로 60분치 · 특보 기준과 같은 자로 본다</dd>
-    <dt>≥ (하한)</dt><dd>일부 시각이 빠져 실제보다 작을 수 있는 합. 단기예보 PCP 30 상한도 같다</dd>
+    <dt>하한(빠진 시각)</dt><dd>구간 중 일부 시각 값이 없으면 있는 시각만 더한다 — 실제보다 작을 수 있다. 지점 글자 · 카드는 숫자만, 점에 마우스를 올리면 몇 시간 빠졌는지. 단기예보 PCP 30 상한도 같다</dd>
     <dt>산출 특보</dt><dd>실제 발표가 아니라 격자 3시간 · 12시간 합에 호우 기준(주의보 60 · 110 / 경보 90 · 180㎜)을 적용해 계산한 것</dd>
     <dt>기준 · 발표 · 대상시각</dt><dd>실측은 기준시각(그 시각까지), 예측은 발표시각(tmfc)과 대상시각(tmef). 60분 강수 13:00 은 12:00~13:00 몫</dd>
     <dt>정각</dt><dd>매시 00분. 격자 누적은 정각 60분 격자를 칸마다 더한다(빠진 정각은 수집기가 한 번에 4장씩 메운다)</dd>

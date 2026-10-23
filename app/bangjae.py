@@ -236,19 +236,33 @@ class Client:
         """하루치 **지점별 시간강우량**. [{stn, name, sigun, mm: [24개]}]
 
         화면 `보고서 > 시간강우량`(dt096). 지점마다 두 줄이 온다 —
-        `gubun='시간'`(시간강우량)과 `gubun='일'`(일누적). 시간 줄만 쓴다.
+        `gubun='시간'`(시간강우량)과 `gubun='일'`(일누적). 시간 줄을 쓰고, 00시만 일 줄로 메운다(아래).
 
         ⚠️ `timesNN` 은 시계 시각이 **아니라** toTime 기준 24시간 창이다.
            `toTime=23` 으로 부를 때만 times00=00시 … times23=23시 로 떨어진다.
            그래서 언제나 23 으로 부른다.
         ⚠️ 시각은 **스방 기준**이다 — times07 은 07:00~07:59 다.
            기상청의 07시(06:00~07:00)와 한 칸 어긋난다.
+        ⚠️ **경남 AWS 는 시간 줄의 00시 칸이 늘 비어 온다**(기상청 지점은 있다). 그래서 어제 0시부터 같은 누적은
+           경남 AWS 가 모두 한 시간 빠진 하한이 됐다 — 10.19. 00시 호우(78곳)가 통째로 빠졌다. 일 줄은 그 날 00시부터의
+           누계라(일[h] − 일[h−1] = 시간[h] — 2026-10-19 실측 약 6천 칸 다 맞음, 기상청 지점은 시간[0] = 일[0] 54곳 다 맞음)
+           00시는 **일[0]** 이 그 값이다. 근처 기상청 01시(00~01시)와도 가장 가깝다(평균 차 1.3㎜, 앞뒤 시각은 4~8㎜).
 
         시군 표기가 관리주체마다 다르게 온다(기상청 '거창군' / 경남 '거창').
         그대로 두면 한 시군이 둘로 갈려 평균이 깨진다. 짧은 이름으로 맞춘다.
         """
         rows = await self.get("/dt096/list", orgCode="", rtuMbdy="total",
                               toDate=str(day), toTime="23")
+        def v(r: dict, h: int):
+            raw = str(r.get(f"times{h:02d}") or "").strip()
+            if not raw:
+                return None                # 빈 칸은 결측이다. 0 으로 바꾸지 않는다
+            try:
+                return max(0.0, float(raw))
+            except ValueError:
+                return None
+
+        acc = {str(r.get("lnk_id") or "").strip(): r for r in rows if str(r.get("gubun")) == "일"}
         out = []
         for r in rows:
             if str(r.get("gubun")) != "시간":
@@ -256,20 +270,13 @@ class Client:
             stn = str(r.get("lnk_id") or "").strip()
             if not stn:
                 continue
-
-            def v(h: int):
-                raw = str(r.get(f"times{h:02d}") or "").strip()
-                if not raw:
-                    return None            # 빈 칸은 결측이다. 0 으로 바꾸지 않는다
-                try:
-                    return max(0.0, float(raw))
-                except ValueError:
-                    return None
-
+            mm = [v(r, h) for h in range(24)]
+            if mm[0] is None and stn in acc:
+                mm[0] = v(acc[stn], 0)     # 00시 = 일누적 00시(위)
             out.append({"stn": stn,
                         "name": str(r.get("rtu_name") or "").strip(),
                         "sigun": _short_sigun(r.get("org_name")),
-                        "mm": [v(h) for h in range(24)]})
+                        "mm": mm})
         return out
 
     async def sigun_average(self, start, end, hour: int) -> dict[str, float]:

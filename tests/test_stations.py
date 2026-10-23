@@ -122,6 +122,41 @@ def test_flow_from_aws_is_hourly_then_vsrt():
     assert len(f["total"]["max"]) == len(f["frames"])
     assert gridview.flow(hours=1, now=now, test=True)["frames"][0]["layer"] == "obs60"   # 기본은 격자 그대로
 
+def test_aws_layer_tells_missing_hours(store, tdb, monkeypatch):
+    """한 시간이 빠진 경남 AWS — 합은 있는 시각만(part), 몇 시간 빠졌나(miss). 화면은 숫자만 쓰고 툴팁에 miss."""
+    gridview._ACC_CACHE.clear(); gridview._SUM_CACHE.clear(); gridview._AWS_CACHE.clear()
+    monkeypatch.setattr(gridview, "setting", lambda: {"acc_hours": 2, "acc_from": "hours"})
+    for k in ("202610031400", "202610031500"):
+        store.save("obs60", k, np.zeros(store.shape("hr")))
+    hl = next(s for s in sites.gn_sites() if s["sigun"] == "고성" and s["name"] == "학림")
+    with tdb.tx() as c:
+        c.execute("INSERT INTO bangjae_hourly VALUES('2026-10-03 13:00', 'BJ7', '학림', '고성', 30, 'x')")   # 14시 칸만
+    monkeypatch.setattr(gridview.clock, "now", lambda: datetime(2026, 10, 3, 15, 20))
+    r = next(x for x in gridview.stations("aws")["rows"] if x["stn"] == hl["stn"])
+    assert r["v"] == 30.0 and r["q"] == "part" and r["miss"] == 1
+
+
+def test_bangjae_hourly_fills_midnight_from_daily_row():
+    """경남 AWS 는 시간 줄 00시가 비어 온다 — 같은 응답의 일누적 00시로 메운다. 다른 빈 칸은 그대로 결측."""
+    from app import bangjae
+
+    def row(stn, gubun, vals):
+        return {"lnk_id": stn, "rtu_name": "학림", "org_name": "고성", "gubun": gubun,
+                **{f"times{h:02d}": v for h, v in enumerate(vals)}}
+    got = [row("8438", "시간", ["", "1.0", "", "2.5"] + [""] * 20), row("8438", "일", ["4.0", "5.0", "", "11.5"] + [""] * 20),
+           row("155", "시간", ["0.5"] + [""] * 23), row("155", "일", ["9.9"] + [""] * 23)]
+
+    async def run():
+        async with bangjae.Client() as c:
+            async def fake(path, **kw):
+                return got
+            c.get = fake
+            return await c.station_hourly("20261019")
+    by = {s["stn"]: s["mm"] for s in asyncio.run(run())}
+    assert by["8438"][:4] == [4.0, 1.0, None, 2.5]          # 00시 = 일누적 00시, 02시 빈 칸은 메우지 않는다
+    assert by["155"][0] == 0.5                              # 시간 줄에 있으면 그대로
+
+
 def test_aws_match_report(tdb):
     from app import queries
     with tdb.tx() as c:
