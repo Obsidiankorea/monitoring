@@ -76,7 +76,9 @@ def test_put_setting_validates(monkeypatch):
     assert gridview.SETTING_DEFAULT["aws_live"] is False and gridview.put_setting({"aws_live": 1})["aws_live"] is True
     # 오른쪽 아래 예측 분포 재생 — 기본 끔
     assert gridview.SETTING_DEFAULT["acc_qpf"] is False and gridview.put_setting({"acc_qpf": 1})["acc_qpf"] is True
+    # 재생 빠르기 — 지도(play_ms) · 초단기예측 이미지(qpf_ms) 둘 다 설정에서
+    assert gridview.SETTING_DEFAULT["qpf_ms"] == 600 and gridview.put_setting({"qpf_ms": 250, "play_ms": 3000})["qpf_ms"] == 250
     for bad in ({"flow_step": 15}, {"play_ms": 50}, {"tl_stat": "sum"}, {"layer": "nope"},
-                {"overlays": ["bars"]}, {"overlays": "alerts"}, {"pal": "rainbow"}, {"acc_per": 5}):
+                {"overlays": ["bars"]}, {"overlays": "alerts"}, {"pal": "rainbow"}, {"acc_per": 5}, {"qpf_ms": 50}):
         with pytest.raises((ValueError, LookupError)):
             gridview.put_setting(bad)

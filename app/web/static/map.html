@@ -431,6 +431,9 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 .qpf-box { position: relative; width: 100%; aspect-ratio: 950 / 800; max-height: calc(50vh - 20px); margin: 0 auto;
   border-radius: 15px; overflow: hidden; background: #f0f0f0; }
 .qpf-lay { position: absolute; inset: 0; background: #f0f0f0 no-repeat center / contain; will-change: opacity; }
+/* 확대 · 옮기기 — 두 겹을 한 판(qpf-view)에 담아 같이 움직인다. 시각 · 범례 · 막대는 판 밖이라 그대로 */
+.qpf-view { position: absolute; inset: 0; transform-origin: 0 0; cursor: grab; touch-action: none; }
+.qpf-view.drag { cursor: grabbing; }
 .qpf-box.dim .qpf-lay { filter: grayscale(.6) opacity(.55); }
 .qpf-clock { position: absolute; top: 8px; right: 8px; display: flex; align-items: baseline; gap: 6px; padding: 3px 9px;
   border-radius: 8px; background: color-mix(in oklab, var(--panel) 86%, transparent); border: 1px solid var(--line); zoom: var(--k, 1); }
@@ -451,6 +454,22 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 /* 줄 세우기 '시군당 n곳' — 시군이 바뀌는 줄 위에 가는 선 */
 #acc-b .ar.g0 { box-shadow: inset 0 1px 0 color-mix(in oklab, var(--line) 90%, transparent); }
 .ch .sp { flex: 1; }
+/* 카드 머리 작은 범례(시우량 · 6시간 합) — 지도 범례(누적 자동 눈금)와 다른 자라는 것을 카드에 적는다 */
+.mlg { display: inline-flex; align-items: stretch; flex: none; gap: 1px; border-radius: 5px; overflow: hidden; }
+.mlg b { font: 600 calc(10.5px * var(--k, 1)) var(--sans); color: var(--ink-3); padding-right: calc(5px * var(--k, 1)); align-self: center; }
+.mlg i { font: 600 calc(9.5px * var(--k, 1)) var(--mono); font-style: normal; text-align: center;
+  min-width: calc(19px * var(--k, 1)); padding: 1px calc(3px * var(--k, 1)); }
+/* 초단기예측 이미지 범례 — 그림의 범례는 잘라 낼 때 빠진다. 기상청 원본 그림에서 그대로 뽑아 둔 색(/api/qpf/legend)으로
+   늘 보이게(종합 화면 예측 분포 재생과 같다). 센 값이 위 */
+.qpf-scale { position: absolute; left: 8px; top: 8px; bottom: 52px; zoom: var(--k, 1); display: flex; flex-direction: column;
+  padding: 5px 6px 6px; border-radius: 9px; background: color-mix(in oklab, var(--panel) 86%, transparent); border: 1px solid var(--line); }
+.qpf-scale .u { font: 600 10px var(--sans); color: var(--ink-2); text-align: center; padding-bottom: 3px; }
+.qpf-scale .sc { flex: 1; min-height: 0; display: grid; grid-template-columns: 11px auto; column-gap: 4px; }
+.qpf-scale .bar, .qpf-scale .tk { display: flex; flex-direction: column; }
+.qpf-scale .bar i { flex: 1; }
+.qpf-scale .tk span { flex: 1; position: relative; font: 600 9.5px var(--mono); color: var(--ink-2); }
+.qpf-scale .tk span b { position: absolute; bottom: -6px; left: 0; font-weight: 600; }
+.qpf-scale .none { font: 500 11px var(--sans); color: var(--ink-3); max-width: 90px; }
 .ch .bt { font: 600 calc(12px * var(--k, 1)) var(--mono); color: var(--ink-2); border: 1px solid var(--line); border-radius: 6px; padding: 1px 7px; white-space: nowrap; }
 .ch .src { font: 600 calc(11px * var(--k, 1)) var(--sans); color: var(--accent); white-space: nowrap; }
 .ch .src.fell { color: var(--lv-fail); }
@@ -820,19 +839,20 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
       <div class="rng-pop" id="acc-ctx" hidden role="menu"></div>
     </section>
     <section class="card" id="c-now">
-      <div class="ch"><h3>지금 오는 비</h3><span class="sub" id="now-sub">기상청 매분자료</span><span class="sp"></span><span class="bt" id="now-bt">—</span></div>
+      <div class="ch"><h3>지금 오는 비</h3><span class="sub" id="now-sub">기상청 매분자료</span><span class="sp"></span><span id="now-lg"></span><span class="bt" id="now-bt">—</span></div>
       <div class="cb" id="now-b"></div>
     </section>
     <section class="card" id="c-fc">
-      <div class="ch"><h3 id="fc-h">예측 상위</h3><span class="sub" id="fc-sub">초단기 · 앞으로 6시간</span><span class="sp"></span><span class="bt" id="fc-bt">—</span></div>
+      <div class="ch"><h3 id="fc-h">예측 상위</h3><span class="sub" id="fc-sub">초단기 · 앞으로 6시간</span><span class="sp"></span><span id="fc-lg"></span><span class="bt" id="fc-bt">—</span></div>
       <div class="cb" id="fc-b"></div>
     </section>
     <section class="card" id="c-qpf" aria-label="초단기예측 이미지 재생">
       <div class="ch"><h3>초단기예측 이미지 재생</h3><span class="sub">기상청 초단기강수예측 그림(B 융합) · 10분 간격</span><span class="sp"></span>
         <span class="src" id="qpf-sync"></span><span class="bt" id="qpf-bt">—</span></div>
       <div class="qpf-box" id="qpf-box">
-        <div class="qpf-lay" style="opacity:1"></div><div class="qpf-lay" style="opacity:.004"></div>
+        <div class="qpf-view" id="qpf-view" title="휠: 확대 · 축소(커서 자리 기준) · 끌기: 옮기기 · 두 번 누르기: 처음 크기"><div class="qpf-lay" style="opacity:1"></div><div class="qpf-lay" style="opacity:.004"></div></div>
         <span class="qpf-clock"><b id="qpf-t">—</b><i id="qpf-ef"></i><i class="fc" id="qpf-fc"></i></span>
+        <div class="qpf-scale" id="qpf-scale" role="img" aria-label="강수강도 범례 mm/h"></div>
         <div class="qpf-note" id="qpf-note"></div>
         <div class="qpf-bar"><button id="qpf-play" aria-label="재생">▶</button><input id="qpf-seek" type="range" min="0" max="0" value="0" aria-label="예측 시각"></div>
       </div>
@@ -1008,7 +1028,7 @@ const COLLECT_OF = { obs15: "grid", obs60: "grid", obsday: "grid", acc: "grid", 
                      shrt_today: "short", shrt_tomorrow: "short" };
 const SET_DEFAULT = { flow_step: 10, flow_hours: 6, play_ms: 1200, tl_on: false, tl_stat: "max",
                       panel: "cards", acc_hours: 12, acc_from: "hours", acc_basis: "aws", sel_zoom: true, acc_fc: true, acc_h1: true,
-                      acc_per: 1, acc_full: false, aws_live: false, acc_qpf: false };
+                      acc_per: 1, acc_full: false, aws_live: false, acc_qpf: false, qpf_ms: 600 };
 
 let META = null, TOPO = null, GEO = null, MSIG = null, MEMD = null, EMDN = null;
 let SET = { ...SET_DEFAULT };
@@ -2819,32 +2839,38 @@ function hovEvents(body) {
   body.onmouseleave = () => { HOVT = null; body.classList.remove("hovt"); cardsPlayhead(); };
 }
 
-/* 지금 오는 비 — 15분 │ 60분 상위. 단계는 종합 화면과 같다(15분과 60분이 다른 자) */
-const MN_STEPS = { 15: [0.5, 2, 5, 8, 12, 18, 25], 60: [1, 5, 10, 20, 30, 50, 70] };
+/* 시우량 범주(㎜/h) — 지금 오는 비 · 예측 상위(초단기) · 지도 1시간 층이 **한 자**를 쓴다(종합 화면 시우량 램프와 같다).
+   누적(지도 누적 층 — 자동 눈금)과는 다른 자다 — 카드 머리에 작은 범례로 따로 적는다.
+   15분 값은 ×4(시간당 기세)로 이 자에 칠한다 — 15분 8㎜ 는 시간당 32㎜ 의 기세다.
+   ⚠️ 예전에는 지금 오는 비가 1·5·10·20·30·50·70, 15분은 0.5·2·5·8·12·18·25 로 따로 칠해 같은 10㎜ 가 지도 · 예측 상위와 다른 색이었다 */
+const SIU = STEPS.m60;
+/* 카드 머리 작은 범례 — 그 자의 칸마다 색과 값. 기상청 색이면 시우량은 레이더 경계 색 */
+function miniLegend(steps, label, hourly = true, tip = "") {
+  return `<span class="mlg" title="${tip}"><b>${label}</b>${steps.map((v, i) => {
+    const c = rampColor(v, steps, hourly), ink = kmaOn() ? inkOn(c) : i >= 3 ? "var(--on-accent)" : "var(--ink)";
+    return `<i style="background:${c};color:${ink}">${v}</i>`;
+  }).join("")}</span>`;
+}
 /* 지금 오는 비 · 예측 상위 줄 수 — 패널이 낮으면(FHD 150% = 720px 등) 줄여서 강수 누적 카드에 자리를 남긴다.
    ⚠️ 1280×720 에서 둘이 6줄씩 다 쓰자 강수 누적은 머리만 남았다(본문 11px) */
 const cardRows = () => { const h = $("rail")?.clientHeight || 900; return h < 560 ? 3 : h < 800 ? 4 : 6; };
 function renderNow() {
   const N = CARDS.now;
   $("now-bt").textContent = N.tm || "—";
-  const col = (list, kk) => {
+  const col = (list, kk, steps = SIU) => {
     const mx = Math.max(...list.map(x => x.mm), 0.1);
     if (!list.length || mx <= 0.1 && !list.some(x => x.mm > 0))
       return `<div class="empty-note">비 없음</div>`;
     return list.slice(0, cardRows()).map(x => {
-      // 15분은 기상청 색이면 ×4(시간당 자). 사례의 '3시간'은 누적 자
-      const c = (kk === 15 ? rampColor(kmaOn() ? x.mm * 4 : x.mm, MN_STEPS[15], true)
-               : rampColor(x.mm, MN_STEPS[kk], kk === 60 || MN_STEPS[kk] === MN_STEPS[60])) || "var(--ink-3)";
+      // 시우량 자 — 15분은 ×4 로. 사례의 '3시간'은 누적 자(steps 를 따로 준다)
+      const c = rampColor(kk === 15 ? x.mm * 4 : x.mm, steps, steps === SIU) || "var(--ink-3)";
       const sm = N.det ? x.tag : x.sig, at = x.pos ? ` data-x="${x.pos.x}" data-y="${x.pos.y}"` : "";
       return `<div class="mr${N.det ? " det" : ""}" data-s="${x.sig}"${at}><span class="bg" style="width:${(x.mm / mx * 100).toFixed(0)}%;background:${c}"></span>
         <span class="nm2">${x.name && x.name !== x.sig ? `${sm ? `<small>${sm}</small>` : ""}${x.name}` : x.sig}</span><b>${x.mm.toFixed(1)}</b></div>`;
     }).join("");
   };
-  const colSteps = (list, steps) => {                 // 사례: 1시간·3시간 (단계를 직접 준다)
-    const saved = MN_STEPS.x; MN_STEPS.x = steps;
-    const h = col(list, "x"); MN_STEPS.x = saved;
-    return h;
-  };
+  const colSteps = (list, steps) => col(list, "x", steps);   // 사례 · 시군: 1시간 · 3시간(자를 직접 준다)
+  $("now-lg").innerHTML = miniLegend(SIU, "시우량", true, "시우량 범주(㎜/h) — 지도 1시간 · 예측 상위와 같은 자. 15분은 ×4(시간당 기세)로 칠한다. 지도 누적 층의 자와는 다르다");
   $("now-b").innerHTML = N.cols
     ? `<div class="mn">${N.cols.map(c => `<div><h4>${c.title}<span>㎜</span></h4>${colSteps(c.list, c.steps)}</div>`).join("")}</div>`
     : `<div class="mn"><div><h4>15분<span>㎜</span></h4>${col(N.r15, 15)}</div>
@@ -2859,11 +2885,14 @@ function renderFc() {
   const rows = F.rows.slice().sort((a, b) => b.sum - a.sum).slice(0, cardRows());
   const day = F.mode === "day";
   if (!rows.length || rows[0].sum <= 0) {
+    $("fc-lg").innerHTML = "";
     $("fc-b").innerHTML = `<div class="empty-note">${F.empty || "앞으로 6시간 예상 강수 없음"}</div>`;
     return;
   }
-  // 칸 색 — 초단기는 1시간 눈금, 단기는 6시간 합이라 하루 눈금(지도 단기 층과 같은 자)
-  const steps = day ? STEPS.day : STEPS.m60;
+  // 칸 색 — 초단기는 시우량(1시간) 자, 단기는 6시간 합이라 하루 눈금(지도 단기 층과 같은 자)
+  const steps = day ? STEPS.day : SIU;
+  $("fc-lg").innerHTML = day ? miniLegend(steps, "6시간 합", false, "단기 6시간 합(㎜) — 지도 단기 층과 같은 자")
+    : miniLegend(steps, "시우량", true, "시우량 범주(㎜/h) — 칸은 그 시간 강수량(초단기 RN1). 지도 누적 층의 자와는 다르다");
   const cell = v => {
     if (v == null) return `<i class="na"></i>`;           // 오늘의 지난 구간(발표 앞)
     const k = stepIdx(v, steps), c = rampColor(v, steps, !day);
@@ -3001,13 +3030,13 @@ async function cardsFromCase() {
     .sort((a, b) => ((rank[b.lv] || 0) - (rank[a.lv] || 0)) || (b.h12 - a.h12)).slice(0, 6);
   // 시군을 고르면 1시간·3시간도 그 시군(들) 읍면동 — 격자 그 시각 칸을 읍면동마다 최대로
   let now = { tm: when, sub: "격자 · 1시간 · 3시간",
-              cols: [{ title: "1시간", list: top("h1", "h1w"), steps: MN_STEPS[60] },
+              cols: [{ title: "1시간", list: top("h1", "h1w"), steps: SIU },
                      { title: "3시간", list: top("h3"), steps: [5, 20, 40, 60, 90, 120, 180] }] };
   if (selOn()) {
     const q = h => getJson(`/api/grid/emd?sigun=${encodeURIComponent(selQ())}&case=${CASE}&tm=${t}&hours=${h}`);
     const [a, b] = await Promise.all([q(1), q(3)]);
     now = { tm: when, det: true, sub: `${selName()} 읍면동 · 격자 1시간 · 3시간`,
-            cols: [{ title: "1시간", list: emdTop(a.rows), steps: MN_STEPS[60] },
+            cols: [{ title: "1시간", list: emdTop(a.rows), steps: SIU },
                    { title: "3시간", list: emdTop(b.rows), steps: [5, 20, 40, 60, 90, 120, 180] }] };
   }
   return {
@@ -3851,7 +3880,10 @@ function openPrefs() {
     <div class="row"><span class="k">AWS 실시간</span>${seg("aws_live", [[false, "끔 — 정시마다"], [true, "감시 — 1분마다"]])}</div>
     <div class="row"><span class="k"></span><span class="note">감시를 켜면 AWS 누적 · 1시간이 마지막 정시 뒤 매분자료까지 1분마다 따라간다(1시간은
       그 분의 직전 60분, 기상청 AWS). 켠 동안만 매분자료를 1분마다 받는다. 층 메뉴 실측 머리의 '실시간' · R 키와 같다.</span></div>
-    <div class="row"><span class="k">빠르기</span>${seg("play_ms", [[2000, "느리게"], [1200, "보통"], [600, "빠르게"]])}</div>
+    <div class="row"><span class="k">지도 빠르기</span>${seg("play_ms", [[3000, "아주 느리게"], [2000, "느리게"], [1200, "보통"], [600, "빠르게"], [400, "아주 빠르게"]])}</div>
+    <div class="row"><span class="k">초단기예측 이미지</span>${seg("qpf_ms", [[1500, "아주 느리게"], [1000, "느리게"], [600, "보통"], [400, "빠르게"], [250, "아주 빠르게"]])}</div>
+    <div class="row"><span class="k"></span><span class="note">한 장 머무는 시간 — 지도 3 · 2 · 1.2 · 0.6 · 0.4초, 초단기예측 이미지(오른쪽 아래, Q) 1.5 · 1 · 0.6 · 0.4 · 0.25초.
+      지도를 재생하는 동안은 이미지가 지도와 같은 시각으로 가므로 지도 빠르기를 따른다.</span></div>
     <h4>오른쪽 패널</h4>
     <div class="row"><span class="k">표시</span>${seg("tl_on", [[true, "켬"], [false, "끔"]])}</div>
     <div class="row"><span class="k">방식</span>${seg("panel", [["cards", "카드 — 종합 화면 판"], ["timeline", "타임라인 — 시군 선"]])}</div>
@@ -3884,6 +3916,8 @@ function openPrefs() {
     if (k === "panel") { CARDS = null; applyTL(true); }
     if (k === "acc_hours") loadCards();
     if (k === "flow_step" || k === "flow_hours") loadFlow();
+    if (k === "play_ms" && playing) startPlay();          // 재생 중이면 새 빠르기로 곧바로
+    if (k === "qpf_ms" && QPF.play) qpfStart();
     if (k === "tl_stat") buildTL();
     if (k === "sel_zoom") { if (zoomOn()) ensureEmd(); camGo(true); }
     openPrefs();
@@ -4067,7 +4101,21 @@ async function loadQpf() {
     $("qpf-seek").max = Math.max(0, QPF.efs.length - 1);
   }
   if (!QPF.play && !QPF.sync && !QPF.stopped && QPF.efs.length > 1) qpfStart();   // 벽면 화면 — 켜면 돈다
+  if (!QPF.lg) qpfLegend();
+  qzApply();
   drawQpf();
+}
+/* 범례 — 기상청 원본 그림에서 뽑아 둔 색 · 경계(약한 것부터 온다 — 센 것을 위로 뒤집는다). 눈금은 띄엄띄엄.
+   한 칸의 아래 경계가 그 값이다(그 값부터 그 색) */
+const QPF_TICKS = [0.1, 1, 5, 10, 20, 30, 50, 110];
+async function qpfLegend() {
+  const el = $("qpf-scale");
+  if (!QPF.lg) { try { QPF.lg = await getJson("/api/qpf/legend"); } catch { QPF.lg = null; } }
+  if (!QPF.lg) { el.innerHTML = `<div class="none">범례를 아직 못 받았다 — 다음 발표분에 채워진다</div>`; return; }
+  const { colors, bounds, unit } = QPF.lg, n = colors.length;
+  const top = [...colors].reverse(), lab = [...bounds].reverse();
+  el.innerHTML = `<div class="u">${unit || "mm/h"}</div><div class="sc"><div class="bar">${top.map(c => `<i style="background:${c}"></i>`).join("")}</div>
+    <div class="tk">${lab.map((v, i) => `<span>${QPF_TICKS.includes(+v) && i === lab.lastIndexOf(v) ? `<b>${v}</b>` : ""}</span>`).join("")}</div></div>`;
 }
 function qpfShow() {
   const lays = $("qpf-box").querySelectorAll(".qpf-lay"), src = QPF.urls[QPF.idx];
@@ -4103,7 +4151,7 @@ function qpfStart() {
   if (QPF.efs.length < 2) return;
   clearInterval(QPF.timer);
   QPF.play = true; QPF.stopped = false;
-  QPF.timer = setInterval(() => { QPF.idx = (QPF.idx + 1) % QPF.efs.length; drawQpf(); }, 600);
+  QPF.timer = setInterval(() => { QPF.idx = (QPF.idx + 1) % QPF.efs.length; drawQpf(); }, +SET.qpf_ms || 600);
   drawQpf();
 }
 function qpfStop(quiet) {
@@ -4139,6 +4187,56 @@ function toggleQpf() {
   if (CARDS && !CARDS.err) renderCards();
 }
 $("acc-qpf").onclick = ev => { ev.stopPropagation(); toggleQpf(); };
+/* 확대 · 옮기기 — 휠은 커서 자리를 기준으로 확대 · 축소, 왼쪽 끌기로 옮기고, 두 번 누르면 처음 크기(판을 꽉 채우는 배율 —
+   그림 둘레 여백이 빠진다). 배율 · 자리는 판 크기에 대한 비율로 이 화면(브라우저)마다 기억한다 */
+const QPF_R = 950 / 800;                                  // 서버가 잘라 둔 그림 비율(경남 광역)
+const QZ = { z: null, fx: 0, fy: 0 };
+try { Object.assign(QZ, JSON.parse(localStorage.getItem("gn-map-qpfzoom") || "{}")); } catch {}
+function qzCover() {                                      // 판을 꽉 채우는 배율(contain 그림을 cover 로)
+  const b = $("qpf-box"), W = b.clientWidth || 1, H = b.clientHeight || 1;
+  return W / H > QPF_R ? W / (H * QPF_R) : H / (W / QPF_R);
+}
+function qzApply(save) {
+  const b = $("qpf-box"), W = b.clientWidth || 1, H = b.clientHeight || 1;
+  if (QZ.z == null) { QZ.z = qzCover(); QZ.fx = (1 - QZ.z) / 2; QZ.fy = (1 - QZ.z) / 2; }
+  QZ.z = Math.max(1, Math.min(8, QZ.z));
+  QZ.fx = Math.min(0, Math.max(1 - QZ.z, QZ.fx));         // 판 밖으로 끌려 나가지 않게
+  QZ.fy = Math.min(0, Math.max(1 - QZ.z, QZ.fy));
+  $("qpf-view").style.transform = `translate(${(QZ.fx * W).toFixed(1)}px, ${(QZ.fy * H).toFixed(1)}px) scale(${QZ.z.toFixed(3)})`;
+  if (save) try { localStorage.setItem("gn-map-qpfzoom", JSON.stringify(QZ)); } catch {}
+}
+{
+  const view = $("qpf-view"), box = $("qpf-box");
+  box.addEventListener("wheel", ev => {
+    ev.preventDefault(); ev.stopPropagation();
+    if (QZ.z == null) qzApply();
+    const r = box.getBoundingClientRect(), cx = (ev.clientX - r.left) / r.width, cy = (ev.clientY - r.top) / r.height;
+    const z1 = Math.max(1, Math.min(8, QZ.z * (ev.deltaY < 0 ? 1.15 : 1 / 1.15)));
+    QZ.fx = cx - (cx - QZ.fx) * z1 / QZ.z;                // 커서 밑 자리가 그대로 남게
+    QZ.fy = cy - (cy - QZ.fy) * z1 / QZ.z;
+    QZ.z = z1;
+    qzApply(true);
+  }, { passive: false });
+  let drag = null;
+  view.addEventListener("pointerdown", ev => {
+    if (ev.button !== 0) return;
+    if (QZ.z == null) qzApply();
+    drag = { x: ev.clientX, y: ev.clientY, fx: QZ.fx, fy: QZ.fy };
+    view.setPointerCapture(ev.pointerId); view.classList.add("drag");
+  });
+  view.addEventListener("pointermove", ev => {
+    if (!drag) return;
+    const r = box.getBoundingClientRect();
+    QZ.fx = drag.fx + (ev.clientX - drag.x) / r.width;
+    QZ.fy = drag.fy + (ev.clientY - drag.y) / r.height;
+    qzApply();
+  });
+  const up = () => { if (!drag) return; drag = null; view.classList.remove("drag"); qzApply(true); };
+  view.addEventListener("pointerup", up);
+  view.addEventListener("pointercancel", up);
+  view.addEventListener("dblclick", () => { QZ.z = null; qzApply(true); });
+  new ResizeObserver(() => { if (qpfOn()) qzApply(); }).observe(box);
+}
 $("qpf-play").onclick = () => { if (QPF.sync) return; if (QPF.play) { qpfStop(); QPF.stopped = true; } else qpfStart(); };
 $("qpf-seek").oninput = ev => { if (QPF.sync) return; qpfStop(); QPF.stopped = true; QPF.idx = +ev.target.value; drawQpf(); };
 /* 위 카드 우클릭 — 줄 세우기: 시군당 1 · 2 · 3곳 / 시군 무관(전 지점 순위). 종합 화면 강수 타임라인과 같은 말 */

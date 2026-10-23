@@ -1116,11 +1116,14 @@ SETTING_DEFAULT = {"layer": "obs60", "x4": False, "vsrt_n": 1,
                    # 오른쪽 패널 아래를 '예측 분포 재생'(초단기 QPF B 융합 그림)으로 — 강수 누적과 같이 본다(Q).
                    # 지도를 재생하는 동안은 그림이 지도와 같은 시각으로 따라간다
                    "acc_qpf": False,
+                   # 초단기예측 이미지 한 장 머무는 시간(ms) — 따로 재생할 때(지도와 같이 갈 때는 지도 빠르기)
+                   "qpf_ms": 600,
                    # 지도 위에 겹칠 레이어(왼쪽 위 '레이어'에서 켠다). 차츰 늘린다.
                    "overlays": []}
 OVERLAYS = ("alerts", "stations", "stnval")   # stnval = 관측소 옆 값 글자(관측소에 딸림)
 _CHOICES = {"flow_step": (10, 20, 30, 60), "flow_hours": (1, 3, 6, 12),
-            "play_ms": (600, 1200, 2000), "tl_stat": ("max", "mean"),
+            "play_ms": (400, 600, 1200, 2000, 3000), "tl_stat": ("max", "mean"),
+            "qpf_ms": (250, 400, 600, 1000, 1500),
             "panel": ("cards", "timeline"), "acc_hours": (6, 12, 24, 48),
             "acc_from": ("hours", "today", "yesterday"),
             "acc_basis": ("aws", "grid"),
