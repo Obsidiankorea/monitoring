@@ -1113,6 +1113,9 @@ SETTING_DEFAULT = {"layer": "obs60", "x4": False, "vsrt_n": 1,
                    # AWS 실시간 감시 — 끄면 AWS 누적 · 1시간이 정시마다, 켜면 마지막 정시 뒤 매분까지 1분마다(R).
                    # 1분 수집기(minute)도 켠 동안만 기상청을 부른다
                    "aws_live": False,
+                   # 오른쪽 패널 아래를 '예측 분포 재생'(초단기 QPF B 융합 그림)으로 — 강수 누적과 같이 본다(Q).
+                   # 지도를 재생하는 동안은 그림이 지도와 같은 시각으로 따라간다
+                   "acc_qpf": False,
                    # 지도 위에 겹칠 레이어(왼쪽 위 '레이어'에서 켠다). 차츰 늘린다.
                    "overlays": []}
 OVERLAYS = ("alerts", "stations", "stnval")   # stnval = 관측소 옆 값 글자(관측소에 딸림)
@@ -1137,7 +1140,7 @@ def put_setting(body: dict) -> dict:
     if "layer" in body:
         split(str(body["layer"]))            # 모르는 층이면 LookupError
         cur["layer"] = str(body["layer"])
-    for k in ("x4", "tl_on", "sel_zoom", "acc_fc", "acc_h1", "acc_full", "aws_live"):
+    for k in ("x4", "tl_on", "sel_zoom", "acc_fc", "acc_h1", "acc_full", "aws_live", "acc_qpf"):
         if k in body:
             cur[k] = bool(body[k])
     if "vsrt_n" in body:

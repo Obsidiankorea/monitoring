@@ -74,6 +74,8 @@ def test_put_setting_validates(monkeypatch):
     assert (got["acc_per"], got["acc_full"]) == (0, True)
     # AWS 실시간 감시 — 기본 끔(정시마다)
     assert gridview.SETTING_DEFAULT["aws_live"] is False and gridview.put_setting({"aws_live": 1})["aws_live"] is True
+    # 오른쪽 아래 예측 분포 재생 — 기본 끔
+    assert gridview.SETTING_DEFAULT["acc_qpf"] is False and gridview.put_setting({"acc_qpf": 1})["acc_qpf"] is True
     for bad in ({"flow_step": 15}, {"play_ms": 50}, {"tl_stat": "sum"}, {"layer": "nope"},
                 {"overlays": ["bars"]}, {"overlays": "alerts"}, {"pal": "rainbow"}, {"acc_per": 5}):
         with pytest.raises((ValueError, LookupError)):
