@@ -2189,12 +2189,16 @@ function tlPlayhead() {
 /* ── 오른쪽 카드 — 종합 화면(강수 모니터링)의 세 판을 작게 ─────────────────────
    실제 자료는 종합 화면과 **같은 API·같은 규칙**이다 — 숫자가 두 화면에서 같아야 한다.
      강수 누적  /api/rain(스방 → 비면 기상청) 시군마다 다우지점(자료 있는 지점 중 합계 최대)
-                + /api/forecast 시군 6시간을 0·5·10·20·30·50 으로 맞춘 합(빗금). 합으로 줄 세운다
+                + /api/forecast 6시간 합(연한 막대 — 아래 '예측 상위'와 같은 값). 합으로 줄 세운다
      지금 오는 비 /api/minute — 15분·60분 상위
      예측 상위  /api/forecast 시군 — 6시간 합 순
    테스트 모드는 합성 흐름(/api/grid/flow?test=1)에서 뽑는다 — 지도와 같은 값이 나오게. */
 let CARDS = null;
-const qRN1 = v => [0, 5, 10, 20, 30, 50].reduce((a, b) => (Math.abs(b - v) < Math.abs(a - v) ? b : a));
+/* 예상 합 — 초단기 RN1 을 **그대로** 더한다(아래 '예측 상위' 칸 · 합과 같은 값, 0.1㎜ 로 맞춤).
+   ⚠️ 예전에는 시간마다 0·5·10·20·30·50 가운데 가까운 값으로 바꿔 더했다 — 3㎜ 가 5, 2㎜ 가 0 이 되어 거제(시간 3㎜)가
+   위 카드에는 +25 인데 예측 상위(그대로 합 15)에는 없었다. 재난상황보고서 예측 표도 RN1 을 그대로(정수로) 쓴다 */
+const fcSum = a => Math.round(sumv(a) * 10) / 10;
+const fcTxt = v => (+v).toFixed(v % 1 ? 1 : 0);
 const ORDER_GN = () => GEO.sigun.filter(s => s.kind === "gn").map(s => s.name);
 const sumv = a => a.reduce((x, v) => x + (typeof v === "number" ? v : 0), 0);
 
@@ -2391,10 +2395,10 @@ async function accAws(H, fc) {
   // 임시로** 둔다(서버 sites.position, est). sel = 시군을 고른 상세(그 시군 지점 전부)
   const stRow = (r, sel) => {
     const site = SITEBY.get(r.stn), emd = site?.emd || r.pos?.emd, e = emd ? FE[`${r.sigun}|${emd}`] : null;
-    const fcd = e ? e.d.slice(0, 6).map(qRN1) : [];
+    const fcd = e ? e.d.slice(0, 6) : [];
     const tag = !sel ? r.sigun : site ? (site.emd || "기상청") : own ? (r.pos?.emd || "경남") : "";
     return { sig: r.sigun, tag: sel && multi() ? `${r.sigun} ${tag}` : tag, stn: r.name, d: r.d, dt, fcd,
-             ft: fcd.length ? ft : [], sum: r.sum, fc: sumv(fcd), bad: r.bad, dead: !live(r), kma: !!site, h1: r.m60, org: orgOf(r),
+             ft: fcd.length ? ft : [], sum: r.sum, fc: fcSum(fcd), bad: r.bad, dead: !live(r), kma: !!site, h1: r.m60, org: orgOf(r),
              pos: sitePos(r.stn) || (r.pos ? { x: r.pos.x, y: r.pos.y, est: r.pos.est } : null), det: sel };
   };
   if (!selOn() && accPer() !== 1) {
@@ -2407,8 +2411,8 @@ async function accAws(H, fc) {
     for (const r of rain.rows) (by[r.sigun] ||= []).push(r);
     const rows = ORDER_GN().filter(s => by[s]).map(s => {
       const st = by[s].slice().sort((a, b) => (live(b) - live(a)) || (b.sum - a.sum))[0];
-      const fcd = (FC[s]?.d || []).slice(0, 6).map(qRN1);
-      return { sig: s, stn: st.name, d: st.d, dt, fcd, ft, sum: st.sum, fc: sumv(fcd), bad: st.bad, h1: st.m60, org: orgOf(st),
+      const fcd = (FC[s]?.d || []).slice(0, 6);
+      return { sig: s, stn: st.name, d: st.d, dt, fcd, ft, sum: st.sum, fc: fcSum(fcd), bad: st.bad, h1: st.m60, org: orgOf(st),
                pos: sitePos(st.stn) || (st.pos ? { x: st.pos.x, y: st.pos.y, est: st.pos.est } : null) };
     });
     return { ...base, rows, sub: `다우지점 · ${accSpan().label} + 예상 6시간` };
@@ -2438,9 +2442,9 @@ async function accGrid(H, fc) {
   const dt = j.frames.map(tOf), ft = nextHours(fc.labels || [], dt.at(-1));
   const [FC, FE] = fcMaps(fc);
   let rows = j.rows.map(r => {
-    const fcd = ((emdRows ? FE[`${r.sig}|${r.name}`] : FC[r.sig])?.d || []).slice(0, 6).map(qRN1);
+    const fcd = ((emdRows ? FE[`${r.sig}|${r.name}`] : FC[r.sig])?.d || []).slice(0, 6);
     return { sig: r.sig, tag: selOn() ? (multi() ? r.sig : "") : r.sig, stn: emdRows ? r.name : (r.name || "—"), d: r.d, dt, fcd,
-             ft: fcd.length ? ft : [], sum: r.sum ?? 0, fc: sumv(fcd), det: selOn(),
+             ft: fcd.length ? ft : [], sum: r.sum ?? 0, fc: fcSum(fcd), det: selOn(),
              pos: r.col != null ? { x: r.col, y: r.row } : null, ...(r.h1 != null ? { h1: r.h1 } : {}) };
   });
   if (!selOn() && accPer() !== 1) rows = perSigun(rows, r => r.sum);
@@ -2531,8 +2535,8 @@ async function cardsFromTest() {
   const lastObs = FLOW.frames.reduce((a, f, i) => (f.kind === "obs" ? i : a), -1);
   const dt = obsI.map(i => FLOW.tt[i]), ft = fcI.map(i => FLOW.tt[i]);
   const rows = FLOW.series.map(s => {
-    const d = obsI.map(i => s.max[i]), fcd = fcI.map(i => qRN1(s.max[i] ?? 0));
-    return { sig: s.sigun, stn: "격자", d, dt, fcd, ft, sum: Math.round(sumv(d) * 10) / 10, fc: sumv(fcd) };
+    const d = obsI.map(i => s.max[i]), fcd = fcI.map(i => s.max[i] ?? 0);
+    return { sig: s.sigun, stn: "격자", d, dt, fcd, ft, sum: Math.round(sumv(d) * 10) / 10, fc: fcSum(fcd) };
   });
   let s15 = null;
   try { s15 = await getJson("/api/grid/sigun?layer=obs15&test=1"); } catch {}
@@ -2692,7 +2696,7 @@ function renderAcc() {
       <div class="abar"><div class="o${A.day ? " dayb" : hw >= o - 0.05 && !r.fc ? " all" : ""}" style="width:${o.toFixed(1)}%"></div>
         ${h1 >= 0.1 ? `<div class="h${r.fc ? "" : " end"}${hw >= o - 0.05 ? " all" : ""}" style="left:${(o - hw).toFixed(1)}%;width:${hw.toFixed(1)}%" title="그중 최근 1시간 ${h1.toFixed(1)}㎜"></div>` : ""}
         ${r.fc ? `<div class="f" style="left:${o.toFixed(1)}%;width:${f.toFixed(1)}%"></div>` : ""}
-        <span class="v" style="${vpos}"${ge}>${r.sum.toFixed(1)}${r.fc ? `<i>+${r.fc}</i>` : ""}</span></div>
+        <span class="v" style="${vpos}"${ge}>${r.sum.toFixed(1)}${r.fc ? `<i>+${fcTxt(r.fc)}</i>` : ""}</span></div>
       <svg viewBox="0 0 ${SW.toFixed(0)} ${SH.toFixed(0)}" preserveAspectRatio="none">
         <path class="sp-a" d="${po.a}"/><path class="sp-l" d="${po.d}"/>
         <path class="sp-fa" d="${pf.a}"/><path class="sp-fl" d="${pf.d}"/>
