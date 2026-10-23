@@ -55,7 +55,9 @@ def test_save_load_prune(store):
     h, w = store.shape("hr")
     a = np.zeros((h, w))
     a[1, 1] = 3.2
-    store.save("obs60", "202609270000", a)       # 사흘 넘었다
+    store.save("obs60", "202609270000", a)       # 사흘 넘은 정각 — 누적 날짜 지정(7일 앞)이 더하므로 남긴다
+    store.save("obs60", "202609270010", a)       # 사흘 넘은 10분 칸 — 지운다
+    store.save("obs60", "202609210000", a)       # 아흐레 넘은 정각 — 지운다
     store.save("obs60", "202610010800", a)
     for t in ("0750", "0800", "0810", "0820"):  # 초단기 발표분 넷
         store.save("vsrt", f"20261001{t}_202610010900", np.zeros(store.shape("dfs")))
@@ -63,7 +65,7 @@ def test_save_load_prune(store):
     raw = gzip.decompress(store.raw_gz("obs60", "202610010800"))
     assert len(raw) == h * w * 2
     store.prune(now=datetime(2026, 10, 1, 9, 0))
-    assert store.keys("obs60") == ["202610010800"]
+    assert store.keys("obs60") == ["202609270000", "202610010800"]
     assert [k[:12] for k in store.keys("vsrt")] == ["202610010800", "202610010810", "202610010820"]
 
 

@@ -112,6 +112,8 @@ def set_acc(db: Path, acc: dict | None) -> dict:
     cur = json.loads(r[0]) if r else {}
     if acc:
         cur.update(acc_from=acc.get("from", "hours"), acc_hours=int(acc.get("hours") or cur.get("acc_hours") or 12))
+        if acc.get("date"):
+            cur["acc_date"] = str(acc["date"])
         c.execute("INSERT OR REPLACE INTO setting(key, value) VALUES('map', ?)", (json.dumps(cur, ensure_ascii=False),))
         c.commit()
     c.close()

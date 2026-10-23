@@ -15,7 +15,7 @@ import logging
 from datetime import datetime
 
 from .. import db
-from ..domain.regions import ORDER, in_gyeongnam, pre_slot, sigun_of, split_level
+from ..domain.regions import ORDER, in_gyeongnam, is_sea, pre_slot, sigun_of, split_level
 from ..kma import KmaError, fetch_bytes
 
 log = logging.getLogger("collect.alerts")
@@ -80,7 +80,7 @@ def normalize(raw: bytes | str, now: datetime) -> dict:
             continue
 
         name, lvl = split_level(p[I_WRN] + p[I_LVL])
-        sea = reg_up in {"남해동부전해상", "남해동부앞바다"}
+        sea = is_sea(reg_up, reg)          # 이름으로 — 바다 구역은 시군에 붙이지 않는다
         # 화면 표기는 '주의보'로 통일한다. API가 주는 문자열은 '주의'다.
         disp_lvl = {"주의": "주의보"}.get(p[I_LVL], p[I_LVL])
 
@@ -101,7 +101,7 @@ def normalize(raw: bytes | str, now: datetime) -> dict:
                                     "regions": [], "siguns": []})
         g["regions"].append(reg)
         g["tmfc"] = min(g["tmfc"], p[I_TM_FC])
-        sig = sigun_of(reg)
+        sig = None if sea else sigun_of(reg)
         if sig and sig not in g["siguns"]:
             g["siguns"].append(sig)
 

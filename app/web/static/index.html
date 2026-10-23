@@ -4024,7 +4024,7 @@ bindMenu("m-step", "lb-step", "프레임 간격",
   k => putQpfSetting({ step: +k }));
 
 bindMenu("m-ahead", "lb-ahead", "최대 선행시간",
-  () => [180, 240, 360].map(v => ({ k: v, l: v / 60 + "시간", on: v === QCFG.ahead })),
+  () => [180, 240, 300, 360].map(v => ({ k: v, l: v / 60 + "시간", on: v === QCFG.ahead })),
   k => putQpfSetting({ ahead: +k }));
 
 bindMenu("m-crop", "lb-crop", "화각",

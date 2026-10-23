@@ -78,7 +78,30 @@ def test_put_setting_validates(monkeypatch):
     assert gridview.SETTING_DEFAULT["acc_qpf"] is False and gridview.put_setting({"acc_qpf": 1})["acc_qpf"] is True
     # 재생 빠르기 — 지도(play_ms) · 초단기예측 이미지(qpf_ms) 둘 다 설정에서
     assert gridview.SETTING_DEFAULT["qpf_ms"] == 600 and gridview.put_setting({"qpf_ms": 250, "play_ms": 3000})["qpf_ms"] == 250
+    # 강수 누적 카드 머리 고정 — 기본 고정(늘 보임)
+    assert gridview.SETTING_DEFAULT["acc_hdr_pin"] is True and gridview.put_setting({"acc_hdr_pin": 0})["acc_hdr_pin"] is False
     for bad in ({"flow_step": 15}, {"play_ms": 50}, {"tl_stat": "sum"}, {"layer": "nope"},
                 {"overlays": ["bars"]}, {"overlays": "alerts"}, {"pal": "rainbow"}, {"acc_per": 5}, {"qpf_ms": 50}):
         with pytest.raises((ValueError, LookupError)):
+            gridview.put_setting(bad)
+
+
+def test_acc_window_custom_date(monkeypatch):
+    """누적 날짜 지정 — 그날 0시부터(오늘부터 7일 앞까지). 지난 N시간 · 오늘 · 어제는 48시간까지, 날짜는 192시간까지."""
+    from datetime import datetime
+    end = datetime(2026, 10, 23, 15, 0)
+    assert gridview.span_hours("20261020", end) == 3 * 24 + 15
+    assert gridview.span_hours("yesterday", end) == 39 and gridview.span_hours(None, end, 12) == 12
+    assert gridview.span_hours("20261001", end) == gridview.ACC_SPAN_MAX           # 너무 앞이면 끝까지만
+    monkeypatch.setattr(gridview, "setting", lambda: {"acc_from": "date", "acc_date": "20261020", "acc_hours": 12})
+    assert gridview.acc_window() == (12, "20261020")
+    saved = {}
+    monkeypatch.setattr(gridview.db, "get_setting", lambda k, d: dict(d))
+    monkeypatch.setattr(gridview.db, "put_setting", lambda k, v: saved.update(v))
+    monkeypatch.setattr(gridview.clock, "now", lambda: end)
+    monkeypatch.setattr(gridview, "setting", lambda: dict(gridview.SETTING_DEFAULT))
+    got = gridview.put_setting({"acc_from": "date", "acc_date": "20261020"})
+    assert (got["acc_from"], got["acc_date"]) == ("date", "20261020")
+    for bad in ({"acc_date": "20261010"}, {"acc_date": "20261024"}, {"acc_date": "2026-10-20"}, {"acc_from": "date"}):
+        with pytest.raises(ValueError):
             gridview.put_setting(bad)

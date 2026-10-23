@@ -119,7 +119,10 @@ button { font-family: inherit; }
 @keyframes ttlin { from { opacity: 0; transform: translateY(7px); filter: blur(3px); } to { opacity: 1; transform: none; filter: none; } }
 .hud-sub { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 3px; }
 #ltime { font: 600 18px var(--mono); white-space: nowrap; }
-#lsrc { font-size: 12.5px; color: var(--ink-2); margin-top: 3px; white-space: nowrap; }
+#lsrc { font-size: 12.5px; color: var(--ink-2); margin-top: 3px; white-space: nowrap; cursor: pointer; }
+/* 출처 줄 — 누르면 접는다(작은 '출처 ▸'만), 다시 누르면 편다. 이 화면(브라우저)마다 기억 */
+#lsrc.fold { font-size: 0; }
+#lsrc.fold::before { content: "출처 ▸"; font-size: 11px; color: var(--ink-3); }
 #badges { display: inline-flex; gap: 6px; text-shadow: none; }
 .badge {
   display: inline-block; font-size: 13px; font-weight: 600; padding: 2px 9px; border-radius: 6px;
@@ -410,6 +413,20 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 .rng-pop button.on { background: color-mix(in oklab, var(--accent) 18%, transparent); box-shadow: inset 3px 0 0 var(--accent); }
 .rng-pop .note { font: 500 12px var(--sans); color: var(--ink-3); padding: 6px 10px 4px; max-width: 230px; line-height: 1.4; }
 .rng-pop .sep { height: 1px; margin: 4px 6px; background: var(--line); }
+/* 날짜 지정 — 그날 0시부터(오늘부터 7일 앞까지) */
+.rng-pop .dt { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 10px; border-radius: 8px;
+  font: 600 14px var(--sans); color: var(--ink); }
+.rng-pop .dt.on { background: color-mix(in oklab, var(--accent) 18%, transparent); box-shadow: inset 3px 0 0 var(--accent); }
+.rng-pop .dt input, #prefs input[type=date] { font: 600 13px var(--mono); color: var(--ink); background: var(--panel-2, transparent);
+  border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; color-scheme: dark light; }
+.rng-pop .dt small { flex-basis: 100%; font: 500 11.5px var(--sans); color: var(--ink-3); }
+/* 강수 누적 머리 고정을 끄면 — 머리(제목 · 설명 · 단추)와 아래 범례는 마우스를 올렸을 때만 그림 위에 떠오르고 평소에는 시군 줄만.
+   머리가 자리를 비우므로 줄이 위로 올라간다(줄 수는 다시 센다). 범례는 자리를 남긴 채 감춘다(올릴 때 줄이 흔들리지 않게) */
+#c-acc.hdr-auto .ch { position: absolute; top: 0; left: 0; right: 0; z-index: 4; border-radius: 16px 16px 0 0;
+  background: color-mix(in oklab, var(--panel) 94%, transparent); opacity: 0; pointer-events: none; transition: opacity .2s var(--ease); }
+#c-acc.hdr-auto:hover .ch { opacity: 1; pointer-events: auto; }
+#c-acc.hdr-auto #acc-b { padding-top: calc(10px * var(--k, 1)); }
+#c-acc.hdr-auto:not(:hover) .acc-lg { visibility: hidden; }
 /* 위 카드 패널 가득 — 지금 오는 비 · 예측 상위를 감추고 위 카드가 패널을 다 쓴다(머리 단추 · 다시 누르면 돌아온다) */
 #rail.accfull #c-now, #rail.accfull #c-fc { display: none; }
 /* 아래를 '초단기예측 이미지 재생'으로(Q) — 지금 오는 비 · 예측 상위 대신. 패널 가득이면 그것도 감춘다 */
@@ -422,9 +439,9 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 #c-qpf .ch { position: absolute; top: 0; left: 0; right: 0; z-index: 3; border-radius: 15px 15px 0 0;
   background: color-mix(in oklab, var(--panel) 90%, transparent); opacity: 0; pointer-events: none;
   transition: opacity .2s var(--ease); }
-#c-qpf:hover .ch, #c-qpf:focus-within .ch { opacity: 1; pointer-events: auto; }
+#c-qpf:hover .ch { opacity: 1; pointer-events: auto; }
 #c-qpf .qpf-bar { opacity: 0; pointer-events: none; transition: opacity .2s var(--ease); }
-#c-qpf:hover .qpf-bar, #c-qpf:focus-within .qpf-bar { opacity: 1; pointer-events: auto; }
+#c-qpf:hover .qpf-bar { opacity: 1; pointer-events: auto; }
 #c-qpf .qpf-clock { transition: top .2s var(--ease); }
 #c-qpf:hover .qpf-clock { top: calc(46px * var(--k, 1)); }
 /* 그림 — 서버가 경남 광역(950×800)으로 잘라 둔 기상청 그림을 판에 맞춰 통째로. 두 겹을 번갈아 띄운다(종합 화면과 같다) */
@@ -836,7 +853,8 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
         <button id="acc-full" class="fctg" aria-pressed="false" title="이 카드를 패널 가득 — 지금 오는 비 · 예측 상위를 감춘다. 다시 누르면 돌아온다 (G)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10"/></svg></button>
         <button id="acc-qpf" class="fctg" aria-pressed="false" title="아래에 초단기예측 이미지 재생(기상청 초단기강수예측 그림 · B 융합, 종합 화면 오른쪽 위와 같은 것) — 지금 오는 비 · 예측 상위 대신. 지도를 재생하면 그림이 같은 시각으로 따라간다 (Q)"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.2" y="3" width="11.6" height="10" rx="1.6"/><path class="d" d="M4.5 10.5c1.5-2.6 3-1 4.2-3.2s2-1.6 2.8-2.3"/></svg></button>
         <span class="selchip" id="acc-sel" hidden title="경남 전체로 (Esc)"></span><span class="sub" id="acc-sub" title="눌러서 누적 구간 고르기 — 지난 N시간 · 오늘 0시부터 · 어제 0시부터"></span>
-        <span class="sp"></span><span class="src" id="acc-src"></span><span class="bt" id="acc-bt">—</span></div>
+        <span class="sp"></span><span class="src" id="acc-src"></span><span class="bt" id="acc-bt">—</span>
+        <button id="acc-pin" class="fctg on" aria-pressed="true" title="머리 고정 — 끄면 제목 · 설명 · 단추가 마우스를 올렸을 때만 보이고 평소에는 시군 줄만"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2.5h4M7 2.5v4L4.5 9h7L9 6.5v-4M8 9v4.5"/></svg></button></div>
       <div class="cb" id="acc-b"></div>
       <div class="rng-pop" id="acc-rng" hidden role="menu"></div>
       <div class="rng-pop" id="acc-ctx" hidden role="menu"></div>
@@ -1031,7 +1049,7 @@ const COLLECT_OF = { obs15: "grid", obs60: "grid", obsday: "grid", acc: "grid", 
                      shrt_today: "short", shrt_tomorrow: "short" };
 const SET_DEFAULT = { flow_step: 10, flow_hours: 6, play_ms: 1200, tl_on: false, tl_stat: "max",
                       panel: "cards", acc_hours: 12, acc_from: "hours", acc_basis: "aws", sel_zoom: true, acc_fc: true, acc_h1: true,
-                      acc_per: 1, acc_full: false, aws_live: false, acc_qpf: false, qpf_ms: 600 };
+                      acc_per: 1, acc_full: false, aws_live: false, acc_qpf: false, qpf_ms: 600, acc_date: "", acc_hdr_pin: true };
 
 let META = null, TOPO = null, GEO = null, MSIG = null, MEMD = null, EMDN = null;
 let SET = { ...SET_DEFAULT };
@@ -1625,10 +1643,10 @@ function reqTm(key) {
 function accParams(p, key) {
   if (!ACCK.has(key) || CASE) return p;
   p.set("hours", String(SET.acc_hours || 12));
-  p.set("since", SET.acc_from || "hours");
+  p.set("since", SET.acc_from === "date" ? SET.acc_date : SET.acc_from || "hours");     // 날짜 지정은 'YYYYMMDD'
   return p;
 }
-const accSig = key => ACCK.has(key) && !CASE ? `|${SET.acc_from || "hours"}:${SET.acc_hours || 12}` : "";
+const accSig = key => ACCK.has(key) && !CASE ? `|${SET.acc_from || "hours"}:${SET.acc_hours || 12}:${SET.acc_date || ""}` : "";
 function qs(key, tm) {
   const p = new URLSearchParams();
   if (tm) p.set("tm", tm);
@@ -2306,8 +2324,22 @@ function nextHours(labels, after) {          // 예측 '00','01',… → after �
    AWS 는 '지금' 칸까지라 시간 수를 여기서 센다(0시부터 지금 시각까지 H 칸, 진행 중인 칸은 따로 붙는다).
    격자는 마지막 정시 격자에서 세야 맞아서 since 를 서버에 넘긴다.
    받은 매시 값은 DB(AWS obs_hourly) · 파일(격자 obs60)에 남는다 — 구간을 늘리면 없는 시각만 한 번 받는다 */
+/* 날짜 지정 누적 — 그날 0시부터(오늘부터 7일 앞까지, 서버 ACC_DATE_DAYS). 'YYYYMMDD' */
+const ACC_DATE_DAYS = 7;
+const dateOf = d => new Date(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8));
+const ymd = t => `${t.getFullYear()}${String(t.getMonth() + 1).padStart(2, "0")}${String(t.getDate()).padStart(2, "0")}`;
+const isoOf = d => `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`;
+function dateBounds() {                  // date 입력 min · max — 오늘부터 7일 앞까지
+  const t = NOWD(), lo = new Date(t); lo.setDate(lo.getDate() - ACC_DATE_DAYS);
+  return [isoOf(ymd(lo)), isoOf(ymd(t))];
+}
 function accSpan() {
   const f = SET.acc_from || "hours", h = NOWD().getHours();
+  if (f === "date" && /^\d{8}$/.test(SET.acc_date || "")) {
+    const d = SET.acc_date;
+    return { H: Math.max(1, Math.min(24 * (ACC_DATE_DAYS + 1), Math.floor((NOWD() - dateOf(d)) / 3600e3))),
+             since: d, label: `${+d.slice(4, 6)}.${+d.slice(6, 8)}. 0시부터` };
+  }
   if (f === "today") return { H: Math.max(1, h), since: "today", label: "오늘 0시부터" };
   if (f === "yesterday") return { H: 24 + h, since: "yesterday", label: "어제 0시부터" };
   return { H: SET.acc_hours, since: null, label: `지난 ${SET.acc_hours}시간` };
@@ -2315,10 +2347,11 @@ function accSpan() {
 const RNG_OPTS = [["hours", 6, "지난 6시간"], ["hours", 12, "지난 12시간"], ["hours", 24, "지난 24시간"],
                   ["hours", 48, "지난 48시간"], ["today", null, "오늘 0시부터"], ["yesterday", null, "어제 0시부터"]];
 const rngOn = ([f, h]) => (SET.acc_from || "hours") === f && (f !== "hours" || +SET.acc_hours === h);
-function setRange(f, h) {
+function setRange(f, h, date) {
   SET.acc_from = f;
   const body = { acc_from: f };
   if (h) { SET.acc_hours = h; body.acc_hours = h; }
+  if (f === "date") { SET.acc_date = date; body.acc_date = date; }
   saveSetting(body);
   CARDS = null; loadCards();
   if (ACCK.has(kind) && !CASE) show(true);       // 지도 누적 · AWS 누적 층도 같은 구간으로
@@ -2326,8 +2359,11 @@ function setRange(f, h) {
 function rangePop(open = $("acc-rng").hidden) {
   const pop = $("acc-rng");
   if (!open) { pop.classList.remove("open"); pop.hidden = true; return; }
+  const [lo, hi] = dateBounds(), dOn = SET.acc_from === "date";
   pop.innerHTML = `<div class="g">누적 구간</div>` + RNG_OPTS.map((o, i) =>
-    `<button data-i="${i}" class="${rngOn(o) ? "on" : ""}" style="--i:${i}">${o[2]}</button>`).join("");
+    `<button data-i="${i}" class="${rngOn(o) ? "on" : ""}" style="--i:${i}">${o[2]}</button>`).join("")
+    + `<div class="sep"></div><label class="dt${dOn ? " on" : ""}">날짜 지정<input type="date" id="acc-date" min="${lo}" max="${hi}"
+         value="${dOn && SET.acc_date ? isoOf(SET.acc_date) : ""}"><small>그날 0시부터</small></label>`;
   const sb = $("acc-sub").getBoundingClientRect(), cb = $("c-acc").getBoundingClientRect();
   pop.style.left = (sb.left - cb.left) / V.k + "px"; pop.style.top = (sb.bottom - cb.top + 4) / V.k + "px";
   pop.hidden = false; void pop.offsetWidth; pop.classList.add("open");
@@ -2336,6 +2372,9 @@ function rangePop(open = $("acc-rng").hidden) {
     const [f, h] = RNG_OPTS[+b.dataset.i];
     rangePop(false); setRange(f, h);
   };
+  const di = $("acc-date");
+  di.onclick = di.onpointerdown = ev => ev.stopPropagation();
+  di.onchange = () => { if (di.value && di.value >= lo && di.value <= hi) { rangePop(false); setRange("date", null, di.value.replace(/-/g, "")); } };
 }
 /* 줄 세우기(위 카드 우클릭) — 시군당 n곳(1~3) · 0 = 시군 무관(전 지점 순위). 종합 화면 강수 타임라인 우클릭과 같은 말.
    시군을 골랐으면 그 시군 지점 · 읍면동 전부라 쓰지 않는다 */
@@ -3296,10 +3335,14 @@ document.addEventListener("pointerdown", ev => {
 let ALERTS = null, ALERTBOX = [];
 const LVRANK = { severe: 3, warn: 2, watch: 1 };
 const LVNAME = { severe: "중대경보", warn: "경보", watch: "주의보" };
-function regSig(reg) {                    // '합천서북부' → ['합천', '서북'], '창원시' → ['창원', '']
+/* '합천서북부' → ['합천', '서북'], '창원시' → ['창원', ''] — 시군 이름 뒤가 시 · 군 · 방위(…부)일 때만.
+   ⚠️ 앞머리만 맞추면 '남해서부서쪽먼바다'(전남 쪽 바다)가 남해군 특보로 그려졌다. 바다 구역은 시군이 아니다 */
+function regSig(reg) {
+  if (/바다|해상/.test(reg)) return [null, ""];
   for (const s of ORDER_GN()) if (reg.startsWith(s)) {
     const rest = reg.slice(s.length);
-    return [s, rest === "시" || rest === "군" ? "" : rest.replace(/부$/, "")];
+    if (rest === "" || rest === "시" || rest === "군") return [s, ""];
+    if (/^[동서남북중]{1,2}부$/.test(rest)) return [s, rest.replace(/부$/, "")];
   }
   return [null, ""];
 }
@@ -3307,7 +3350,8 @@ function parseAlerts(j) {
   const data = j?.data || { groups: [], pending: [] };
   const bySig = {}, land = [], sea = [];
   for (const g of data.groups || []) {
-    if (g.sea) { sea.push(g); continue; }
+    // 바다 — 서버가 경남 바다만 준다. 혹시 육상으로 와도 구역 이름이 바다면 바다로(시군에 긋지 않는다)
+    if (g.sea || (g.regions || []).every(r => /바다|해상/.test(r))) { sea.push({ ...g, sea: true }); continue; }
     const where = [];
     for (const reg of g.regions || []) {
       const [s, sub] = regSig(reg);
@@ -3327,7 +3371,7 @@ function testAlerts() {
       { lv: "warn", name: "호우경보", sea: false, tmfc: hhmm, regions: ["창원", "김해"] },
       { lv: "watch", name: "호우주의보", sea: false, tmfc: hhmm, regions: ["진주", "산청서남부", "함안"] },
       { lv: "watch", name: "강풍주의보", sea: false, tmfc: hhmm, regions: ["통영", "거제", "창원"] },
-      { lv: "watch", name: "풍랑주의보", sea: true, tmfc: hhmm, regions: ["남해동부앞바다", "거제시동부앞바다"] },
+      { lv: "watch", name: "풍랑주의보", sea: true, tmfc: hhmm, regions: ["남해동부동쪽안쪽먼바다", "거제시동부앞바다"] },
     ],
     pending: [{ kind: "pre", name: "호우", reg: "하동", sigun: "하동", when: "새벽(03~06시)" },
               { kind: "pre", name: "호우", reg: "남해", sigun: "남해", when: "새벽(03~06시)" }] } };
@@ -3404,15 +3448,24 @@ function drawAlerts() {
       y += bh + 3;
     }
   }
-  // 바다 특보 — 바다 위(거제 남쪽)에 글로
+  // 바다 특보 — 경남 바다(남해동부 먼바다 · 거제 · 경남 앞바다)만, 땅에 긋지 않고 바다 위(거제 남쪽)에 글로.
+  // 둘째 줄에 구역(줄인 이름) — 어느 바다인지. 시군 경계 · 이름과 겹치지 않게 땅에서 떨어진 자리
   if (ALERTS.sea.length) {
-    const [cx, cy] = LCCF(128.66, 34.62);
-    const fs = FSN * 0.62;
+    // ⚠️ 거제 남쪽(34.55°N)은 1920×1080 에서 화면 맨 아래 — 재생 막대와 겹쳤다. 거제 동남쪽 트인 바다(부산 아래)로
+    const [cx, cy] = LCCF(128.98, 34.84);
+    const fs = FSN * 0.56, fs2 = fs * 0.72, x = V.toX(cx).toFixed(1);
+    const short = r => r.replace(/^남해동부/, "").replace(/시동부앞바다$/, "앞바다").replace(/(먼바다|앞바다)$/, " $1").trim();
     let y = V.toY(cy);
     for (const g of ALERTS.sea) {
-      badges.push(`<text class="wsea" x="${V.toX(cx).toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle"
+      const regs = (g.regions || []).map(short);
+      badges.push(`<text class="wsea" x="${x}" y="${y.toFixed(1)}" text-anchor="middle"
         style="font-size:${fs.toFixed(1)}px;fill:var(--lv-${g.lv});stroke-width:${(fs * 0.2).toFixed(1)}px">바다 · ${g.name}</text>`);
-      y += fs * 1.35;
+      y += fs * 1.1;
+      if (regs.length) {
+        badges.push(`<text class="wsea" x="${x}" y="${y.toFixed(1)}" text-anchor="middle"
+          style="font-size:${fs2.toFixed(1)}px;fill:var(--ink-2);stroke-width:${(fs2 * 0.2).toFixed(1)}px">${regs.slice(0, 3).join(" · ")}${regs.length > 3 ? ` 외 ${regs.length - 3}` : ""}</text>`);
+        y += fs2 * 1.5;
+      }
     }
   }
   gl.innerHTML = `<defs>${defs.join("")}</defs>${lines.join("")}`;
@@ -3771,6 +3824,9 @@ function helpHtml(tab) {
       시군을 고른 동안은 그 시군 것 전부</dd>
     <dt>아래에 초단기예측 이미지 재생 <code>Q</code></dt><dd>위 카드 머리의 그림 단추 · 우클릭 메뉴 — 지금 오는 비 · 예측 상위 대신 기상청 초단기강수예측 그림(B 융합, 종합 화면 오른쪽 위와 같은 것)을
       강수 누적 아래에. 평소에는 따로 돌고, <b>지도를 재생하는 동안만</b> 지도와 같은 시각의 그림으로 따라간다(실측 구간이면 첫 그림에 멈춰 적는다)</dd>
+    <dt>머리 고정 · 출처 줄</dt><dd>강수 누적 머리 오른쪽 끝 핀 — 끄면 머리 · 범례는 마우스를 올렸을 때만, 평소에는 시군 줄만.
+      지도 제목 밑 출처 줄은 누르면 접고 다시 누르면 편다</dd>
+    <dt>누적 날짜 지정</dt><dd>누적 구간(카드 설명을 누르거나 설정 › 오른쪽 패널)에서 날짜를 고르면 그날 0시부터 지금까지 — 오늘부터 7일 앞까지</dd>
     <dt>패널 가득</dt><dd>위 카드 머리의 네 귀 단추 · <code>G</code> — 지금 오는 비 · 예측 상위를 감추고 위 카드가 패널을 다 쓴다. 다시 누르면 돌아온다</dd>
     <dt>줄에 마우스</dt><dd>지도에 그 시군 · 지점 · 칸까지 선이 그어진다</dd>
     <dt>관측소에 마우스</dt><dd>실측과 그 칸 격자 값, 차이(격자 − 관측)</dd>
@@ -3869,6 +3925,10 @@ function prefTabs() {
   };
 }
 function openPrefs() {
+  if (QCFG_AHEAD === null && !openPrefs.busy) {          // 이미지 길이는 수집 설정 — 처음 열 때 읽어 다시 그린다
+    openPrefs.busy = true;
+    loadQcfg().then(() => { openPrefs.busy = false; if (QCFG_AHEAD !== null && !$("prefs").hidden) openPrefs(); });
+  }
   stopPlay();
   const seg = (key, opts) => `<span class="seg">${opts.map(([v, l]) =>
     `<button data-k="${key}" data-v="${v}" class="${String(SET[key]) === String(v) ? "on" : ""}">${l}</button>`).join("")}</span>`;
@@ -3885,13 +3945,20 @@ function openPrefs() {
       그 분의 직전 60분, 기상청 AWS). 켠 동안만 매분자료를 1분마다 받는다. 층 메뉴 실측 머리의 '실시간' · R 키와 같다.</span></div>
     <div class="row"><span class="k">지도 빠르기</span>${seg("play_ms", [[3000, "아주 느리게"], [2000, "느리게"], [1200, "보통"], [600, "빠르게"], [400, "아주 빠르게"]])}</div>
     <div class="row"><span class="k">초단기예측 이미지</span>${seg("qpf_ms", [[1500, "아주 느리게"], [1000, "느리게"], [600, "보통"], [400, "빠르게"], [250, "아주 빠르게"]])}</div>
+    <div class="row"><span class="k">이미지 길이</span><span class="seg">${[180, 240, 300, 360].map(v =>
+      `<button data-ahead="${v}" class="${QCFG_AHEAD === v ? "on" : ""}">${v / 60}시간</button>`).join("")}</span></div>
     <div class="row"><span class="k"></span><span class="note">한 장 머무는 시간 — 지도 3 · 2 · 1.2 · 0.6 · 0.4초, 초단기예측 이미지(오른쪽 아래, Q) 1.5 · 1 · 0.6 · 0.4 · 0.25초.
-      지도를 재생하는 동안은 이미지가 지도와 같은 시각으로 가므로 지도 빠르기를 따른다.</span></div>
+      지도를 재생하는 동안은 이미지가 지도와 같은 시각으로 가므로 지도 빠르기를 따른다.
+      이미지 길이는 수집 설정(종합 화면 '최대 선행시간'과 같다) — 다음 발표분부터 그만큼 받는다(6시간이면 3시간의 두 배를 부른다).</span></div>
     <h4>오른쪽 패널</h4>
     <div class="row"><span class="k">표시</span>${seg("tl_on", [[true, "켬"], [false, "끔"]])}</div>
     <div class="row"><span class="k">방식</span>${seg("panel", [["cards", "카드 — 종합 화면 판"], ["timeline", "타임라인 — 시군 선"]])}</div>
     <div class="row"><span class="k">누적 구간</span><span class="seg">${RNG_OPTS.map((o, i) =>
       `<button data-rng="${i}" class="${rngOn(o) ? "on" : ""}">${o[2].replace("지난 ", "")}</button>`).join("")}</span></div>
+    <div class="row"><span class="k">날짜 지정</span><span class="seg"><button data-a="date" class="${SET.acc_from === "date" ? "on" : ""}">${SET.acc_from === "date" ? accSpan().label : "고르기"}</button></span>
+      <input type="date" id="pf-date" min="${dateBounds()[0]}" max="${dateBounds()[1]}" value="${SET.acc_from === "date" && SET.acc_date ? isoOf(SET.acc_date) : ""}"></div>
+    <div class="row"><span class="k"></span><span class="note">AWS · 격자 누적을 그날 0시부터 — 오늘부터 ${ACC_DATE_DAYS}일 앞까지(예: 10.20. 0시부터 지금까지).
+      지도 누적 층 · 강수 누적 카드가 같이 바뀐다. 격자는 빠진 정각을 10분마다 4장씩 메운다(그동안 합은 하한).</span></div>
     <div class="row"><span class="k">타임라인 값</span>${seg("tl_stat", [["max", "시군 최대"], ["mean", "시군 평균"]])}</div>
     <h4>화면</h4>
     <div class="row"><span class="k">테마</span><span class="seg">
@@ -3928,6 +3995,19 @@ function openPrefs() {
   for (const b of $("prefs").querySelectorAll("button[data-th]")) b.onclick = () => { setTheme(b.dataset.th); openPrefs(); };
   for (const b of $("prefs").querySelectorAll("button[data-tools]")) b.onclick = () => { setTools(b.dataset.tools); openPrefs(); };
   for (const b of $("prefs").querySelectorAll("button[data-rng]")) b.onclick = () => { const [f, h] = RNG_OPTS[+b.dataset.rng]; setRange(f, h); openPrefs(); };
+  // 초단기예측 이미지 길이 — 수집 설정(서버 qpf.ahead). 다음 발표분부터 그만큼 받는다
+  for (const b of $("prefs").querySelectorAll("button[data-ahead]")) b.onclick = async () => {
+    const v = +b.dataset.ahead;
+    try {
+      const r = await fetch("/api/settings/qpf", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ahead: v }) });
+      if (r.ok) QCFG_AHEAD = (await r.json()).qpf.ahead;
+    } catch {}
+    openPrefs();
+  };
+  const pd = $("pf-date"), [dlo, dhi] = dateBounds();
+  pd.onchange = () => { if (pd.value && pd.value >= dlo && pd.value <= dhi) { setRange("date", null, pd.value.replace(/-/g, "")); openPrefs(); } };
+  const pb = $("prefs").querySelector('button[data-a="date"]');
+  pb.onclick = () => (pd.showPicker ? pd.showPicker() : pd.focus());
   fillDemo($("pf-demo"));
 }
 /* 오른쪽 위 도구 — 이 화면(브라우저)마다 기억. 기본은 '마우스를 움직이면'(벽면 화면이 깔끔하게) */
@@ -3951,6 +4031,9 @@ toolsWake();                               // 처음 뜰 때 한 번 보여 준�
 function closePrefs() { $("prefs").hidden = true; }
 $("prefs").addEventListener("click", ev => { if (ev.target.id === "prefs") closePrefs(); });
 
+/* 초단기예측 이미지 길이(분) — 수집 설정 qpf.ahead(180 · 240 · 300 · 360). 설정 창을 열 때 읽는다 */
+let QCFG_AHEAD = null;
+async function loadQcfg() { try { QCFG_AHEAD = (await getJson("/api/settings")).qpf?.ahead ?? null; } catch {} }
 /* AWS 실시간 감시 — 끄면 AWS 누적 · 1시간이 정시마다, 켜면 마지막 정시 뒤 매분자료까지 1분마다.
    설정은 서버에 둔다(벽면 화면 · 1분 수집기가 같이 본다). 켜면 매분을 곧바로 한 번 받아 기다리지 않게 한다 */
 async function setLive(on) {
@@ -4081,6 +4164,30 @@ function toggleAccFull() {
   if (CARDS && !CARDS.err) renderCards();     // 줄 수는 카드 높이로 정한다 — 늘어난 만큼 다시 채운다
 }
 $("acc-full").onclick = ev => { ev.stopPropagation(); toggleAccFull(); };
+/* 강수 누적 머리 고정(서버 설정 acc_hdr_pin — 벽면 화면도 같이). 끄면 평소에는 시군 줄만 */
+function applyHdrPin() {
+  const pin = SET.acc_hdr_pin !== false;
+  $("c-acc").classList.toggle("hdr-auto", !pin);
+  $("acc-pin").classList.toggle("on", pin); $("acc-pin").setAttribute("aria-pressed", pin);
+}
+$("acc-pin").onclick = ev => {
+  ev.stopPropagation();
+  SET.acc_hdr_pin = SET.acc_hdr_pin === false;
+  saveSetting({ acc_hdr_pin: SET.acc_hdr_pin });
+  applyHdrPin();
+};
+/* 지도 출처 줄 — 누르면 접고(작은 '출처 ▸') 다시 누르면 편다 */
+{
+  let fold = false;
+  try { fold = localStorage.getItem("gn-map-lsrc") === "0"; } catch {}
+  $("lsrc").classList.toggle("fold", fold);
+  $("lsrc").title = "눌러서 출처 줄 접기 · 펴기";
+  $("lsrc").onclick = () => {
+    fold = !fold;
+    $("lsrc").classList.toggle("fold", fold);
+    try { localStorage.setItem("gn-map-lsrc", fold ? "0" : "1"); } catch {}
+  };
+}
 
 /* ── 초단기예측 이미지 재생(Q) — 오른쪽 아래, 지금 오는 비 · 예측 상위 대신. 종합 화면 오른쪽 위 '예측 분포 재생'과 같은 그림
    (기상청 초단기 QPF B 융합, 10분 간격 +10~+360분, 서버가 경남 광역으로 잘라 둔 것 — /api/qpf/<발표>/<ef>.png).
@@ -4367,7 +4474,7 @@ async function boot() {
                : CASE ? ["alerts"] : (SET.overlays || []));
   renderLayers();
   vsrtN = +SET.vsrt_n || 1; x4 = !!SET.x4;
-  applyAccFull();
+  applyAccFull(); applyHdrPin();
   // 색 — ?pal=kma|blue 가 서버 설정보다 먼저(벽면 화면 고정용). 기상청 색은 서버가 뽑아 둔 범례를 받아 와야 쓴다
   PAL = ["kma", "blue"].includes(Q.get("pal")) ? Q.get("pal") : SET.pal === "kma" ? "kma" : "blue";
   if (PAL === "kma") await loadKmaLegend();

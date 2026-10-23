@@ -30,7 +30,11 @@ SUBZONES = {
 NO_SPLIT_SIGUN = {"고성"}
 
 SEA_PARENTS = {"남해동부전해상", "남해동부앞바다"}
-SEA_EXCLUDE = ("부산", "전남")
+# 경남 바다가 아닌 것 — 부산 · 전남 앞바다, 남해**서부** 먼바다(전남 쪽). ⚠️ '남해서부…'는 '남해'(군)로 시작해
+# 시군 이름 앞머리 맞추기에 걸려 남해군 특보처럼 그려졌다(2026-10-23 남해서부서쪽 · 동쪽먼바다 풍랑주의보)
+SEA_EXCLUDE = ("부산", "전남", "남해서부")
+# 경남 바다라고 볼 이름 — 남해동부 먼바다(동쪽 · 서쪽 · 안쪽 · 바깥)는 SEA_PARENTS 나 '남해동부'로, 앞바다는 이 말로
+GN_SEA_KEYS = ("거제", "경남", "통영")
 
 
 @lru_cache(maxsize=1)
@@ -53,18 +57,25 @@ def grids() -> dict:
     return json.loads((DATA / "gyeongnam_grids.json").read_text(encoding="utf-8"))
 
 
+def is_sea(reg_up: str, reg: str) -> bool:
+    """바다 특보 구역인가 — 이름으로 가른다('…앞바다' · '…먼바다' · '…전해상'). 상위구역 목록만 보면 새 구역을 놓친다."""
+    return reg_up in SEA_PARENTS or "바다" in reg or "해상" in reg or "바다" in reg_up or "해상" in reg_up
+
+
 def in_gyeongnam(reg_up: str, reg: str) -> bool:
-    """특보 행이 경남 것인지 — 육상 미세분 / 육상 세분화 / 해상."""
+    """특보 행이 경남 것인지 — 육상 미세분 / 육상 세분화 / 해상.
+
+    바다는 경남 바다만 — 남해동부 먼바다 · 경남 앞바다(거제시동부 · 경남중부남해 · 경남서부남해 …). 부산 · 전남 · 남해서부는 뺀다.
+    세분화된 군(합천 · 산청 · 함양 · 거창 · 하동)은 상위구역이 'OO군' 그대로일 때만.
+    ⚠️ 예전에는 상위구역이 시군 이름으로 **시작**하기만 하면 경남으로 쳤다 — '남해서부먼바다'가 '남해'로 걸렸다."""
+    if is_sea(reg_up, reg):
+        if any(x in reg or x in reg_up for x in SEA_EXCLUDE):
+            return False
+        return reg_up in SEA_PARENTS or reg.startswith("남해동부") or any(k in reg for k in GN_SEA_KEYS)
     if reg_up == "경상남도":
         return True
-    if reg_up in SEA_PARENTS:
-        return not any(x in reg for x in SEA_EXCLUDE)
-    for sig in ORDER:
-        if sig in NO_SPLIT_SIGUN:
-            continue                      # 강원 고성이 새어 들어오는 것을 막는다
-        if reg_up.startswith(sig):
-            return True
-    return False
+    # 강원 고성(상위구역 '고성군')은 SUBZONES 에 없어 새어 들지 않는다(경남 고성은 늘 '경상남도')
+    return reg_up.removesuffix("군") in SUBZONES
 
 
 def sigun_of(reg: str) -> str | None:

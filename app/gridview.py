@@ -821,28 +821,57 @@ def acc_table(acc: np.ndarray, frames: list, sigun: str | None = None, h1: np.nd
 _ACC_CACHE: dict[tuple, dict] = {}
 
 
+ACC_DATE_DAYS = 7                 # 날짜 지정 누적 — 오늘부터 며칠 앞까지 고를 수 있나(그날 0시부터)
+ACC_SPAN_MAX = 24 * (ACC_DATE_DAYS + 1)      # 그때 최대 시간 수(7일 전 0시 ~ 오늘 23시)
+
+
+def valid_date(s) -> bool:
+    """'YYYYMMDD' 날짜 지정 누적의 시작일인가."""
+    if not isinstance(s, str) or len(s) != 8 or not s.isdigit():
+        return False
+    try:
+        datetime.strptime(s, "%Y%m%d")
+    except ValueError:
+        return False
+    return True
+
+
+def since_day(since: str | None, end: datetime) -> datetime | None:
+    """누적 시작 0시 — today · yesterday · 'YYYYMMDD'(날짜 지정). 지난 N시간이면 None."""
+    if since in ("today", "yesterday"):
+        return end.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1 if since == "yesterday" else 0)
+    if valid_date(since):
+        return datetime.strptime(since, "%Y%m%d")
+    return None
+
+
 def span_hours(since: str | None, end: datetime, hours: int = 12) -> int:
-    """누적 구간 시간 수 — since 가 today/yesterday 면 그날 0시부터 end(마지막 정시)까지, 아니면 hours.
+    """누적 구간 시간 수 — since 가 today/yesterday/날짜(YYYYMMDD)면 그날 0시부터 end(마지막 정시)까지, 아니면 hours.
 
     ⚠️ 정시 'H시' 한 장은 (H-1)~H시다. 0시부터 15시까지는 01·02 … 15시 열다섯 장이다.
-       0시 정각이면 오늘 몫이 아직 없다 — 한 장(어제 23~24시)이라도 보여 준다."""
-    if since not in ("today", "yesterday"):
+       0시 정각이면 오늘 몫이 아직 없다 — 한 장(어제 23~24시)이라도 보여 준다.
+    날짜 지정은 ACC_SPAN_MAX(8일)까지 — 그보다 앞이면 그만큼만(설정이 7일 앞까지만 받는다)."""
+    d0 = since_day(since, end)
+    if d0 is None:
         return max(1, min(48, int(hours)))
-    d0 = end.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1 if since == "yesterday" else 0)
-    return max(1, min(48, int((end - d0).total_seconds() // 3600)))
+    cap = 48 if since in ("today", "yesterday") else ACC_SPAN_MAX
+    return max(1, min(cap, int((end - d0).total_seconds() // 3600)))
 
 
 _SUM_CACHE: dict[tuple, dict] = {}
 
 
 def acc_window(hours: int | None = None, since: str | None = None) -> tuple[int, str | None]:
-    """누적 구간 — 주지 않으면 지도 설정(강수 누적 카드가 고른 것). since 는 today | yesterday | None(지난 hours)."""
+    """누적 구간 — 주지 않으면 지도 설정(강수 누적 카드가 고른 것).
+    since 는 today | yesterday | 'YYYYMMDD'(날짜 지정 — 설정 acc_from=date · acc_date) | None(지난 hours)."""
     if hours is None or since is None:
         st = setting()
         hours = int(hours or st.get("acc_hours") or 12)
         if since is None:
             since = st.get("acc_from")
-    return int(hours), (since if since in ("today", "yesterday") else None)
+            if since == "date":
+                since = st.get("acc_date")
+    return int(hours), (since if since in ("today", "yesterday") or valid_date(since) else None)
 
 
 def _acc_keys(hours: int, since: str | None, now: datetime, test: bool) -> tuple[list[str], list[str]]:
@@ -1095,7 +1124,8 @@ SETTING_DEFAULT = {"layer": "obs60", "x4": False, "vsrt_n": 1,
                    # 타임라인의 시군 '최대'/'평균', 카드의 누적 구간(시간)
                    "tl_on": False, "panel": "cards", "tl_stat": "max", "acc_hours": 12,
                    # 누적 구간을 어디서부터 — hours(지난 acc_hours 시간) · today(오늘 0시부터) · yesterday(어제 0시부터)
-                   "acc_from": "hours",
+                   # · date(acc_date 'YYYYMMDD' 0시부터 — 오늘부터 ACC_DATE_DAYS 일 앞까지)
+                   "acc_from": "hours", "acc_date": "",
                    # 누적 카드 기준 — aws: 관측소 다우지점(스방 265 → 기상청 56) / grid: 격자 누적 최대 칸
                    "acc_basis": "aws",
                    # 시군을 누르면 그 시군으로 확대(읍면동 경계·이름이 나온다). 끄면 테두리만
@@ -1118,6 +1148,8 @@ SETTING_DEFAULT = {"layer": "obs60", "x4": False, "vsrt_n": 1,
                    "acc_qpf": False,
                    # 초단기예측 이미지 한 장 머무는 시간(ms) — 따로 재생할 때(지도와 같이 갈 때는 지도 빠르기)
                    "qpf_ms": 600,
+                   # 강수 누적 카드 머리(제목 · 설명 · 단추) 고정 — 끄면 마우스를 올렸을 때만, 평소에는 시군 줄만
+                   "acc_hdr_pin": True,
                    # 지도 위에 겹칠 레이어(왼쪽 위 '레이어'에서 켠다). 차츰 늘린다.
                    "overlays": []}
 OVERLAYS = ("alerts", "stations", "stnval")   # stnval = 관측소 옆 값 글자(관측소에 딸림)
@@ -1125,7 +1157,7 @@ _CHOICES = {"flow_step": (10, 20, 30, 60), "flow_hours": (1, 3, 6, 12),
             "play_ms": (400, 600, 1200, 2000, 3000), "tl_stat": ("max", "mean"),
             "qpf_ms": (250, 400, 600, 1000, 1500),
             "panel": ("cards", "timeline"), "acc_hours": (6, 12, 24, 48),
-            "acc_from": ("hours", "today", "yesterday"),
+            "acc_from": ("hours", "today", "yesterday", "date"),
             "acc_basis": ("aws", "grid"),
             # 지도 색 — 청색 램프 / 기상청 레이더 색(범례 색 띠를 누르면 바뀐다)
             "pal": ("blue", "kma"),
@@ -1143,7 +1175,7 @@ def put_setting(body: dict) -> dict:
     if "layer" in body:
         split(str(body["layer"]))            # 모르는 층이면 LookupError
         cur["layer"] = str(body["layer"])
-    for k in ("x4", "tl_on", "sel_zoom", "acc_fc", "acc_h1", "acc_full", "aws_live", "acc_qpf"):
+    for k in ("x4", "tl_on", "sel_zoom", "acc_fc", "acc_h1", "acc_full", "aws_live", "acc_qpf", "acc_hdr_pin"):
         if k in body:
             cur[k] = bool(body[k])
     if "vsrt_n" in body:
@@ -1157,6 +1189,16 @@ def put_setting(body: dict) -> dict:
             if v not in ok:
                 raise ValueError(f"{k} 는 {ok} 중 하나")
             cur[k] = v
+    if "acc_date" in body:
+        d = str(body["acc_date"] or "")
+        if not valid_date(d):
+            raise ValueError("acc_date 는 YYYYMMDD")
+        today = clock.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        if not today - timedelta(days=ACC_DATE_DAYS) <= datetime.strptime(d, "%Y%m%d") <= today:
+            raise ValueError(f"acc_date 는 오늘부터 {ACC_DATE_DAYS}일 앞까지")
+        cur["acc_date"] = d
+    if cur.get("acc_from") == "date" and not valid_date(cur.get("acc_date")):
+        raise ValueError("날짜 지정 누적에는 acc_date 가 있어야 한다")
     if "overlays" in body:
         ov = body["overlays"]
         if not isinstance(ov, list) or any(x not in OVERLAYS for x in ov):

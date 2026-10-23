@@ -140,7 +140,7 @@ app = FastAPI(title="경남 기상 대시보드", lifespan=lifespan)
 
 
 @app.get("/api/rain")
-async def api_rain(hours: int = Query(12, ge=1, le=72),
+async def api_rain(hours: int = Query(12, ge=1, le=gridview.ACC_SPAN_MAX),
                    src: str = Query("kma", pattern="^(kma|bangjae)$"), tail: bool = True):
     """지점별 강수량. `src=bangjae` 면 스방 265개소. `tail=0` 이면 정시까지만(마지막 '정시 뒤 지금까지' 칸을 붙이지 않는다 —
     지도 판에서 AWS 실시간 감시를 끈 동안 위 카드가 지도와 같은 정시를 보이게).
@@ -248,7 +248,7 @@ async def api_grid_case(slug: str):
         raise HTTPException(404, str(e)) from e
 
 
-_SINCE = "^(today|yesterday|hours)$"         # 누적(acc) 층의 구간 — 강수 누적 카드와 같은 말
+_SINCE = r"^(today|yesterday|hours|\d{8})$"   # 누적(acc) 층의 구간 — 강수 누적 카드와 같은 말(YYYYMMDD = 그날 0시부터)
 
 
 @app.get("/api/grid/sigun")
@@ -275,9 +275,9 @@ async def api_grid_stations(layer: str, tm: str | None = None, test: bool = Fals
 
 
 @app.get("/api/grid/acctable")
-async def api_grid_acctable(hours: int = Query(12, ge=1, le=48), sigun: str | None = None,
+async def api_grid_acctable(hours: int = Query(12, ge=1, le=gridview.ACC_SPAN_MAX), sigun: str | None = None,
                        test: bool = False, case: str | None = None, tm: str | None = None,
-                       since: str | None = Query(None, pattern="^(today|yesterday)$")):
+                       since: str | None = Query(None, pattern=r"^(today|yesterday|\d{8})$")):
     """격자 누적 — 시군 줄(누적 최대 칸·읍면동·그 칸의 매시 값), `sigun=` 이면 그 시군 읍면동 줄.
     `case=` 면 재현 사례 처음부터 tm 까지. 받지 못한 정시가 있으면 missing 시간 수(합은 하한)."""
     try:
@@ -504,7 +504,7 @@ async def api_settings_get():
 @app.put("/api/settings/qpf")
 async def api_settings_qpf(body: dict):
     cur = qpf.cfg()
-    allowed = {"step": (10, 20, 30), "ahead": (180, 240, 360),
+    allowed = {"step": (10, 20, 30), "ahead": (180, 240, 300, 360),
                "size": (600, 900, 1200, 1800), "keep": tuple(range(1, 7))}
     for k, ok in allowed.items():
         if k in body:

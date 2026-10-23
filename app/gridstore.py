@@ -33,6 +33,7 @@ GEO = DATA / "geo"
 ROOT = CACHE / "grid"
 MISSING = 65535
 KEEP_DAYS = 3            # 실측 층(obs*·odam) 보관
+KEEP_HOURLY_DAYS = 9     # 60분 정각 — 지도 누적 날짜 지정(7일 앞 0시부터)이 더한다
 KEEP_RUNS = 3            # 예측 층(vsrt·shrt) 발표분 보관
 
 GRID_OF = {"obs15": "hr", "obs60": "hr", "obsday": "hr", "odam": "dfs", "vsrt": "dfs", "shrt": "dfs"}
@@ -146,6 +147,10 @@ def prune(layers=None, now: datetime | None = None) -> dict[str, int]:
             runs = sorted({k.split("_")[0] for k in ks})
             keep = set(runs[-KEEP_RUNS:])
             gone = [k for k in ks if k.split("_")[0] not in keep]
+        elif layer == "obs60":
+            # 정각 60분은 누적 날짜 지정(7일 앞 0시부터)이 더하는 칸이라 KEEP_HOURLY_DAYS 일 — 10분 칸은 KEEP_DAYS
+            cut_h = (now - timedelta(days=KEEP_HOURLY_DAYS)).strftime("%Y%m%d%H%M")
+            gone = [k for k in ks if k < cut_h or (k < cut and not k.endswith("00"))]
         else:
             gone = [k for k in ks if k < cut]
         for k in gone:
