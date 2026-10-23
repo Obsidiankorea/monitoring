@@ -283,3 +283,17 @@ def test_test_rain_shape_and_unsited_fakes():
     assert all(len(x["d"]) == 6 for x in r["rows"])
     # 기상청 자리 값은 관측소 층(테스트)과 같은 비율 — 지도와 카드가 같은 비를 보인다
     assert gridview._tfac("155") == 0.7 + 0.6 * ((155 * 37) % 100) / 100
+
+
+def test_bangjae_rain_takes_kma_stations_from_kma(tdb):
+    """내부망(스방) 카드도 기상청 지점 값은 기상청 API(obs_hourly) — 스방이 준 값은 버린다. 경남 AWS 만 스방."""
+    from app import queries
+    with tdb.tx() as c:
+        c.execute("INSERT INTO obs_hourly VALUES('155', '2026-10-03 14:00', 4, 0, 0, 'ok', 'x')")
+        c.execute("INSERT INTO bangjae_hourly VALUES('2026-10-03 13:00', '155', '창원', '창원', 99, 'x')")
+        c.execute("INSERT INTO bangjae_hourly VALUES('2026-10-03 13:00', 'BJ7', '학림', '고성', 30, 'x')")
+    r = queries._rain_bangjae(2, datetime(2026, 10, 3, 14, 20))
+    by = {x["stn"]: x for x in r["rows"]}
+    assert by["155"]["sum"] == 4.0 and by["155"]["org"] == "kma"
+    assert by["BJ7"]["sum"] == 30.0 and by["BJ7"]["org"] == "gn"
+    assert all(len(x["d"]) == len(r["labels"]) for x in r["rows"])

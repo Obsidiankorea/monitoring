@@ -88,6 +88,8 @@ async def _nightly() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.init()
+    if config.DEMO and config.SNAP:
+        snaps.add_bangjae(config.DB_PATH, config.SNAP)   # 서버 시연에 없는 경남 AWS(내부망에서 받아 둔 것)
     if os.environ.get("NO_COLLECT") == "1":
         # 화면만 띄운다(개발용). ⚠️ 같은 PC 에서 수집기가 둘 돌면 기상청 호출이 두 배가 된다.
         log.info("수집기 끔(NO_COLLECT) — 저장된 자료만 보여 준다")

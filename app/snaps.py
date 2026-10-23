@@ -268,3 +268,28 @@ def start(**kw) -> dict:
 
     threading.Thread(target=run, name="snap-make", daemon=True).start()
     return job
+
+
+# ── 경남 AWS(스방) 덧붙이기 — 서버(언레이드)는 스방에 닿지 않아 굳힌 시연에 경남 AWS 가 없다 ────────────────
+# 내부망 PC 에서 그 시각까지의 스방 시간 강수를 받아 저장소(data/demo/bangjae/<시연 이름>.json)에 넣어 두면
+# (tools/snap_bangjae.py), 시연 서버가 그 시연을 띄울 때 **사본** DB 에 얹는다 — 굳힌 원본은 손대지 않는다.
+BANGJAE_DIR = config.DATA / "demo" / "bangjae"
+
+
+def add_bangjae(db: Path, name: str | None) -> int:
+    """data/demo/bangjae/<name>.json 의 스방 시간 강수를 db 에 얹는다(없는 칸만). 얹은 줄 수."""
+    f = BANGJAE_DIR / f"{name}.json" if name else None
+    if not f or not f.exists():
+        return 0
+    j = json.loads(f.read_text("utf-8"))
+    c = sqlite3.connect(db)
+    n = 0
+    for tm, stn, nm, sg, mm in j["rows"]:
+        n += c.execute("INSERT OR IGNORE INTO bangjae_hourly(tm, stn, name, sigun, mm, fetched_at) VALUES(?,?,?,?,?,?)",
+                       (tm, stn, nm, sg, mm, j.get("made", "demo"))).rowcount
+    c.execute("INSERT OR REPLACE INTO collect_log(kind, ok_at, tried_at, ok, detail) VALUES('bangjae', ?, ?, 1, ?)",
+              (j["now"], j["now"], f"경남 AWS {j.get('stations', '')}곳 — 내부망에서 덧붙임({f.name})"))
+    c.commit()
+    c.close()
+    log.info("시연 %s 에 경남 AWS %d칸을 얹었다", name, n)
+    return n

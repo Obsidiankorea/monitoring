@@ -194,6 +194,15 @@ def _rain_bangjae(hours: int, now: datetime | None = None) -> dict:
             # 위치 — 경남 AWS 목록(시군 + 장치명), 없으면 이름이 가리키는 읍면동 가운데(임시, est). 기상청 번호면 화면이 안다
             "pos": None if stn in STN_NAME else sites.position(stn, st["name"], st["sigun"]),
         })
+    # 기상청 지점은 스방이 아니라 **기상청 API 값**(obs_hourly · 매분 보강)으로 — 스방이 기상청 몫을 떨군 적이 있고
+    # (10.18. 11시~10.19., 54곳 다), 외부망 화면(기상청 직접)과 같은 지점이 다른 값이면 헷갈린다. 경남 AWS 만 스방에서.
+    k = rain(hours, now, src="kma")
+    kp = bool(k["minute_tm"])
+    for r in k["rows"]:
+        d = r["d"][:len(slots)] + ([r["d"][-1] if kp else None] if partial else [])
+        ok = [v for v in d if v is not None]
+        r.update(d=d, sum=round(sum(ok), 1), bad=len(d) - len(ok), m60=r["m60"] if partial and kp else None, pos=None)
+    out = [r for r in out if r["stn"] not in STN_NAME] + k["rows"]
     out.sort(key=lambda r: (ORDER.index(r["sigun"]) if r["sigun"] in ORDER else 99, r["name"]))
 
     with db.tx() as con:

@@ -121,3 +121,22 @@ def test_demo_server_reads_store(live, tmp_path, monkeypatch):
             monkeypatch.delenv(k, raising=False)
         importlib.reload(config)
         importlib.reload(clock)
+
+
+def test_add_bangjae_to_snapshot_copy(tmp_path, monkeypatch):
+    """서버 시연에 없는 경남 AWS — data/demo/bangjae/<이름>.json 을 시연 사본 DB 에 얹는다(없는 칸만, 두 번 해도 같다)."""
+    import json as _json
+    import sqlite3 as _sq
+    from app import db as _db, snaps as _snaps
+    d = tmp_path / "bj"
+    d.mkdir()
+    (d / "s1.json").write_text(_json.dumps({"now": "2026-10-19 00:24", "made": "x", "stations": 1,
+                                            "rows": [["2026-10-18 23:00", "8438", "학림", "고성", 25.5]]}), "utf-8")
+    monkeypatch.setattr(_snaps, "BANGJAE_DIR", d)
+    f = tmp_path / "g.db"
+    monkeypatch.setattr(_db, "DB_PATH", f)
+    _db.init()
+    assert _snaps.add_bangjae(f, "s1") == 1 and _snaps.add_bangjae(f, "s1") == 0 and _snaps.add_bangjae(f, "none") == 0
+    c = _sq.connect(f)
+    assert c.execute("SELECT mm FROM bangjae_hourly WHERE stn='8438'").fetchone()[0] == 25.5
+    assert c.execute("SELECT ok FROM collect_log WHERE kind='bangjae'").fetchone()[0] == 1
