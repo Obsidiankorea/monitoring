@@ -68,7 +68,11 @@ def test_put_setting_validates(monkeypatch):
     # 지도 색 — 기본 청색, 범례 색 띠를 누르면 기상청 레이더 색
     assert gridview.SETTING_DEFAULT["pal"] == "blue"
     assert gridview.put_setting({"pal": "kma"})["pal"] == "kma"
+    # 위 카드 — 줄 세우기(시군당 n · 0 = 시군 무관) · 패널 가득
+    assert gridview.SETTING_DEFAULT["acc_per"] == 1 and gridview.SETTING_DEFAULT["acc_full"] is False
+    got = gridview.put_setting({"acc_per": 0, "acc_full": 1})
+    assert (got["acc_per"], got["acc_full"]) == (0, True)
     for bad in ({"flow_step": 15}, {"play_ms": 50}, {"tl_stat": "sum"}, {"layer": "nope"},
-                {"overlays": ["bars"]}, {"overlays": "alerts"}, {"pal": "rainbow"}):
+                {"overlays": ["bars"]}, {"overlays": "alerts"}, {"pal": "rainbow"}, {"acc_per": 5}):
         with pytest.raises((ValueError, LookupError)):
             gridview.put_setting(bad)

@@ -199,11 +199,14 @@ SEL_MAX = 3                     # 지도에서 한꺼번에 고르는 시군(Ctr
 
 
 def siguns_of(sigun: str | list | None) -> list[str]:
-    """'함양,거창' → ['함양', '거창']. 경남 시군만, 겹치면 하나로, SEL_MAX 곳까지. 모르면 LookupError."""
+    """'함양,거창' → ['함양', '거창']. 경남 시군만, 겹치면 하나로, SEL_MAX 곳까지. 모르면 LookupError.
+    'all' 이면 경남 열여덟 시군 전부 — 위 카드 줄 세우기(시군당 2·3곳 · 시군 무관)가 경남 읍면동을 다 받는다."""
     if not sigun:
         return []
+    gn = [s["name"] for s in gridstore.geo()["sigun"] if s["kind"] == "gn"]
+    if sigun == "all":
+        return gn
     names = [x.strip() for x in (sigun.split(",") if isinstance(sigun, str) else sigun) if x.strip()]
-    gn = {s["name"] for s in gridstore.geo()["sigun"] if s["kind"] == "gn"}
     bad = [x for x in names if x not in gn]
     if bad:
         raise LookupError(f"모르는 시군: {', '.join(bad)}")
@@ -949,6 +952,10 @@ SETTING_DEFAULT = {"layer": "obs60", "x4": False, "vsrt_n": 1,
                    "acc_h1": True,
                    # 지도 색 — blue: 청색 램프 / kma: 기상청 레이더 색(예측 분포 범례에서 뽑은 색)
                    "pal": "blue",
+                   # 위 카드 줄 세우기(우클릭) — 시군당 1·2·3곳, 0 = 시군 무관(전 지점 순위)
+                   "acc_per": 1,
+                   # 위 카드를 패널 가득(지금 오는 비 · 예측 상위를 감춘다) — 카드 머리 단추
+                   "acc_full": False,
                    # 지도 위에 겹칠 레이어(왼쪽 위 '레이어'에서 켠다). 차츰 늘린다.
                    "overlays": []}
 OVERLAYS = ("alerts", "stations", "stnval")   # stnval = 관측소 옆 값 글자(관측소에 딸림)
@@ -958,7 +965,9 @@ _CHOICES = {"flow_step": (10, 20, 30, 60), "flow_hours": (1, 3, 6, 12),
             "acc_from": ("hours", "today", "yesterday"),
             "acc_basis": ("aws", "grid"),
             # 지도 색 — 청색 램프 / 기상청 레이더 색(범례 색 띠를 누르면 바뀐다)
-            "pal": ("blue", "kma")}
+            "pal": ("blue", "kma"),
+            # 위 카드 줄 세우기 — 시군당 n곳, 0 = 시군 무관
+            "acc_per": (0, 1, 2, 3)}
 _TEXT = {"tl_stat", "panel", "acc_basis", "acc_from", "pal"}
 
 
@@ -971,7 +980,7 @@ def put_setting(body: dict) -> dict:
     if "layer" in body:
         split(str(body["layer"]))            # 모르는 층이면 LookupError
         cur["layer"] = str(body["layer"])
-    for k in ("x4", "tl_on", "sel_zoom", "acc_fc", "acc_h1"):
+    for k in ("x4", "tl_on", "sel_zoom", "acc_fc", "acc_h1", "acc_full"):
         if k in body:
             cur[k] = bool(body[k])
     if "vsrt_n" in body:

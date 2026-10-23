@@ -17,6 +17,9 @@ def test_siguns_of_validates():
         gridview.siguns_of("함양,부산")                                  # 경남 밖(이웃)은 고를 수 없다
     with pytest.raises(LookupError):
         gridview.siguns_of("함양,거창,산청,합천")                         # 3곳까지
+    # 'all' = 경남 열여덟 시군 전부(위 카드 줄 세우기 — 시군당 2·3곳 · 시군 무관)
+    gn = [s["name"] for s in gridstore.geo()["sigun"] if s["kind"] == "gn"]
+    assert gridview.siguns_of("all") == gn and len(gn) == 18
 
 
 def test_acc_table_several_siguns():
@@ -125,6 +128,8 @@ def test_forecast_several_siguns(tdb):
                         ("202610171100", "2026101712", sg, emd, v, "x"))
     r = queries.forecast(6, now=datetime(2026, 10, 17, 11, 10), sigun="함양,거창")
     assert {e["sigun"] for e in r["emd_sigun"]} == {"함양", "거창"}
+    r = queries.forecast(6, now=datetime(2026, 10, 17, 11, 10), sigun="all")
+    assert {e["sigun"] for e in r["emd_sigun"]} == {"함양", "거창", "산청"}
 
 
 def test_emd_day_windows_and_layers():

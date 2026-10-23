@@ -305,7 +305,9 @@ def forecast(hours: int = 6, now: datetime | None = None, sigun: str | None = No
 
     out = {"tmfc": tmfc, "labels": [t[8:10] for t in tmefs],
            "emd": emd_list[:24], "sigun": sig}
-    if sigun:                                  # '함양,거창' — 여러 시군 읍면동(지도 판 비교)
+    if sigun == "all":                         # 경남 읍면동 전부 — 지도 판 위 카드 줄 세우기(시군당 2·3곳 · 시군 무관)
+        out["emd_sigun"] = emd_list
+    elif sigun:                                # '함양,거창' — 여러 시군 읍면동(지도 판 비교)
         want = {x.strip() for x in sigun.split(",") if x.strip()}
         out["emd_sigun"] = [e for e in emd_list if e["sigun"] in want]
     return out
