@@ -418,7 +418,7 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 #rail.qpf:not(.accfull) #c-qpf { display: flex; }
 #c-qpf .ch .src.sync { color: var(--lv-ok); }
 /* 평소에는 그림만 — 제목 줄과 재생 막대는 마우스를 올렸을 때만 그림 위에 떠오른다(자리를 차지하지 않는다).
-   그림 시각 · 발표 시각(오른쪽 위)은 늘 보인다 — 그림이 몇 시 것인지 모르면 볼 수 없다 */
+   그림 시각 · 발표 시각(왼쪽 위)은 늘 보인다 — 그림이 몇 시 것인지 모르면 볼 수 없다 */
 #c-qpf .ch { position: absolute; top: 0; left: 0; right: 0; z-index: 3; border-radius: 15px 15px 0 0;
   background: color-mix(in oklab, var(--panel) 90%, transparent); opacity: 0; pointer-events: none;
   transition: opacity .2s var(--ease); }
@@ -435,7 +435,7 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 .qpf-view { position: absolute; inset: 0; transform-origin: 0 0; cursor: grab; touch-action: none; }
 .qpf-view.drag { cursor: grabbing; }
 .qpf-box.dim .qpf-lay { filter: grayscale(.6) opacity(.55); }
-.qpf-clock { position: absolute; top: 8px; right: 8px; display: flex; align-items: baseline; gap: 6px; padding: 3px 9px;
+.qpf-clock { position: absolute; top: 8px; left: 8px; display: flex; align-items: baseline; gap: 6px; padding: 3px 9px;
   border-radius: 8px; background: color-mix(in oklab, var(--panel) 86%, transparent); border: 1px solid var(--line); zoom: var(--k, 1); }
 .qpf-clock b { font: 600 18px var(--mono); color: var(--ink); }
 .qpf-clock i { font: 600 11.5px var(--mono); font-style: normal; color: var(--ink-2); }
@@ -460,15 +460,18 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 .mlg i { font: 600 calc(9.5px * var(--k, 1)) var(--mono); font-style: normal; text-align: center;
   min-width: calc(19px * var(--k, 1)); padding: 1px calc(3px * var(--k, 1)); }
 /* 초단기예측 이미지 범례 — 그림의 범례는 잘라 낼 때 빠진다. 기상청 원본 그림에서 그대로 뽑아 둔 색(/api/qpf/legend)으로
-   늘 보이게(종합 화면 예측 분포 재생과 같다). 센 값이 위 */
-.qpf-scale { position: absolute; left: 8px; top: 8px; bottom: 52px; zoom: var(--k, 1); display: flex; flex-direction: column;
-  padding: 5px 6px 6px; border-radius: 9px; background: color-mix(in oklab, var(--panel) 86%, transparent); border: 1px solid var(--line); }
+   늘 보이게(종합 화면 예측 분포 재생과 같다). 센 값이 위. 오른쪽 — 띠가 가장자리에 붙고 눈금은 띠 왼쪽(시각은 왼쪽 위).
+   마우스를 올리면 제목 줄이 그림 위에 생기므로 시각 · 범례가 그만큼 내려간다 */
+.qpf-scale { position: absolute; right: 8px; top: 8px; bottom: 52px; zoom: var(--k, 1); display: flex; flex-direction: column;
+  padding: 5px 6px 6px; border-radius: 9px; background: color-mix(in oklab, var(--panel) 86%, transparent); border: 1px solid var(--line);
+  transition: top .2s var(--ease); }
+#c-qpf:hover .qpf-scale { top: 50px; }
 .qpf-scale .u { font: 600 10px var(--sans); color: var(--ink-2); text-align: center; padding-bottom: 3px; }
-.qpf-scale .sc { flex: 1; min-height: 0; display: grid; grid-template-columns: 11px auto; column-gap: 4px; }
+.qpf-scale .sc { flex: 1; min-height: 0; display: grid; grid-template-columns: auto 11px; column-gap: 4px; }
 .qpf-scale .bar, .qpf-scale .tk { display: flex; flex-direction: column; }
 .qpf-scale .bar i { flex: 1; }
-.qpf-scale .tk span { flex: 1; position: relative; font: 600 9.5px var(--mono); color: var(--ink-2); }
-.qpf-scale .tk span b { position: absolute; bottom: -6px; left: 0; font-weight: 600; }
+.qpf-scale .tk span { flex: 1; position: relative; min-width: 22px; font: 600 9.5px var(--mono); color: var(--ink-2); }
+.qpf-scale .tk span b { position: absolute; bottom: -6px; right: 0; font-weight: 600; }
 .qpf-scale .none { font: 500 11px var(--sans); color: var(--ink-3); max-width: 90px; }
 .ch .bt { font: 600 calc(12px * var(--k, 1)) var(--mono); color: var(--ink-2); border: 1px solid var(--line); border-radius: 6px; padding: 1px 7px; white-space: nowrap; }
 .ch .src { font: 600 calc(11px * var(--k, 1)) var(--sans); color: var(--accent); white-space: nowrap; }
@@ -4114,8 +4117,9 @@ async function qpfLegend() {
   if (!QPF.lg) { el.innerHTML = `<div class="none">범례를 아직 못 받았다 — 다음 발표분에 채워진다</div>`; return; }
   const { colors, bounds, unit } = QPF.lg, n = colors.length;
   const top = [...colors].reverse(), lab = [...bounds].reverse();
-  el.innerHTML = `<div class="u">${unit || "mm/h"}</div><div class="sc"><div class="bar">${top.map(c => `<i style="background:${c}"></i>`).join("")}</div>
-    <div class="tk">${lab.map((v, i) => `<span>${QPF_TICKS.includes(+v) && i === lab.lastIndexOf(v) ? `<b>${v}</b>` : ""}</span>`).join("")}</div></div>`;
+  el.innerHTML = `<div class="u">${unit || "mm/h"}</div><div class="sc">
+    <div class="tk">${lab.map((v, i) => `<span>${QPF_TICKS.includes(+v) && i === lab.lastIndexOf(v) ? `<b>${v}</b>` : ""}</span>`).join("")}</div>
+    <div class="bar">${top.map(c => `<i style="background:${c}"></i>`).join("")}</div></div>`;
 }
 function qpfShow() {
   const lays = $("qpf-box").querySelectorAll(".qpf-lay"), src = QPF.urls[QPF.idx];
