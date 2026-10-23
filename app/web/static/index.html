@@ -2637,8 +2637,7 @@ function accOf(d) {
 }
 /* 예측은 읍면동(≈5km 격자)마다 있다 — 지점이 놓인 격자의 값을 쓰는 것이 맞다.
    실제로는 data/gyeongnam_grids.json 의 XY로 인덱스 (Y-1)*149+(X-1) 를 찾아 읽는다.
-   여기서는 그 매핑이 없어 시군 곡선을 지점의 격자 계수로 눌러 흉내 낸다.
-   ⚠️ RN1은 정수 mm로 양자화돼 오므로 흉내 낸 값도 같은 단계에 맞춘다. */
+   여기서는 그 매핑이 없어 시군 곡선을 지점의 격자 계수로 눌러 흉내 낸다(실황은 계수 1 — 시군 곡선 그대로). */
 /* ── 묶음 칸(여러 시간을 합친 칸) 눈금 ────────────────────────────────
    ⚠️ **1시간 칸과 같은 자를 쓰면 안 된다.** 히트맵은 지난 시간을 `01~23` 처럼
       묶어 한 칸에 담는데, 그 칸을 시우량 램프로 칠하면 23시간 합계 64.5㎜가
@@ -2669,14 +2668,15 @@ function accVar(v, n) {
    같은 자리에서 뒤집는다 — 한 단계 늦추면 --acc-4 위에 흰 글씨가 얹혀 2.4:1 이 된다. */
 const inkOnAcc = (v, n) => (v >= ACC_FRAC[3] * accTop(n) ? "var(--on-fill)" : "var(--ink)");
 
-const RN1_STEPS = [0, 5, 10, 20, 30, 50];
-const qRN1 = v => RN1_STEPS.reduce((a, b) => (Math.abs(b - v) < Math.abs(a - v) ? b : a));
-
+/* 예상 — 초단기 RN1 을 **그대로**(0.1㎜). '예측 상위 시군' 판의 칸 · 합과 같은 값이다.
+   ⚠️ 예전에는 시간마다 0·5·10·20·30·50 가운데 가까운 값으로 바꿔 더했다 — 3㎜ 가 5, 2㎜ 가 0 이 되어 거제(시간 3㎜)가
+   타임라인에는 +25 인데 예측 상위 시군(그대로 합 15)에는 없었다(10-23). 재난상황보고서 예측 표도 RN1 을 그대로 쓴다 */
 function fcFor(sig, f = 1) {
   const base = FCSIG[sig] ? FCSIG[sig].d : [];
-  return base.slice(0, fcN()).map(v => qRN1(v * f));
+  return base.slice(0, fcN()).map(v => Math.round(v * f * 10) / 10);
 }
 const sumOf = a => a.reduce((x, y) => x + y, 0);
+const fcSumOf = a => Math.round(sumOf(a) * 10) / 10;
 /* 최근 1시간 — 직전 60분(기상청 매분 자료 · 마지막 칸이 덜 찼을 때)이 있으면 그것, 없으면 마지막 칸.
    시군 평균은 지점들의 직전 60분 평균. 막대 안에 그리므로 누적보다 크지 않게 */
 function h1Of(r) {
@@ -2768,14 +2768,14 @@ function rowsOf() {
       // 이름 자리는 `창원²³` 뿐이다. '평균 23개소'를 크게 적으면 시군을 못 읽는다 —
       // 줄을 찾는 눈은 시군을 본다. 몇 개소인지는 윗첨자로 딸려 가면 충분하다.
       return { sig, kind: "main", stn: sig, sup: n, avg: true,
-               d: a.d, bads: a.bad, ...accOf(a.d), fcd, fc: sumOf(fcd) };
+               d: a.d, bads: a.bad, ...accOf(a.d), fcd, fc: fcSumOf(fcd) };
     });
 
   if (metric === "rep")
     return ORDER.filter(sig => stationsOf(sig).length).map(sig => {
       const st = stationsOf(sig).find(x => x.rep) || liveFirst(sig)[0];
       const fcd = fcFor(sig, st.f);
-      return { sig, kind: "main", stn: st.name, d: st.d, m60: st.m60, ...accOf(st.d), fcd, fc: sumOf(fcd) };
+      return { sig, kind: "main", stn: st.name, d: st.d, m60: st.m60, ...accOf(st.d), fcd, fc: fcSumOf(fcd) };
     });
 
   if (flat) {
@@ -2783,7 +2783,7 @@ function rowsOf() {
     for (const sig of ORDER)
       for (const st of stationsOf(sig)) {
         const fcd = fcFor(sig, st.f);
-        all.push({ sig, stn: st.name, d: st.d, m60: st.m60, ...accOf(st.d), fcd, fc: sumOf(fcd) });
+        all.push({ sig, stn: st.name, d: st.d, m60: st.m60, ...accOf(st.d), fcd, fc: fcSumOf(fcd) });
       }
     all.sort((x, y) => y.sum - x.sum);
     return all.slice(0, 20).map(r => ({ ...r, kind: "main" }));
@@ -2800,7 +2800,7 @@ function rowsOf() {
       if (!st) return;
       const fcd = fcFor(sig, st.f);
       rows.push({ sig, kind: k === 0 ? "main" : "extra", stn: st.name,
-                  d: st.d, m60: st.m60, ...accOf(st.d), fcd, fc: sumOf(fcd) });
+                  d: st.d, m60: st.m60, ...accOf(st.d), fcd, fc: fcSumOf(fcd) });
     });
   }
   return rows;
@@ -3340,7 +3340,7 @@ function drawFcSigun() {
     .map(sig => {
       const d = FCSIG[sig] ? FCSIG[sig].d.slice(0, fcHours) : [];
       return { sig, emd: FCSIG[sig] ? FCSIG[sig].emd : "", d,
-               sum: d.reduce((a, b) => a + b, 0), peak: d.length ? Math.max(...d) : 0 };
+               sum: fcSumOf(d), peak: d.length ? Math.max(...d) : 0 };      // 타임라인 예상(+N)과 같은 셈
     })
     .filter(r => r.sum > 0)
     .sort((a, b) => b.sum - a.sum || b.peak - a.peak);
