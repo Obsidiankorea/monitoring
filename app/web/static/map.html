@@ -716,17 +716,19 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 .ly-it.off { opacity: .45; cursor: default; }
 .ly-it.sub { margin-left: 26px; padding-top: 4px; }
 /* 특보 범례 — 켜면 레이어 단추 밑에 붙는다 */
-#ly-alerts { width: 188px; min-width: 0; padding: 8px 9px 9px; overflow-y: auto; overscroll-behavior: contain; }
+#ly-alerts { width: 188px; min-width: 0; padding: 8px 9px 9px; overflow-y: auto; overscroll-behavior: contain;
+  background: var(--panel); backdrop-filter: none; -webkit-backdrop-filter: none; }   /* 불투명 — 끌어 올리면 뒤 아이콘이 비치지 않게 */
 #layers #ly-alerts { left: 0; }            /* 아이콘 오른쪽이 아니라 아이콘들 밑에 — 지도 왼쪽 빈자리(위치 top 은 renderLyIcons) */
 #ly-alerts .hd3 { font: 600 11px var(--mono); color: var(--ink-3); margin: -3px 0 5px; }
-#ly-alerts .al { grid-template-columns: 27px minmax(0, 1fr); align-items: start; gap: 6px; padding: 5px 1px; font-size: 13px; }
+/* 앞 칸(선 견본 · 바다 · 예비 딱지)을 뺐다 — 좁은 줄이라 글자에 자리를 다 준다(10-24). 바다 · 예정은 이름 뒤 작은 글자 */
+#ly-alerts .al { display: block; padding: 5px 1px; font-size: 13px; }
+#ly-alerts .al .tg { font: 600 10.5px var(--sans); color: var(--ink-3); margin-left: 5px; }
 #ly-alerts .al + .al { border-top: 1px solid color-mix(in oklab, var(--line) 60%, transparent); }
 #ly-alerts .al b { display: block; white-space: normal; font-size: 13.5px; line-height: 1.3; }
 #ly-alerts .al .where { display: block; font-size: 11.5px; line-height: 1.35; overflow-wrap: anywhere; }
 #ly-alerts .al .where i { font-style: normal; font-weight: 600; color: var(--ink); }
-#ly-alerts .al svg { width: 24px; margin-top: 5px; }
-#ly-alerts .al .tag { font-size: 10px; padding: 0 2px; margin-top: 2px; white-space: nowrap; letter-spacing: -.02em; }
-#ly-alerts .hd2 { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; cursor: pointer; }
+#ly-alerts .hd2 { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; cursor: move; user-select: none; }
+#ly-alerts .hd2 .fd { cursor: pointer; }
 #ly-alerts .hd2 .fd { margin-left: auto; font-style: normal; color: var(--ink-3); }
 #ly-stn .hd2 { cursor: pointer; }
 #ly-alerts .hd2 .inf { align-self: center; }
@@ -966,6 +968,77 @@ body.cam-edit #sw { pointer-events: none; opacity: .5; }
 #sw.tall .fr .sum { font-size: calc(13px * var(--k, 1)); }
 #sw.tall .fh { font-size: calc(10px * var(--k, 1)); }
 
+/* ── 화면 재생(P) — 아래 가운데 쪽 점(아이패드 화면 넘김 점처럼). 지금 화면은 길쭉한 알약에 남은 시간이 찬다.
+   점에 올리면 위에 이름 · 앞/멈춤/다음 · 고치기 · 끝 ── */
+#showdots { position: absolute; left: var(--playx, 50%); bottom: 10px; transform: translateX(-50%); z-index: 6; zoom: var(--k, 1);
+  display: flex; flex-direction: column; align-items: center; gap: 6px; }
+#showdots .sd-dots { display: flex; gap: 8px; align-items: center; padding: 6px 11px; border-radius: 999px;
+  background: color-mix(in oklab, var(--panel) 72%, transparent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+#showdots .sd-dots i { position: relative; display: block; width: 8px; height: 8px; border-radius: 4px; cursor: pointer; overflow: hidden;
+  background: color-mix(in oklab, var(--ink) 30%, transparent); transition: width .35s var(--ease), background .3s; }
+#showdots .sd-dots i:hover { background: color-mix(in oklab, var(--ink) 60%, transparent); }
+#showdots .sd-dots i.on { width: 30px; background: color-mix(in oklab, var(--ink) 28%, transparent); }
+#showdots .sd-dots i.on::after { content: ""; position: absolute; inset: 0; background: var(--ink); transform-origin: left; transform: scaleX(0);
+  animation: sdfill var(--dur, 30s) linear forwards; }
+#showdots.paused .sd-dots i.on::after { animation-play-state: paused; }
+@keyframes sdfill { to { transform: scaleX(1); } }
+#showdots .sd-ctl { display: flex; align-items: center; gap: 4px; padding: 4px 6px 4px 12px; border-radius: 10px; white-space: nowrap;
+  background: color-mix(in oklab, var(--panel) 92%, transparent); border: 1px solid var(--line); font: 500 12.5px var(--sans); color: var(--ink-2);
+  opacity: 0; transform: translateY(4px); pointer-events: none; transition: opacity .2s, transform .2s var(--ease); }
+#showdots:hover .sd-ctl, #showdots.paused .sd-ctl { opacity: 1; transform: none; pointer-events: auto; }
+#showdots .sd-ctl b { color: var(--ink); margin-right: 4px; }
+#showdots .sd-ctl span { margin-right: 6px; }
+#showdots .sd-ctl button { font: 600 13px var(--sans); color: var(--ink); background: transparent; border: 1px solid transparent; border-radius: 7px;
+  min-width: 26px; height: 24px; cursor: pointer; }
+#showdots .sd-ctl button:hover { border-color: var(--line); background: color-mix(in oklab, var(--accent) 14%, transparent); }
+body.show-on #play { bottom: 46px; }      /* 점 자리를 비운다 */
+
+/* ── 화면 재생 목록 — 왼쪽에서 고르고(누르거나 끌어 넣기) 오른쪽에서 차례(끌기) · 시간 · 값을 정한다 ── */
+#showdlg { position: fixed; inset: 0; z-index: 22; display: flex; align-items: center; justify-content: center; background: rgba(4, 8, 14, .55); }
+#showdlg .box { width: 900px; max-width: calc(100vw - 32px); max-height: calc(100vh - 32px); display: flex; flex-direction: column; zoom: var(--k, 1);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 24px 80px rgba(0,0,0,.45); padding: 16px 20px 18px; }
+#showdlg .top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+#showdlg .top > b { font-size: 18px; }
+#showdlg .top .sp { flex: 1; }
+#showdlg .top .x { background: transparent; border: 0; color: var(--ink-2); font-size: 20px; cursor: pointer; }
+#showdlg .lists { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; border-radius: 10px; margin-bottom: 12px;
+  background: color-mix(in oklab, var(--accent) 6%, transparent); border: 1px solid var(--line); }
+#showdlg .lists label { font-size: 12px; color: var(--ink-3); }
+#showdlg select, #showdlg input[type=text] { font: 600 13px var(--sans); color: var(--ink); background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: 7px; padding: 4px 8px; }
+#showdlg input[type=text] { width: 180px; }
+#showdlg .btn { font: 600 13px var(--sans); color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: 8px; padding: 5px 12px; cursor: pointer; }
+#showdlg .btn:hover { background: color-mix(in oklab, var(--accent) 14%, transparent); }
+#showdlg .btn.pri { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 26%, transparent); }
+#showdlg .btn:disabled { opacity: .4; cursor: default; }
+#showdlg .msg { font-size: 12px; color: var(--ink-3); }
+#showdlg .cols { display: grid; grid-template-columns: 260px 1fr; gap: 16px; min-height: 0; flex: 1; }
+#showdlg .cat { overflow-y: auto; padding-right: 4px; }
+#showdlg .cat h5 { margin: 10px 0 4px; font-size: 11px; letter-spacing: .12em; color: var(--ink-3); }
+#showdlg .cat h5:first-child { margin-top: 0; }
+#showdlg .cat button { display: block; width: 100%; text-align: left; margin: 3px 0; padding: 7px 10px; border-radius: 8px; cursor: grab;
+  font: 600 13.5px var(--sans); color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); }
+#showdlg .cat button:hover { border-color: var(--accent); }
+#showdlg .cat button small { display: block; font-weight: 500; font-size: 11.5px; color: var(--ink-3); }
+#showdlg .seq { display: flex; flex-direction: column; min-height: 0; border: 1px dashed var(--line); border-radius: 10px; padding: 8px; }
+#showdlg .seq.over { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 6%, transparent); }
+#showdlg .seq .hd { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-3); padding: 0 4px 6px; }
+#showdlg .rows { overflow-y: auto; min-height: 120px; flex: 1; }
+#showdlg .row { display: grid; grid-template-columns: 18px 22px 1fr auto auto auto; align-items: center; gap: 8px; padding: 6px 6px; margin: 3px 0;
+  border-radius: 8px; background: var(--panel-2); border: 1px solid var(--line); }
+#showdlg .row.drag { opacity: .4; }
+#showdlg .row.ins { box-shadow: 0 -3px 0 var(--accent); }
+#showdlg .row.ins-after { box-shadow: 0 3px 0 var(--accent); }
+#showdlg .row .h { cursor: grab; color: var(--ink-3); text-align: center; user-select: none; }
+#showdlg .row .no { font: 600 12px var(--mono); color: var(--ink-3); text-align: right; }
+#showdlg .row .nm { font-weight: 600; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+#showdlg .row .nm select { font-size: 12.5px; padding: 2px 4px; }
+#showdlg .row .ib2 { background: transparent; border: 0; color: var(--ink-3); cursor: pointer; font-size: 14px; padding: 0 4px; }
+#showdlg .row .ib2:hover { color: var(--ink); }
+#showdlg .empty { color: var(--ink-3); font-size: 13px; padding: 30px 10px; text-align: center; }
+#showdlg .foot { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+#showdlg .foot .sp { flex: 1; }
+
 [hidden] { display: none !important; }
 
 /* 4K 벽면(배율 100%)에서도 머리글·범례가 1080p 와 같은 크기로 읽히게 통째로 키운다.
@@ -1060,6 +1133,12 @@ body.cam-edit #sw { pointer-events: none; opacity: .5; }
       <div class="ly-pop" id="ly-stn" hidden></div>
     </div>
   </div>
+  <div id="showdots" hidden aria-label="화면 재생">
+    <div class="sd-ctl"><b id="sd-name"></b><span id="sd-lab"></span>
+      <button type="button" data-a="prev" title="앞 화면">‹</button><button type="button" data-a="pause" title="멈춤 · 다시">❙❙</button><button type="button" data-a="next" title="다음 화면">›</button>
+      <button type="button" data-a="edit" title="재생목록 고치기">✎</button><button type="button" data-a="stop" title="끝 (Esc · P)">✕</button></div>
+    <div class="sd-dots"></div>
+  </div>
   <div id="sw" hidden aria-label="바다 위젯">
     <div class="sw-h" title="끌어서 옮기기 — 마지막으로 놓은 자리가 이 화면의 기본 자리(두 번 누르면 다시 자동 — 땅을 덜 덮는 빈자리)"><span class="sw-tabs">
       <button type="button" data-m="fc" title="초단기 예측 순위 — 앞으로 6시간">예측<i> 상위</i></button><button type="button" data-m="now" title="지금 오는 비 순위 — 15분 · 60분">지금<i> 오는</i> 비</button></span>
@@ -1068,6 +1147,7 @@ body.cam-edit #sw { pointer-events: none; opacity: .5; }
     <div class="sw-b" id="sw-b"></div>
   </div>
   <div id="tools">
+    <button id="b-show" class="ib" aria-label="화면 재생" title="화면 재생 — 여러 화면을 차례로(화면보호기처럼) · 재생목록 만들기 (P)"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="m10.5 8.6 4 2.4-4 2.4z" class="f"/><circle cx="9" cy="20.2" r=".9" class="f"/><circle cx="12" cy="20.2" r=".9" class="f"/><circle cx="15" cy="20.2" r=".9" class="f"/></svg></button>
     <button id="b-cam" class="ib" aria-label="지도 위치" title="지도 위치 — 끌어서 옮기기 · 휠로 키우기 줄이기, 이 화면에 기억 (C)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18"/><path d="m9 5.5 3-3 3 3M9 18.5l3 3 3-3M5.5 9l-3 3 3 3M18.5 9l3 3-3 3"/></svg></button>
     <button id="b-tl" class="ib" aria-label="패널" title="오른쪽 패널 — 강수 누적 · 지금 오는 비 · 예측 상위 (L)"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M14.5 4v16M17 8.5h1.5M17 12h1.5M17 15.5h1.5"/></svg></button>
     <button id="b-help" class="ib" aria-label="도움말" title="도움말 — 용어 · 자료 출처 (?)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.4a2.6 2.6 0 0 1 5 .9c0 1.8-2.5 2.3-2.5 3.9"/><circle cx="12" cy="17.3" r=".9" class="f"/></svg></button>
@@ -1077,6 +1157,7 @@ body.cam-edit #sw { pointer-events: none; opacity: .5; }
   <div id="toast" hidden role="status"></div>
 </main>
 <div id="prefs" hidden></div>
+<div id="showdlg" hidden></div>
 <div id="help" hidden></div>
 <div id="pop" hidden></div>
 
@@ -1286,10 +1367,12 @@ const COLLECT_OF = { obs15: "grid", obs60: "grid", obsday: "grid", acc: "grid", 
                      shrt_today: "short", shrt_tomorrow: "short" };
 const SET_DEFAULT = { flow_step: 10, flow_hours: 6, play_ms: 1200, tl_on: false, tl_stat: "max",
                       panel: "cards", acc_hours: 12, acc_from: "hours", acc_basis: "aws", sel_zoom: true, acc_fc: true, acc_h1: true,
-                      acc_per: 1, acc_full: false, aws_live: false, acc_qpf: false, qpf_ms: 600, acc_date: "", acc_hdr_pin: true, aws_off: [], acc_scale: 0, sea_w: "fc" };
+                      acc_per: 1, acc_full: false, aws_live: false, acc_qpf: false, qpf_ms: 600, acc_date: "", acc_hdr_pin: true, aws_off: [], acc_scale: 0, sea_w: "fc", shows: [] };
 
 let META = null, TOPO = null, GEO = null, MSIG = null, MEMD = null, EMDN = null;
 let SET = { ...SET_DEFAULT };
+// 화면 재생(P) 상태 — 아래 '화면 재생' 칸. saveSetting 이 먼저 본다(재생 중엔 서버 설정을 건드리지 않는다)
+const SHOW = { on: false, name: "", items: [], i: 0, timer: null, paused: false, prev: null };
 const awsLive = () => !test && !CASE && !!SET.aws_live;      // AWS 실시간 감시(R) — setLive
 let kind = "obs60", vsrtN = 1, x4 = false;
 let OBS_TM = null;                      // 60분 층을 지난 시각으로 볼 때(재생·끌기)
@@ -1908,6 +1991,7 @@ function pickLayer(k) {
 
 function saveSetting(body) {
   if (CASE) return;                       // 재현을 보는 동안 고른 것은 실황 설정에 남기지 않는다
+  if (SHOW.on) return;                    // 화면 재생 중 — 화면마다 바꾸는 층 · 구간은 이 화면 것일 뿐(다른 화면 설정을 흔들지 않게)
   fetch("/api/settings/map", { method: "PUT", headers: { "Content-Type": "application/json" },
                                body: JSON.stringify(body) }).catch(() => {});
 }
@@ -2204,7 +2288,8 @@ function applyTL(animate = true) {
 function leftBound() {
   const st = $("stage").getBoundingClientRect(), lg = $("legend").getBoundingClientRect(), al = $("ly-alerts");
   let x = lg.width ? lg.right - st.left + 10 : 16;
-  if (alShown() && !al.hidden && al.offsetWidth) x = Math.max(x, al.getBoundingClientRect().right - st.left + 22);   // 서쪽 지점 글자가 줄에 닿지 않게
+  // 서쪽 지점 글자가 줄에 닿지 않게. 줄을 지도 안쪽으로 끌어다 놓았으면(왼쪽 끝에서 떨어지면) 지도를 밀지 않는다
+  if (alShown() && !al.hidden && al.offsetWidth) { const r = al.getBoundingClientRect(); if (r.left - st.left < 120) x = Math.max(x, r.right - st.left + 22); }
   return Math.max(16, x);
 }
 function tlFit() {
@@ -2712,7 +2797,7 @@ function accSpan() {
   }
   if (f === "today") return { H: Math.max(1, h), since: "today", label: "오늘 0시부터" };
   if (f === "yesterday") return { H: 24 + h, since: "yesterday", label: "어제 0시부터" };
-  return { H: SET.acc_hours, since: null, label: `지난 ${SET.acc_hours}시간` };
+  return { H: SET.acc_hours, since: null, label: SET._accLabel || `지난 ${SET.acc_hours}시간` };
 }
 const RNG_OPTS = [["hours", 6, "지난 6시간"], ["hours", 12, "지난 12시간"], ["hours", 24, "지난 24시간"],
                   ["hours", 48, "지난 48시간"], ["today", null, "오늘 0시부터"], ["yesterday", null, "어제 0시부터"]];
@@ -3668,8 +3753,31 @@ if (LY_OPEN === "alerts") LY_OPEN = null;
 /* 특보 줄 — 레이어 아이콘 밑에 얇게 세로로(지도 왼쪽 빈자리). 펼쳐 두면 지도가 그 오른쪽으로 비켜 선다(겹치지 않게).
    ⚠️ 예전에는 아이콘 오른쪽으로 340px 상자가 지도 북서쪽(함양 · 거창)을 덮어 평소엔 접어 뒀다(10-24 얇은 줄로).
    창마다 기억(gn-map-alopen) — 처음엔 펼침. 관측소 범례와 따로 논다(둘 다 펼칠 수 있다) */
-let AL_OPEN = true;
+let AL_OPEN = true, AL_POS = { dx: 0, dy: 0 };
 try { const v = localStorage.getItem("gn-map-alopen"); if (v !== null) AL_OPEN = v === "1"; } catch {}
+try { const p = JSON.parse(localStorage.getItem("gn-map-alpos") || "null"); if (p && isFinite(p.dx) && isFinite(p.dy)) AL_POS = p; } catch {}
+/* 특보 줄 끌어 옮기기 — 머리를 잡고. 위로 올리면 아이콘을 덮는다(줄이 불투명이라 비치지 않는다). 두 번 누르면 제자리 */
+{
+  const al = $("ly-alerts");
+  al.addEventListener("pointerdown", ev => {
+    const hd = ev.target.closest("#al-hd");
+    if (!hd || ev.button !== 0 || ev.target.closest(".fd, .inf")) return;
+    hd.setPointerCapture(ev.pointerId); al.classList.add("drag");
+    const k = V?.k || 1, x0 = ev.clientX, y0 = ev.clientY, p0 = { ...AL_POS }, l0 = parseFloat(al.style.left) || 0, t0 = parseFloat(al.style.top) || 0;
+    hd.onpointermove = e => { al.style.left = l0 + (e.clientX - x0) / k + "px"; al.style.top = t0 + (e.clientY - y0) / k + "px"; };
+    hd.onpointerup = hd.onpointercancel = e => {
+      hd.onpointermove = hd.onpointerup = null; al.classList.remove("drag");
+      AL_POS = { dx: Math.round(p0.dx + (e.clientX - x0) / k), dy: Math.round(p0.dy + (e.clientY - y0) / k) };
+      try { localStorage.setItem("gn-map-alpos", JSON.stringify(AL_POS)); } catch {}
+      fitAlCol(); if (V) { camGo(true); placeSw(); }
+    };
+  });
+  al.addEventListener("dblclick", ev => {
+    if (!ev.target.closest("#al-hd") || ev.target.closest(".fd, .inf")) return;
+    AL_POS = { dx: 0, dy: 0 }; try { localStorage.removeItem("gn-map-alpos"); } catch {}
+    fitAlCol(); if (V) { camGo(true); placeSw(); }
+  });
+}
 const alShown = () => AL_OPEN && OV.has("alerts");
 function setAlOpen(on) {
   AL_OPEN = on;
@@ -3707,11 +3815,19 @@ function renderLyIcons() {
 /* 특보 줄 자리 — 아이콘들 밑에서 범례 위까지(범례가 바뀌면 다시 — 기상청 색 누적은 범례가 길다) */
 function fitAlCol() {
   const al = $("ly-alerts"), box = $("ly-act");
-  if (al.hidden) return;
-  const last = box.offsetHeight ? box : $("ly-btn");
-  al.style.top = last.offsetTop + last.offsetHeight + 8 + "px";
-  const lgTop = $("legend").getBoundingClientRect().top, r = al.getBoundingClientRect();
-  al.style.maxHeight = Math.max(140, (lgTop - r.top - 14) / (V?.k || 1)).toFixed(0) + "px";
+  if (al.hidden || al.classList.contains("drag")) return;
+  const last = box.offsetHeight ? box : $("ly-btn"), k = V?.k || 1;
+  // 기본 자리(아이콘들 밑) + 사람이 옮긴 만큼(AL_POS, 이 화면에 기억). 판 밖으로 나가지 않게
+  al.style.left = AL_POS.dx + "px";
+  al.style.top = last.offsetTop + last.offsetHeight + 8 + AL_POS.dy + "px";
+  const st = $("stage").getBoundingClientRect();
+  let r = al.getBoundingClientRect();
+  if (r.top < st.top + 6) { al.style.top = parseFloat(al.style.top) + (st.top + 6 - r.top) / k + "px"; r = al.getBoundingClientRect(); }
+  if (r.left < st.left + 4) { al.style.left = parseFloat(al.style.left) + (st.left + 4 - r.left) / k + "px"; r = al.getBoundingClientRect(); }
+  // 밑 끝 — 범례와 겹치는 세로 줄이면 범례 위까지, 아니면 판 밑까지
+  const lg = $("legend").getBoundingClientRect();
+  const bottom = r.left < lg.right && r.right > lg.left ? lg.top - 14 : st.bottom - 16;
+  al.style.maxHeight = Math.max(140, (bottom - r.top) / k).toFixed(0) + "px";
 }
 function renderLayers() {
   if (LY_OPEN && !OV.has(LY_OPEN)) LY_OPEN = null;
@@ -4070,27 +4186,24 @@ function renderAlertLegend() {
   if (box.hidden) { renderLyIcons(); return; }
   if (!ALERTS) { box.innerHTML = `<div class="hd2"><b>기상특보</b><span>읽는 중…</span></div>`; return; }
   if (ALERTS.err) { box.innerHTML = `<div class="hd2"><b>기상특보</b></div><div class="al-none">불러오지 못했다 — ${ALERTS.err}</div>`; return; }
-  const sample = lv => lv === "severe"
-    ? `<svg viewBox="0 0 30 12"><line x1="0" x2="30" y1="2.5" y2="2.5" stroke="var(--lv-severe)" stroke-width="3"/><line x1="0" x2="30" y1="9" y2="9" stroke="var(--lv-severe)" stroke-width="2"/></svg>`
-    : `<svg viewBox="0 0 30 12"><line x1="0" x2="30" y1="6" y2="6" stroke="var(--lv-${lv})" stroke-width="4"${lv === "watch" ? ' stroke-dasharray="6 4"' : ""}/></svg>`;
   // 얇은 세로 줄 — 한 특보가 두 줄: 이름(색) / 어디(작게). 너무 길면 '외 N'
   const cut = (list, n) => list.slice(0, n).join(" · ") + (list.length > n ? ` 외 ${list.length - n}` : "");
-  const row = (lead, lv, name, where, ds = "") => `<div class="al${lv === "pre" ? " pre" : ""}"${ds ? ` data-s="${ds}"` : ""}>${lead}`
-    + `<div class="t"><b style="color:var(--lv-${lv})">${name}</b>${where ? `<span class="where">${where}</span>` : ""}</div></div>`;
+  const row = (tg, lv, name, where, ds = "") => `<div class="al${lv === "pre" ? " pre" : ""}"${ds ? ` data-s="${ds}"` : ""}>`
+    + `<b style="color:var(--lv-${lv})">${name}${tg ? `<span class="tg">${tg}</span>` : ""}</b>${where ? `<span class="where">${where}</span>` : ""}</div>`;
   const rows = [];
   for (const g of ALERTS.land)
-    rows.push(row(sample(g.lv), g.lv, g.name, cut(g.where, 6), g.where.map(x => x.replace(/\(.*/, "")).join(",")));
+    rows.push(row("", g.lv, g.name, cut(g.where, 6), g.where.map(x => x.replace(/\(.*/, "")).join(",")));
   for (const g of ALERTS.sea)
-    rows.push(row(`<span class="tag">바다</span>`, g.lv, g.name, cut((g.regions || []).map(seaShort), 4)));
+    rows.push(row("바다", g.lv, g.name, cut((g.regions || []).map(seaShort), 4)));
   // 예비특보(태풍 · 호우 …) — 이름 · 발효 예상(날짜 · 시간대)이 같은 것끼리. 바다 구역은 줄인 이름
   const preBy = {};
   for (const p of ALERTS.pending.filter(x => x.kind === "pre")) (preBy[`${p.name}|${p.when}`] ||= []).push(p.sigun || seaShort(p.reg || ""));
   for (const [k, sigs] of Object.entries(preBy)) {
     const [name, when] = k.split("|");
-    rows.push(row(`<span class="tag">예비</span>`, "pre", `${name} 예비특보`, `<i>${when}</i><br>${cut([...new Set(sigs)], 5)}`));
+    rows.push(row("", "pre", `${name} 예비특보`, `<i>${when}</i><br>${cut([...new Set(sigs)], 5)}`));
   }
   for (const p of ALERTS.pending.filter(x => x.kind === "later"))
-    rows.push(row(`<span class="tag">예정</span>`, "pre", p.name, `${p.sigun || p.reg} · ${String(p.tmef || "").slice(8, 10)}:${String(p.tmef || "").slice(10, 12)} 발효`));
+    rows.push(row("예정", "pre", p.name, `${p.sigun || p.reg} · ${String(p.tmef || "").slice(8, 10)}:${String(p.tmef || "").slice(10, 12)} 발효`));
   const bt = ALERTS.base ? String(ALERTS.base).slice(11, 16) : "—";
   const nKind = ALERTS.land.length + ALERTS.sea.length;
   // 평소엔 아이콘만(지도 북서쪽 함양·거창을 가리지 않게). 아이콘이나 머리를 누르면 닫힌다
@@ -4100,10 +4213,10 @@ function renderAlertLegend() {
       : `<b>기상특보</b> — 기상청 발효 중 특보(1분마다 다시 읽는다, 조회 ${bt}). 예비특보(태풍 · 호우 …)와 발효 예정은 지도에 긋지 않고
          여기에만 — 발효 예상 날짜 · 시간대와 함께.`)
     + `<br>지도 왼쪽 빈자리에 얇게 세로로 — 펼쳐 두면 지도가 그 오른쪽으로 비켜 선다. 특보 아이콘(또는 이 머리)을 누르면 접힌다.`);
-  box.innerHTML = `<div class="hd2" id="al-hd" title="눌러서 접기 — 지도가 다시 넓어진다"><b>기상특보${ALERTS.calc ? " · 산출" : ""}</b><i class="inf" data-tip="al-now">i</i><i class="fd">✕</i></div>`
+  box.innerHTML = `<div class="hd2" id="al-hd" title="끌어서 옮기기(이 화면에 기억, 두 번 누르면 제자리) · ✕ 접기 — 지도가 다시 넓어진다"><b>기상특보${ALERTS.calc ? " · 산출" : ""}</b><i class="inf" data-tip="al-now">i</i><i class="fd" title="접기">✕</i></div>`
     + `<div class="hd3">${nKind ? `${nKind}종 · ` : ""}${test ? "테스트 · " : ""}${ALERTS.calc ? "" : "조회 "}${bt}</div>`
     + (rows.length ? rows.join("") : `<div class="al-none">${ALERTS.calc ? "호우 기준을 넘은 시군 없음" : "발효 중인 특보 없음"}</div>`);
-  $("al-hd").onclick = ev => { if (!ev.target.closest(".inf")) setAlOpen(false); };
+  $("al-hd").querySelector(".fd").onclick = ev => { ev.stopPropagation(); setAlOpen(false); };
   for (const r of box.querySelectorAll(".al[data-s]")) {
     const first = r.dataset.s.split(",")[0];
     r.onmouseenter = () => highlight(first);
@@ -4439,7 +4552,11 @@ function helpHtml(tab) {
       실측 머리의 <b>자료</b>(격자 500m | AWS, <code>B</code>)가 1시간 · 누적 층과 오른쪽 '강수 누적' 카드를 같이 바꾼다. 1시간 줄의 '5km 실황'은 동네예보 실황</dd>
     <dt>지도 위치 <code>C</code></dt><dd>오른쪽 위 십자 단추 — 판 위를 끌어 옮기고 휠로 키우고 줄인다(두 번 누르기 · <code>0</code> = 처음대로, <code>Enter</code> · <code>Esc</code> = 끝).
       이 화면(브라우저)에 기억한다 — 바다 위젯 · 패널을 두고 경남을 어디에 놓을지. 시군을 골라 확대하면 그 틀이 먼저, 풀면 이 틀로</dd>
-    <dt>특보 줄</dt><dd>왼쪽 특보 아이콘 — 아이콘들 밑에 얇게 세로로 펼친다(지도 왼쪽 빈자리, 지도가 그 오른쪽으로 비켜 선다). 바다 · 예비(태풍 등, 발효 예상 날짜 · 시간대) · 예정까지. 머리나 아이콘을 누르면 접힌다</dd>
+    <dt>특보 줄</dt><dd>왼쪽 특보 아이콘 — 아이콘들 밑에 얇게 세로로 펼친다(지도 왼쪽 빈자리, 지도가 그 오른쪽으로 비켜 선다). 바다 · 예비(태풍 등, 발효 예상 날짜 · 시간대) · 예정까지.
+      머리를 끌어 옮긴다(위로 올려 아이콘을 덮어도 된다 — 불투명, 두 번 누르면 제자리). ✕ 나 아이콘을 누르면 접힌다</dd>
+    <dt>화면 재생 <code>P</code></dt><dd>오른쪽 위 화면 단추 — 여러 화면을 차례로(화면보호기처럼). 재생목록 창에서 화면(누적 지난 N시간 · N시부터 · 오늘/어제 0시부터 · 1시간 · 15분 · 흐름 재생 · 초단기 · 오늘/내일 24시까지)을
+      누르거나 끌어 넣고, 끌어서 차례, 줄마다 값과 시간. 같은 종류도 여럿. 저장하면 어느 화면에서나 불러온다. 재생 중엔 아래 점 — 누르면 그 화면, 올리면 멈춤 · 고치기 · 끝(<code>Esc</code>).
+      재생 중 바꾸는 층 · 구간은 이 화면에서만(다른 화면 설정은 그대로)</dd>
     <dt>바다 위젯 <code>W</code></dt><dd>지도 위 반투명 판 — 예측 상위(초단기 6시간) · 지금 오는 비를 머리 탭으로 고른다(<code>W</code> 는 차례로, 끝은 끔). 특보는 왼쪽 특보 줄에.
       자리는 스스로 찾는다 — 경남 땅을 가장 적게 덮는 빈자리, 좁고 길면 세로로 길쭉한 꼴로. 머리를 끌어 옮기면 마지막으로 놓은 자리가 이 화면의 기본 자리(두 번 누르면 다시 자동),
       <code>⇔</code> · <code>⇕</code> 로 꼴을 바꾼다</dd>
@@ -4457,7 +4574,7 @@ function helpHtml(tab) {
       누적은 기상청 색이 열 칸 남짓, <b>다양한 색조</b>는 QPF 범례 색을 다 써(한 색에 서너 색조) 스무 칸 남짓 · 끝 눈금이 자료를 바짝 따른다.
       레이더 색의 노랑 · 빨강 · 보라는 특보 선 색과 겹친다. <code>?pal=kma</code> · <code>?pal=rich</code> 로 고정</dd>
     <dt>레이어</dt><dd>왼쪽 위. 기상특보 <code>A</code> · 관측소 <code>S</code> · 지점 강수량 글자 <code>V</code>(관측소를 켰을 때, 기본은 끔 — 점 색만으로도 단계가 읽힌다)</dd>
-    <dt>층 · 재생</dt><dd><code>1</code>~<code>6</code> 층 · <code>B</code> 자료(격자 ↔ AWS) · <code>Space</code> 재생 · <code>←</code><code>→</code> 한 장씩 · <code>L</code> 패널 · <code>G</code> 위 카드 가득 · <code>R</code> AWS 실시간 감시 · <code>Q</code> 아래에 초단기예측 이미지 · <code>W</code> 바다 위젯 · <code>C</code> 지도 위치 · <code>T</code> 테스트.
+    <dt>층 · 재생</dt><dd><code>1</code>~<code>6</code> 층 · <code>B</code> 자료(격자 ↔ AWS) · <code>Space</code> 재생 · <code>←</code><code>→</code> 한 장씩 · <code>L</code> 패널 · <code>G</code> 위 카드 가득 · <code>R</code> AWS 실시간 감시 · <code>Q</code> 아래에 초단기예측 이미지 · <code>W</code> 바다 위젯 · <code>C</code> 지도 위치 · <code>P</code> 화면 재생 · <code>T</code> 테스트.
       AWS 로 재생하면 지난 시간은 AWS 1시간 면(정시마다), 지금 뒤는 초단기</dd>
     <dt>주소로 고정</dt><dd><code>?layer=obs60</code> · <code>?ov=alerts,stations</code> · <code>?sig=창원</code> · <code>?basis=grid</code> · <code>?pal=kma</code> · <code>?case=geoje-20260816</code> — 벽면 화면을 한 상태로 둘 때</dd>
     <dt>설정 · 도움말</dt><dd><code>Ctrl</code>+<code>,</code> 설정 · <code>?</code> 이 창</dd></dl>`;
@@ -4590,6 +4707,8 @@ function openPrefs() {
       예측 상위 · 지금 오는 비는 오른쪽 패널(카드)과 같은 자료. 특보는 왼쪽 특보 줄에.</span></div>
     <div class="row"><span class="k">지도 위치</span><span class="seg"><button data-cam="edit">고치기 (C)</button><button data-cam="reset"${ucOn() ? "" : " disabled"}>처음대로</button></span>
       <span class="note">${ucOn() ? `${Math.round(UC.z * 100)}% · 옮김` : "경남 전체가 꼭 차게(기본)"}</span></div>
+    <div class="row"><span class="k">화면 재생</span><span class="seg"><button data-show="open">재생목록…</button><button data-show="play">${SHOW.on ? "끝" : "재생 ▶"}</button></span>
+      <span class="note">여러 화면을 차례로(화면보호기처럼) — P · 오른쪽 위 화면 단추. 목록 ${showLists().length}개</span></div>
     <div class="row"><span class="k">지도 색</span><span class="seg">${["blue", "kma", "rich"].map(p => `<button data-pal="${p}" class="${PAL === p ? "on" : ""}">${PAL_NAME[p]}</button>`).join("")}</span></div>
     <div class="row"><span class="k"></span><span class="note">범례 색 띠를 눌러도 차례로 바뀐다. 다양한 색조 — 기상청 QPF 범례 색을 다 써 한 색에 서너 색조, 누적은 스무 칸 남짓 · 끝 눈금이 자료를 바짝 따른다.</span></div>
     <div class="row"><span class="k">누적 눈금</span>${seg("acc_scale", [[0, "자동"], ...Object.keys(ACC_FIXED).map(v => [v, v + "㎜"])])}</div>
@@ -4611,7 +4730,7 @@ function openPrefs() {
     <div class="upd" id="pf-upd">${updHtml()}</div>
     <h4>데모</h4>
     <div class="demo-list" id="pf-demo"><div class="al-none">읽는 중…</div></div>
-    <div class="keys"><kbd>1</kbd>~<kbd>8</kbd> 층 · <kbd>Space</kbd> 재생 · <kbd>←</kbd><kbd>→</kbd> 한 장씩 · <kbd>L</kbd> 패널 · <kbd>A</kbd> 특보 · <kbd>S</kbd> 관측소 · <kbd>V</kbd> 지점 값 · <kbd>B</kbd> 누적 기준 · <kbd>F</kbd> 누적 예상 · <kbd>H</kbd> 최근 1시간 · <kbd>G</kbd> 위 카드 가득 · <kbd>R</kbd> 실시간 감시 · <kbd>Q</kbd> 초단기예측 이미지 · <kbd>W</kbd> 바다 위젯 · <kbd>C</kbd> 지도 위치 · <kbd>T</kbd> 테스트 · <kbd>?</kbd> 도움말 · <kbd>Ctrl</kbd>+<kbd>,</kbd> 설정</div>
+    <div class="keys"><kbd>1</kbd>~<kbd>8</kbd> 층 · <kbd>Space</kbd> 재생 · <kbd>←</kbd><kbd>→</kbd> 한 장씩 · <kbd>L</kbd> 패널 · <kbd>A</kbd> 특보 · <kbd>S</kbd> 관측소 · <kbd>V</kbd> 지점 값 · <kbd>B</kbd> 누적 기준 · <kbd>F</kbd> 누적 예상 · <kbd>H</kbd> 최근 1시간 · <kbd>G</kbd> 위 카드 가득 · <kbd>R</kbd> 실시간 감시 · <kbd>Q</kbd> 초단기예측 이미지 · <kbd>W</kbd> 바다 위젯 · <kbd>C</kbd> 지도 위치 · <kbd>P</kbd> 화면 재생 · <kbd>T</kbd> 테스트 · <kbd>?</kbd> 도움말 · <kbd>Ctrl</kbd>+<kbd>,</kbd> 설정</div>
   </div>`;
   prefTabs();
   $("prefs").hidden = false;
@@ -4634,6 +4753,10 @@ function openPrefs() {
     if (k === "tl_stat") buildTL();
     if (k === "sel_zoom") { if (zoomOn()) ensureEmd(); camGo(true); }
     openPrefs();
+  };
+  for (const b of $("prefs").querySelectorAll("button[data-show]")) b.onclick = () => {
+    closePrefs();
+    if (b.dataset.show === "open") openShowDlg(SHOW.on ? SHOW.name : undefined); else SHOW.on ? stopShow() : showQuick();
   };
   for (const b of $("prefs").querySelectorAll("button[data-pal]")) b.onclick = async () => { await setPal(b.dataset.pal); openPrefs(); };
   for (const b of $("prefs").querySelectorAll("button[data-cam]")) b.onclick = () => {
@@ -4808,6 +4931,254 @@ async function updAct(a) {
   UPD.msg = `<span class="warnx">다시 뜨지 않았다 — 창을 확인하세요</span>`; updPaint();
 }
 $("prefs").addEventListener("click", ev => { const b = ev.target.closest?.("button[data-upd]"); if (b && !b.disabled) updAct(b.dataset.upd); });
+
+/* ── 화면 재생(P) — 화면보호기처럼 여러 화면을 차례로(10-24) ───────────────────────────
+   재생목록 = 화면(층 · 자료 · 누적 구간)과 머무는 초의 차례. 같은 종류도 여럿(AWS 24시간 · AWS 48시간 …).
+   목록은 서버 설정 shows([{name, items:[{t, b?, h?, n?, sec}]}]) — 어느 화면에서 만들어도 벽면에서 불러 쓴다.
+   ⚠️ 재생 중에는 층 · 누적 구간 · 자료를 **이 화면에서만** 바꾼다(saveSetting 이 막힌다) — 다른 화면 설정을 흔들지 않게.
+   끝내면 재생 앞 상태로 돌아간다. 재생하던 목록 이름은 이 브라우저에 기억 — 새로고침해도 이어서(?show=이름 도) */
+const SLIDE = {
+  acc_h:      { g: "누적", nm: s => `${bn(s)} 지난 ${s.h}시간 누적`, p: ["b", "h"], d: { b: "aws", h: 24 }, tip: "지난 N시간(1~48)" },
+  acc_from:   { g: "누적", nm: s => `${bn(s)} ${s.n}시부터 누적`, p: ["b", "n"], d: { b: "aws", n: 9 }, tip: "오늘 N시부터(지났으면 어제 N시부터)" },
+  acc_today:  { g: "누적", nm: s => `${bn(s)} 오늘 0시부터 누적`, p: ["b"], d: { b: "aws" }, tip: "오늘 0시부터 지금까지" },
+  acc_yday:   { g: "누적", nm: s => `${bn(s)} 어제 0시부터 누적`, p: ["b"], d: { b: "aws" }, tip: "어제 0시부터 지금까지" },
+  h1:         { g: "지금", nm: s => `${bn(s)} 1시간 강수량`, p: ["b"], d: { b: "aws" }, tip: "가장 최근 1시간" },
+  m15:        { g: "지금", nm: () => "격자 15분 강수량", p: [], d: {}, tip: "가장 최근 15분(500m 격자)" },
+  flow:       { g: "지금", nm: s => `${bn(s)} 흐름 재생`, p: ["b"], d: { b: "grid" }, tip: "지난 시간 → 지금 → 초단기 +6시간을 재생" },
+  vsrt:       { g: "예측", nm: s => `초단기 +${s.n}시간`, p: ["v"], d: { n: 1 }, tip: "초단기예보 N시간 뒤(1~6)" },
+  shrt_today: { g: "예측", nm: () => "오늘 24시까지 강수량", p: [], d: {}, tip: "단기예보 오늘 하루 합" },
+  shrt_tomorrow: { g: "예측", nm: () => "내일 24시까지 강수량", p: [], d: {}, tip: "단기예보 내일 하루 합" },
+};
+const bn = s => (s.b === "aws" ? "AWS" : "격자");
+const SHOW_SECS = [5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600];
+const fmtSec = n => (n >= 60 ? `${Math.floor(n / 60)}분${n % 60 ? ` ${n % 60}초` : ""}` : `${n}초`);
+const slideOf = (t, more = {}) => ({ t, ...SLIDE[t].d, sec: 30, ...more });
+const showLists = () => (Array.isArray(SET.shows) ? SET.shows : []);
+
+/* 한 화면 보이기 — 서버에 남기지 않고 이 화면에서만 */
+function slideKind(s) {
+  const aws = s.b === "aws";
+  if (s.t.startsWith("acc_")) return aws ? "aws" : "acc";
+  if (s.t === "h1" || s.t === "flow") return aws ? "aws60" : "obs60";
+  if (s.t === "m15") return "obs15";
+  return s.t;                                           // vsrt · shrt_today · shrt_tomorrow
+}
+async function applySlide(s) {
+  stopPlay(true);
+  if (s.b && ACC_BASIS !== s.b) { ACC_BASIS = s.b; SET.acc_basis = s.b; }
+  SET._accLabel = "";
+  const hr = NOWD().getHours();
+  if (s.t === "acc_h") { SET.acc_from = "hours"; SET.acc_hours = s.h; }
+  if (s.t === "acc_from") {               // N시부터 — 지난 몇 시간인지로 바꿔 부른다(지났으면 어제 N시부터)
+    let H = hr - s.n; const today = H >= 1;
+    if (!today) H += 24;
+    SET.acc_from = "hours"; SET.acc_hours = Math.max(1, Math.min(48, H)); SET._accLabel = `${today ? "오늘" : "어제"} ${s.n}시부터`;
+  }
+  if (s.t === "acc_today") SET.acc_from = "today";
+  if (s.t === "acc_yday") SET.acc_from = "yesterday";
+  if (s.t === "vsrt") vsrtN = s.n;
+  CARDS = null;
+  choose(slideKind(s), false);
+  loadCards();
+  if (s.t === "flow") {                    // 흐름 재생 — 처음부터 돌린다
+    if (!FLOW || (FLOW.src || "grid") !== flowSrc()) await loadFlow();
+    if (SHOW.on && SHOW.items[SHOW.i] === s) { seek(0); startPlay(); }
+  }
+}
+function showGo(i) {
+  clearTimeout(SHOW.timer);
+  if (!SHOW.on || !SHOW.items.length) return;
+  SHOW.i = (i + SHOW.items.length) % SHOW.items.length;
+  const s = SHOW.items[SHOW.i];
+  applySlide(s);
+  renderDots();
+  if (!SHOW.paused) SHOW.timer = setTimeout(() => showGo(SHOW.i + 1), s.sec * 1000);
+}
+function startShow(items, name = "") {
+  if (CASE || !items?.length) return;
+  try { if (name) localStorage.setItem("gn-map-show-last", name); } catch {}
+  if (!SHOW.on) SHOW.prev = { kind, vsrtN, basis: ACC_BASIS, sbasis: SET.acc_basis, from: SET.acc_from, hours: SET.acc_hours, date: SET.acc_date };
+  Object.assign(SHOW, { on: true, items: items.map(x => ({ ...x })), name, paused: false });
+  try { name ? localStorage.setItem("gn-map-show", name) : localStorage.removeItem("gn-map-show"); } catch {}
+  document.body.classList.add("show-on");
+  $("showdots").hidden = false;
+  $("b-show").classList.add("on");
+  showGo(0);
+}
+function stopShow() {
+  if (!SHOW.on) return;
+  clearTimeout(SHOW.timer);
+  SHOW.on = false;
+  try { localStorage.removeItem("gn-map-show"); } catch {}
+  document.body.classList.remove("show-on");
+  $("showdots").hidden = true;
+  $("b-show").classList.remove("on");
+  const p = SHOW.prev;                   // 재생 앞으로 — 이 화면에서만 바꿨으니 되돌리기만
+  stopPlay();
+  if (p) {
+    ACC_BASIS = p.basis; Object.assign(SET, { acc_basis: p.sbasis, acc_from: p.from, acc_hours: p.hours, acc_date: p.date, _accLabel: "" });
+    vsrtN = p.vsrtN; CARDS = null; choose(p.kind, false); loadCards();
+  }
+}
+function showPause(on = !SHOW.paused) {
+  SHOW.paused = on;
+  clearTimeout(SHOW.timer);
+  if (!on) showGo(SHOW.i);                // 다시 — 그 화면을 처음부터
+  else renderDots();
+}
+function renderDots() {
+  const box = $("showdots"), s = SHOW.items[SHOW.i];
+  box.classList.toggle("paused", SHOW.paused);
+  $("sd-name").textContent = SHOW.name || "재생목록";
+  $("sd-lab").textContent = s ? `${SHOW.i + 1}/${SHOW.items.length} · ${SLIDE[s.t].nm(s)}` : "";
+  box.querySelector('[data-a="pause"]').textContent = SHOW.paused ? "▶" : "❙❙";
+  // 새로 그려야 지금 점의 채움이 처음부터 다시 돈다
+  box.querySelector(".sd-dots").innerHTML = SHOW.items.map((x, j) =>
+    `<i data-j="${j}" class="${j === SHOW.i ? "on" : ""}" style="--dur:${x.sec}s" title="${j + 1}. ${SLIDE[x.t].nm(x)} · ${fmtSec(x.sec)}"></i>`).join("");
+}
+$("showdots").addEventListener("click", ev => {
+  const d = ev.target.closest("[data-j]"), a = ev.target.closest("[data-a]")?.dataset.a;
+  if (d) { SHOW.paused = false; showGo(+d.dataset.j); return; }
+  if (a === "prev") showGo(SHOW.i - 1);
+  else if (a === "next") showGo(SHOW.i + 1);
+  else if (a === "pause") showPause();
+  else if (a === "stop") stopShow();
+  else if (a === "edit") openShowDlg(SHOW.name);
+});
+/* P — 재생 중이면 끝, 아니면 마지막에 튼 목록(없으면 첫 목록, 그것도 없으면 만들기 창) */
+function showQuick() {
+  let last = "";
+  try { last = localStorage.getItem("gn-map-show-last") || ""; } catch {}
+  const L = showLists(), sh = L.find(x => x.name === last) || L[0];
+  if (sh) startShow(sh.items, sh.name); else openShowDlg();
+}
+$("b-show").onclick = () => (SHOW.on ? openShowDlg(SHOW.name) : openShowDlg());
+
+/* ── 재생목록 창 ── */
+const SED = { name: "", items: [], from: "", msg: "" };    // 고치는 중인 목록(저장 전)
+let SED_DRAG = null;                                       // 끄는 것 — { j } 줄 · { t } 새 화면
+function openShowDlg(name) {
+  const L = showLists(), sh = L.find(x => x.name === name) || (name === undefined && L[0]) || null;
+  Object.assign(SED, sh ? { name: sh.name, items: sh.items.map(x => ({ ...x })), from: sh.name }
+                        : { name: "새 재생목록", items: [], from: "" }, { msg: "" });
+  if (SHOW.on && !SHOW.paused) showPause(true);           // 고치는 동안은 멈춘다
+  renderShowDlg();
+  $("showdlg").hidden = false;
+}
+function closeShowDlg() { $("showdlg").hidden = true; if (SHOW.on && SHOW.paused) showPause(false); }
+function sedRow(x, j) {
+  const S = SLIDE[x.t], sel = (k, opts, v) => `<select data-k="${k}" data-j="${j}">${opts.map(([a, l]) => `<option value="${a}"${String(a) === String(v) ? " selected" : ""}>${l}</option>`).join("")}</select>`;
+  const ps = S.p.map(k => k === "b" ? sel("b", [["aws", "AWS"], ["grid", "격자"]], x.b)
+    : k === "h" ? sel("h", [1, 2, 3, 6, 9, 12, 18, 24, 36, 48].map(v => [v, `${v}시간`]), x.h)
+    : k === "n" ? sel("n", [...Array(24).keys()].map(v => [v, `${v}시부터`]), x.n)
+    : sel("n", [1, 2, 3, 4, 5, 6].map(v => [v, `+${v}시간`]), x.n)).join("");
+  return `<div class="row" draggable="true" data-j="${j}"><span class="h" title="끌어서 차례 바꾸기">⋮⋮</span><span class="no">${j + 1}</span>
+    <span class="nm">${SLIDE[x.t].nm(x)}${ps}</span>${sel("sec", SHOW_SECS.map(v => [v, fmtSec(v)]), x.sec)}
+    <button class="ib2" data-a="dup" data-j="${j}" title="같은 것 하나 더(값을 바꿔 쓴다 — 예: AWS 24 · 48시간)">⧉</button><button class="ib2" data-a="del" data-j="${j}" title="빼기">✕</button></div>`;
+}
+function renderShowDlg() {
+  const L = showLists(), tot = SED.items.reduce((a, x) => a + x.sec, 0);
+  const groups = {};
+  for (const [t, S] of Object.entries(SLIDE)) (groups[S.g] ||= []).push(t);
+  $("showdlg").innerHTML = `<div class="box" role="dialog" aria-label="화면 재생">
+    <div class="top"><b>화면 재생</b><span class="msg">여러 화면을 차례로 — 화면보호기처럼. 왼쪽을 누르거나 오른쪽으로 끌어 넣고, 오른쪽에서 끌어 차례를 바꾼다</span><span class="sp"></span><button class="x" data-a="close" title="닫기 (Esc)">✕</button></div>
+    <div class="lists"><label>재생목록</label><select id="sd-pick"><option value="">— 새로 —</option>${L.map(x => `<option${x.name === SED.from ? " selected" : ""}>${esc(x.name)}</option>`).join("")}</select>
+      <label>이름</label><input type="text" id="sd-nm" maxlength="30" value="${esc(SED.name)}">
+      <button class="btn" data-a="save">저장</button><button class="btn" data-a="new">새로</button><button class="btn" data-a="rm"${SED.from ? "" : " disabled"}>지우기</button>
+      <span class="msg" id="sd-msg">${SED.msg}</span></div>
+    <div class="cols"><div class="cat">${Object.entries(groups).map(([g, ts]) => `<h5>${g}</h5>` + ts.map(t =>
+        `<button draggable="true" data-add="${t}" title="누르면 맨 뒤에 더한다 · 오른쪽으로 끌어 그 자리에">${SLIDE[t].nm(slideOf(t)).replace(/^(AWS|격자) /, "")}<small>${SLIDE[t].tip}</small></button>`).join("")).join("")}</div>
+      <div class="seq" id="sd-seq"><div class="hd"><span>재생 차례 ${SED.items.length}화면</span><span>한 바퀴 ${fmtSec(tot)}</span></div>
+        <div class="rows">${SED.items.length ? SED.items.map(sedRow).join("") : `<div class="empty">왼쪽에서 화면을 눌러 더하세요 — 같은 종류도 여럿(AWS 24시간 · 48시간 …)</div>`}</div></div></div>
+    <div class="foot"><span class="msg">재생 중에는 층 · 구간을 이 화면에서만 바꾼다(다른 화면 설정은 그대로). 끝은 Esc · P · 점 위 ✕</span><span class="sp"></span>
+      ${SHOW.on ? `<button class="btn" data-a="stop">재생 끝</button>` : ""}<button class="btn pri" data-a="play"${SED.items.length ? "" : " disabled"}>▶ 재생</button></div></div>`;
+}
+const esc = t => String(t ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+async function putShows(list) {
+  const r = await fetch("/api/settings/map", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ shows: list }) });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.status);
+  SET.shows = (await r.json()).map.shows;
+}
+$("showdlg").addEventListener("click", async ev => {
+  if (ev.target.id === "showdlg") return closeShowDlg();
+  const add = ev.target.closest("[data-add]"), a = ev.target.closest("[data-a]")?.dataset.a;
+  SED.name = $("sd-nm")?.value.trim() || SED.name;
+  if (add) { SED.items.push(slideOf(add.dataset.add)); SED.msg = ""; renderShowDlg(); $("showdlg").querySelector(".rows").scrollTop = 1e6; return; }
+  if (!a) return;
+  const j = +ev.target.closest("[data-j]")?.dataset.j;
+  if (a === "close") return closeShowDlg();
+  if (a === "dup") { SED.items.splice(j + 1, 0, { ...SED.items[j] }); renderShowDlg(); return; }
+  if (a === "del") { SED.items.splice(j, 1); renderShowDlg(); return; }
+  if (a === "new") { Object.assign(SED, { name: "새 재생목록", items: [], from: "", msg: "" }); renderShowDlg(); return; }
+  if (a === "stop") { stopShow(); renderShowDlg(); return; }
+  if (a === "save" || a === "rm") {
+    const name = SED.name.slice(0, 30);
+    if (a === "save" && (!name || !SED.items.length)) { SED.msg = "이름과 화면 하나 이상이 있어야 저장한다"; renderShowDlg(); return; }
+    // 저장 — 고치던 목록(이름을 바꿨어도) 그 자리에, 같은 이름이 따로 있으면 그것을 갈음. 지우기 — 고치던 목록을
+    let L = showLists().slice();
+    const at = L.findIndex(x => x.name === SED.from);
+    if (a === "rm") L = L.filter(x => x.name !== SED.from);
+    else {
+      L = L.filter((x, i) => i === at || x.name !== name);
+      const k2 = L.findIndex(x => x.name === SED.from);
+      if (k2 >= 0) L[k2] = { name, items: SED.items }; else L.push({ name, items: SED.items });
+    }
+    try { await putShows(L); SED.msg = a === "save" ? `저장했다 — ${name}` : `지웠다 — ${SED.from}`; SED.from = a === "save" ? name : ""; }
+    catch (e) { SED.msg = `못 했다 — ${e.message}`; }
+    renderShowDlg(); return;
+  }
+  if (a === "play") {
+    try { if (SED.from) localStorage.setItem("gn-map-show-last", SED.from); } catch {}
+    $("showdlg").hidden = true;
+    startShow(SED.items, SED.from && showLists().some(x => x.name === SED.from) ? SED.from : "");
+  }
+});
+$("showdlg").addEventListener("change", ev => {
+  const t = ev.target;
+  if (t.id === "sd-pick") { openShowDlg(t.value || null); return; }   // 빈 값 = 새로
+  if (t.id === "sd-nm") { SED.name = t.value.trim(); return; }
+  const j = +t.dataset.j, k = t.dataset.k;
+  if (!k || !SED.items[j]) return;
+  SED.items[j][k] = k === "b" ? t.value : +t.value;
+  renderShowDlg();
+});
+// 끌기 — 왼쪽 화면을 오른쪽 차례 자리로, 오른쪽 줄끼리 차례 바꾸기(HTML 끌어 놓기)
+$("showdlg").addEventListener("dragstart", ev => {
+  const r = ev.target.closest(".row[data-j]"), c = ev.target.closest("[data-add]");
+  SED_DRAG = r ? { j: +r.dataset.j } : c ? { t: c.dataset.add } : null;
+  if (r) r.classList.add("drag");
+  ev.dataTransfer.effectAllowed = "move"; ev.dataTransfer.setData("text/plain", "x");
+});
+const sedSlot = ev => {                  // 놓을 자리 — 줄 위 반이면 그 앞, 아래 반이면 그 뒤
+  const r = ev.target.closest(".row[data-j]");
+  if (!r) return SED.items.length;
+  const b = r.getBoundingClientRect();
+  return +r.dataset.j + (ev.clientY > b.top + b.height / 2 ? 1 : 0);
+};
+$("showdlg").addEventListener("dragover", ev => {
+  if (!SED_DRAG || !ev.target.closest("#sd-seq")) return;
+  ev.preventDefault();
+  $("sd-seq").classList.add("over");
+  const at = sedSlot(ev);
+  $("showdlg").querySelectorAll(".row").forEach((r, j) => { r.classList.toggle("ins", j === at); r.classList.toggle("ins-after", at === SED.items.length && j === SED.items.length - 1); });
+});
+$("showdlg").addEventListener("dragleave", ev => { if (ev.target.id === "sd-seq") $("sd-seq").classList.remove("over"); });
+$("showdlg").addEventListener("drop", ev => {
+  if (!SED_DRAG || !ev.target.closest("#sd-seq")) return;
+  ev.preventDefault();
+  let at = sedSlot(ev);
+  if (SED_DRAG.t) SED.items.splice(at, 0, slideOf(SED_DRAG.t));
+  else { const [x] = SED.items.splice(SED_DRAG.j, 1); if (at > SED_DRAG.j) at--; SED.items.splice(at, 0, x); }
+  SED_DRAG = null; renderShowDlg();
+});
+$("showdlg").addEventListener("dragend", () => { SED_DRAG = null; $("showdlg").querySelectorAll(".row").forEach(r => r.classList.remove("drag", "ins", "ins-after")); $("sd-seq")?.classList.remove("over"); });
+/* 새로고침해도 이어서 — 이 브라우저가 재생하던 목록(또는 ?show=이름) */
+function showResume() {
+  let name = Q.get("show") || "";
+  if (!name) { try { name = localStorage.getItem("gn-map-show") || ""; } catch {} }
+  const sh = name && showLists().find(x => x.name === name);
+  if (sh) startShow(sh.items, sh.name);
+}
 
 /* ── AWS 비활성화 — 관측소 점 오른쪽 클릭. 주변과 동떨어진 값(진주 한 곳 1㎜, 둘레 12~14㎜ — 고장 · 막힘)을 계산에서 뺀다 ──
    서버 설정 map.aws_off(벽면 화면 · 종합 화면도 같이) — 면(AWS 누적 · 1시간 IDW) · 강수 누적 카드 · 지금 오는 비에서 빠진다.
@@ -5217,7 +5588,8 @@ document.addEventListener("keydown", ev => {
     if (!$("acc-ctx").hidden) { accCtx(null); return; }
     if (!$("lg-pop").hidden) { lgPop(null); return; }
     if (!$("stn-pop").hidden) { stnPop(null); return; }
-    if (!$("prefs").hidden) closePrefs(); else if (!$("help").hidden) closeHelp(); else if (selOn()) selectSig(null);
+    if (!$("showdlg").hidden) { closeShowDlg(); return; }
+    if (!$("prefs").hidden) closePrefs(); else if (!$("help").hidden) closeHelp(); else if (selOn()) selectSig(null); else if (SHOW.on) stopShow();
     return;
   }
   if (ev.key === "?") { $("help").hidden ? openHelp() : closeHelp(); return; }
@@ -5227,6 +5599,7 @@ document.addEventListener("keydown", ev => {
   else if ((ev.key === "t" || ev.key === "T") && !CASE) setTest(!test);
   else if (ev.key === "l" || ev.key === "L") setTL(!tlOn);
   else if (ev.key === "c" || ev.key === "C") camEdit(!CAM_EDIT);
+  else if ((ev.key === "p" || ev.key === "P") && !CASE) (SHOW.on ? stopShow() : showQuick());
   else if (ev.key === "w" || ev.key === "W") setSw(SW_MODES[(SW_MODES.indexOf(swMode()) + 1) % SW_MODES.length]);
   else if (ev.key === "a" || ev.key === "A") setOverlay("alerts", !OV.has("alerts"));
   else if (ev.key === "s" || ev.key === "S") setOverlay("stations", !OV.has("stations"));
@@ -5327,6 +5700,7 @@ async function boot() {
   // 카드·특보는 종합 화면처럼 1분마다 다시 읽는다(DB 만 읽는다 — 기상청 호출은 늘지 않는다)
   setInterval(() => { if (!test) { loadCards(); loadAlerts(); } if (qpfOn() && !SET.acc_full) loadQpf(); }, 60000);
   loadAlerts();
+  if (!CASE) showResume();               // 화면 재생 — 이 브라우저가 돌리던 목록을 이어서
   // 웹 글꼴이 늦게 오면 카드 높이가 바뀐다 — 다 오면 한 번 더 잰다(누적 카드가 아래를 비운 채 굳지 않게)
   document.fonts?.ready?.then(() => { if (CARDS && !CARDS.err && tlOn && SET.panel !== "timeline") renderCards(); });
   if (Q.has("help")) openHelp(["src", "terms", "how"].includes(Q.get("help")) ? Q.get("help") : "src");   // ?help= — 도움말을 연 채로(안내용 링크)

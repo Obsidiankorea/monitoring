@@ -85,6 +85,19 @@ def test_put_setting_validates(monkeypatch):
     assert gridview.SETTING_DEFAULT["acc_scale"] == 0 and gridview.put_setting({"acc_scale": 150})["acc_scale"] == 150
     # 바다 위젯 — 기본 예측 상위, 지금 오는 비 · 끔(특보 탭은 뺐다 — 왼쪽 특보 줄로)
     assert gridview.SETTING_DEFAULT["sea_w"] == "fc" and gridview.put_setting({"sea_w": "now"})["sea_w"] == "now"
+    # 화면 재생 목록 — 같은 종류 여럿(AWS 24 · 48시간), 이름이 같으면 뒤의 것
+    shows = [{"name": "기본", "items": [{"t": "acc_h", "b": "aws", "h": 24, "sec": 30}, {"t": "acc_h", "b": "aws", "h": 48, "sec": 20},
+                                        {"t": "shrt_today", "sec": 15}, {"t": "vsrt", "n": 3, "sec": 10}]},
+             {"name": "기본", "items": [{"t": "flow", "b": "grid", "sec": 60}]}]
+    got = gridview.put_setting({"shows": shows})["shows"]
+    assert gridview.SETTING_DEFAULT["shows"] == [] and got == [{"name": "기본", "items": [{"t": "flow", "b": "grid", "sec": 60}]}]
+    got = gridview.put_setting({"shows": shows[:1]})["shows"]
+    assert [x.get("h") for x in got[0]["items"]] == [24, 48, None, None] and got[0]["items"][3]["n"] == 3
+    for bad in ([{"name": "", "items": [{"t": "m15", "sec": 10}]}], [{"name": "a", "items": []}],
+                [{"name": "a", "items": [{"t": "radar", "sec": 10}]}], [{"name": "a", "items": [{"t": "m15", "sec": 1}]}],
+                [{"name": "a", "items": [{"t": "acc_h", "h": 99, "sec": 10}]}], "x"):
+        with pytest.raises(ValueError):
+            gridview.put_setting({"shows": bad})
     for bad in ({"flow_step": 15}, {"play_ms": 50}, {"tl_stat": "sum"}, {"layer": "nope"},
                 {"overlays": ["bars"]}, {"overlays": "alerts"}, {"pal": "rainbow"}, {"acc_per": 5}, {"qpf_ms": 50},
                 {"acc_scale": 100}, {"sea_w": "big"}, {"sea_w": "alert"}):

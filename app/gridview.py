@@ -1176,6 +1176,8 @@ SETTING_DEFAULT = {"layer": "obs60", "x4": False, "vsrt_n": 1,
                    # 바다 위젯 — 지도 위 반투명 판: off · fc(예측 상위) · now(지금 오는 비). W 키.
                    # ⚠️ 특보(alert) 탭은 뺐다 — 판이 너무 커졌다. 특보는 왼쪽 특보 줄(얇게)에(10-24). 남은 alert 값은 화면이 fc 로 읽는다
                    "sea_w": "fc",
+                   # 화면 재생 목록 — [{name, items:[{t, b?, h?, n?, sec}]}]. 지도 오른쪽 위 화면 단추 · P. 재생 중엔 이 설정 말고는 안 바꾼다
+                   "shows": [],
                    # 지도 위에 겹칠 레이어(왼쪽 위 '레이어'에서 켠다). 차츰 늘린다.
                    "overlays": []}
 OVERLAYS = ("alerts", "stations", "stnval")   # stnval = 관측소 옆 값 글자(관측소에 딸림)
@@ -1197,6 +1199,44 @@ _TEXT = {"tl_stat", "panel", "acc_basis", "acc_from", "pal", "sea_w"}
 
 def setting() -> dict:
     return db.get_setting("map", SETTING_DEFAULT)
+
+
+# 화면 재생 — 한 화면의 종류(map.html SLIDE 와 같은 이름). 누적: 지난 N시간 · N시부터 · 오늘/어제 0시부터 /
+# 지금: 1시간 · 15분 · 흐름 재생 / 예측: 초단기 +N · 단기 오늘 · 내일
+SHOW_T = ("acc_h", "acc_from", "acc_today", "acc_yday", "h1", "m15", "flow", "vsrt", "shrt_today", "shrt_tomorrow")
+SHOW_MAX, SHOW_ITEMS = 30, 40
+
+
+def _clean_shows(lst) -> list[dict]:
+    """재생목록 검사 — 이름(30자) · 화면 1~40개 · 화면마다 종류 · 머무는 초(3~900) · 값(자료 b · 시간 h 1~48 · n 0~23).
+    같은 이름이면 뒤의 것. 모르는 것은 ValueError(조용히 버리지 않는다 — 저장했다고 믿었는데 빠지면 안 된다)."""
+    if not isinstance(lst, list) or len(lst) > SHOW_MAX:
+        raise ValueError(f"shows 는 목록({SHOW_MAX}개까지)")
+    out: dict[str, dict] = {}
+    for sh in lst:
+        name = str((sh or {}).get("name") or "").strip()[:30] if isinstance(sh, dict) else ""
+        items = sh.get("items") if isinstance(sh, dict) else None
+        if not name or not isinstance(items, list) or not 1 <= len(items) <= SHOW_ITEMS:
+            raise ValueError(f"재생목록은 이름과 화면 1~{SHOW_ITEMS}개")
+        clean = []
+        for it in items:
+            if not isinstance(it, dict) or it.get("t") not in SHOW_T:
+                raise ValueError(f"화면 종류는 {SHOW_T} 중 하나")
+            sec = int(it.get("sec", 30))
+            if not 3 <= sec <= 900:
+                raise ValueError("화면 하나는 3~900초")
+            x = {"t": it["t"], "sec": sec}
+            if it.get("b") in ("grid", "aws"):
+                x["b"] = it["b"]
+            for k, lo, hi in (("h", 1, 48), ("n", 0, 23)):
+                if it.get(k) is not None:
+                    v = int(it[k])
+                    if not lo <= v <= hi:
+                        raise ValueError(f"{k} 는 {lo}~{hi}")
+                    x[k] = v
+            clean.append(x)
+        out[name] = {"name": name, "items": clean}
+    return list(out.values())
 
 
 def put_setting(body: dict) -> dict:
@@ -1239,6 +1279,8 @@ def put_setting(body: dict) -> dict:
             clean.append({"id": x["id"], "name": str(x.get("name") or "")[:40], "sigun": str(x.get("sigun") or "")[:10],
                           "org": "gn" if x.get("org") == "gn" else "kma"})
         cur["aws_off"] = list({c["id"]: c for c in clean}.values())
+    if "shows" in body:
+        cur["shows"] = _clean_shows(body["shows"])
     if "overlays" in body:
         ov = body["overlays"]
         if not isinstance(ov, list) or any(x not in OVERLAYS for x in ov):
