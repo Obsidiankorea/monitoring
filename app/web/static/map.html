@@ -560,6 +560,11 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 .abar .h { position: absolute; top: 0; bottom: 0;
   background: repeating-linear-gradient(45deg, var(--acc-h1a) 0 3px, var(--acc-h1b) 3px 6px); }
 .abar .o.all { border-radius: 5px; }
+/* 색조 — 막대를 그 값의 지도 범례 색으로(막대를 누르면 한 색 ↔ 색조, 서버 설정 acc_tone). 기상청 AWS 줄 청록 구분은 이때 쓰지 않는다 */
+#acc-b.tone .abar[style] .o { background: var(--tc); }
+#acc-b.tone .abar[style] .h { background: repeating-linear-gradient(45deg, color-mix(in oklab, var(--tc) 55%, white) 0 3px, var(--tc) 3px 6px); }
+#acc-b.tone .abar:not([style]) .o { background: color-mix(in oklab, var(--ink) 18%, transparent); }
+.acc-lg .tn { width: calc(34px * var(--k, 1)) !important; }
 /* 기상청 AWS 지점 줄 — 막대를 청록으로(경남 AWS 는 그대로 파랑). 같은 시군에 둘이 섞여도 어느 관측망인지 바로 */
 .ar.kma .abar .o { background: var(--acc-kma); }
 .ar.kma .abar .h { background: repeating-linear-gradient(45deg, var(--acc-kma-h1a) 0 3px, var(--acc-kma-h1b) 3px 6px); }
@@ -966,6 +971,38 @@ body.cam-edit #sw { pointer-events: none; opacity: .5; }
 #sw .nw .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: calc(13px * var(--k, 1)); }
 #sw .nw .nm small { color: var(--ink-3); margin-right: 4px; font-size: calc(11px * var(--k, 1)); }
 #sw .nw b { flex: none; font: 700 calc(13.5px * var(--k, 1)) var(--mono); }
+/* 시군 평균 — 넓은 판은 경남 모양 타일 지도(6×4), 테두리 · 옅은 바탕이 지도 범례 색. 비 없는 시군은 흐리게(10-24) */
+#sw .avm { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); grid-template-rows: repeat(4, calc(var(--rh) * var(--k, 1)));
+  gap: calc(5px * var(--k, 1)); }
+#sw .av { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 0; border-radius: 8px; cursor: pointer;
+  border: 1.5px solid var(--c); background: color-mix(in oklab, var(--c) 16%, transparent); transition: background .2s, box-shadow .2s; }
+#sw .av .nm { font: 600 calc(12px * var(--k, 1)) var(--sans); color: var(--ink-2); line-height: 1.15; }
+#sw .av b { font: 700 calc(17px * var(--k, 1)) var(--mono); line-height: 1.1; }
+#sw .av small { font: 500 calc(10px * var(--k, 1)) var(--mono); color: var(--ink-3); line-height: 1.2; white-space: nowrap; }
+#sw .av.top { border-width: 2.5px; }
+#sw :is(.av, .nw).dry { border-color: color-mix(in oklab, var(--line) 60%, transparent); background: transparent; }
+#sw :is(.av, .nw).dry b { color: var(--ink-3); font-weight: 600; }
+#sw .av:hover, #sw .av.hov { box-shadow: 0 0 0 2px var(--accent); }
+#sw .avm.sm .av { flex-direction: row; gap: calc(5px * var(--k, 1)); }
+#sw .avm.sm .av small { display: none; }
+#sw .avm.sm .av b { font-size: calc(13.5px * var(--k, 1)); }
+#sw .avs { grid-column: 5 / 7; grid-row: 3 / 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  border-radius: 10px; border: 1px dashed color-mix(in oklab, var(--c) 60%, var(--line)); }
+#sw .avs span { font: 600 calc(11.5px * var(--k, 1)) var(--sans); color: var(--ink-3); }
+#sw .avs b { font: 700 calc(26px * var(--k, 1)) var(--mono); line-height: 1.05; }
+#sw .avs b i { font: 600 calc(12px * var(--k, 1)) var(--sans); font-style: normal; color: var(--ink-3); margin-left: 2px; }
+#sw .avs small { font: 500 calc(10.5px * var(--k, 1)) var(--sans); color: var(--ink-3); }
+#sw .avm.sm .avs b { font-size: calc(19px * var(--k, 1)); }
+#sw .avm.sm .avs small { display: none; }
+#sw .sw-lg { min-height: calc(14px * var(--k, 1)); align-items: center; gap: 8px; }
+#sw .sw-lg :is(.cap, .gm) { line-height: calc(14px * var(--k, 1)); max-height: calc(14px * var(--k, 1)); }   /* 범례 줄과 같은 14px — 세 탭이 같은 크기 */
+#sw .sw-lg .cap { margin-right: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font: 600 calc(11px * var(--k, 1)) var(--sans); color: var(--ink-3); }
+#sw .sw-lg .gm { flex: none; font: 600 calc(11px * var(--k, 1)) var(--sans); color: var(--ink-3); }
+#sw .sw-lg .gm b { color: var(--ink); font: 700 calc(13px * var(--k, 1)) var(--mono); }
+#sw .nw.hov { background: color-mix(in oklab, var(--accent) 12%, transparent); }
+#sw .nwg.avl .nw { height: calc(var(--nh) * var(--k, 1)); }
+#sw .nwg.avl .nw b { font-size: calc(14.5px * var(--k, 1)); }
 #sw :is(.sw-x, .sw-sh) { background: transparent; border: 0; color: var(--ink-3); font-size: calc(14px * var(--k, 1)); cursor: pointer; padding: 0 2px; }
 #sw :is(.sw-x, .sw-sh, .sw-rot):hover { color: var(--ink); }
 #sw .sw-rot { background: transparent; border: 0; color: var(--ink-3); font-size: calc(14px * var(--k, 1)); cursor: pointer; padding: 0 2px; }
@@ -1167,8 +1204,8 @@ body.show-on #play { bottom: 46px; }      /* 점 자리를 비운다 */
   </div>
   <div id="sw" hidden aria-label="바다 위젯">
     <div class="sw-h" title="끌어서 옮기기 — 마지막으로 놓은 자리가 이 화면의 기본 자리(두 번 누르면 다시 자동 — 땅을 덜 덮는 빈자리)"><span class="sw-tabs">
-      <button type="button" data-m="fc" title="초단기 예측 순위 — 앞으로 6시간">예측<i> 상위</i></button><button type="button" data-m="now" title="지금 오는 비 순위 — 60분 시우량">지금<i> 오는</i> 비</button></span>
-      <span class="sp"></span><span class="bt" id="sw-bt">—</span><button type="button" class="sw-rot" title="돌리기 — 예측 상위 ↔ 지금 오는 비를 번갈아(화면 재생과 따로). 오른쪽 클릭으로 간격 · 시군당 곳 수">⟳</button><button type="button" class="sw-sh" title="꼴 바꾸기 — 세로로 길쭉하게 ↔ 넓게(이 자리에 기억)">⇔</button><button type="button" class="sw-x" title="닫기 — 다시: W · 설정 › 화면 › 바다 위젯">✕</button></div>
+      <button type="button" data-m="fc" title="초단기 예측 순위 — 앞으로 6시간">예측<i> 상위</i></button><button type="button" data-m="now" title="지금 오는 비 순위 — 60분 시우량">지금<i> 오는</i> 비</button><button type="button" data-m="avg" title="시군 평균 — 지금 지도 층(그 시각 · 그 구간)의 18개 시군 면 평균"><i>시군 </i>평균</button></span>
+      <span class="sp"></span><span class="bt" id="sw-bt">—</span><button type="button" class="sw-rot" title="돌리기 — 예측 상위 → 지금 오는 비 → 시군 평균을 차례로(화면 재생과 따로). 오른쪽 클릭으로 간격 · 시군당 곳 수">⟳</button><button type="button" class="sw-sh" title="꼴 바꾸기 — 세로로 길쭉하게 ↔ 넓게(이 자리에 기억)">⇔</button><button type="button" class="sw-x" title="닫기 — 다시: W · 설정 › 화면 › 바다 위젯">✕</button></div>
     <i class="sw-prog" hidden></i>
     <div class="sw-lg" id="sw-lg"></div>
     <div class="sw-b" id="sw-b"></div>
@@ -1398,7 +1435,7 @@ const COLLECT_OF = { obs15: "grid", obs60: "grid", obsday: "grid", acc: "grid", 
                      shrt_today: "short", shrt_tomorrow: "short" };
 const SET_DEFAULT = { flow_step: 10, flow_hours: 6, play_ms: 1200, tl_on: false, tl_stat: "max",
                       panel: "cards", acc_hours: 12, acc_from: "hours", acc_basis: "aws", sel_zoom: true, acc_fc: true, acc_h1: true,
-                      acc_per: 1, acc_full: false, aws_live: false, acc_qpf: false, qpf_ms: 600, acc_date: "", acc_hdr_pin: true, aws_off: [], acc_scale: 0, sea_w: "fc", sea_rot: 0, sea_per: 1, shows: [] };
+                      acc_per: 1, acc_full: false, aws_live: false, acc_qpf: false, qpf_ms: 600, acc_date: "", acc_hdr_pin: true, acc_tone: false, aws_off: [], acc_scale: 0, sea_w: "fc", sea_rot: 0, sea_per: 1, shows: [] };
 
 let META = null, TOPO = null, GEO = null, MSIG = null, MEMD = null, EMDN = null;
 let SET = { ...SET_DEFAULT };
@@ -1575,7 +1612,7 @@ function highlight(name) {
     if (ft) p.setAttribute("d", PATH(ft));
     p.classList.toggle("on", !!ft);
   }
-  for (const r of document.querySelectorAll(".tl-row, .ar, .mr, .fr"))
+  for (const r of document.querySelectorAll(".tl-row, .ar, .mr, .fr, #sw .nw, #sw .av"))
     r.classList.toggle("hov", !!name && r.dataset.s === name);
 }
 
@@ -2102,7 +2139,10 @@ async function show(fade = false) {
     const [gr, st] = await Promise.all([fetchGrid(key, tm), fetchStat(key, tm)]);
     if (my !== SEQ) return;                     // 그새 다른 층을 골랐다
     CUR = gr; CURSTAT = st;
-    if (updScale()) buildLegend();          // 누적 — 자료 크기에 맞춘 눈금(바뀌면 범례 · 면 · 관측소 점이 같이)
+    if (updScale()) {                       // 누적 — 자료 크기에 맞춘 눈금(바뀌면 범례 · 면 · 관측소 점이 같이)
+      buildLegend();
+      if (SET.acc_tone && CARDS && !CARDS.err) renderCards();   // 색조 막대도 새 자로
+    }
     $("empty").hidden = true;
   } catch (e) {
     if (my !== SEQ) return;
@@ -2121,6 +2161,7 @@ async function show(fade = false) {
   loadStations();                        // 기억해 둔 시각이면 곧바로(같은 틱에) 바뀐다 — 격자와 함께 넘어간다
   draw(fade);
   paintHead();
+  if (swOn() && swView() === "avg") renderSw();         // 바다 위젯 시군 평균은 지도 면을 따른다
   buildPlay();
   tlPlayhead();
   if (CASE && CASEM && CUR && tlOn && SET.panel !== "timeline") loadCards();
@@ -3320,6 +3361,12 @@ function renderAcc() {
   };
   // 최근 1시간 칩 — 시우량 자(SIU)로 칠한다. 막대 빗금과 같은 단추(H)로 켜고 끈다
   body.classList.toggle("h1c", h1On);
+  // 막대 색 — 색조(SET.acc_tone)면 값마다 메인 지도 범례의 그 범주 색. 지도가 누적이면 그 자(자동 눈금 · 고정 눈금 · 다양한 색조 그대로),
+  // '그 시각' · 단기 카드면 그 층의 자. 막대를 누르면 한 색 ↔ 색조
+  const tone = !!SET.acc_tone, tk = A.day || A.moment || ACCK.has(kind) ? kind : ACC_BASIS === "grid" ? "acc" : "aws";
+  const tSteps = stepsOf(tk), tHr = HOURLY.has(tk);
+  const tcol = v => { const x = v * (tk === kind ? factor() : 1); return (x >= tSteps[0] && rampColor(x, tSteps, tHr)) || ""; };
+  body.classList.toggle("tone", tone);
   const h1Chip = (r, v) => {
     if (r.dead) return `<span class="h1v z" title="결측">—</span>`;
     const c = v >= 0.1 ? rampColor(v, SIU, true) : null;
@@ -3342,7 +3389,7 @@ function renderAcc() {
     const g0 = A.per > 1 && !A.sel && i > 0 && rows[i - 1].sig !== r.sig;
     return `<div class="ar${r.det ? " det" : ""}${g0 ? " g0" : ""}${A.basis === "aws" && r.org === "kma" ? " kma" : ""}" data-s="${r.sig}" data-k="${r.sig}|${r.stn}"${at} title="${r.det ? "" : `${r.sig} — 눌러서 이 시군 ${A.basis === "grid" ? "읍면동" : "지점"} 보기`}">
       <div class="nm2">${rank}<small>${r.tag ?? r.sig}</small>${r.stn}</div>
-      <div class="abar"><div class="o${A.day ? " dayb" : hw >= o - 0.05 && !r.fc ? " all" : ""}" style="width:${o.toFixed(1)}%"></div>
+      <div class="abar" title="막대를 누르면 색 — ${tone ? "한 색으로" : "지도 범례 색조로(값마다 그 범주 색)"}"${tone && tcol(r.sum) ? ` style="--tc:${tcol(r.sum)}"` : ""}><div class="o${A.day ? " dayb" : hw >= o - 0.05 && !r.fc ? " all" : ""}" style="width:${o.toFixed(1)}%"></div>
         ${h1 >= 0.1 ? `<div class="h${r.fc ? "" : " end"}${hw >= o - 0.05 ? " all" : ""}" style="left:${(o - hw).toFixed(1)}%;width:${hw.toFixed(1)}%" title="그중 최근 1시간 ${h1.toFixed(1)}㎜"></div>` : ""}
         ${r.fc ? `<div class="f" style="left:${o.toFixed(1)}%;width:${f.toFixed(1)}%"></div>` : ""}
         <span class="v${r.dead ? " dead" : ""}" style="${vpos}"${ge}>${r.dead ? "결측" : r.sum.toFixed(1)}${r.fc ? `<i>+${fcTxt(r.fc)}</i>` : ""}</span></div>
@@ -3360,9 +3407,14 @@ function renderAcc() {
       : A.day ? `<div class="acc-lg"><span><i class="d"></i>그날 예보 합(단기 PCP 매시 합 · 읍면동 최대)</span><span>선 그래프: 매시 값</span></div>`
       : `<div class="acc-lg">${A.basis === "aws"
           ? (rows.some(r => r.org !== "kma") ? `<span><i class="p"></i>경남 AWS</span>` : "") + (rows.some(r => r.org === "kma") ? `<span><i class="pk"></i>기상청 AWS</span>` : "")
-          : `<span><i class="p"></i>실측</span>`}${h1On ? `<span><i class="h"></i>그중 최근 1시간</span><span><i class="c1"></i>1h · 많을수록 밝게</span>` : ""}${fcOn && rows.some(r => r.fc) ? `<span><i class="f"></i>앞으로 6시간</span>` : ""}</div>`);
+          : `<span><i class="p"></i>실측</span>`}${tone ? `<span title="막대를 누르면 한 색으로"><i class="tn" style="background:linear-gradient(90deg, ${tSteps.map(v => rampColor(v, tSteps, tHr) || "transparent").join(", ")})"></i>지도 범례 색</span>` : ""}${h1On ? `<span><i class="h"></i>그중 최근 1시간</span><span><i class="c1"></i>1h · 많을수록 밝게</span>` : ""}${fcOn && rows.some(r => r.fc) ? `<span><i class="f"></i>앞으로 6시간</span>` : ""}</div>`);
   rowEvents(body);
   hovEvents(body);
+  for (const b of body.querySelectorAll(".abar")) b.onclick = ev => {     // 막대 = 색 바꾸기(줄의 나머지는 그대로 시군 고르기)
+    ev.stopPropagation();
+    SET.acc_tone = !SET.acc_tone; saveSetting({ acc_tone: SET.acc_tone });
+    renderAcc();
+  };
   slideRows(body, before);
 }
 /* 줄 순서가 바뀌면 옛 자리에서 새 자리로 미끄러진다(FLIP). 새로 들어온 줄은 서서히 */
@@ -4075,13 +4127,13 @@ const seaShort = r => r.replace(/^남해동부/, "").replace(/시동부앞바다
    자리는 이 브라우저에 기억(gn-map-sw — 화면 크기가 달라서). 위젯이 켜져 있으면 지도 위 바다 특보 글자는 그리지 않는다
    (위젯이 그 바다 자리를 쓴다 — 바다 특보는 왼쪽 특보 줄에). ⚠️ 특보 탭은 판이 너무 커져 뺐다(10-24).
    예측 상위 · 지금 오는 비는 오른쪽 패널 카드와 같은 자료(CARDS)와 같은 그림(renderFc · renderNow)이다 */
-const SW_MODES = ["fc", "now", "off"];   // ⚠️ 특보 탭은 뺐다 — 판이 너무 커졌다. 특보는 왼쪽 특보 줄(얇게)에(10-24)
+const SW_MODES = ["fc", "now", "avg", "off"];   // ⚠️ 특보 탭은 뺐다 — 판이 너무 커졌다. 특보는 왼쪽 특보 줄(얇게)에(10-24)
 // 위젯 몸 높이는 줄 수로 정한다 — 예측 상위 · 지금 오는 비 두 탭이 같은 크기(돌려도 판이 들썩이지 않게, 10-24).
 // 예측 상위 열 줄이 기본 — 빈자리가 모자라면 8 · 6 · 5 · 4 줄로(swAuto). 지금 오는 비는 그 높이를 장소 칩으로 채운다
 const SW_ROWS = 10;
 let SW_N = SW_ROWS;
 const swBodyH = n => (n * 30 + 24) * (V?.k || 1);
-/* 돌리기 — 서버 설정 sea_rot 초마다 예측 상위 ↔ 지금 오는 비(화면 재생과 따로). 보이는 탭(SW_ROT.m)은 이 화면에서만 바꾼다 */
+/* 돌리기 — 서버 설정 sea_rot 초마다 예측 상위 → 지금 오는 비 → 시군 평균(화면 재생과 따로). 보이는 탭(SW_ROT.m)은 이 화면에서만 바꾼다 */
 const SW_ROT = { m: null, t: null };
 const swRotOn = () => swOn() && +SET.sea_rot > 0;
 const swView = () => (swRotOn() && SW_ROT.m) || swMode();
@@ -4096,7 +4148,8 @@ function swRotate(reset) {
   clearInterval(SW_ROT.t); SW_ROT.t = null;
   if (!swRotOn()) { SW_ROT.m = null; swProg(); return; }
   if (reset || !SW_ROT.m) SW_ROT.m = swMode();
-  SW_ROT.t = setInterval(() => { SW_ROT.m = SW_ROT.m === "fc" ? "now" : "fc"; renderSw(); swProg(); }, SET.sea_rot * 1000);
+  const ms = SW_MODES.filter(m => m !== "off");        // 예측 상위 → 지금 오는 비 → 시군 평균 → …
+  SW_ROT.t = setInterval(() => { SW_ROT.m = ms[(ms.indexOf(SW_ROT.m) + 1) % ms.length]; renderSw(); swProg(); }, SET.sea_rot * 1000);
   swProg();
 }
 function setSwOpt(k, v) {
@@ -4151,10 +4204,11 @@ function renderSw() {
   const m = swView(), n = SWPOS ? SW_ROWS : SW_N;
   for (const b of box.querySelectorAll(".sw-tabs button")) b.classList.toggle("on", b.dataset.m === m);
   box.querySelector(".sw-rot").classList.toggle("on", swRotOn());
-  const body = $("sw-b"), bt = $("sw-bt");
+  const body = $("sw-b"), bt = $("sw-bt"), tall0 = box.classList.contains("tall");
   body.style.height = swBodyH(n) + "px";                // 두 탭이 같은 크기
   $("sw-lg").innerHTML = "";
-  if (!tlOn || SET.panel === "timeline" || !CARDS) {
+  if (m === "avg") renderAvgSw(n);                      // 지도 자료라 오른쪽 패널이 꺼져 있어도 나온다
+  else if (!tlOn || SET.panel === "timeline" || !CARDS) {
     bt.textContent = "—";
     body.innerHTML = `<div class="sw-none">${tlOn && SET.panel !== "timeline" ? "읽는 중…" : "오른쪽 패널을 카드로 켜면 나온다(L · 설정 › 오른쪽 패널)"}</div>`;
   } else if (CARDS.err) { bt.textContent = "—"; body.innerHTML = `<div class="sw-none">불러오지 못했다 — ${CARDS.err}</div>`; }
@@ -4162,6 +4216,52 @@ function renderSw() {
   else if (m === "fc") renderFc(SW_T, n, swFcRows());
   else renderNowSw(n);
   placeSw();
+  // 자리를 찾다가 꼴(넓게 ↔ 길쭉하게)이 바뀌었으면 그 꼴로 다시 — 칩 칸 수 · 타일 지도가 꼴을 따른다
+  if (box.classList.contains("tall") !== tall0 && !renderSw.again) {
+    renderSw.again = true;
+    try { renderSw(); } finally { renderSw.again = false; }
+  }
+}
+/* 시군 평균 — 지금 지도 층(그 시각 · 그 구간)의 시군 면 평균(시군 안 격자 칸 평균, 결측 칸 뺌 — 지도 시군 통계 CURSTAT).
+   지도를 따른다(누적이면 그 구간, 1시간이면 1시간, 화면 재생이면 그 화면). 색은 지도 범례 그대로.
+   넓은 판은 경남 모양 타일 지도(6×4 — 대략 제자리, 오른쪽 아래 바다 자리에 경남 평균), 길쭉한 판은 많은 순 칩 */
+const AVG_GEO = { 함양: [0, 0], 거창: [1, 0], 합천: [2, 0], 창녕: [3, 0], 밀양: [4, 0],
+  산청: [0, 1], 진주: [1, 1], 의령: [2, 1], 함안: [3, 1], 김해: [4, 1], 양산: [5, 1],
+  하동: [0, 2], 사천: [1, 2], 고성: [2, 2], 창원: [3, 2], 남해: [1, 3], 통영: [2, 3], 거제: [3, 3] };
+const fmtAvg = v => (v == null ? "—" : v >= 100 ? String(Math.round(v)) : v.toFixed(1));
+function renderAvgSw(n) {
+  const body = $("sw-b"), k = V?.k || 1, fac = factor();
+  const rows = (CURSTAT?.rows || []).filter(r => r.kind === "gn");
+  $("sw-bt").textContent = CUR?.tm ? `${CUR.tm.slice(8, 10)}:${CUR.tm.slice(10, 12)}` : "—";
+  if (!rows.length) { body.innerHTML = `<div class="sw-none">${CUR ? "이 층은 시군 통계가 없다" : "지도 자료가 없다 — 지도 층을 바꿔 본다"}</div>`; return; }
+  const steps = stepsOf(kind), hr = HOURLY.has(kind), v = r => (r.mean == null ? null : r.mean * fac);
+  const col = x => (x != null && rampColor(x, steps, hr)) || "var(--line)";
+  // 경남 평균 — 시군 평균을 (결측 뺀) 칸 수로 무게 = 경남 땅 칸 전체 평균
+  let sum = 0, cnt = 0;
+  for (const r of rows) if (r.mean != null) { const c = r.cells - (r.missing || 0); sum += v(r) * c; cnt += c; }
+  const gm = cnt ? sum / cnt : null, wet = rows.filter(r => v(r) >= steps[0]).length;
+  const top = Math.max(0, ...rows.map(r => v(r) || 0));
+  const tip = r => `${r.sigun} 평균 ${fmtAvg(v(r))}㎜ · 최대 ${fmtAvg(r.max == null ? null : r.max * fac)}㎜${r.where?.emd ? ` (${r.where.emd})` : ""}`;
+  const cls = r => (v(r) >= steps[0] ? "" : " dry") + (top > 0 && v(r) === top ? " top" : "");
+  const tall = $("sw").classList.contains("tall");
+  // 설명 줄은 다른 탭의 작은 범례 자리(sw-lg)에 — 세 탭이 같은 크기
+  $("sw-lg").innerHTML = `<span class="cap" title="시군 안 격자 칸의 평균(결측 칸 뺌) — 지도와 같은 면 · 같은 색. 경남은 땅 칸 전체 평균">${labelOf(kind)} · 시군 평균</span>`
+    + (tall ? `<span class="gm">경남 <b>${fmtAvg(gm)}</b></span>` : "");
+  if (tall) {
+    const fit = Math.max(1, Math.floor((swBodyH(n) / k + 4) / 27)), cols = Math.min(3, Math.ceil(rows.length / fit));
+    const list = rows.slice().sort((a, b) => (v(b) ?? -1) - (v(a) ?? -1)), nr = Math.ceil(list.length / cols);
+    const ch = Math.max(20, Math.min(32, (swBodyH(n) / k - (nr - 1) * 4) / nr));   // 칩을 판 높이에 맞춰 키운다(18곳뿐이라)
+    body.innerHTML = `<div class="nwg avl" style="--cols:${cols};--nh:${ch.toFixed(1)}px">` + list.map(r =>
+        `<div class="nw av-c${cls(r)}" data-s="${r.sigun}" style="--c:${col(v(r))}" title="${tip(r)}"><span class="nm">${r.sigun}</span><b>${fmtAvg(v(r))}</b></div>`).join("") + `</div>`;
+  } else {
+    const rh = (swBodyH(n) / k - 3 * 5) / 4;               // 타일 한 줄 높이 — 낮으면 이름 · 값을 한 줄로
+    body.innerHTML = `<div class="avm${rh < 50 ? " sm" : ""}" style="--rh:${rh.toFixed(1)}px">` + rows.map(r => {
+      const [c, w] = AVG_GEO[r.sigun] || [5, 0];
+      return `<div class="av${cls(r)}" data-s="${r.sigun}" style="--c:${col(v(r))};grid-column:${c + 1};grid-row:${w + 1}" title="${tip(r)}">`
+        + `<span class="nm">${r.sigun}</span><b>${fmtAvg(v(r))}</b><small>최대 ${fmtAvg(r.max == null ? null : r.max * fac)}</small></div>`;
+    }).join("") + `<div class="avs" style="--c:${col(gm)}"><span>경남 평균</span><b>${fmtAvg(gm)}<i>㎜</i></b><small>비 온 시군 ${wet}/${rows.length}</small></div></div>`;
+  }
+  rowEvents(body);
 }
 /* 빈자리 찾기 — 경남 땅을 가장 적게 덮는 자리. ⚠️ 처음에는 지도 빈자리 오른쪽 아래에 붙였더니 1920×1080 에서 거제를 덮었다(10-24).
    판을 8px 칸으로 나눠 경남 시군(이웃 부산 · 울산 · 바다는 빈자리로 친다)을 칠하고, 범례 · 재생 막대 · 제목 · 도구 · 오른쪽 패널은 못 가는 칸으로.
@@ -4272,7 +4372,7 @@ function placeSw() {
   box.addEventListener("contextmenu", ev => {
     ev.preventDefault(); ev.stopPropagation();
     const pop = $("sw-ctx"), rot = +SET.sea_rot || 0, per = +SET.sea_per === 2 ? 2 : 1;
-    pop.innerHTML = `<div class="g">돌리기 — 예측 상위 ↔ 지금 오는 비</div>`
+    pop.innerHTML = `<div class="g">돌리기 — 예측 상위 → 지금 오는 비 → 시군 평균</div>`
       + [[0, "끔 — 고른 탭 그대로"], [10, "10초"], [15, "15초"], [20, "20초"], [30, "30초"], [60, "1분"]].map(([v, l]) => `<button data-rot="${v}" class="${rot === v ? "on" : ""}">${l}</button>`).join("")
       + `<div class="sep"></div><div class="g">예측 상위</div>`
       + [[1, "시군당 1곳"], [2, "시군당 2곳 — 읍면동 둘"]].map(([v, l]) => `<button data-per="${v}" class="${per === v ? "on" : ""}">${l}</button>`).join("");
@@ -4697,10 +4797,13 @@ function helpHtml(tab) {
       누르거나 끌어 넣고, 끌어서 차례, 줄마다 값과 시간. 같은 종류도 여럿. 누적 · 단기는 줄마다 <b>범례</b>를 체크하면 그 화면만 따로 끝 눈금(30~800㎜) —
       72시간 누적과 내일 24시까지를 같은 자로. 저장하면 어느 화면에서나 불러온다. 재생 중엔 아래 점 — 누르면 그 화면, 올리면 멈춤 · 고치기 · 끝(<code>Esc</code>).
       재생 중 바꾸는 층 · 구간은 이 화면에서만(다른 화면 설정은 그대로)</dd>
-    <dt>바다 위젯 <code>W</code></dt><dd>지도 위 반투명 판 — 예측 상위(초단기 6시간) · 지금 오는 비를 머리 탭으로 고른다(<code>W</code> 는 차례로, 끝은 끔). 특보는 왼쪽 특보 줄에.
+    <dt>바다 위젯 <code>W</code></dt><dd>지도 위 반투명 판 — 예측 상위(초단기 6시간) · 지금 오는 비 · 시군 평균을 머리 탭으로 고른다(<code>W</code> 는 차례로, 끝은 끔). 특보는 왼쪽 특보 줄에.
+      <b>시군 평균</b>은 지금 지도 층(그 구간 · 그 시각)의 18개 시군 면 평균 — 넓은 판은 경남 모양 타일 지도와 경남 평균, 길쭉한 판은 많은 순. 색은 지도 범례.
       자리는 스스로 찾는다 — 경남 땅을 가장 적게 덮는 빈자리, 좁고 길면 세로로 길쭉한 꼴로. 머리를 끌어 옮기면 마지막으로 놓은 자리가 이 화면의 기본 자리(두 번 누르면 다시 자동),
       <code>⇔</code> · <code>⇕</code> 로 꼴을 바꾼다. 두 탭은 같은 크기 — 지금 오는 비는 장소 + 60분 시우량 칩(테두리가 시우량 색).
-      머리의 <code>⟳</code> 은 두 탭을 저절로 번갈아(화면 재생과 따로, 머리 밑 가는 줄이 다음 탭까지) · 오른쪽 클릭은 돌리기 간격 · 예측 상위 시군당 1곳/2곳</dd>
+      머리의 <code>⟳</code> 은 세 탭을 저절로 차례로(화면 재생과 따로, 머리 밑 가는 줄이 다음 탭까지) · 오른쪽 클릭은 돌리기 간격 · 예측 상위 시군당 1곳/2곳</dd>
+    <dt>강수 누적 막대 누르기</dt><dd>막대 색이 바뀐다 — 한 색 ↔ <b>지도 범례 색조</b>(값마다 메인 지도의 그 범주 색 — 자동 · 고정 눈금, 청색 · 기상청 · 다양한 색조 그대로).
+      줄의 이름 · 선 그래프를 누르면 전처럼 시군 고르기. 모든 화면이 같이(서버 설정)</dd>
     <dt>강수 누적 1h</dt><dd>줄 맨 오른쪽 — 최근 1시간 강수량. 바탕 없이 왼쪽 막대만 시우량 색, 많이 올수록 글자가 밝고 굵다(20㎜ 넘으면 흰 글자). 0 이면 흐리게. 막대 빗금과 같이 <code>H</code> 로 켜고 끈다</dd>
     <dt>색 — 약한 비는 바탕에 가깝게</dt><dd>0.1 · 1㎜ 처럼 거의 안 온 곳은 땅(바탕) 색에 가깝게 칠해 묻히고, 오는 곳만 밝게 솟는다(청색 · 기상청 색 둘 다).
       기상청 색으로 보면 누적은 눈금을 열 칸 남짓으로 잘게 나눠 하늘 · 파랑 · 초록 · 노랑 · 주황 · 빨강 · 보라가 다 나온다</dd>
@@ -4842,13 +4945,13 @@ function openPrefs() {
       <button data-th="dark" class="${th === "dark" ? "on" : ""}">어둡게</button>
       <button data-th="gray" class="${th === "gray" ? "on" : ""}">회색</button>
       <button data-th="light" class="${th === "light" ? "on" : ""}">밝게</button></span></div>
-    <div class="row"><span class="k">바다 위젯</span>${seg("sea_w", [["off", "끔"], ["fc", "예측 상위"], ["now", "지금 오는 비"]])}</div>
+    <div class="row"><span class="k">바다 위젯</span>${seg("sea_w", [["off", "끔"], ["fc", "예측 상위"], ["now", "지금 오는 비"], ["avg", "시군 평균"]])}</div>
     <div class="row"><span class="k">위젯 돌리기</span>${seg("sea_rot", [[0, "끔"], [10, "10초"], [15, "15초"], [20, "20초"], [30, "30초"], [60, "1분"]])}</div>
     <div class="row"><span class="k">위젯 예측</span>${seg("sea_per", [[1, "시군당 1곳"], [2, "시군당 2곳"]])}</div>
     <div class="row"><span class="k"></span><span class="note">지도 위 반투명 판(W) — 경남 땅을 가장 적게 덮는 빈자리를 스스로 찾는다(좁고 길면 세로로 길쭉하게).
       머리를 끌어 옮기면 마지막으로 놓은 자리가 이 화면의 기본 자리(두 번 누르면 다시 자동), ⇔ · ⇕ 로 꼴을 바꾼다.
       예측 상위 · 지금 오는 비는 오른쪽 패널(카드)과 같은 자료. 특보는 왼쪽 특보 줄에.
-      돌리기는 두 탭을 그 간격으로 번갈아 보인다(화면 재생과 따로) · 시군당 2곳은 한 시군의 비 많은 읍면동 둘(위젯 위 오른쪽 클릭으로도).</span></div>
+      시군 평균은 지금 지도 층의 시군 면 평균(지도를 따른다). 돌리기는 세 탭을 그 간격으로 차례로(화면 재생과 따로) · 시군당 2곳은 한 시군의 비 많은 읍면동 둘(위젯 위 오른쪽 클릭으로도).</span></div>
     <div class="row"><span class="k">지도 위치</span><span class="seg"><button data-cam="edit">고치기 (C)</button><button data-cam="reset"${ucOn() ? "" : " disabled"}>처음대로</button></span>
       <span class="note">${ucOn() ? `${Math.round(UC.z * 100)}% · 옮김` : "경남 전체가 꼭 차게(기본)"}</span></div>
     <div class="row"><span class="k">화면 재생</span><span class="seg"><button data-show="open">재생목록…</button><button data-show="play">${SHOW.on ? "끝" : "재생 ▶"}</button></span>

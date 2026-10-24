@@ -85,6 +85,9 @@ def test_put_setting_validates(monkeypatch):
     assert gridview.SETTING_DEFAULT["acc_scale"] == 0 and gridview.put_setting({"acc_scale": 150})["acc_scale"] == 150
     # 바다 위젯 — 기본 예측 상위, 지금 오는 비 · 끔(특보 탭은 뺐다 — 왼쪽 특보 줄로)
     assert gridview.SETTING_DEFAULT["sea_w"] == "fc" and gridview.put_setting({"sea_w": "now"})["sea_w"] == "now"
+    assert gridview.put_setting({"sea_w": "avg"})["sea_w"] == "avg"        # 시군 평균(10-24)
+    # 강수 누적 막대 색 — 기본 한 색, 막대를 누르면 지도 범례 색조
+    assert gridview.SETTING_DEFAULT["acc_tone"] is False and gridview.put_setting({"acc_tone": 1})["acc_tone"] is True
     # 화면 재생 목록 — 같은 종류 여럿(AWS 24 · 48시간), 이름이 같으면 뒤의 것
     shows = [{"name": "기본", "items": [{"t": "acc_h", "b": "aws", "h": 24, "sec": 30}, {"t": "acc_h", "b": "aws", "h": 48, "sec": 20},
                                         {"t": "shrt_today", "sec": 15}, {"t": "vsrt", "n": 3, "sec": 10}]},

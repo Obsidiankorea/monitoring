@@ -1174,15 +1174,17 @@ SETTING_DEFAULT = {"layer": "obs60", "x4": False, "vsrt_n": 1,
                    "qpf_ms": 600,
                    # 강수 누적 카드 머리(제목 · 설명 · 단추) 고정 — 끄면 마우스를 올렸을 때만, 평소에는 시군 줄만
                    "acc_hdr_pin": True,
+                   # 강수 누적 막대 색 — False: 한 색, True: 지도 범례 색조(값마다 그 범주 색). 막대를 누르면 바뀐다
+                   "acc_tone": False,
                    # 비활성화한 AWS — [{id, name, sigun, org}]. 지도에서 관측소 점 오른쪽 클릭 → 비활성화. 면 · 카드 · 지금 오는 비에서 뺀다
                    "aws_off": [],
                    # 누적(격자 · AWS) 범례 눈금 — 0: 자동(자료 크기에 맞춰), 그 밖은 끝 눈금(㎜)으로 고정. 범례 오른쪽 클릭
                    "acc_scale": 0,
-                   # 바다 위젯 돌리기 — 0 이면 고른 탭 그대로, 아니면 그 초마다 예측 상위 ↔ 지금 오는 비(화면 재생과 따로)
+                   # 바다 위젯 돌리기 — 0 이면 고른 탭 그대로, 아니면 그 초마다 예측 상위 → 지금 오는 비 → 시군 평균(화면 재생과 따로)
                    "sea_rot": 0,
                    # 바다 위젯 예측 상위 — 시군당 몇 곳(1 · 2). 위젯 오른쪽 클릭
                    "sea_per": 1,
-                   # 바다 위젯 — 지도 위 반투명 판: off · fc(예측 상위) · now(지금 오는 비). W 키.
+                   # 바다 위젯 — 지도 위 반투명 판: off · fc(예측 상위) · now(지금 오는 비) · avg(시군 평균 — 지도 층을 따른다). W 키.
                    # ⚠️ 특보(alert) 탭은 뺐다 — 판이 너무 커졌다. 특보는 왼쪽 특보 줄(얇게)에(10-24). 남은 alert 값은 화면이 fc 로 읽는다
                    "sea_w": "fc",
                    # 화면 재생 목록 — [{name, items:[{t, b?, h?, n?, sec}]}]. 지도 오른쪽 위 화면 단추 · P. 재생 중엔 이 설정 말고는 안 바꾼다
@@ -1202,7 +1204,7 @@ _CHOICES = {"flow_step": (10, 20, 30, 60), "flow_hours": (1, 3, 6, 12),
             "acc_per": (0, 1, 2, 3),
             # 누적 눈금 — 0 = 자동, 나머지는 끝 눈금(㎜) 고정(map.html ACC_FIXED 와 같은 값)
             "acc_scale": (0, 30, 60, 150, 300, 800),
-            "sea_w": ("off", "fc", "now"),
+            "sea_w": ("off", "fc", "now", "avg"),
             "sea_rot": (0, 10, 15, 20, 30, 60), "sea_per": (1, 2)}
 _TEXT = {"tl_stat", "panel", "acc_basis", "acc_from", "pal", "sea_w"}
 
@@ -1260,7 +1262,7 @@ def put_setting(body: dict) -> dict:
     if "layer" in body:
         split(str(body["layer"]))            # 모르는 층이면 LookupError
         cur["layer"] = str(body["layer"])
-    for k in ("x4", "tl_on", "sel_zoom", "acc_fc", "acc_h1", "acc_full", "aws_live", "acc_qpf", "acc_hdr_pin"):
+    for k in ("x4", "tl_on", "sel_zoom", "acc_fc", "acc_h1", "acc_full", "aws_live", "acc_qpf", "acc_hdr_pin", "acc_tone"):
         if k in body:
             cur[k] = bool(body[k])
     if "vsrt_n" in body:
