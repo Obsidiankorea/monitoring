@@ -120,6 +120,17 @@ def pre_slot(tm_ef: str) -> str | None:
     return PRE_SLOTS.get(tm_ef[-4:]) if len(tm_ef) >= 4 else None
 
 
+def pre_when(tm_ef: str) -> str:
+    """예비특보 발효 예상 — '25일 새벽(03~06시)'. 시간대 코드가 아니면 '25일 12시', 모르면 그대로.
+    ⚠️ 예전에는 시간대만 적어(새벽(03~06시)) 오늘인지 내일인지 몰랐다 — 태풍 예비특보는 하루 이틀 앞을 말한다."""
+    t = (tm_ef or "").strip()
+    if len(t) == 12 and t.isdigit():
+        day = f"{int(t[6:8])}일"
+        slot = pre_slot(t)
+        return f"{day} {slot}" if slot else f"{day} {int(t[8:10])}시"
+    return pre_slot(t) or t
+
+
 # 기상청 예보 문구의 권역. 단기예보 통보문·예상강수량이 이 이름으로 나온다.
 # (화면 이름, 시군들, 묶음, 상위 권역) — 묶음이 바뀌는 자리에 화면이 구분선을 긋는다.
 # ⚠️ 경남서부내륙이 **위**, 북서내륙·남서내륙이 그 **아래**다. 기상청은 둘을 나눠

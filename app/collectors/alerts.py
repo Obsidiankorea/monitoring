@@ -5,6 +5,8 @@
    읽은 행이 없는데 본문에 자료가 있으면 실패로 올린다 — 모양이 또 바뀌어도 '특보 없음'으로 숨지 않게.
 ⚠️ 레벨은 '경보'/'주의'다. '주의보'로 매칭하면 표가 통째로 빈다.
 ⚠️ 예비특보(CMD='예비')가 같은 응답에 섞여 온다. TM_EF는 시각이 아니라 시간대 코드다.
+   태풍 예비특보처럼 하루 이틀 앞을 말하기도 해 **날짜를 붙여** 적는다('25일 새벽(03~06시)'). 레벨 칸이나
+   특보 이름에 '예비'가 붙어 와도 예비로 읽는다 — 발효 중인 '태풍예비' 특보로 잘못 세지 않게(10-24).
 ⚠️ 아직 발효 전인 특보도 함께 온다 — 집계에는 TM_EF <= 기준시각만 넣는다.
 ⚠️ 조회 실패를 '특보 없음'으로 처리하면 전부해제→전부신규 헛알림이 난다(pitfalls ★1).
 """
@@ -15,7 +17,7 @@ import logging
 from datetime import datetime
 
 from .. import db
-from ..domain.regions import ORDER, in_gyeongnam, is_sea, pre_slot, sigun_of, split_level
+from ..domain.regions import ORDER, in_gyeongnam, is_sea, pre_when, sigun_of, split_level
 from ..kma import KmaError, fetch_bytes
 
 log = logging.getLogger("collect.alerts")
@@ -84,10 +86,10 @@ def normalize(raw: bytes | str, now: datetime) -> dict:
         # 화면 표기는 '주의보'로 통일한다. API가 주는 문자열은 '주의'다.
         disp_lvl = {"주의": "주의보"}.get(p[I_LVL], p[I_LVL])
 
-        if cmd == "예비":
-            pending.append({"kind": "pre", "name": p[I_WRN], "reg": reg,
-                            "sigun": sigun_of(reg), "tmfc": p[I_TM_FC],
-                            "when": pre_slot(p[I_TM_EF]) or p[I_TM_EF]})
+        if cmd == "예비" or p[I_LVL] == "예비" or p[I_WRN].endswith("예비"):
+            pending.append({"kind": "pre", "name": p[I_WRN].removesuffix("예비"), "reg": reg, "sea": sea,
+                            "sigun": None if sea else sigun_of(reg), "tmfc": p[I_TM_FC],
+                            "when": pre_when(p[I_TM_EF])})
             continue
 
         # 아직 발효 전인 것은 집계에서 빼고 따로 적는다

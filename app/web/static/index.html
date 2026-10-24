@@ -2498,6 +2498,17 @@ async function loadAlerts() {
   const later = (g.pending || []).filter(x => x.kind === "later");
   if (later.length && ALERTS.length)
     ALERTS[0].note = `발효 예정 <b>${later.length}건</b> — ${later.map(x => x.reg).join(", ")}`;
+  /* 예비특보(태풍 · 호우 …) — 발효 중인 것 뒤에 예비 색으로. ⚠️ 예전에는 받기만 하고 띄우지 않아
+     태풍 예비특보가 내려도 이 줄에는 '발효 중인 특보 없음'만 보였다(10-24). 이름 · 발효 예상이 같은 것끼리 묶는다 */
+  const pre = {};
+  for (const p of (g.pending || []).filter(x => x.kind === "pre")) {
+    const k = `${p.name}|${p.when}`;
+    const a = pre[k] ||= { lv: "pre", name: `${p.name} 예비특보`, sea: true, tmfc: p.when || "", spots: 0, regions: [], note: null, _s: new Set() };
+    const where = p.sigun || p.reg;
+    if (!a._s.has(where)) { a._s.add(where); a.regions.push([where, p.sea ? "바다" : ""]); }
+    if (!p.sea) a.sea = false;
+  }
+  for (const a of Object.values(pre)) { a.spots = a._s.size; delete a._s; ALERTS.push(a); }
 }
 
 /* 수집기가 언제 성공했는지는 서버만 안다 — 화면이 받은 시각과 다르다. */
@@ -3790,13 +3801,13 @@ function openWrn(focus) {
     "wrn_now_data.php");
   document.querySelector("#modal footer").innerHTML =
     `레벨 문자열은 API가 주는 <b>주의</b>·<b>경보</b>다(주의보 아님). 폭염은 <b>중대경보</b>까지 3단계.
-     집계는 발효 중인 것만 세고, 발효 예정은 따로 적는다.`;
+     집계는 발효 중인 것만 세고, 발효 예정은 따로 적는다. 예비특보(태풍 · 호우 …)는 뒤에 예비 색으로 — 날짜 · 시간대는 발효 예상.`;
   document.getElementById("modal-body").innerHTML = ALERTS.map((a, i) => `
     <div class="wgroup"${i === focus ? ' style="background:color-mix(in oklab, var(--accent) 7%, transparent)"' : ""}>
       <div class="whead">
         <span class="wrn ${a.lv}" style="cursor:default">${a.pre ? a.pre + " " + a.name : a.name}</span>
         <span class="wcount">${countLabel(a)}</span>
-        <span class="wtm">발표 ${a.tmfc}</span>
+        <span class="wtm">${a.lv === "pre" ? "발효 예상" : "발표"} ${a.tmfc}</span>
       </div>
       <div class="wregions">${a.regions.map(([r, sub]) =>
         `<span class="rg">${r}${sub ? `<sup>${sub}</sup>` : ""}</span>`).join("")}</div>

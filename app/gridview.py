@@ -1173,8 +1173,9 @@ SETTING_DEFAULT = {"layer": "obs60", "x4": False, "vsrt_n": 1,
                    "aws_off": [],
                    # 누적(격자 · AWS) 범례 눈금 — 0: 자동(자료 크기에 맞춰), 그 밖은 끝 눈금(㎜)으로 고정. 범례 오른쪽 클릭
                    "acc_scale": 0,
-                   # 바다 위젯 — 지도 남쪽 바다 위 반투명 판: off · alert(특보) · fc(예측 상위) · now(지금 오는 비). W 키
-                   "sea_w": "alert",
+                   # 바다 위젯 — 지도 위 반투명 판: off · fc(예측 상위) · now(지금 오는 비). W 키.
+                   # ⚠️ 특보(alert) 탭은 뺐다 — 판이 너무 커졌다. 특보는 왼쪽 특보 줄(얇게)에(10-24). 남은 alert 값은 화면이 fc 로 읽는다
+                   "sea_w": "fc",
                    # 지도 위에 겹칠 레이어(왼쪽 위 '레이어'에서 켠다). 차츰 늘린다.
                    "overlays": []}
 OVERLAYS = ("alerts", "stations", "stnval")   # stnval = 관측소 옆 값 글자(관측소에 딸림)
@@ -1190,7 +1191,7 @@ _CHOICES = {"flow_step": (10, 20, 30, 60), "flow_hours": (1, 3, 6, 12),
             "acc_per": (0, 1, 2, 3),
             # 누적 눈금 — 0 = 자동, 나머지는 끝 눈금(㎜) 고정(map.html ACC_FIXED 와 같은 값)
             "acc_scale": (0, 30, 60, 150, 300, 800),
-            "sea_w": ("off", "alert", "fc", "now")}
+            "sea_w": ("off", "fc", "now")}
 _TEXT = {"tl_stat", "panel", "acc_basis", "acc_from", "pal", "sea_w"}
 
 
