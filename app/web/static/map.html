@@ -911,13 +911,13 @@ body.cam-edit #sw { pointer-events: none; opacity: .5; }
 #sw .sw-h { display: flex; align-items: center; gap: 8px; cursor: move; user-select: none; padding-bottom: calc(6px * var(--k, 1)); }
 #sw .sw-h .sp { flex: 1; }
 #sw .sw-tabs { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-#sw .sw-tabs button { font: 600 calc(12.5px * var(--k, 1)) var(--sans); color: var(--ink-3); background: transparent; border: 0;
+#sw .sw-tabs button { font: 600 calc(12.5px * var(--k, 1)) var(--sans); color: var(--ink-3); background: transparent; border: 0; white-space: nowrap;
   border-right: 1px solid var(--line); padding: calc(4px * var(--k, 1)) calc(9px * var(--k, 1)); cursor: pointer; }
 #sw .sw-tabs button:last-child { border-right: 0; }
 #sw .sw-tabs button.on { color: var(--ink); background: color-mix(in oklab, var(--accent) 24%, transparent); }
 #sw .bt { font: 600 calc(12px * var(--k, 1)) var(--mono); color: var(--ink-3); white-space: nowrap; }
-#sw .sw-x { background: transparent; border: 0; color: var(--ink-3); font-size: calc(14px * var(--k, 1)); cursor: pointer; padding: 0 2px; }
-#sw .sw-x:hover { color: var(--ink); }
+#sw :is(.sw-x, .sw-sh) { background: transparent; border: 0; color: var(--ink-3); font-size: calc(14px * var(--k, 1)); cursor: pointer; padding: 0 2px; }
+#sw :is(.sw-x, .sw-sh):hover { color: var(--ink); }
 #sw .sw-lg:empty { display: none; }
 #sw .sw-lg { display: flex; justify-content: flex-end; padding-bottom: 4px; }
 #sw .sw-al, #sw .swa { font-size: calc(13px * var(--k, 1)); line-height: 1.45; }
@@ -927,6 +927,23 @@ body.cam-edit #sw { pointer-events: none; opacity: .5; }
 #sw .swa .tag { flex: none; font: 600 calc(11px * var(--k, 1)) var(--sans); color: var(--ink-3); border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; }
 #sw .swa .where { color: var(--ink-2); min-width: 0; }
 #sw .sw-none { color: var(--ink-3); font-size: calc(13px * var(--k, 1)); padding: 4px 2px; }
+#sw .sw-tabs i { font-style: normal; }
+/* 세로로 길쭉한 판(tall) — 빈자리가 좁고 길면(거제 동쪽 바다 · 지도 위쪽 등) 이 꼴로. 특보는 이름 밑에 구역,
+   지금 오는 비는 15분 · 60분을 위아래로, 예측 상위는 칸을 좁힌다 */
+#sw.tall { width: calc(262px * var(--k, 1)); }
+#sw.tall .sw-tabs i { display: none; }
+#sw.tall .sw-tabs button { padding: calc(4px * var(--k, 1)) calc(6px * var(--k, 1)); font-size: calc(11.5px * var(--k, 1)); }
+#sw.tall .sw-h { gap: 5px; }
+#sw.tall .bt { font-size: calc(11px * var(--k, 1)); }
+#sw .sw-tabs { flex: none; }                 /* 탭 글자가 잘리지 않게 — 줄어드는 것은 시각 글자 */
+#sw .sw-h .bt { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#sw.tall .swa { flex-wrap: wrap; row-gap: 0; }
+#sw.tall .swa .where { flex-basis: 100%; padding-left: calc(4px * var(--k, 1)); font-size: calc(12.5px * var(--k, 1)); }
+#sw.tall .mn { grid-template-columns: 1fr; gap: calc(6px * var(--k, 1)); }
+#sw.tall .fr, #sw.tall .fh { grid-template-columns: calc(62px * var(--k, 1)) 1fr calc(30px * var(--k, 1)); gap: 5px; padding: 0 2px; }
+#sw.tall .fr .cells i { font-size: calc(10.5px * var(--k, 1)); }
+#sw.tall .fr .sum { font-size: calc(13px * var(--k, 1)); }
+#sw.tall .fh { font-size: calc(10px * var(--k, 1)); }
 
 [hidden] { display: none !important; }
 
@@ -1023,9 +1040,9 @@ body.cam-edit #sw { pointer-events: none; opacity: .5; }
     </div>
   </div>
   <div id="sw" hidden aria-label="바다 위젯">
-    <div class="sw-h" title="끌어서 옮기기 — 이 화면에 기억(두 번 누르면 처음 자리)"><span class="sw-tabs">
-      <button type="button" data-m="alert" title="경남 특보 — 바다(풍랑 등) · 육상 · 예비">특보</button><button type="button" data-m="fc" title="초단기 예측 순위 — 앞으로 6시간">예측 상위</button><button type="button" data-m="now" title="지금 오는 비 순위 — 15분 · 60분">지금 오는 비</button></span>
-      <span class="sp"></span><span class="bt" id="sw-bt">—</span><button type="button" class="sw-x" title="닫기 — 다시: W · 설정 › 화면 › 바다 위젯">✕</button></div>
+    <div class="sw-h" title="끌어서 옮기기 — 마지막으로 놓은 자리가 이 화면의 기본 자리(두 번 누르면 다시 자동 — 땅을 덜 덮는 빈자리)"><span class="sw-tabs">
+      <button type="button" data-m="alert" title="경남 특보 — 바다(풍랑 등) · 육상 · 예비">특보</button><button type="button" data-m="fc" title="초단기 예측 순위 — 앞으로 6시간">예측<i> 상위</i></button><button type="button" data-m="now" title="지금 오는 비 순위 — 15분 · 60분">지금<i> 오는</i> 비</button></span>
+      <span class="sp"></span><span class="bt" id="sw-bt">—</span><button type="button" class="sw-sh" title="꼴 바꾸기 — 세로로 길쭉하게 ↔ 넓게(이 자리에 기억)">⇔</button><button type="button" class="sw-x" title="닫기 — 다시: W · 설정 › 화면 › 바다 위젯">✕</button></div>
     <div class="sw-al" id="sw-al" hidden></div>
     <div class="sw-lg" id="sw-lg"></div>
     <div class="sw-b" id="sw-b"></div>
@@ -2173,6 +2190,7 @@ function camSet(T) {
   st.classList.toggle("zoomed", !!CAM);
   if (CAM) ensureEmd();                  // ?sig= 로 연 때처럼 날지 않고 바로 확대한 경우
   buildBase(); draw(); drawRanks(); hot(null);
+  if (!CAM) placeSw();                   // 경남 전체로 돌아왔다 — 바다 위젯 자리를 다시(확대 중에 패널 등이 바뀌었을 수 있다)
   // 새로 그린 글자·점은 감춘 채(opacity 0) 생겼다 — 그 값을 한 번 읽어 굳힌 뒤 걷어야 서서히 나온다
   getComputedStyle($("names")).opacity;
   st.classList.remove("zooming");
@@ -2366,6 +2384,7 @@ function placePlay() {
     if (Math.abs(want - TRK.Wt) > 3) { TRK.Wt = want; p.dataset.sig = ""; buildPlay(); }
   }
   $("stage").style.setProperty("--playx", ((x0 + x1) / 2 / V.k).toFixed(0) + "px");
+  placeSw();                               // 재생 막대가 생기거나 옮겼다 — 바다 위젯이 피해 간다
 }
 function setTL(on, save = true) {
   tlOn = on;
@@ -3750,10 +3769,13 @@ const seaShort = r => r.replace(/^남해동부/, "").replace(/시동부앞바다
    예측 상위 · 지금 오는 비는 오른쪽 패널 카드와 같은 자료(CARDS)와 같은 그림(renderFc · renderNow)이다 */
 const SW_MODES = ["alert", "fc", "now", "off"];
 const SW_ROWS = 5;
+let SW_N = SW_ROWS;                       // 지금 그린 줄 수 — 빈자리가 모자라면 4 · 3 줄로 줄인다(swAuto)
 const swMode = () => (SW_MODES.includes(SET.sea_w) ? SET.sea_w : "alert");
 const swOn = () => swMode() !== "off";
-let SWPOS = null;                         // { x: 왼쪽/판 너비, b: 아래 끝에서/판 높이 } — 없으면 지도 빈자리 오른쪽 아래
-try { const p = JSON.parse(localStorage.getItem("gn-map-sw") || "null"); if (p && isFinite(p.x) && isFinite(p.b)) SWPOS = p; } catch {}
+// 사람이 옮긴 자리 { x: 왼쪽/판 너비, t: 위 끝/판 높이 | b: 아래 끝에서/판 높이, tall } — 가까운 끝에 붙인다(줄 수가 바뀌어도 그 끝에 붙어 있게).
+// 없으면 스스로 빈자리를 찾는다(swAuto)
+let SWPOS = null;
+try { const p = JSON.parse(localStorage.getItem("gn-map-sw") || "null"); if (p && isFinite(p.x) && (isFinite(p.t) || isFinite(p.b))) SWPOS = p; } catch {}
 function setSw(m) {
   SET.sea_w = m;
   saveSetting({ sea_w: m });
@@ -3790,24 +3812,123 @@ function renderSw() {
     body.innerHTML = `<div class="sw-none">${tlOn && SET.panel !== "timeline" ? "읽는 중…" : "오른쪽 패널을 카드로 켜면 나온다(L · 설정 › 오른쪽 패널)"}</div>`;
   } else if (CARDS.err) { bt.textContent = "—"; body.innerHTML = `<div class="sw-none">불러오지 못했다 — ${CARDS.err}</div>`; }
   else if (m === "fc" && CASE) { bt.textContent = "—"; body.innerHTML = `<div class="sw-none">사례에는 초단기 예측이 없다 — 오른쪽 '호우 기준'을 본다</div>`; }
-  else if (m === "fc") renderFc(SW_T, SW_ROWS);
-  else renderNow(SW_T, SW_ROWS);
+  else if (m === "fc") renderFc(SW_T, SWPOS ? SW_ROWS : SW_N);
+  else renderNow(SW_T, SWPOS ? SW_ROWS : SW_N);
   placeSw();
+}
+/* 빈자리 찾기 — 경남 땅을 가장 적게 덮는 자리. ⚠️ 처음에는 지도 빈자리 오른쪽 아래에 붙였더니 1920×1080 에서 거제를 덮었다(10-24).
+   판을 8px 칸으로 나눠 경남 시군(이웃 부산 · 울산 · 바다는 빈자리로 친다)을 칠하고, 범례 · 재생 막대 · 제목 · 도구 · 오른쪽 패널은 못 가는 칸으로.
+   넓은 꼴(430)과 세로로 길쭉한 꼴(262) 둘 다 재 보고 땅을 덜 덮는 쪽 — 같으면 지도 위쪽 오른편에 가까운 쪽(위에 빈자리가 있다는 말), 길쭉한 쪽.
+   지도 틀 · 패널 · 범례가 그대로면 다시 재지 않는다(1분마다 줄 수가 조금 바뀌어 판이 들썩이지 않게 — 높이가 40px 넘게 바뀔 때만) */
+let SW_AUTO = null;
+function swGrid(C) {
+  const nx = Math.ceil(V.W / C), ny = Math.ceil(V.H / C);
+  const cv = document.createElement("canvas"); cv.width = nx; cv.height = ny;
+  const ctx = cv.getContext("2d");
+  const g = { s: V.s, ox: V.ox, oy: V.oy }, m = MT;
+  const path = d3.geoPath(d3.geoTransform({ point(x, y) {
+    this.stream.point(((g.ox + (x - V.X0) * g.s) * m.sc + m.tx) / C, ((g.oy + (V.Y1 - y) * g.s) * m.sc + m.ty) / C); } }), ctx);
+  ctx.beginPath();
+  for (const ft of FEAT) if (ft.properties.kind !== "nb") path(ft);
+  ctx.fill();
+  const px = ctx.getImageData(0, 0, nx, ny).data, cost = new Float64Array(nx * ny);
+  for (let i = 0; i < nx * ny; i++) cost[i] = px[i * 4 + 3] > 60 ? 1 : 0;
+  const st = $("stage").getBoundingClientRect(), BIG = 1e4;
+  const block = (x0, y0, x1, y1) => {
+    const i0 = Math.max(0, Math.floor((x0 - 6) / C)), i1 = Math.min(nx, Math.ceil((x1 + 6) / C));
+    const j0 = Math.max(0, Math.floor((y0 - 6) / C)), j1 = Math.min(ny, Math.ceil((y1 + 6) / C));
+    for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) cost[j * nx + i] = BIG;
+  };
+  for (const id of ["legend", "play", "lefttop", "tools", "testrib"]) {
+    const el = $(id);
+    if (!el || el.hidden || !el.offsetWidth) continue;
+    const r = el.getBoundingClientRect();
+    block(r.left - st.left, r.top - st.top, r.right - st.left, r.bottom - st.top);
+  }
+  if (tlOn) block(V.W - tlWidth(), 0, V.W, V.H);          // 오른쪽 패널(카드 · 타임라인)
+  const S = new Float64Array((nx + 1) * (ny + 1));          // 누적 합 — 판 크기 창을 미끄러뜨린다
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++)
+    S[(j + 1) * (nx + 1) + i + 1] = cost[j * nx + i] + S[j * (nx + 1) + i + 1] + S[(j + 1) * (nx + 1) + i] - S[j * (nx + 1) + i];
+  return { nx, ny, C, S };
+}
+function swFit(G, w, h) {
+  const { nx, ny, C, S } = G, cw = Math.ceil(w / C), ch = Math.ceil(h / C), A = mapArea();
+  const tx = A.x1, ty = A.y0, D = Math.hypot(V.W, V.H);    // 같으면 지도 위쪽 오른편에 가까운 쪽
+  let best = null;
+  const lo = Math.ceil(8 / C);
+  for (let j = lo; j + ch <= ny - lo; j++) for (let i = lo; i + cw <= nx - lo; i++) {
+    const sum = S[(j + ch) * (nx + 1) + i + cw] - S[j * (nx + 1) + i + cw] - S[(j + ch) * (nx + 1) + i] + S[j * (nx + 1) + i];
+    const x = i * C, y = j * C, score = sum + Math.hypot(x + w / 2 - tx, y + h / 2 - ty) / D;
+    if (!best || score < best.score) best = { x, y, cost: sum, score };
+  }
+  return best;
 }
 function placeSw() {
   const box = $("sw");
   if (box.hidden || !V || box.classList.contains("drag")) return;
-  const w = box.offsetWidth, h = box.offsetHeight;
   let x, y;
-  if (SWPOS) { x = SWPOS.x * V.W; y = V.H - SWPOS.b * V.H - h; }
-  else { const A = mapArea(); x = A.x1 - w - 8; y = A.y1 - h - 8; }
-  box.style.left = Math.max(8, Math.min(V.W - w - 8, x)).toFixed(0) + "px";
+  if (SWPOS) {
+    box.classList.toggle("tall", !!SWPOS.tall);
+    const h = box.offsetHeight;
+    x = SWPOS.x * V.W; y = isFinite(SWPOS.t) ? SWPOS.t * V.H : V.H - SWPOS.b * V.H - h;
+  } else {
+    if (CAM || ZA || !FEAT) return;                       // 시군 확대 중엔 감춰져 있다 — 경남 전체로 돌아오면 잰다
+    const r = el => { const q = el.getBoundingClientRect(); return `${q.left | 0},${q.top | 0},${q.width | 0},${q.height | 0}`; };
+    const key = [V.W, V.H, V.s.toFixed(3), V.ox | 0, V.oy | 0, MT.sc.toFixed(3), MT.tx | 0, MT.ty | 0, tlOn, SET.panel,
+                 $("play").hidden ? "" : r($("play")), r($("legend")), swMode()].join("|");
+    // 두 꼴의 크기를 잰다. 줄이 있는 탭(예측 상위 · 지금 오는 비)은 5 · 4 · 3 줄 높이를 지금 그린 줄 수에서 어림한다
+    const m = swMode(), rowsOf = () => box.querySelector("#sw-b .mr, #sw-b .fr")?.offsetHeight || 0;
+    const shape = tall => {
+      box.classList.toggle("tall", tall);
+      const w = box.offsetWidth, h = box.offsetHeight, rh = rowsOf(), stack = m === "now" && tall ? 2 : 1;
+      const ns = m === "alert" || !rh ? [SW_N] : [5, 4, 3];
+      return ns.map(n => ({ tall, n, w, h: h + (n - SW_N) * rh * stack }));
+    };
+    const cands = [...shape(true), ...shape(false)];
+    const hNow = cands.find(c => c.tall === !!SW_AUTO?.tall && c.n === SW_N)?.h || 0;
+    const A0 = SW_AUTO;
+    if (!A0 || A0.key !== key || Math.abs(hNow - A0.h) > 40) {
+      const G = swGrid(8);
+      // 땅을 덜 덮는 것(작은 섬 몇 칸은 셈하지 않는다) → 줄이 많은 것 → 세로로 길쭉한 것 → 지도 위쪽 오른편에 가까운 것
+      let best = null;
+      for (const c of cands) {
+        const f = swFit(G, c.w, c.h);
+        if (!f) continue;
+        const r = { ...c, ...f, land: Math.max(0, f.cost - 4) };
+        if (!best || r.land < best.land || (r.land === best.land && (r.n > best.n || (r.n === best.n && (r.tall && !best.tall
+            || (r.tall === best.tall && r.score < best.score)))))) best = r;
+      }
+      SW_AUTO = best ? { key, tall: best.tall, n: best.n, x: best.x, y: best.y, h: best.h, cost: best.cost } : null;
+    }
+    if (!SW_AUTO) return;
+    box.classList.toggle("tall", SW_AUTO.tall);
+    if (m !== "alert" && SW_AUTO.n !== SW_N && !placeSw.again) {     // 줄 수를 바꿔 다시 그린다(그 끝에서 한 번만 다시 온다)
+      SW_N = SW_AUTO.n; placeSw.again = true;
+      try { renderSw(); } finally { placeSw.again = false; }
+      return;
+    }
+    x = SW_AUTO.x; y = SW_AUTO.y;
+  }
+  box.querySelector(".sw-sh").textContent = box.classList.contains("tall") ? "⇔" : "⇕";
+  const w = box.offsetWidth, h = box.offsetHeight, xr = (tlOn ? V.W - tlWidth() : V.W) - 8;   // 오른쪽 패널 밑으로 들어가지 않게
+  box.style.left = Math.max(8, Math.min(xr - w, x)).toFixed(0) + "px";
   box.style.top = Math.max(8, Math.min(V.H - h - 8, y)).toFixed(0) + "px";
 }
 {
   const box = $("sw"), hd = box.querySelector(".sw-h");
   box.querySelector(".sw-tabs").onclick = ev => { const b = ev.target.closest("[data-m]"); if (b && b.dataset.m !== swMode()) setSw(b.dataset.m); };
   box.querySelector(".sw-x").onclick = () => setSw("off");
+  // 지금 자리를 기억한다 — 가까운 끝(위 · 아래)에 붙여서. 마지막으로 옮긴 자리가 이 화면의 기본 자리가 된다
+  const savePos = (tall, h = box.offsetHeight) => {
+    const top = box.offsetTop;
+    SWPOS = top + h / 2 < V.H / 2 ? { x: box.offsetLeft / V.W, t: top / V.H, tall } : { x: box.offsetLeft / V.W, b: (V.H - top - h) / V.H, tall };
+    try { localStorage.setItem("gn-map-sw", JSON.stringify(SWPOS)); } catch {}
+  };
+  box.querySelector(".sw-sh").onclick = () => {
+    const h0 = box.offsetHeight, tall = !box.classList.contains("tall");
+    savePos(tall, h0);
+    renderSw();
+  };
   hd.addEventListener("pointerdown", ev => {
     if (ev.button !== 0 || ev.target.closest("button")) return;
     hd.setPointerCapture(ev.pointerId); box.classList.add("drag");
@@ -3815,14 +3936,13 @@ function placeSw() {
     hd.onpointermove = e => { box.style.left = l0 + e.clientX - x0 + "px"; box.style.top = t0 + e.clientY - y0 + "px"; };
     hd.onpointerup = hd.onpointercancel = () => {
       hd.onpointermove = hd.onpointerup = null; box.classList.remove("drag");
-      SWPOS = { x: box.offsetLeft / V.W, b: (V.H - box.offsetTop - box.offsetHeight) / V.H };
-      try { localStorage.setItem("gn-map-sw", JSON.stringify(SWPOS)); } catch {}
-      placeSw();
+      savePos(box.classList.contains("tall"));
+      renderSw();                         // 줄 수를 다 채워(자동 자리에서 줄였을 수 있다) 이 자리에 다시
     };
   });
   hd.addEventListener("dblclick", ev => {
     if (ev.target.closest("button")) return;
-    SWPOS = null; try { localStorage.removeItem("gn-map-sw"); } catch {}
+    SWPOS = null; SW_AUTO = null; try { localStorage.removeItem("gn-map-sw"); } catch {}
     placeSw();
   });
 }
@@ -4200,7 +4320,8 @@ function helpHtml(tab) {
     <dt>지도 위치 <code>C</code></dt><dd>오른쪽 위 십자 단추 — 판 위를 끌어 옮기고 휠로 키우고 줄인다(두 번 누르기 · <code>0</code> = 처음대로, <code>Enter</code> · <code>Esc</code> = 끝).
       이 화면(브라우저)에 기억한다 — 바다 위젯 · 패널을 두고 경남을 어디에 놓을지. 시군을 골라 확대하면 그 틀이 먼저, 풀면 이 틀로</dd>
     <dt>바다 위젯 <code>W</code></dt><dd>지도 남쪽 바다 위 반투명 판 — 특보(바다 풍랑 등 · 육상 · 예비) · 예측 상위(초단기 6시간) · 지금 오는 비를 머리 탭으로 고른다(<code>W</code> 는 차례로, 끝은 끔).
-      머리를 끌어 옮긴다(이 화면에 기억, 두 번 누르면 처음 자리). 켜 두면 지도 위 바다 특보 글자 대신 이 판이 적고, 다른 탭을 보는 동안에도 바다 특보는 한 줄로 남긴다</dd>
+      자리는 스스로 찾는다 — 경남 땅을 가장 적게 덮는 빈자리, 좁고 길면 세로로 길쭉한 꼴로. 머리를 끌어 옮기면 마지막으로 놓은 자리가 이 화면의 기본 자리(두 번 누르면 다시 자동),
+      <code>⇔</code> · <code>⇕</code> 로 꼴을 바꾼다. 켜 두면 지도 위 바다 특보 글자 대신 이 판이 적고, 다른 탭을 보는 동안에도 바다 특보는 한 줄로 남긴다</dd>
     <dt>강수 누적 1h 칩</dt><dd>줄 맨 오른쪽 — 최근 1시간 강수량을 시우량 색(지도 1시간 · 지금 오는 비와 같은 자)으로. 0 이면 흐리게. 막대 빗금과 같이 <code>H</code> 로 켜고 끈다</dd>
     <dt>오른쪽 위 아이콘</dt><dd>십자 = 지도 위치(<code>C</code>) · 창 = 오른쪽 패널(<code>L</code>) · ? = 이 창 · 톱니 = 설정. 설정 › 화면에서 항상 · 마우스를 움직이면 · 숨김(제목 메뉴 아래에도 있다)</dd>
     <dt>데모</dt><dd>설정 › 데모 — 실황 · 테스트(합성, <code>T</code>) · 재현 사례(지난 호우).
@@ -4339,7 +4460,8 @@ function openPrefs() {
       <button data-th="gray" class="${th === "gray" ? "on" : ""}">회색</button>
       <button data-th="light" class="${th === "light" ? "on" : ""}">밝게</button></span></div>
     <div class="row"><span class="k">바다 위젯</span>${seg("sea_w", [["off", "끔"], ["alert", "특보"], ["fc", "예측 상위"], ["now", "지금 오는 비"]])}</div>
-    <div class="row"><span class="k"></span><span class="note">지도 남쪽 바다 위 반투명 판(W) — 머리를 끌어 옮긴다(이 화면에 기억, 두 번 누르면 처음 자리).
+    <div class="row"><span class="k"></span><span class="note">지도 위 반투명 판(W) — 경남 땅을 가장 적게 덮는 빈자리를 스스로 찾는다(좁고 길면 세로로 길쭉하게).
+      머리를 끌어 옮기면 마지막으로 놓은 자리가 이 화면의 기본 자리(두 번 누르면 다시 자동), ⇔ · ⇕ 로 꼴을 바꾼다.
       켜 두면 바다 특보는 지도 위 글자 대신 이 판이 적는다. 예측 상위 · 지금 오는 비는 오른쪽 패널(카드)과 같은 자료.</span></div>
     <div class="row"><span class="k">지도 위치</span><span class="seg"><button data-cam="edit">고치기 (C)</button><button data-cam="reset"${ucOn() ? "" : " disabled"}>처음대로</button></span>
       <span class="note">${ucOn() ? `${Math.round(UC.z * 100)}% · 옮김` : "경남 전체가 꼭 차게(기본)"}</span></div>
