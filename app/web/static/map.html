@@ -61,6 +61,13 @@
   --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --sans: "IBM Plex Sans KR", system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
   --ease: cubic-bezier(.2, .8, .2, 1);
+
+  /* 지도 강수 램프(지도 전용 — 종합 화면 --rain-* 과 따로). **약한 쪽은 땅(바탕) 색에 가깝게** — 거의 안 온 곳
+     (0.1 · 1㎜)은 바탕에 묻히고, 오는 곳만 밝게 솟는다(10-24). ⚠️ 예전에는 --rain-1(#1B3A55)부터 또렷한 남색이라
+     0.1~10㎜ 가 넓게 파랗게 칠해져 많이 오는 곳이 안 갈렸다 */
+  --map-r1: #172230; --map-r2: #1A3148; --map-r3: #1C496E; --map-r4: #216799;
+  --map-r5: #2C8DC9; --map-r6: #5EC3EE; --map-r7: #CBEDFB;
+  --h1-hi: #8ED8F8; --h1-top: #FFFFFF;     /* 강수 누적 1h — 10㎜ 넘으면 밝게, 20㎜ 넘으면 흰 글자 */
 }
 :root[data-theme="light"] {
   --ground: #EEF2F7; --panel: #FFFFFF; --panel-2: #F5F8FC; --raised: #E8EEF6;
@@ -84,6 +91,9 @@
   --on-accent: #FFFFFF;
   --lv-watch: #C08400; --lv-warn: #CF3320; --lv-severe: #7B3FBF; --lv-pre: #5A6C8C;
   --test: #7A8494;
+  --map-r1: #EDF3F9; --map-r2: #D3E6F5; --map-r3: #A5CDEB; --map-r4: #66A9DA;
+  --map-r5: #2E86C2; --map-r6: #1B6698; --map-r7: #0B3F66;
+  --h1-hi: #1B6698; --h1-top: #0B3F66;
 }
 /* 회색 테마 — 어두운 회색 바탕 · 조금 밝은 회색 판(밝게는 너무 눈부시고 어둡게는 너무 까맣다는 말에 10-24 더함).
    글자가 밝은 쪽이라 강수 램프는 어둡게처럼 값이 클수록 밝다. 첫 칸은 회색 땅에서 갈라지게 어둡게보다 한 톤 밝힌다.
@@ -109,6 +119,9 @@
   --nb-ink: #7F8995;
   --on-accent: #06121B;
   --test: #9AA3B0;
+  --map-r1: #3D444D; --map-r2: #3A5069; --map-r3: #326A93; --map-r4: #2F82BE;
+  --map-r5: #3FA4DD; --map-r6: #8AD2F3; --map-r7: #E0F4FD;
+  --h1-hi: #9EDDF8; --h1-top: #FFFFFF;
 }
 
 * { box-sizing: border-box; }
@@ -571,11 +584,18 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 .abar .v.dead { color: var(--ink-3); font-weight: 500; }
 /* 맨 오른쪽 — 최근 1시간 칩. 시우량 자(지도 1시간 · 지금 오는 비와 같은 색)로 칠한다. 0 이면 흐리게(10-24, 합 칸을 뺀 자리) */
 #acc-b.h1c .ar { grid-template-columns: calc(118px * var(--k, 1)) 1fr calc(150px * var(--k, 1)) calc(62px * var(--k, 1)); }
-.h1v { justify-self: end; min-width: 100%; text-align: right; white-space: nowrap; border-radius: 6px;
-  padding: calc(2px * var(--k, 1)) calc(6px * var(--k, 1)); font: 700 calc(13.5px * var(--k, 1)) var(--mono); }
-.h1v small { font: 600 calc(9.5px * var(--k, 1)) var(--sans); opacity: .75; margin-right: 3px; }
-.h1v.z { color: var(--ink-3); font-weight: 500; background: transparent; }
-.acc-lg .c1 { background: linear-gradient(90deg, var(--rain-2), var(--rain-4), var(--rain-6)); }
+.h1v { justify-self: end; min-width: 100%; text-align: right; white-space: nowrap; border-radius: 2px;
+  padding: calc(1px * var(--k, 1)) calc(4px * var(--k, 1)) calc(1px * var(--k, 1)) calc(6px * var(--k, 1));
+  font: 600 calc(13.5px * var(--k, 1)) var(--mono); color: var(--ink-2); border-left: 3px solid var(--c, transparent); }
+/* ⚠️ 칸을 시우량 색으로 칠했더니(초록 · 노랑 바탕 위 글자) 안 읽혔다(10-24) — 바탕 없이 글자만. 왼쪽 막대만 시우량 색,
+   많이 올수록 글자가 밝고 굵다: 5㎜ 아래 흐리게 · 5~10 또렷하게 · 10~20 밝은 하늘 · 20 넘으면 흰 글자 + 빛 */
+.h1v.l1 { color: var(--ink); font-weight: 700; }
+.h1v.l2 { color: var(--h1-hi); font-weight: 800; }
+.h1v.l3 { color: var(--h1-top); font-weight: 800; font-size: calc(15px * var(--k, 1));
+  text-shadow: 0 0 8px color-mix(in oklab, var(--h1-hi) 55%, transparent); }
+.h1v small { font: 600 calc(9.5px * var(--k, 1)) var(--sans); opacity: .7; margin-right: 3px; }
+.h1v.z { color: var(--ink-3); font-weight: 500; border-left-color: transparent; }
+.acc-lg .c1 { background: linear-gradient(90deg, var(--map-r3), var(--map-r5), var(--map-r7)); }
 .sp-a { fill: color-mix(in oklab, var(--rain-4) 26%, transparent); }
 .sp-l { fill: none; stroke: var(--rain-5); stroke-width: 1.5; stroke-linejoin: round; }
 .sp-fa { fill: color-mix(in oklab, var(--rain-4) 10%, transparent); }
@@ -1130,13 +1150,28 @@ function updScale() {
       (/api/qpf/legend — 종합 화면 예측 분포 범례와 같은 것. 레이더 영상과 같은 0.1·0.5·1·…·110㎜/h 단계).
       아직 못 뽑았으면 청색 그대로 두고 범례에 그렇게 적는다 — 조용히 다른 색을 쓰지 않는다.
    시간 강수(60분 · 실황 · 초단기, 15분은 ×4)는 레이더와 **같은 경계**로 칠한다 — 10㎜ 면 레이더의 10㎜/h 색.
-   누적(누적 · AWS 누적 · 단기 오늘/내일 · 사례)은 레이더에 같은 자가 없다. 단계(7칸 · 눈금)는 그대로 두고 색만
-   레이더에서 그 세기(KMA_PICK ㎜/h)의 색을 빌린다 — 누적 30㎜ 가 레이더 30㎜/h 색이라는 뜻이 아니다.
+   누적(누적 · AWS 누적 · 단기 오늘/내일 · 사례)은 레이더에 같은 자가 없다. 기상청 색이면 눈금을 열 칸 남짓으로 잘게
+   나누고(ACC_FINE — 끝 눈금은 같다) 색을 레이더 범례에서 고르게 빌린다 — 누적 30㎜ 가 레이더 30㎜/h 색이라는 뜻이 아니다.
+   ⚠️ 예전에는 7칸에 7색만 빌려 지도에 색이 몇 가지뿐이었다(10-24).
+   약한 쪽(맨 아래 칸, 1㎜ 아래 칸)은 땅 색 쪽으로 섞어 바탕에 가깝게 — 거의 안 온 곳이 묻히고 오는 곳이 솟게(청색 --map-r* 과 같은 뜻).
    ⚠️ 레이더 색에는 노랑 · 빨강 · 보라가 있어 특보 예약색(주의보 노랑 · 경보 빨강 · 중대경보 보라)과 겹친다 — 그래서 기본은 청색 */
 let PAL = "blue";
 let KMA_LG = null;                                      // { steps[], cols[] } — 약한 것부터. 겹친 0.1 은 뒤 칸(0.1 이상)
 const KMA_TICKS = [0.1, 1, 5, 10, 20, 30, 50, 110];     // 범례 눈금(종합 화면 예측 분포와 같다)
-const KMA_PICK = [0.1, 1, 3, 7, 15, 25, 50];            // 누적 7칸이 빌려 올 레이더 세기(㎜/h)
+/* 기상청 색으로 볼 때 누적 눈금 — 끝 눈금(자동 · 고정 · 일강수 · 사례)마다 열 칸 남짓 */
+const ACC_FINE = {
+  15: [0.1, 0.5, 1, 2, 3, 4, 5, 7, 10, 12, 15],
+  30: [0.1, 1, 2, 3, 5, 7, 10, 15, 20, 25, 30],
+  60: [0.1, 1, 3, 5, 10, 15, 20, 25, 30, 40, 50, 60],
+  120: [0.1, 1, 5, 10, 20, 30, 40, 50, 60, 80, 100, 120],
+  150: [0.1, 1, 5, 10, 20, 30, 50, 70, 90, 110, 130, 150],
+  250: [0.1, 5, 10, 20, 40, 60, 80, 100, 150, 200, 250],
+  300: [1, 10, 20, 50, 80, 100, 150, 200, 250, 300],
+  500: [1, 10, 30, 50, 80, 100, 150, 200, 250, 300, 400, 500],
+  700: [1, 20, 50, 100, 150, 200, 300, 400, 500, 600, 700],
+  800: [1, 20, 50, 100, 150, 200, 300, 400, 500, 600, 700, 800],
+};
+const fine = st => (kmaOn() && ACC_FINE[st.at(-1)]) || st;
 const HOURLY = new Set(["obs15", "obs60", "aws60", "odam", "vsrt"]);
 const kmaOn = () => PAL === "kma" && !!KMA_LG;
 async function loadKmaLegend() {
@@ -1150,17 +1185,41 @@ async function loadKmaLegend() {
     });
     KMA_LG = steps.length >= 7 && steps.length === cols.length ? { steps, cols } : null;
   } catch { KMA_LG = null; }
+  KCOL.clear();
 }
-const kmaPick = () => KMA_PICK.map(v => KMA_LG.cols[Math.max(0, stepIdx(v, KMA_LG.steps) - 1)]);
-/* 이 층의 단계 → 색(CSS). 청색은 --rain-1~7, 기상청은 원본 색 그대로 */
-const colsOf = k => !kmaOn() ? [1, 2, 3, 4, 5, 6, 7].map(i => `var(--rain-${i})`) : HOURLY.has(k) ? KMA_LG.cols : kmaPick();
+/* 약한 쪽을 땅 색 쪽으로 — 맨 아래 칸은 35%, 그다음 칸도 1㎜ 아래면 65%만 그 색(테마마다 땅 색이 달라 테마마다 따로) */
+const KCOL = new Map();
+function fadeLow(cols, steps, key) {
+  const k = key + "|" + document.documentElement.dataset.theme;
+  if (KCOL.has(k)) return KCOL.get(k);
+  const land = cssColor("--land");
+  const mix = (c, t) => "#" + hexRgb(c).map((x, i) => Math.round(land[i] + (x - land[i]) * t).toString(16).padStart(2, "0")).join("");
+  const out = cols.map((c, i) => (i === 0 ? mix(c, 0.35) : i === 1 && steps[1] <= 1 ? mix(c, 0.65) : c));
+  KCOL.set(k, out);
+  return out;
+}
+const kmaHour = () => fadeLow(KMA_LG.cols, KMA_LG.steps, "h" + KMA_LG.cols.join(""));
+/* 누적 n칸 — 레이더 범례에서 서로 또렷이 갈리는 색만 골라(KMA_SEQ, 레이더 단계 ㎜/h) 그 사이를 고르게.
+   ⚠️ 범례 23색을 고르게 뽑았더니 짙은 초록(#005a00)이 어두운 바탕에 묻히고 노랑이 셋 붙었다 — 하늘 · 파랑 · 초록 · 노랑 ·
+   주황 · 빨강 · 보라 차례로. 레이더 색 그 자체는 서버가 뽑은 것(색을 흉내 내지 않는다) */
+const KMA_SEQ = [0.1, 0.5, 1, 2, 3, 6, 8, 15, 20, 25, 40, 60, 70];
+function kmaPick(steps) {
+  const seq = KMA_SEQ.map(v => KMA_LG.cols[Math.max(0, stepIdx(v, KMA_LG.steps) - 1)]);
+  const n = steps.length, L = seq.length - 1;
+  const cols = steps.map((_, i) => seq[n >= seq.length ? Math.min(L, i) : Math.round(i * L / Math.max(1, n - 1))]);
+  return fadeLow(cols, steps, "a" + steps.join(",") + KMA_LG.cols.join(""));
+}
+/* 이 층의 단계 → 색(CSS). 청색은 지도 램프 --map-r1~7, 기상청은 원본 색(약한 쪽만 바탕 쪽으로) */
+const colsOf = k => !kmaOn() ? [1, 2, 3, 4, 5, 6, 7].map(i => `var(--map-r${i})`) : HOURLY.has(k) ? kmaHour() : kmaPick(stepsOf(k));
 /* 값 → 색(없으면 null). hourly = 시간 강수(㎜/h) — 기상청 색이면 레이더 경계로. 패널 칸 · 막대 · 타임라인 점도
    지도와 같은 색이 되게 이것 하나로 칠한다 */
 function rampColor(v, steps, hourly) {
-  if (kmaOn() && hourly) { const i = stepIdx(v, KMA_LG.steps); return i ? KMA_LG.cols[i - 1] : null; }
+  if (kmaOn() && hourly) { const i = stepIdx(v, KMA_LG.steps); return i ? kmaHour()[i - 1] : null; }
   const i = stepIdx(v, steps);
-  return i ? (kmaOn() ? kmaPick()[i - 1] : `var(--rain-${i})`) : null;
+  return i ? (kmaOn() ? kmaPick(steps)[i - 1] : `var(--map-r${Math.min(7, i)})`) : null;
 }
+/* 청색 칸 위 글자 — 5단계(--map-r5)부터 밝은 칸이라 짙은 글자 */
+const inkBlue = i1 => (i1 >= 5 ? "var(--on-accent)" : "var(--ink)");
 /* 기상청 색 위 글자 — 밝은 칸(노랑 · 연두 · 하늘)엔 검은 글자, 어두운 칸엔 흰 글자.
    ⚠️ 기준을 150 으로 두니 #00ff00(휘도 149.7)에 흰 글자가 얹혀 안 읽혔다 — 140(3일 기온표와 같다) */
 function inkOn(hex) {
@@ -1222,8 +1281,8 @@ let FEAT = null;                        // 시군 GeoJSON(강조용)
 const layerKey = () => kind === "vsrt" ? `vsrt+${vsrtN}` : kind;
 const metaOf = k => (META?.layers || []).find(x => x.id === k) || {};
 const stepsOf = k => (kmaOn() && HOURLY.has(k)) ? KMA_LG.steps
-  : k === "acc" ? (CASE ? accFix() || STEPS.event : accSteps("acc")) : k === "aws" ? accSteps("aws") : k === "obs15" ? (x4 ? STEPS.m60 : STEPS.m15)
-  : (k === "obsday" || k.startsWith("shrt")) ? STEPS.day : STEPS.m60;
+  : k === "acc" ? fine(CASE ? accFix() || STEPS.event : accSteps("acc")) : k === "aws" ? fine(accSteps("aws")) : k === "obs15" ? (x4 ? STEPS.m60 : STEPS.m15)
+  : (k === "obsday" || k.startsWith("shrt")) ? fine(STEPS.day) : STEPS.m60;
 /* 15분 ×4 — 기상청 색이면 늘 ×4 다(레이더 색은 시간당 ㎜/h 의 자다) */
 const factor = () => (kind === "obs15" && (x4 || kmaOn())) ? 4 : 1;
 const tOf = key => new Date(+key.slice(0, 4), +key.slice(4, 6) - 1, +key.slice(6, 8),
@@ -1564,15 +1623,16 @@ function drawLabels() {
 /* ── 범례 ─────────────────────────────────────────────────────────── */
 const BAND_H = 182;                                   // 색 띠 높이(px) — 청색 7칸 × 26
 function buildLegend() {
-  const st = stepsOf(kind), css = colsOf(kind), lg = $("legend"), kma = kmaOn(), many = st.length > 7;
+  const st = stepsOf(kind), css = colsOf(kind), lg = $("legend"), kma = kmaOn(), many = st.length > 13;
   const unit = (kind === "obsday" || ACCK.has(kind) || kind.startsWith("shrt")) ? "㎜ 누적" : factor() === 4 ? "㎜/h 환산" : "㎜";
   const cells = css.map(c => `<i style="background:${c}"></i>`).join("");
   // 레이더 23칸은 눈금을 띄엄띄엄(종합 화면 예측 분포와 같은 자리) — 칸마다 적으면 글자가 겹친다.
   // 띠도 조금 늘린다: 182px 로는 10·20·30·50 이 두 칸(16px)씩이라 글자가 붙었다
-  const bh = many ? 230 : BAND_H, ch = bh / st.length;
+  // 기상청 색 누적(열 칸 남짓)은 칸마다 21px — 눈금을 다 적는다
+  const bh = many ? 230 : st.length > 7 ? st.length * 21 : BAND_H, ch = bh / st.length;
   const ticks = st.map((v, i) => !many || KMA_TICKS.includes(v) ? `<span style="bottom:${(i * ch).toFixed(1)}px">${v}</span>` : "").join("");
   const tip = kma ? (HOURLY.has(kind) ? "기상청 레이더 색(예측 분포 그림 범례에서 뽑은 색 · 같은 ㎜/h 경계) — 누르면 청색"
-                                      : "기상청 레이더 색 — 누적은 레이더에 같은 자가 없어 단계(눈금)는 그대로, 색만 레이더에서 빌렸다. 누르면 청색")
+                                      : "기상청 레이더 색 — 누적은 레이더에 같은 자가 없어 눈금을 열 칸 남짓으로 잘게 나누고 색을 레이더 범례에서 고르게 빌렸다(약한 쪽은 바탕 쪽으로). 누르면 청색")
                   : "누르면 기상청 레이더 색으로(노랑 · 빨강 · 보라가 특보 선 색과 겹친다)";
   // 15분: 기상청 색이면 늘 ×4(레이더는 시간당 자) — 단추는 켠 채 잠근다
   const x4b = kind !== "obs15" ? "" : kma
@@ -1587,6 +1647,7 @@ function buildLegend() {
   const b = $("b-x4");
   if (b && !kma) b.onclick = () => { x4 = !x4; saveSetting({ x4 }); buildLegend(); draw(); paintHead(); };
   lg.querySelector(".band").onclick = togglePal;
+  fitAlCol();
 }
 /* 범례 색 띠를 누르면 청색 ↔ 기상청 레이더 색. 지도 · 범례 · 관측소 · 타임라인 · 패널 칸이 같이 바뀐다 */
 async function togglePal() {
@@ -1612,7 +1673,7 @@ function lgPop(ev) {
   if (!ev) { pop.classList.remove("open"); pop.hidden = true; return; }
   const cur = accFix() ? SET.acc_scale : 0;
   const auto = CASE ? STEPS.event : ACC_LADDER[ACC_TIER[kind] ?? 3];
-  const opt = (v, l, st) => `<button data-s="${v}" class="${cur === v ? "on" : ""}">${l}<small class="st">${st.join(" · ")}</small></button>`;
+  const opt = (v, l, st) => `<button data-s="${v}" class="${cur === v ? "on" : ""}">${l}<small class="st">${fine(st).join(" · ")}</small></button>`;
   pop.innerHTML = `<div class="g">누적 눈금</div>`
     + opt(0, `자동 — ${CASE ? "사례 눈금" : "자료 크기에 맞춰"}`, auto)
     + Object.entries(ACC_FIXED).map(([v, st]) => opt(+v, `${v}㎜ <small>${ACC_FIXED_NOTE[v]}</small>`, st)).join("")
@@ -2538,7 +2599,8 @@ function tlPlayhead() {
       dot.style.cx = TLG.xT(ht).toFixed(1) + "px";
       dot.style.cy = (TLG.base(ri) - Math.min(v, TLG.vmax) / TLG.vmax * TLG.ph).toFixed(1) + "px";
       // 청색은 옅은 단계가 어두운 바탕에 묻혀 3단계부터 — 기상청 색은 그대로
-      dot.style.fill = !kc ? "var(--ink-3)" : kmaOn() ? kc : `var(--rain-${Math.max(3, k)})`;
+      // 기상청 색도 1㎜ 아래는 바탕 쪽으로 섞어 둬서(fadeLow) 점이 묻힌다 — 그때는 회색 점
+      dot.style.fill = !kc ? "var(--ink-3)" : kmaOn() ? (v >= 1 ? kc : "var(--ink-3)") : `var(--rain-${Math.max(3, k)})`;
       dot.style.opacity = "1";
     } else { dot.style.opacity = "0"; }
     txt.textContent = v == null ? "—" : v.toFixed(1);
@@ -3082,8 +3144,8 @@ function renderAcc() {
     if (r.dead) return `<span class="h1v z" title="결측">—</span>`;
     const c = v >= 0.1 ? rampColor(v, SIU, true) : null;
     if (!c) return `<span class="h1v z" title="최근 1시간 0㎜"><small>1h</small>0</span>`;
-    const ink = kmaOn() ? inkOn(c) : stepIdx(v, SIU) >= 4 ? "var(--on-accent)" : "var(--ink)";
-    return `<span class="h1v" style="background:${c};color:${ink}" title="최근 1시간 ${v.toFixed(1)}㎜ — 시우량 색(지도 1시간 · 지금 오는 비와 같은 자)"><small>1h</small>${v.toFixed(v >= 10 ? 0 : 1)}</span>`;
+    const lv = v >= 20 ? 3 : v >= 10 ? 2 : v >= 5 ? 1 : 0;
+    return `<span class="h1v l${lv}" style="--c:${c}" title="최근 1시간 ${v.toFixed(1)}㎜ — 왼쪽 막대는 시우량 색(지도 1시간 · 지금 오는 비와 같은 자), 많을수록 글자가 밝고 굵다"><small>1h</small>${v.toFixed(v >= 10 ? 0 : 1)}</span>`;
   };
   body.innerHTML = rows.slice(0, n).map((r, i) => {
     const tot = r.sum + r.fc, o = r.sum / bmax * 100, f = r.fc / bmax * 100;
@@ -3118,7 +3180,7 @@ function renderAcc() {
       : A.day ? `<div class="acc-lg"><span><i class="d"></i>그날 예보 합(단기 PCP 매시 합 · 읍면동 최대)</span><span>선 그래프: 매시 값</span></div>`
       : `<div class="acc-lg">${A.basis === "aws"
           ? (rows.some(r => r.org !== "kma") ? `<span><i class="p"></i>경남 AWS</span>` : "") + (rows.some(r => r.org === "kma") ? `<span><i class="pk"></i>기상청 AWS</span>` : "")
-          : `<span><i class="p"></i>실측</span>`}${h1On ? `<span><i class="h"></i>그중 최근 1시간</span><span><i class="c1"></i>1h 칩 · 시우량 색</span>` : ""}${fcOn && rows.some(r => r.fc) ? `<span><i class="f"></i>앞으로 6시간</span>` : ""}</div>`);
+          : `<span><i class="p"></i>실측</span>`}${h1On ? `<span><i class="h"></i>그중 최근 1시간</span><span><i class="c1"></i>1h · 많을수록 밝게</span>` : ""}${fcOn && rows.some(r => r.fc) ? `<span><i class="f"></i>앞으로 6시간</span>` : ""}</div>`);
   rowEvents(body);
   hovEvents(body);
   slideRows(body, before);
@@ -3182,7 +3244,7 @@ const SIU = STEPS.m60;
 /* 카드 머리 작은 범례 — 그 자의 칸마다 색과 값. 기상청 색이면 시우량은 레이더 경계 색 */
 function miniLegend(steps, label, hourly = true, tip = "") {
   return `<span class="mlg" title="${tip}"><b>${label}</b>${steps.map((v, i) => {
-    const c = rampColor(v, steps, hourly), ink = kmaOn() ? inkOn(c) : i >= 3 ? "var(--on-accent)" : "var(--ink)";
+    const c = rampColor(v, steps, hourly), ink = kmaOn() ? inkOn(c) : inkBlue(i + 1);
     return `<i style="background:${c};color:${ink}">${v}</i>`;
   }).join("")}</span>`;
 }
@@ -3234,7 +3296,7 @@ function renderFc(t = FC_T, nRows = cardRows()) {
     if (v == null) return `<i class="na"></i>`;           // 오늘의 지난 구간(발표 앞)
     const k = stepIdx(v, steps), c = rampColor(v, steps, !day);
     const txt = v >= 1 ? (Number.isInteger(v) ? v : v.toFixed(1)) : "";
-    const ink = !c ? "" : kmaOn() ? inkOn(c) : k >= 4 ? "var(--on-accent)" : "var(--ink)";
+    const ink = !c ? "" : kmaOn() ? inkOn(c) : inkBlue(k);
     return `<i style="${c ? `background:${c};color:${ink}` : ""}">${txt}</i>`;
   };
   $(t.b).style.setProperty("--n", F.labels.length || 6);
@@ -3602,13 +3664,16 @@ function renderLyIcons() {
   // 관측소 범례는 누른 아이콘 오른쪽 그 높이에. 특보 줄은 아이콘들 밑에 — 범례 위까지(넘치면 굴린다)
   const ic = box.querySelector(`[data-d="stations"]`);
   if (ic) $("ly-stn").style.top = ic.offsetTop + "px";
-  const al = $("ly-alerts");
-  if (!al.hidden) {
-    const last = box.offsetHeight ? box : $("ly-btn");
-    al.style.top = last.offsetTop + last.offsetHeight + 8 + "px";
-    const lgTop = $("legend").getBoundingClientRect().top, r = al.getBoundingClientRect();
-    al.style.maxHeight = Math.max(140, (lgTop - r.top - 14) / (V?.k || 1)).toFixed(0) + "px";
-  }
+  fitAlCol();
+}
+/* 특보 줄 자리 — 아이콘들 밑에서 범례 위까지(범례가 바뀌면 다시 — 기상청 색 누적은 범례가 길다) */
+function fitAlCol() {
+  const al = $("ly-alerts"), box = $("ly-act");
+  if (al.hidden) return;
+  const last = box.offsetHeight ? box : $("ly-btn");
+  al.style.top = last.offsetTop + last.offsetHeight + 8 + "px";
+  const lgTop = $("legend").getBoundingClientRect().top, r = al.getBoundingClientRect();
+  al.style.maxHeight = Math.max(140, (lgTop - r.top - 14) / (V?.k || 1)).toFixed(0) + "px";
 }
 function renderLayers() {
   if (LY_OPEN && !OV.has(LY_OPEN)) LY_OPEN = null;
@@ -4340,7 +4405,9 @@ function helpHtml(tab) {
     <dt>바다 위젯 <code>W</code></dt><dd>지도 위 반투명 판 — 예측 상위(초단기 6시간) · 지금 오는 비를 머리 탭으로 고른다(<code>W</code> 는 차례로, 끝은 끔). 특보는 왼쪽 특보 줄에.
       자리는 스스로 찾는다 — 경남 땅을 가장 적게 덮는 빈자리, 좁고 길면 세로로 길쭉한 꼴로. 머리를 끌어 옮기면 마지막으로 놓은 자리가 이 화면의 기본 자리(두 번 누르면 다시 자동),
       <code>⇔</code> · <code>⇕</code> 로 꼴을 바꾼다</dd>
-    <dt>강수 누적 1h 칩</dt><dd>줄 맨 오른쪽 — 최근 1시간 강수량을 시우량 색(지도 1시간 · 지금 오는 비와 같은 자)으로. 0 이면 흐리게. 막대 빗금과 같이 <code>H</code> 로 켜고 끈다</dd>
+    <dt>강수 누적 1h</dt><dd>줄 맨 오른쪽 — 최근 1시간 강수량. 바탕 없이 왼쪽 막대만 시우량 색, 많이 올수록 글자가 밝고 굵다(20㎜ 넘으면 흰 글자). 0 이면 흐리게. 막대 빗금과 같이 <code>H</code> 로 켜고 끈다</dd>
+    <dt>색 — 약한 비는 바탕에 가깝게</dt><dd>0.1 · 1㎜ 처럼 거의 안 온 곳은 땅(바탕) 색에 가깝게 칠해 묻히고, 오는 곳만 밝게 솟는다(청색 · 기상청 색 둘 다).
+      기상청 색으로 보면 누적은 눈금을 열 칸 남짓으로 잘게 나눠 하늘 · 파랑 · 초록 · 노랑 · 주황 · 빨강 · 보라가 다 나온다</dd>
     <dt>오른쪽 위 아이콘</dt><dd>십자 = 지도 위치(<code>C</code>) · 창 = 오른쪽 패널(<code>L</code>) · ? = 이 창 · 톱니 = 설정. 설정 › 화면에서 항상 · 마우스를 움직이면 · 숨김(제목 메뉴 아래에도 있다)</dd>
     <dt>데모</dt><dd>설정 › 데모 — 실황 · 테스트(합성, <code>T</code>) · 재현 사례(지난 호우).
       테스트에서 시군을 누르면 내부망(경남 AWS)에서 보일 지점 목록 모양을 합성 지점으로 미리 본다</dd>
