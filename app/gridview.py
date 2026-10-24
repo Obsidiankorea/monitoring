@@ -200,7 +200,8 @@ def array(fr: dict) -> np.ndarray:
     return gridstore.load(fr["store"], fr["key"])
 
 
-SEL_MAX = 3                     # 지도에서 한꺼번에 고르는 시군(Ctrl+클릭으로 비교)
+# 지도에서 한꺼번에 고르는 시군(Ctrl+클릭으로 비교). 예전 3곳 — 넷 이상 비교하고 싶다는 말에 경남 전부로 풀었다(10-24)
+SEL_MAX = 18
 
 
 def siguns_of(sigun: str | list | None) -> list[str]:
@@ -1172,6 +1173,8 @@ SETTING_DEFAULT = {"layer": "obs60", "x4": False, "vsrt_n": 1,
                    "aws_off": [],
                    # 누적(격자 · AWS) 범례 눈금 — 0: 자동(자료 크기에 맞춰), 그 밖은 끝 눈금(㎜)으로 고정. 범례 오른쪽 클릭
                    "acc_scale": 0,
+                   # 바다 위젯 — 지도 남쪽 바다 위 반투명 판: off · alert(특보) · fc(예측 상위) · now(지금 오는 비). W 키
+                   "sea_w": "alert",
                    # 지도 위에 겹칠 레이어(왼쪽 위 '레이어'에서 켠다). 차츰 늘린다.
                    "overlays": []}
 OVERLAYS = ("alerts", "stations", "stnval")   # stnval = 관측소 옆 값 글자(관측소에 딸림)
@@ -1186,8 +1189,9 @@ _CHOICES = {"flow_step": (10, 20, 30, 60), "flow_hours": (1, 3, 6, 12),
             # 위 카드 줄 세우기 — 시군당 n곳, 0 = 시군 무관
             "acc_per": (0, 1, 2, 3),
             # 누적 눈금 — 0 = 자동, 나머지는 끝 눈금(㎜) 고정(map.html ACC_FIXED 와 같은 값)
-            "acc_scale": (0, 30, 60, 150, 300, 800)}
-_TEXT = {"tl_stat", "panel", "acc_basis", "acc_from", "pal"}
+            "acc_scale": (0, 30, 60, 150, 300, 800),
+            "sea_w": ("off", "alert", "fc", "now")}
+_TEXT = {"tl_stat", "panel", "acc_basis", "acc_from", "pal", "sea_w"}
 
 
 def setting() -> dict:

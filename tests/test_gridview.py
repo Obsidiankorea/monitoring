@@ -82,9 +82,11 @@ def test_put_setting_validates(monkeypatch):
     assert gridview.SETTING_DEFAULT["acc_hdr_pin"] is True and gridview.put_setting({"acc_hdr_pin": 0})["acc_hdr_pin"] is False
     # 누적 눈금 — 기본 자동(0), 범례 오른쪽 클릭으로 끝 눈금 고정
     assert gridview.SETTING_DEFAULT["acc_scale"] == 0 and gridview.put_setting({"acc_scale": 150})["acc_scale"] == 150
+    # 바다 위젯 — 기본 특보, 예측 상위 · 지금 오는 비 · 끔
+    assert gridview.SETTING_DEFAULT["sea_w"] == "alert" and gridview.put_setting({"sea_w": "fc"})["sea_w"] == "fc"
     for bad in ({"flow_step": 15}, {"play_ms": 50}, {"tl_stat": "sum"}, {"layer": "nope"},
                 {"overlays": ["bars"]}, {"overlays": "alerts"}, {"pal": "rainbow"}, {"acc_per": 5}, {"qpf_ms": 50},
-                {"acc_scale": 100}):
+                {"acc_scale": 100}, {"sea_w": "big"}):
         with pytest.raises((ValueError, LookupError)):
             gridview.put_setting(bad)
 

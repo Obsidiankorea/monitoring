@@ -1,4 +1,4 @@
-"""지도 시군 고르기 — 여러 시군(Ctrl+클릭, 3곳까지) 읍면동 표 · 읍면동 값 · 스방 지점 임시 위치."""
+"""지도 시군 고르기 — 여러 시군(Ctrl+클릭, 경남 전부까지) 읍면동 표 · 읍면동 값 · 스방 지점 임시 위치."""
 import json
 from datetime import datetime
 
@@ -15,8 +15,8 @@ def test_siguns_of_validates():
     assert gridview.siguns_of(" 함양, 거창,함양") == ["함양", "거창"]        # 겹치면 하나로, 순서는 그대로
     with pytest.raises(LookupError):
         gridview.siguns_of("함양,부산")                                  # 경남 밖(이웃)은 고를 수 없다
-    with pytest.raises(LookupError):
-        gridview.siguns_of("함양,거창,산청,합천")                         # 3곳까지
+    # 넷 이상도 고른다(예전 3곳까지 — 10-24 풀었다)
+    assert gridview.siguns_of("함양,거창,산청,합천,하동") == ["함양", "거창", "산청", "합천", "하동"]
     # 'all' = 경남 열여덟 시군 전부(위 카드 줄 세우기 — 시군당 2·3곳 · 시군 무관)
     gn = [s["name"] for s in gridstore.geo()["sigun"] if s["kind"] == "gn"]
     assert gridview.siguns_of("all") == gn and len(gn) == 18

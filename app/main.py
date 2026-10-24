@@ -291,7 +291,7 @@ async def api_grid_acctable(hours: int = Query(12, ge=1, le=gridview.ACC_SPAN_MA
 @app.get("/api/grid/emd")
 async def api_grid_emd(sigun: str, layer: str = "obs60", tm: str | None = None, test: bool = False,
                        case: str | None = None, hours: int = Query(1, ge=1, le=12)):
-    """고른 시군(쉼표로 3곳까지)의 **읍면동마다** 그 층 최대와 그 칸. 사례면 hours 시간 합."""
+    """고른 시군(쉼표로 여럿)의 **읍면동마다** 그 층 최대와 그 칸. 사례면 hours 시간 합."""
     try:
         return await asyncio.to_thread(gridview.emd, sigun, layer, tm, test, case, hours)
     except LookupError as e:
