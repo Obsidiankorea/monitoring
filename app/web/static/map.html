@@ -1135,13 +1135,21 @@ function updScale() {
   const vals = CURSTAT.rows.filter(r => r.kind === "gn" && r.max != null).map(r => r.max);
   const hi = vals.length ? Math.max(...vals) : 0, top = i => ACC_LADDER[i].at(-1);
   if (accFix()) { const was = ACC_HI[kind]; ACC_HI[kind] = hi; return was !== hi; }   // 고정 — 범례의 '최대' 글자만
+  // 다양한 색조 — 끝 눈금을 자료에 바짝(RICH_TOPS). 커지면 곧바로, 작아지면 지금 끝의 60% 아래로 내려갈 때만(깜빡이지 않게)
+  let rich = false;
+  if (PAL === "rich") {
+    let r = RICH_TOPS.find(x => x >= hi) ?? RICH_TOPS.at(-1);
+    const rc = RICH_TOP[kind];
+    if (rc && r < rc && hi > rc * 0.6) r = rc;
+    rich = r !== rc; RICH_TOP[kind] = r;
+  }
   let t = ACC_LADDER.findIndex((_, i) => hi <= top(i) * 1.25);
   if (t < 0) t = ACC_LADDER.length - 1;
   const cur = ACC_TIER[kind];
   if (cur != null && t < cur && hi > top(t)) t = Math.min(cur, t + 1);
   const was = ACC_HI[kind];
   ACC_HI[kind] = hi;
-  if (t === cur) return was !== hi;                    // 범례의 '최대' 글자만 바뀐다
+  if (t === cur) return rich || was !== hi;            // 범례의 '최대' 글자만 바뀐다
   ACC_TIER[kind] = t;
   return true;
 }
@@ -1172,8 +1180,28 @@ const ACC_FINE = {
   800: [1, 20, 50, 100, 150, 200, 300, 400, 500, 600, 700, 800],
 };
 const fine = st => (kmaOn() && ACC_FINE[st.at(-1)]) || st;
+/* 다양한 색조(10-24) — 기상청 QPF 범례처럼 한 색에 서너 색조(파랑 3 · 초록 4 · 노랑 5 · 빨강 4 · 보라 4)를 다 쓴다.
+   누적 눈금은 0.1 다음부터 고른 간격(끝 눈금 ÷ 20 남짓 — 100 이면 5㎜ 단위)으로 스무 칸 남짓, 끝 눈금은 자료를 바짝 따른다
+   (RICH_TOPS — 자동이면 경남 시군 최대가 드는 가장 작은 것, 작아질 땐 한참 작아질 때만). 시간 강수는 레이더 경계 그대로 */
+const RICH_TOPS = [10, 15, 20, 30, 40, 50, 60, 80, 100, 120, 150, 200, 250, 300, 400, 500, 600, 800, 1000];
+const RICH_TOP = {};                                    // 층마다 고른 끝 눈금
+const RICH_D = [0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 7.5, 8, 10, 12.5, 15, 20, 25, 30, 35, 40, 50];
+function richSteps(T) {
+  const d = RICH_D.find(x => T / x <= 21 && Math.abs(T / x - Math.round(T / x)) < 1e-9) || T / 20;
+  const out = [0.1];
+  for (let i = 1; i * d <= T + 1e-9; i++) out.push(+(i * d).toFixed(2));
+  return out;
+}
+/* 누적 층 눈금 — 청색 7칸 · 기상청 색 열 칸 남짓(ACC_FINE) · 다양한 색조 스무 칸 남짓 */
+function accStepsOf(k) {
+  if (richOn()) return richSteps(accFix() ? +SET.acc_scale : CASE && k === "acc" ? 700 : RICH_TOP[k] || accSteps(k).at(-1));
+  return fine(k === "acc" && CASE ? accFix() || STEPS.event : accSteps(k));
+}
 const HOURLY = new Set(["obs15", "obs60", "aws60", "odam", "vsrt"]);
-const kmaOn = () => PAL === "kma" && !!KMA_LG;
+// 기상청 색 · 다양한 색조 둘 다 레이더 범례 색을 쓴다(시간 강수는 레이더 경계 그대로). 다른 것은 누적의 눈금 · 색 고르기
+const kmaOn = () => (PAL === "kma" || PAL === "rich") && !!KMA_LG;
+const richOn = () => PAL === "rich" && !!KMA_LG;
+const PAL_NAME = { blue: "청색", kma: "기상청 색", rich: "다양한 색조" };
 async function loadKmaLegend() {
   try {
     const lg = await getJson("/api/qpf/legend");
@@ -1204,10 +1232,12 @@ const kmaHour = () => fadeLow(KMA_LG.cols, KMA_LG.steps, "h" + KMA_LG.cols.join(
    주황 · 빨강 · 보라 차례로. 레이더 색 그 자체는 서버가 뽑은 것(색을 흉내 내지 않는다) */
 const KMA_SEQ = [0.1, 0.5, 1, 2, 3, 6, 8, 15, 20, 25, 40, 60, 70];
 function kmaPick(steps) {
-  const seq = KMA_SEQ.map(v => KMA_LG.cols[Math.max(0, stepIdx(v, KMA_LG.steps) - 1)]);
+  // 다양한 색조 — 범례 색을 다 쓴다. 어두운 · 회색 바탕에서는 맨 위 짙은 남색 둘(90 · 110㎜/h)이 묻혀 뺀다(밝은 테마는 다)
+  const seq = richOn() ? KMA_LG.cols.slice(0, document.documentElement.dataset.theme === "light" ? undefined : -2)
+    : KMA_SEQ.map(v => KMA_LG.cols[Math.max(0, stepIdx(v, KMA_LG.steps) - 1)]);
   const n = steps.length, L = seq.length - 1;
   const cols = steps.map((_, i) => seq[n >= seq.length ? Math.min(L, i) : Math.round(i * L / Math.max(1, n - 1))]);
-  return fadeLow(cols, steps, "a" + steps.join(",") + KMA_LG.cols.join(""));
+  return fadeLow(cols, steps, (richOn() ? "r" : "a") + steps.join(",") + KMA_LG.cols.join(""));
 }
 /* 이 층의 단계 → 색(CSS). 청색은 지도 램프 --map-r1~7, 기상청은 원본 색(약한 쪽만 바탕 쪽으로) */
 const colsOf = k => !kmaOn() ? [1, 2, 3, 4, 5, 6, 7].map(i => `var(--map-r${i})`) : HOURLY.has(k) ? kmaHour() : kmaPick(stepsOf(k));
@@ -1281,8 +1311,8 @@ let FEAT = null;                        // 시군 GeoJSON(강조용)
 const layerKey = () => kind === "vsrt" ? `vsrt+${vsrtN}` : kind;
 const metaOf = k => (META?.layers || []).find(x => x.id === k) || {};
 const stepsOf = k => (kmaOn() && HOURLY.has(k)) ? KMA_LG.steps
-  : k === "acc" ? fine(CASE ? accFix() || STEPS.event : accSteps("acc")) : k === "aws" ? fine(accSteps("aws")) : k === "obs15" ? (x4 ? STEPS.m60 : STEPS.m15)
-  : (k === "obsday" || k.startsWith("shrt")) ? fine(STEPS.day) : STEPS.m60;
+  : ACCK.has(k) ? accStepsOf(k) : k === "obs15" ? (x4 ? STEPS.m60 : STEPS.m15)
+  : (k === "obsday" || k.startsWith("shrt")) ? (richOn() ? richSteps(150) : fine(STEPS.day)) : STEPS.m60;
 /* 15분 ×4 — 기상청 색이면 늘 ×4 다(레이더 색은 시간당 ㎜/h 의 자다) */
 const factor = () => (kind === "obs15" && (x4 || kmaOn())) ? 4 : 1;
 const tOf = key => new Date(+key.slice(0, 4), +key.slice(4, 6) - 1, +key.slice(6, 8),
@@ -1624,15 +1654,20 @@ function drawLabels() {
 const BAND_H = 182;                                   // 색 띠 높이(px) — 청색 7칸 × 26
 function buildLegend() {
   const st = stepsOf(kind), css = colsOf(kind), lg = $("legend"), kma = kmaOn(), many = st.length > 13;
+  const radar = kma && HOURLY.has(kind);                 // 레이더 23칸 — 눈금은 종합 화면 예측 분포와 같은 자리만
   const unit = (kind === "obsday" || ACCK.has(kind) || kind.startsWith("shrt")) ? "㎜ 누적" : factor() === 4 ? "㎜/h 환산" : "㎜";
   const cells = css.map(c => `<i style="background:${c}"></i>`).join("");
   // 레이더 23칸은 눈금을 띄엄띄엄(종합 화면 예측 분포와 같은 자리) — 칸마다 적으면 글자가 겹친다.
   // 띠도 조금 늘린다: 182px 로는 10·20·30·50 이 두 칸(16px)씩이라 글자가 붙었다
   // 기상청 색 누적(열 칸 남짓)은 칸마다 21px — 눈금을 다 적는다
-  const bh = many ? 230 : st.length > 7 ? st.length * 21 : BAND_H, ch = bh / st.length;
-  const ticks = st.map((v, i) => !many || KMA_TICKS.includes(v) ? `<span style="bottom:${(i * ch).toFixed(1)}px">${v}</span>` : "").join("");
-  const tip = kma ? (HOURLY.has(kind) ? "기상청 레이더 색(예측 분포 그림 범례에서 뽑은 색 · 같은 ㎜/h 경계) — 누르면 청색"
-                                      : "기상청 레이더 색 — 누적은 레이더에 같은 자가 없어 눈금을 열 칸 남짓으로 잘게 나누고 색을 레이더 범례에서 고르게 빌렸다(약한 쪽은 바탕 쪽으로). 누르면 청색")
+  // 다양한 색조 누적(스무 칸 남짓)은 칸마다 11px(레이더 띠와 같은 높이 — 왼쪽 특보 줄 자리를 남긴다) — 눈금은 두세 칸 건너 하나(맨 위는 늘)
+  const bh = radar ? 230 : many ? st.length * 11 : st.length > 7 ? st.length * 21 : BAND_H, ch = bh / st.length;
+  const every = many && !radar ? Math.ceil(st.length / 10) : 1;
+  const ticks = st.map((v, i) => (radar ? KMA_TICKS.includes(v) : !many || i % every === 0 || i === st.length - 1)
+    ? `<span style="bottom:${(i * ch).toFixed(1)}px">${v}</span>` : "").join("");
+  const tip = richOn() && !HOURLY.has(kind) ? "다양한 색조 — 기상청 QPF 범례 색을 다 쓴다(한 색에 서너 색조). 누적 눈금은 스무 칸 남짓 고른 간격, 끝 눈금은 자료를 바짝 따른다. 누르면 청색 · 오른쪽 클릭으로 고르기"
+    : kma ? (HOURLY.has(kind) ? `기상청 레이더 색(예측 분포 그림 범례에서 뽑은 색 · 같은 ㎜/h 경계)${richOn() ? " — 다양한 색조도 시간 강수는 레이더 경계 그대로" : ""} — 누르면 ${richOn() ? "청색" : "다양한 색조"}`
+                                      : "기상청 레이더 색 — 누적은 레이더에 같은 자가 없어 눈금을 열 칸 남짓으로 잘게 나누고 색을 레이더 범례에서 고르게 빌렸다(약한 쪽은 바탕 쪽으로). 누르면 다양한 색조")
                   : "누르면 기상청 레이더 색으로(노랑 · 빨강 · 보라가 특보 선 색과 겹친다)";
   // 15분: 기상청 색이면 늘 ×4(레이더는 시간당 자) — 단추는 켠 채 잠근다
   const x4b = kind !== "obs15" ? "" : kma
@@ -1640,8 +1675,8 @@ function buildLegend() {
     : `<button id="b-x4" class="${x4 ? "on" : ""}" title="15분 값을 ×4 — 시간당 기세로 60분치·특보 기준과 같은 자로 본다">${x4 ? "×4 환산" : "그대로"}</button>`;
   lg.innerHTML = `<div class="lt">${unit}${x4b}</div>
     <div class="rows"><div class="band" title="${tip}" style="height:${bh}px">${cells}</div><div class="ticks">${ticks}</div></div>
-    ${PAL === "kma" && !kma ? `<div class="note">기상청 색을 아직 못 받았다 — 예측 분포 그림을 한 번 받으면 생긴다. 지금은 청색</div>` : ""}
-    ${ACCK.has(kind) && (!CASE || accFix()) ? `<div class="note" title="${accFix() ? `눈금을 ${SET.acc_scale}㎜ 끝으로 고정했다(${ACC_FIXED_NOTE[SET.acc_scale]}) — 화면 모두 같이. ` : "누적 눈금은 자료 크기에 맞춰 자동으로 고른다(일곱 자 중 하나) — 경남 시군 최대 중 가장 큰 값이 끝 눈금 근처에 오게. 갱신해서 커지면 곧바로, 작아지면 다 들 때 바뀐다. "}범례를 오른쪽 클릭하면 눈금을 고른다(자동 · 30 · 60 · 150 · 300 · 800㎜)">${accFix() ? `고정 눈금 ${SET.acc_scale}㎜` : "자동 눈금"}${ACC_HI[kind] != null && !CASE ? ` · 최대 ${(+ACC_HI[kind]).toFixed(ACC_HI[kind] >= 100 ? 0 : 1)}㎜` : ""}</div>` : ""}
+    ${PAL !== "blue" && !kma ? `<div class="note">기상청 색을 아직 못 받았다 — 예측 분포 그림을 한 번 받으면 생긴다. 지금은 청색</div>` : ""}
+    ${ACCK.has(kind) && (!CASE || accFix()) ? `<div class="note" title="${accFix() ? `눈금을 ${SET.acc_scale}㎜ 끝으로 고정했다(${ACC_FIXED_NOTE[SET.acc_scale]}) — 화면 모두 같이. ` : "누적 눈금은 자료 크기에 맞춰 자동으로 고른다 — 경남 시군 최대 중 가장 큰 값이 끝 눈금 근처에 오게. 갱신해서 커지면 곧바로, 작아지면 다 들 때 바뀐다. "}범례를 오른쪽 클릭하면 색(청색 · 기상청 색 · 다양한 색조)과 눈금(자동 · 30 · 60 · 150 · 300 · 800㎜)을 고른다">${accFix() ? `고정 눈금 ${SET.acc_scale}㎜` : richOn() ? `자동 눈금 · 끝 ${st.at(-1)}` : "자동 눈금"}${ACC_HI[kind] != null && !CASE ? ` · 최대 ${(+ACC_HI[kind]).toFixed(ACC_HI[kind] >= 100 ? 0 : 1)}㎜` : ""}</div>` : ""}
     <div class="sw"><b class="h"></b>결측(땅)</div>
     <div class="sw"><b style="background:var(--land)"></b>0 · 비 없음</div>`;
   const b = $("b-x4");
@@ -1650,14 +1685,14 @@ function buildLegend() {
   fitAlCol();
 }
 /* 범례 색 띠를 누르면 청색 ↔ 기상청 레이더 색. 지도 · 범례 · 관측소 · 타임라인 · 패널 칸이 같이 바뀐다 */
-async function togglePal() {
-  if (PAL === "kma") PAL = "blue";
-  else {
-    if (!KMA_LG) await loadKmaLegend();
-    PAL = "kma";                       // 못 받았으면 범례에 그렇게 적고 청색으로 남는다(다음 누름에 다시 받는다)
-    if (!KMA_LG) { buildLegend(); PAL = "blue"; return; }
-  }
+/* 색 띠를 누르면 청색 → 기상청 색 → 다양한 색조 → 청색. 오른쪽 클릭 메뉴 · 설정 › 화면에서 바로 고른다 */
+const togglePal = () => setPal({ blue: "kma", kma: "rich", rich: "blue" }[PAL] || "blue");
+async function setPal(p) {
+  if (p !== "blue" && !KMA_LG) await loadKmaLegend();
+  PAL = p;                             // 기상청 범례를 못 받았으면 범례에 그렇게 적고 청색으로 남는다(다음에 다시 받는다)
+  if (p !== "blue" && !KMA_LG) { buildLegend(); PAL = "blue"; return; }
   saveSetting({ pal: PAL });
+  updScale();                          // 다양한 색조는 끝 눈금을 자료에 바짝 — 바꾼 자리에서 고른다
   buildLegend(); draw(); paintHead(); buildTL();
   if (CARDS && !CARDS.err) renderCards();
 }
@@ -1671,13 +1706,17 @@ function setAccScale(v) {
 function lgPop(ev) {
   const pop = $("lg-pop");
   if (!ev) { pop.classList.remove("open"); pop.hidden = true; return; }
-  const cur = accFix() ? SET.acc_scale : 0;
+  const cur = accFix() ? SET.acc_scale : 0, acc = ACCK.has(kind);
   const auto = CASE ? STEPS.event : ACC_LADDER[ACC_TIER[kind] ?? 3];
-  const opt = (v, l, st) => `<button data-s="${v}" class="${cur === v ? "on" : ""}">${l}<small class="st">${fine(st).join(" · ")}</small></button>`;
-  pop.innerHTML = `<div class="g">누적 눈금</div>`
-    + opt(0, `자동 — ${CASE ? "사례 눈금" : "자료 크기에 맞춰"}`, auto)
-    + Object.entries(ACC_FIXED).map(([v, st]) => opt(+v, `${v}㎜ <small>${ACC_FIXED_NOTE[v]}</small>`, st)).join("")
-    + `<div class="note">AWS 누적 · 격자 누적이 같이 바뀐다 — 화면 모두 같이(서버 설정). 설정(Ctrl+,) › 화면에도 있다</div>`;
+  // 눈금 줄 — 지금 색으로 실제 칸(다양한 색조는 스무 칸 남짓이라 앞 · 뒤만)
+  const show = (v, st) => { const a = richOn() ? richSteps(v || st.at(-1)) : fine(st); return a.length > 12 ? `${a.slice(0, 4).join(" · ")} … ${a.slice(-2).join(" · ")} (${a.length}칸)` : a.join(" · "); };
+  const opt = (v, l, st) => `<button data-s="${v}" class="${cur === v ? "on" : ""}">${l}<small class="st">${show(v, st)}</small></button>`;
+  const pal = p => `<button data-p="${p}" class="${PAL === p ? "on" : ""}">${PAL_NAME[p]}<small>${{ blue: "한 색 · 약한 비는 바탕 쪽", kma: "레이더 색 · 누적 열 칸 남짓", rich: "QPF 범례 색 다 · 한 색에 서너 색조" }[p]}</small></button>`;
+  pop.innerHTML = `<div class="g">지도 색</div>` + ["blue", "kma", "rich"].map(pal).join("")
+    + (acc ? `<div class="sep"></div><div class="g">누적 눈금</div>`
+      + opt(0, `자동 — ${CASE ? "사례 눈금" : richOn() ? "자료에 바짝" : "자료 크기에 맞춰"}`, richOn() && !CASE ? [RICH_TOP[kind] || auto.at(-1)] : auto)
+      + Object.entries(ACC_FIXED).map(([v, st]) => opt(+v, `${v}㎜ <small>${ACC_FIXED_NOTE[v]}</small>`, st)).join("")
+      + `<div class="note">AWS 누적 · 격자 누적이 같이 바뀐다 — 화면 모두 같이(서버 설정). 설정(Ctrl+,) › 화면에도 있다</div>` : "");
   // 범례 오른쪽 옆에 — 색 띠를 덮지 않게(고르면서 띠를 본다). 밑은 범례 밑에 맞춘다
   const rc = $("stage").getBoundingClientRect(), lg = $("legend").getBoundingClientRect(), k = V?.k || 1;
   pop.hidden = false;
@@ -1687,13 +1726,12 @@ function lgPop(ev) {
   void pop.offsetWidth; pop.classList.add("open");
   for (const b of pop.querySelectorAll("button")) b.onclick = e => {
     e.stopPropagation(); lgPop(null);
+    if (b.dataset.p) { if (b.dataset.p !== PAL) setPal(b.dataset.p); return; }
     if (+b.dataset.s !== cur) setAccScale(+b.dataset.s);
   };
 }
-$("legend").addEventListener("contextmenu", ev => {
-  if (!ACCK.has(kind)) return;                     // 시간 강수는 시우량 눈금 하나 — 고를 것이 없다
-  ev.preventDefault(); lgPop(ev);
-});
+// 오른쪽 클릭 — 색은 모든 층, 눈금은 누적 층만(시간 강수는 시우량 눈금 하나)
+$("legend").addEventListener("contextmenu", ev => { ev.preventDefault(); lgPop(ev); });
 document.addEventListener("pointerdown", ev => { if (!$("lg-pop").hidden && !ev.target.closest?.("#lg-pop")) lgPop(null); });
 
 /* ── 머리 ─────────────────────────────────────────────────────────── */
@@ -4414,8 +4452,10 @@ function helpHtml(tab) {
     <dt>ⓘ</dt><dd>레이어 · 범례 옆 <code>i</code> 에 올리거나 누르면 설명이 뜬다(누르면 고정, 밖을 누르면 닫힘)</dd>
     <dt>누적 눈금은 자동</dt><dd>누적(격자 · AWS)은 자료 크기에 맞춰 일곱 자(끝 15 · 30 · 60 · 120 · 250 · 500 · 800㎜) 중 하나를 고른다 —
       경남 시군 최대 중 가장 큰 값이 끝 눈금 근처에 오게. 커지면 곧바로, 작아지면 다 들 때 바뀐다. 범례 밑 '자동 눈금 · 최대'. 재현 사례는 고정</dd>
-    <dt>범례 색 띠 누르기</dt><dd>청색 ↔ 기상청 레이더 색. 시간 강수(60분 · 실황 · 초단기, 15분은 ×4)는 레이더와 같은 ㎜/h 경계,
-      누적은 단계는 그대로 두고 색만 레이더에서 빌린다. 레이더 색의 노랑 · 빨강 · 보라는 특보 선 색과 겹친다. <code>?pal=kma</code> 로 고정</dd>
+    <dt>범례 색 띠 누르기 · 오른쪽 클릭</dt><dd>청색 → 기상청 색 → 다양한 색조 차례로(오른쪽 클릭 메뉴 '지도 색' · 설정 › 화면에서 바로 고른다).
+      시간 강수(60분 · 실황 · 초단기, 15분은 ×4)는 기상청 색 · 다양한 색조 모두 레이더와 같은 ㎜/h 경계.
+      누적은 기상청 색이 열 칸 남짓, <b>다양한 색조</b>는 QPF 범례 색을 다 써(한 색에 서너 색조) 스무 칸 남짓 · 끝 눈금이 자료를 바짝 따른다.
+      레이더 색의 노랑 · 빨강 · 보라는 특보 선 색과 겹친다. <code>?pal=kma</code> · <code>?pal=rich</code> 로 고정</dd>
     <dt>레이어</dt><dd>왼쪽 위. 기상특보 <code>A</code> · 관측소 <code>S</code> · 지점 강수량 글자 <code>V</code>(관측소를 켰을 때, 기본은 끔 — 점 색만으로도 단계가 읽힌다)</dd>
     <dt>층 · 재생</dt><dd><code>1</code>~<code>6</code> 층 · <code>B</code> 자료(격자 ↔ AWS) · <code>Space</code> 재생 · <code>←</code><code>→</code> 한 장씩 · <code>L</code> 패널 · <code>G</code> 위 카드 가득 · <code>R</code> AWS 실시간 감시 · <code>Q</code> 아래에 초단기예측 이미지 · <code>W</code> 바다 위젯 · <code>C</code> 지도 위치 · <code>T</code> 테스트.
       AWS 로 재생하면 지난 시간은 AWS 1시간 면(정시마다), 지금 뒤는 초단기</dd>
@@ -4550,6 +4590,8 @@ function openPrefs() {
       예측 상위 · 지금 오는 비는 오른쪽 패널(카드)과 같은 자료. 특보는 왼쪽 특보 줄에.</span></div>
     <div class="row"><span class="k">지도 위치</span><span class="seg"><button data-cam="edit">고치기 (C)</button><button data-cam="reset"${ucOn() ? "" : " disabled"}>처음대로</button></span>
       <span class="note">${ucOn() ? `${Math.round(UC.z * 100)}% · 옮김` : "경남 전체가 꼭 차게(기본)"}</span></div>
+    <div class="row"><span class="k">지도 색</span><span class="seg">${["blue", "kma", "rich"].map(p => `<button data-pal="${p}" class="${PAL === p ? "on" : ""}">${PAL_NAME[p]}</button>`).join("")}</span></div>
+    <div class="row"><span class="k"></span><span class="note">범례 색 띠를 눌러도 차례로 바뀐다. 다양한 색조 — 기상청 QPF 범례 색을 다 써 한 색에 서너 색조, 누적은 스무 칸 남짓 · 끝 눈금이 자료를 바짝 따른다.</span></div>
     <div class="row"><span class="k">누적 눈금</span>${seg("acc_scale", [[0, "자동"], ...Object.keys(ACC_FIXED).map(v => [v, v + "㎜"])])}</div>
     <div class="row"><span class="k"></span><span class="note">AWS · 격자 누적 범례 — 자동은 자료 크기에 맞춰 자를 바꾼다. 고정하면 시각끼리 · 화면끼리 같은 자로 견준다. 범례를 오른쪽 클릭해도 고른다.</span></div>
     <div class="row"><span class="k">시군 누르면</span>${seg("sel_zoom", [[true, "확대 — 읍면동 경계·이름"], [false, "테두리만"]])}</div>
@@ -4593,6 +4635,7 @@ function openPrefs() {
     if (k === "sel_zoom") { if (zoomOn()) ensureEmd(); camGo(true); }
     openPrefs();
   };
+  for (const b of $("prefs").querySelectorAll("button[data-pal]")) b.onclick = async () => { await setPal(b.dataset.pal); openPrefs(); };
   for (const b of $("prefs").querySelectorAll("button[data-cam]")) b.onclick = () => {
     if (b.dataset.cam === "reset") { camReset(); openPrefs(); return; }
     closePrefs(); camEdit(true);
@@ -5264,8 +5307,8 @@ async function boot() {
   vsrtN = +SET.vsrt_n || 1; x4 = !!SET.x4;
   applyAccFull(); applyHdrPin();
   // 색 — ?pal=kma|blue 가 서버 설정보다 먼저(벽면 화면 고정용). 기상청 색은 서버가 뽑아 둔 범례를 받아 와야 쓴다
-  PAL = ["kma", "blue"].includes(Q.get("pal")) ? Q.get("pal") : SET.pal === "kma" ? "kma" : "blue";
-  if (PAL === "kma") await loadKmaLegend();
+  PAL = ["kma", "blue", "rich"].includes(Q.get("pal")) ? Q.get("pal") : ["kma", "rich"].includes(SET.pal) ? SET.pal : "blue";
+  if (PAL !== "blue") await loadKmaLegend();
   tlOn = Q.has("tl") ? Q.get("tl") === "1" : (CASE || selOn()) ? true : !!SET.tl_on;
   let want = Q.get("layer") || (CASE ? "acc" : SET.layer) || "obs60";   // URL 이 서버 설정보다 먼저다(화면 고정용)
   if (want === "obsday" && !CASE) want = "acc";                          // 예전 '오늘 누적' — 이제 카드 구간을 따르는 누적

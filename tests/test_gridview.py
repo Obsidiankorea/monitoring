@@ -68,6 +68,7 @@ def test_put_setting_validates(monkeypatch):
     # 지도 색 — 기본 청색, 범례 색 띠를 누르면 기상청 레이더 색
     assert gridview.SETTING_DEFAULT["pal"] == "blue"
     assert gridview.put_setting({"pal": "kma"})["pal"] == "kma"
+    assert gridview.put_setting({"pal": "rich"})["pal"] == "rich"            # 다양한 색조
     # 위 카드 — 줄 세우기(시군당 n · 0 = 시군 무관) · 패널 가득
     assert gridview.SETTING_DEFAULT["acc_per"] == 1 and gridview.SETTING_DEFAULT["acc_full"] is False
     got = gridview.put_setting({"acc_per": 0, "acc_full": 1})

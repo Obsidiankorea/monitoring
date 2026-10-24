@@ -1186,7 +1186,7 @@ _CHOICES = {"flow_step": (10, 20, 30, 60), "flow_hours": (1, 3, 6, 12),
             "acc_from": ("hours", "today", "yesterday", "date"),
             "acc_basis": ("aws", "grid"),
             # 지도 색 — 청색 램프 / 기상청 레이더 색(범례 색 띠를 누르면 바뀐다)
-            "pal": ("blue", "kma"),
+            "pal": ("blue", "kma", "rich"),
             # 위 카드 줄 세우기 — 시군당 n곳, 0 = 시군 무관
             "acc_per": (0, 1, 2, 3),
             # 누적 눈금 — 0 = 자동, 나머지는 끝 눈금(㎜) 고정(map.html ACC_FIXED 와 같은 값)
