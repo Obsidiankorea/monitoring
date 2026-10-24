@@ -458,8 +458,11 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 .rng-pop .dt { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 10px; border-radius: 8px;
   font: 600 14px var(--sans); color: var(--ink); }
 .rng-pop .dt.on { background: color-mix(in oklab, var(--accent) 18%, transparent); box-shadow: inset 3px 0 0 var(--accent); }
-.rng-pop .dt input, #prefs input[type=date] { font: 600 13px var(--mono); color: var(--ink); background: var(--panel-2, transparent);
-  border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; color-scheme: dark light; }
+.rng-pop .dt select, #prefs .dp select { font: 600 13px var(--sans); color: var(--ink); background: var(--panel-2, transparent);
+  border: 1px solid var(--line); border-radius: 6px; padding: 2px 4px; color-scheme: dark light; }
+.rng-pop .dt button.go, #prefs .dp button { flex: none; width: auto; display: inline-block; padding: 3px 10px; border-radius: 7px; font-size: 13px;
+  border: 1px solid var(--accent); background: color-mix(in oklab, var(--accent) 22%, transparent); color: var(--ink); cursor: pointer; }
+#prefs .dp { display: inline-flex; gap: 6px; align-items: center; }
 .rng-pop .dt small { flex-basis: 100%; font: 500 11.5px var(--sans); color: var(--ink-3); }
 /* 강수 누적 머리 고정을 끄면 — 머리(제목 · 설명 · 단추)와 아래 범례는 마우스를 올렸을 때만 그림 위에 떠오르고 평소에는 시군 줄만.
    머리가 자리를 비우므로 줄이 위로 올라간다(줄 수는 다시 센다). 범례는 자리를 남긴 채 감춘다(올릴 때 줄이 흔들리지 않게) */
@@ -2779,25 +2782,47 @@ function nextHours(labels, after) {          // 예측 '00','01',… → after �
    AWS 는 '지금' 칸까지라 시간 수를 여기서 센다(0시부터 지금 시각까지 H 칸, 진행 중인 칸은 따로 붙는다).
    격자는 마지막 정시 격자에서 세야 맞아서 since 를 서버에 넘긴다.
    받은 매시 값은 DB(AWS obs_hourly) · 파일(격자 obs60)에 남는다 — 구간을 늘리면 없는 시각만 한 번 받는다 */
-/* 날짜 지정 누적 — 그날 0시부터(오늘부터 7일 앞까지, 서버 ACC_DATE_DAYS). 'YYYYMMDD' */
+/* 날짜 지정 누적 — 그날 0시부터 'YYYYMMDD' · 그날 HH시부터 'YYYYMMDDHH'(10-24 '어제 18시부터'). 오늘부터 7일 앞까지(서버 ACC_DATE_DAYS) */
 const ACC_DATE_DAYS = 7;
-const dateOf = d => new Date(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8));
+const dateOf = d => new Date(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8), d.length === 10 ? +d.slice(8, 10) : 0);
 const ymd = t => `${t.getFullYear()}${String(t.getMonth() + 1).padStart(2, "0")}${String(t.getDate()).padStart(2, "0")}`;
-const isoOf = d => `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`;
-function dateBounds() {                  // date 입력 min · max — 오늘부터 7일 앞까지
-  const t = NOWD(), lo = new Date(t); lo.setDate(lo.getDate() - ACC_DATE_DAYS);
-  return [isoOf(ymd(lo)), isoOf(ymd(t))];
+/* 'YYYYMMDD(HH)' → '어제 18시부터' · '10.20. 0시부터'(사흘 앞부터는 날짜로) */
+function dateLabel(d) {
+  const t = NOWD(), back = Math.round((new Date(t.getFullYear(), t.getMonth(), t.getDate()) - dateOf(d.slice(0, 8))) / 864e5);
+  const day = ["오늘", "어제", "그제"][back] || `${+d.slice(4, 6)}.${+d.slice(6, 8)}.`;
+  return `${day} ${d.length === 10 ? +d.slice(8, 10) : 0}시부터`;
 }
 function accSpan() {
   const f = SET.acc_from || "hours", h = NOWD().getHours();
-  if (f === "date" && /^\d{8}$/.test(SET.acc_date || "")) {
+  if (f === "date" && /^\d{8}(\d{2})?$/.test(SET.acc_date || "")) {
     const d = SET.acc_date;
     return { H: Math.max(1, Math.min(24 * (ACC_DATE_DAYS + 1), Math.floor((NOWD() - dateOf(d)) / 3600e3))),
-             since: d, label: `${+d.slice(4, 6)}.${+d.slice(6, 8)}. 0시부터` };
+             since: d, label: dateLabel(d) };
   }
   if (f === "today") return { H: Math.max(1, h), since: "today", label: "오늘 0시부터" };
   if (f === "yesterday") return { H: 24 + h, since: "yesterday", label: "어제 0시부터" };
   return { H: SET.acc_hours, since: null, label: SET._accLabel || `지난 ${SET.acc_hours}시간` };
+}
+/* 날짜 · 시 고르기 — 날짜는 목록(오늘 · 어제 · 그제 … 7일 전, 칠 필요 없이), 시는 0~23시. 처음엔 어제 0시.
+   ⚠️ 예전에는 <input type=date> 라 연도부터 쳐야 했다(10-24) */
+const WD = "일월화수목금토";
+function datePick(id) {
+  const cur = SET.acc_from === "date" && /^\d{8}(\d{2})?$/.test(SET.acc_date || "") ? SET.acc_date : null, t = NOWD();
+  const selD = cur ? cur.slice(0, 8) : ymd(new Date(t.getFullYear(), t.getMonth(), t.getDate() - 1));
+  const selH = cur && cur.length === 10 ? +cur.slice(8, 10) : 0;
+  const days = [...Array(ACC_DATE_DAYS + 1).keys()].map(i => {
+    const d = new Date(t.getFullYear(), t.getMonth(), t.getDate() - i);
+    return [ymd(d), `${["오늘", "어제", "그제"][i] || `${i}일 전`} ${d.getMonth() + 1}.${d.getDate()}.(${WD[d.getDay()]})`];
+  });
+  return `<select id="${id}-d" title="날짜">${days.map(([k, l]) => `<option value="${k}"${k === selD ? " selected" : ""}>${l}</option>`).join("")}</select>`
+    + `<select id="${id}-h" title="몇 시부터">${[...Array(24).keys()].map(h => `<option value="${h}"${h === selH ? " selected" : ""}>${h}시</option>`).join("")}</select>`;
+}
+/* 고른 날짜 · 시 → 'YYYYMMDD'(0시) · 'YYYYMMDDHH'. 아직 안 온 시각이면 지금 시로 */
+function datePicked(id) {
+  const d = $(`${id}-d`).value, t = NOWD();
+  let h = +$(`${id}-h`).value;
+  if (d === ymd(t) && h > t.getHours()) h = t.getHours();
+  return h ? `${d}${String(h).padStart(2, "0")}` : d;
 }
 const RNG_OPTS = [["hours", 6, "지난 6시간"], ["hours", 12, "지난 12시간"], ["hours", 24, "지난 24시간"],
                   ["hours", 48, "지난 48시간"], ["today", null, "오늘 0시부터"], ["yesterday", null, "어제 0시부터"]];
@@ -2814,22 +2839,21 @@ function setRange(f, h, date) {
 function rangePop(open = $("acc-rng").hidden) {
   const pop = $("acc-rng");
   if (!open) { pop.classList.remove("open"); pop.hidden = true; return; }
-  const [lo, hi] = dateBounds(), dOn = SET.acc_from === "date";
+  const dOn = SET.acc_from === "date";
   pop.innerHTML = `<div class="g">누적 구간</div>` + RNG_OPTS.map((o, i) =>
     `<button data-i="${i}" class="${rngOn(o) ? "on" : ""}" style="--i:${i}">${o[2]}</button>`).join("")
-    + `<div class="sep"></div><label class="dt${dOn ? " on" : ""}">날짜 지정<input type="date" id="acc-date" min="${lo}" max="${hi}"
-         value="${dOn && SET.acc_date ? isoOf(SET.acc_date) : ""}"><small>그날 0시부터</small></label>`;
+    + `<div class="sep"></div><div class="dt${dOn ? " on" : ""}">날짜 지정 ${datePick("acc-date")}<button type="button" class="go" data-a="date">부터</button>
+         <small>${dOn ? `지금 ${accSpan().label} · ` : ""}그날 그 시각부터 지금까지(${ACC_DATE_DAYS}일 앞까지)</small></div>`;
   const sb = $("acc-sub").getBoundingClientRect(), cb = $("c-acc").getBoundingClientRect();
   pop.style.left = (sb.left - cb.left) / V.k + "px"; pop.style.top = (sb.bottom - cb.top + 4) / V.k + "px";
   pop.hidden = false; void pop.offsetWidth; pop.classList.add("open");
   for (const b of pop.querySelectorAll("button")) b.onclick = ev => {
     ev.stopPropagation();
+    if (b.dataset.a === "date") { const d = datePicked("acc-date"); rangePop(false); setRange("date", null, d); return; }
     const [f, h] = RNG_OPTS[+b.dataset.i];
     rangePop(false); setRange(f, h);
   };
-  const di = $("acc-date");
-  di.onclick = di.onpointerdown = ev => ev.stopPropagation();
-  di.onchange = () => { if (di.value && di.value >= lo && di.value <= hi) { rangePop(false); setRange("date", null, di.value.replace(/-/g, "")); } };
+  for (const sl of pop.querySelectorAll("select")) sl.onclick = sl.onpointerdown = ev => ev.stopPropagation();
 }
 /* 줄 세우기(위 카드 우클릭) — 시군당 n곳(1~3) · 0 = 시군 무관(전 지점 순위). 종합 화면 강수 타임라인 우클릭과 같은 말.
    시군을 골랐으면 그 시군 지점 · 읍면동 전부라 쓰지 않는다 */
@@ -4542,7 +4566,7 @@ function helpHtml(tab) {
       강수 누적 아래에. 평소에는 따로 돌고, <b>지도를 재생하는 동안만</b> 지도와 같은 시각의 그림으로 따라간다(실측 구간이면 첫 그림에 멈춰 적는다)</dd>
     <dt>머리 고정 · 출처 줄</dt><dd>강수 누적 머리 오른쪽 끝 핀 — 끄면 머리 · 범례는 마우스를 올렸을 때만, 평소에는 시군 줄만.
       지도 제목 밑 출처 줄은 누르면 접고 다시 누르면 편다</dd>
-    <dt>누적 날짜 지정</dt><dd>누적 구간(카드 설명을 누르거나 설정 › 오른쪽 패널)에서 날짜를 고르면 그날 0시부터 지금까지 — 오늘부터 7일 앞까지</dd>
+    <dt>누적 날짜 지정</dt><dd>누적 구간(카드 설명을 누르거나 설정 › 오른쪽 패널)에서 날짜(오늘 · 어제 · 그제 … — 처음엔 어제)와 몇 시부터를 고르고 '부터' — 예 어제 18시부터 지금까지. 오늘부터 7일 앞까지</dd>
     <dt>패널 가득</dt><dd>위 카드 머리의 네 귀 단추 · <code>G</code> — 지금 오는 비 · 예측 상위를 감추고 위 카드가 패널을 다 쓴다. 다시 누르면 돌아온다</dd>
     <dt>줄에 마우스</dt><dd>지도에 그 시군 · 지점 · 칸까지 선이 그어진다</dd>
     <dt>관측소에 마우스</dt><dd>실측과 그 칸 격자 값, 차이(격자 − 관측)</dd>
@@ -4691,9 +4715,9 @@ function openPrefs() {
     <div class="row"><span class="k">방식</span>${seg("panel", [["cards", "카드 — 종합 화면 판"], ["timeline", "타임라인 — 시군 선"]])}</div>
     <div class="row"><span class="k">누적 구간</span><span class="seg">${RNG_OPTS.map((o, i) =>
       `<button data-rng="${i}" class="${rngOn(o) ? "on" : ""}">${o[2].replace("지난 ", "")}</button>`).join("")}</span></div>
-    <div class="row"><span class="k">날짜 지정</span><span class="seg"><button data-a="date" class="${SET.acc_from === "date" ? "on" : ""}">${SET.acc_from === "date" ? accSpan().label : "고르기"}</button></span>
-      <input type="date" id="pf-date" min="${dateBounds()[0]}" max="${dateBounds()[1]}" value="${SET.acc_from === "date" && SET.acc_date ? isoOf(SET.acc_date) : ""}"></div>
-    <div class="row"><span class="k"></span><span class="note">AWS · 격자 누적을 그날 0시부터 — 오늘부터 ${ACC_DATE_DAYS}일 앞까지(예: 10.20. 0시부터 지금까지).
+    <div class="row"><span class="k">날짜 지정</span><span class="dp">${datePick("pf-date")}<button type="button" data-a="date">부터</button></span>
+      ${SET.acc_from === "date" ? `<span class="note">지금 ${accSpan().label}</span>` : ""}</div>
+    <div class="row"><span class="k"></span><span class="note">AWS · 격자 누적을 그날 그 시각부터 — 오늘부터 ${ACC_DATE_DAYS}일 앞까지(예: 어제 18시부터 지금까지).
       지도 누적 층 · 강수 누적 카드가 같이 바뀐다. 격자는 빠진 정각을 10분마다 4장씩 메운다(그동안 합은 하한).</span></div>
     <div class="row"><span class="k">타임라인 값</span>${seg("tl_stat", [["max", "시군 최대"], ["mean", "시군 평균"]])}</div>
     <h4>화면</h4>
@@ -4779,10 +4803,7 @@ function openPrefs() {
     } catch {}
     openPrefs();
   };
-  const pd = $("pf-date"), [dlo, dhi] = dateBounds();
-  pd.onchange = () => { if (pd.value && pd.value >= dlo && pd.value <= dhi) { setRange("date", null, pd.value.replace(/-/g, "")); openPrefs(); } };
-  const pb = $("prefs").querySelector('button[data-a="date"]');
-  pb.onclick = () => (pd.showPicker ? pd.showPicker() : pd.focus());
+  $("prefs").querySelector('.dp button[data-a="date"]').onclick = () => { setRange("date", null, datePicked("pf-date")); openPrefs(); };
   fillDemo($("pf-demo"));
 }
 /* 오른쪽 위 도구 — 이 화면(브라우저)마다 기억. 기본은 '마우스를 움직이면'(벽면 화면이 깔끔하게) */

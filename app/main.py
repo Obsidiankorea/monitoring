@@ -248,7 +248,7 @@ async def api_grid_case(slug: str):
         raise HTTPException(404, str(e)) from e
 
 
-_SINCE = r"^(today|yesterday|hours|\d{8})$"   # 누적(acc) 층의 구간 — 강수 누적 카드와 같은 말(YYYYMMDD = 그날 0시부터)
+_SINCE = r"^(today|yesterday|hours|\d{8}|\d{10})$"   # 누적(acc) 층의 구간 — 강수 누적 카드와 같은 말(YYYYMMDD = 그날 0시부터, YYYYMMDDHH = 그 시각부터)
 
 
 @app.get("/api/grid/sigun")
@@ -277,7 +277,7 @@ async def api_grid_stations(layer: str, tm: str | None = None, test: bool = Fals
 @app.get("/api/grid/acctable")
 async def api_grid_acctable(hours: int = Query(12, ge=1, le=gridview.ACC_SPAN_MAX), sigun: str | None = None,
                        test: bool = False, case: str | None = None, tm: str | None = None,
-                       since: str | None = Query(None, pattern=r"^(today|yesterday|\d{8})$")):
+                       since: str | None = Query(None, pattern=r"^(today|yesterday|\d{8}|\d{10})$")):
     """격자 누적 — 시군 줄(누적 최대 칸·읍면동·그 칸의 매시 값), `sigun=` 이면 그 시군 읍면동 줄.
     `case=` 면 재현 사례 처음부터 tm 까지. 받지 못한 정시가 있으면 missing 시간 수(합은 하한)."""
     try:

@@ -844,23 +844,28 @@ ACC_DATE_DAYS = 7                 # 날짜 지정 누적 — 오늘부터 며칠
 ACC_SPAN_MAX = 24 * (ACC_DATE_DAYS + 1)      # 그때 최대 시간 수(7일 전 0시 ~ 오늘 23시)
 
 
+def _start_of(s: str) -> datetime:
+    """'YYYYMMDD'(그날 0시) · 'YYYYMMDDHH'(그날 HH시) → 시작 시각."""
+    return datetime.strptime(s, "%Y%m%d%H" if len(s) == 10 else "%Y%m%d")
+
+
 def valid_date(s) -> bool:
-    """'YYYYMMDD' 날짜 지정 누적의 시작일인가."""
-    if not isinstance(s, str) or len(s) != 8 or not s.isdigit():
+    """날짜 지정 누적의 시작인가 — 'YYYYMMDD'(그날 0시부터) · 'YYYYMMDDHH'(그날 HH시부터, 10-24 '어제 18시부터')."""
+    if not isinstance(s, str) or len(s) not in (8, 10) or not s.isdigit():
         return False
     try:
-        datetime.strptime(s, "%Y%m%d")
+        _start_of(s)
     except ValueError:
         return False
     return True
 
 
 def since_day(since: str | None, end: datetime) -> datetime | None:
-    """누적 시작 0시 — today · yesterday · 'YYYYMMDD'(날짜 지정). 지난 N시간이면 None."""
+    """누적 시작 — today · yesterday(0시) · 'YYYYMMDD'(그날 0시) · 'YYYYMMDDHH'(그날 HH시). 지난 N시간이면 None."""
     if since in ("today", "yesterday"):
         return end.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1 if since == "yesterday" else 0)
     if valid_date(since):
-        return datetime.strptime(since, "%Y%m%d")
+        return _start_of(since)
     return None
 
 
@@ -1143,7 +1148,7 @@ SETTING_DEFAULT = {"layer": "obs60", "x4": False, "vsrt_n": 1,
                    # 타임라인의 시군 '최대'/'평균', 카드의 누적 구간(시간)
                    "tl_on": False, "panel": "cards", "tl_stat": "max", "acc_hours": 12,
                    # 누적 구간을 어디서부터 — hours(지난 acc_hours 시간) · today(오늘 0시부터) · yesterday(어제 0시부터)
-                   # · date(acc_date 'YYYYMMDD' 0시부터 — 오늘부터 ACC_DATE_DAYS 일 앞까지)
+                   # · date(acc_date 'YYYYMMDD' 그날 0시부터 · 'YYYYMMDDHH' 그날 HH시부터 — 오늘부터 ACC_DATE_DAYS 일 앞까지)
                    "acc_from": "hours", "acc_date": "",
                    # 누적 카드 기준 — aws: 관측소 다우지점(스방 265 → 기상청 56) / grid: 격자 누적 최대 칸
                    "acc_basis": "aws",
@@ -1261,10 +1266,11 @@ def put_setting(body: dict) -> dict:
     if "acc_date" in body:
         d = str(body["acc_date"] or "")
         if not valid_date(d):
-            raise ValueError("acc_date 는 YYYYMMDD")
-        today = clock.now().replace(hour=0, minute=0, second=0, microsecond=0)
-        if not today - timedelta(days=ACC_DATE_DAYS) <= datetime.strptime(d, "%Y%m%d") <= today:
-            raise ValueError(f"acc_date 는 오늘부터 {ACC_DATE_DAYS}일 앞까지")
+            raise ValueError("acc_date 는 YYYYMMDD 또는 YYYYMMDDHH(그 시각부터)")
+        now = clock.now()
+        today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        if not today - timedelta(days=ACC_DATE_DAYS) <= _start_of(d) <= now:
+            raise ValueError(f"acc_date 는 오늘부터 {ACC_DATE_DAYS}일 앞 0시 ~ 지금 사이")
         cur["acc_date"] = d
     if cur.get("acc_from") == "date" and not valid_date(cur.get("acc_date")):
         raise ValueError("날짜 지정 누적에는 acc_date 가 있어야 한다")

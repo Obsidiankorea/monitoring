@@ -121,6 +121,10 @@ def test_acc_window_custom_date(monkeypatch):
     monkeypatch.setattr(gridview, "setting", lambda: dict(gridview.SETTING_DEFAULT))
     got = gridview.put_setting({"acc_from": "date", "acc_date": "20261020"})
     assert (got["acc_from"], got["acc_date"]) == ("date", "20261020")
-    for bad in ({"acc_date": "20261010"}, {"acc_date": "20261024"}, {"acc_date": "2026-10-20"}, {"acc_from": "date"}):
+    # 시각까지 — '어제 18시부터'(10-24). 15시에 오늘 16시부터는 아직 안 온 시각이라 안 된다
+    assert gridview.span_hours("2026102218", end) == 21 and gridview.since_day("2026102218", end) == datetime(2026, 10, 22, 18)
+    assert gridview.put_setting({"acc_from": "date", "acc_date": "2026102218"})["acc_date"] == "2026102218"
+    for bad in ({"acc_date": "20261010"}, {"acc_date": "20261024"}, {"acc_date": "2026-10-20"}, {"acc_from": "date"},
+                {"acc_date": "2026102316"}, {"acc_date": "2026102224"}, {"acc_date": "202610221"}):
         with pytest.raises(ValueError):
             gridview.put_setting(bad)
