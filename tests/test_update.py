@@ -60,3 +60,22 @@ def test_install_deps_marks_installed(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "base_prefix", str(tmp_path / "base"))
     assert update.install_deps() == {"ok": True}
     assert (tmp_path / ".installed").exists()       # run.bat 이 다음에 또 깔지 않게
+
+
+def test_dirty_files_keep_first_letter(monkeypatch):
+    # _git 은 출력 앞뒤 공백을 걷는다 — 첫 줄 ` M app/…` 이 `M app/…` 로 와도 경로 첫 글자가 잘리면 안 된다(`pp/…`)
+    def git(*args, timeout=25):
+        if args[:2] == ("rev-parse", "--is-inside-work-tree"):
+            return 0, "true"
+        if args[:1] == ("remote",):
+            return 0, "origin"
+        if args[:1] == ("status",):
+            return 0, " M app/web/static/map.html\n M README.md\nMM app/main.py".strip()
+        if args[:1] in (("rev-parse",), ("log",)):
+            return 0, "x"
+        if args[:1] == ("rev-list",):
+            return 0, "0\t0"
+        raise AssertionError(args)
+    monkeypatch.setattr(update, "_git", git)
+    r = update.status(fetch=False)
+    assert r["dirty"] and r["dirty_files"] == ["app/web/static/map.html", "README.md", "app/main.py"]

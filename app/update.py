@@ -72,7 +72,9 @@ def status(fetch: bool = True) -> dict:
     #    받기를 막지 않는데, 그걸 '손댔다'고 적으면 멀쩡한 PC 마다 경고가 뜬다.
     _, st = _git("status", "--porcelain", "--untracked-files=no", timeout=8)
     out["dirty"] = bool(st.strip())
-    out["dirty_files"] = [l[3:] for l in st.splitlines() if l.strip()][:8]
+    # ⚠️ `XY 경로` 의 앞 두 칸을 자리로 자르지 않는다 — _git 이 출력 앞뒤 공백을 걷어서 첫 줄 ` M app/…` 이
+    #    `M app/…` 가 되고, [3:] 이면 `pp/…` 로 첫 글자가 잘렸다(10-24). 첫 낱말(상태)만 떼어 낸다.
+    out["dirty_files"] = [l.split(None, 1)[-1] for l in st.splitlines() if l.strip()][:8]
 
     if fetch:
         code, msg = _git("fetch", "--quiet", "origin")

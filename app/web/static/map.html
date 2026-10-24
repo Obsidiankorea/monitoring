@@ -833,6 +833,19 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 #prefs .note { font-size: 12px; color: var(--ink-3); }
 #prefs .keys { margin-top: 14px; font-size: 12px; color: var(--ink-3); }
 #prefs .keys kbd { font: 600 11px var(--mono); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; color: var(--ink-2); }
+/* 업데이트 탭 — 종합 화면 설정 › 업데이트와 같은 것(이 PC 받기 · 서버 갱신) */
+#prefs .upd .row { align-items: flex-start; }
+#prefs .upd .uv { min-width: 0; flex: 1; line-height: 1.5; }
+#prefs .upd .usub { margin: 12px 0 2px; font-weight: 700; color: var(--ink-2); }
+#prefs .upd code { font: 600 12.5px var(--mono); color: var(--ink); }
+#prefs .upd .hint { font-size: 12px; color: var(--ink-3); }
+#prefs .upd .warnx { color: var(--lv-fail); font-weight: 700; }
+#prefs .upd pre { white-space: pre-wrap; margin: 4px 0; max-height: 180px; overflow: auto; }
+#prefs .ubtn { font: 600 12.5px var(--sans); color: var(--ink); background: transparent; border: 1px solid var(--line);
+  border-radius: 7px; padding: 4px 12px; cursor: pointer; margin-right: 6px; }
+#prefs .ubtn:hover:not(:disabled) { background: color-mix(in oklab, var(--accent) 16%, transparent); }
+#prefs .ubtn.pri { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 24%, transparent); }
+#prefs .ubtn:disabled { opacity: .45; cursor: default; }
 
 [hidden] { display: none !important; }
 
@@ -3952,7 +3965,10 @@ function prefTabs() {
     PF_TAB = +b.dataset.tab;
     bar.querySelectorAll("button").forEach((x, i) => x.classList.toggle("on", i === PF_TAB));
     panes.forEach(([, el], i) => { el.hidden = i !== PF_TAB; });
+    if (panes[PF_TAB][0] === "업데이트") loadUpd(true);   // 탭을 열 때마다 GitHub 를 다시 본다(종합 화면과 같다)
   };
+  // 업데이트 탭에서 다시 열면 — 처음이면 확인, 아니면 기억해 둔 것을 그대로(설정을 바꿀 때마다 GitHub 를 부르지 않게)
+  if (panes[PF_TAB]?.[0] === "업데이트" && !UPD.pc && !UPD.loading) loadUpd(true);
 }
 function openPrefs() {
   if (QCFG_AHEAD === null && !openPrefs.busy) {          // 이미지 길이는 수집 설정 — 처음 열 때 읽어 다시 그린다
@@ -4004,6 +4020,11 @@ function openPrefs() {
     ${offList().map(x => `<div class="row"><span class="k">${x.sigun}</span><span class="offnm">${x.name}<small>${x.org === "gn" ? "경남 AWS" : `기상청 ${x.id}`}</small></span>
       <button class="pf-on" data-id="${x.id}">다시 켜기</button></div>`).join("")}
     ${offList().length > 1 ? `<div class="row"><span class="k"></span><button class="pf-on" data-id="*">모두 다시 켜기</button></div>` : ""}
+    <h4>업데이트</h4>
+    <div class="row"><span class="note">종합 화면 설정 › 업데이트와 같다 — 지도 창만 띄워 둔 화면에서도 여기서 받는다. 배포처는 GitHub 하나.
+      이 PC 는 <b>지금 받기</b>(git pull — 이 PC 에서 손댄 파일이 있으면 받지 않는다), 서버(언레이드)는 <b>서버 갱신</b>(1분 안에 서버가 다시 빌드해 띄운다).
+      자동으로 받지 않는다 — 누를 때만.</span></div>
+    <div class="upd" id="pf-upd">${updHtml()}</div>
     <h4>데모</h4>
     <div class="demo-list" id="pf-demo"><div class="al-none">읽는 중…</div></div>
     <div class="keys"><kbd>1</kbd>~<kbd>8</kbd> 층 · <kbd>Space</kbd> 재생 · <kbd>←</kbd><kbd>→</kbd> 한 장씩 · <kbd>L</kbd> 패널 · <kbd>A</kbd> 특보 · <kbd>S</kbd> 관측소 · <kbd>V</kbd> 지점 값 · <kbd>B</kbd> 누적 기준 · <kbd>F</kbd> 누적 예상 · <kbd>H</kbd> 최근 1시간 · <kbd>G</kbd> 위 카드 가득 · <kbd>R</kbd> 실시간 감시 · <kbd>Q</kbd> 초단기예측 이미지 · <kbd>T</kbd> 테스트 · <kbd>?</kbd> 도움말 · <kbd>Ctrl</kbd>+<kbd>,</kbd> 설정</div>
@@ -4070,6 +4091,132 @@ document.addEventListener("pointermove", toolsWake);
 toolsWake();                               // 처음 뜰 때 한 번 보여 준다 — 거기 있다는 걸 알게
 function closePrefs() { $("prefs").hidden = true; }
 $("prefs").addEventListener("click", ev => { if (ev.target.id === "prefs") closePrefs(); });
+
+/* ── 업데이트 — 종합 화면 설정 › 업데이트와 같은 API(app/update.py · app/serverupdate.py) ──
+   이 PC: /api/update(git fetch) → /api/update/pull(--ff-only) → 화면만이면 새로고침, 파이썬이면 /api/update/restart(run.bat 이 다시 띄운다).
+   서버(언레이드 도커): /api/server-update 에 부탁만 한다(state/update/request) — 1분마다 도는 예약 작업이 deploy.sh 로 갱신.
+   ⚠️ 확인 실패를 '최신'으로 읽지 않는다 — 인터넷이 막힌 PC 에서 '최신이다'라고 적으면 거짓말이 된다.
+   ⚠️ 설정창은 무엇을 누를 때마다 통째로 다시 그린다(openPrefs) — 그래서 상태를 UPD 에 두고 updHtml 이 거기서 그린다 */
+const UPD = { srv: null, pc: null, loading: false, msg: "", smsg: "", wait: null };
+const escH = t => String(t ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
+function updHtml() {
+  const row = (k, v) => `<div class="row"><span class="k">${k}</span><span class="uv">${v}</span></div>`;
+  let h = "";
+  const s = UPD.srv;
+  if (s?.available) {
+    const busy = s.deploying || s.requested, L = s.last;
+    h += `<div class="usub">서버(언레이드)</div>`
+      + row("지금 판", `<code>${escH(s.version || s.running || "—")}</code>`)
+      + row("GitHub", s.remote ? `<code>${escH(s.remote)}</code> <span class="hint">${escH(s.checked_at || "")} 확인</span>` : `<span class="warnx">확인 못 함</span>`)
+      + (s.behind ? row("새 판", `<b>${s.behind}개</b> 밀려 있다<div class="hint">${(s.commits || []).map(c =>
+          `<div>· <code>${escH(c.h)}</code> ${escH(c.at)} ${escH(c.s)}</div>`).join("")}</div>`)
+        : s.remote ? row("상태", "최신이다") : "")
+      + (s.updater_stale ? row("주의", `<span class="warnx">갱신 장치가 ${Math.round(s.updater_age_s / 60)}분째 조용하다</span>
+          <div class="hint">언레이드 예약 작업이 안 돈다 — <code>bash …/deploy/unraid/updater.sh --install</code></div>`) : "")
+      + (busy ? row("진행", `<b>${s.deploying ? "갱신 중… (1~2분, 화면이 잠깐 끊긴다)" : "부탁함 — 1분 안에 시작한다"}</b>`) : "")
+      + (L ? row("마지막 갱신", `${L.ok ? "" : `<span class="warnx">실패</span> `}${escH(L.done || L.at)} → <code>${escH(L.version)}</code>
+          <details><summary class="hint">기록</summary><pre class="hint">${escH(L.log)}</pre></details>`) : "")
+      + row("", `<button class="ubtn" data-upd="srv-check"${busy ? " disabled" : ""}>다시 확인</button><button class="ubtn pri" data-upd="srv-go"${
+          busy || s.updater_stale ? " disabled" : ""}>서버 갱신</button><span class="hint">${escH(UPD.smsg || "GitHub 최신 판으로 다시 빌드해 띄운다(시연 :8001 도)")}</span>`);
+  }
+  const u = UPD.pc;
+  if (!u) return h + row("", `<span class="note">${UPD.loading ? "확인하는 중…" : "—"}</span>`);
+  if (u.fail) return h + row("이 PC", `<span class="warnx">확인하지 못했다</span> <span class="hint">${escH(u.fail)}</span>`);
+  // 서버(도커)는 git 저장소가 아니다 — 서버 갱신 칸이 대신한다. 그때는 이 PC 칸을 비운다
+  if (!u.available) return h + (s?.available ? "" : row("", `<span class="note">${escH(u.reason || "업데이트를 쓸 수 없다")}</span>`));
+  const hd = u.here || {};
+  h += (s?.available ? `<div class="usub">이 PC</div>` : "")
+    + row("지금 버전", `<code>${escH(hd.sha || "—")}</code> <span class="hint">${escH(hd.at || "")}</span><div class="hint">${escH(hd.subject || "")}</div>`)
+    + (u.error ? row("확인", `<span class="warnx">확인 실패</span><div class="hint">${escH(u.error)}</div>`)
+      : u.behind ? row("새 버전", `<b>${u.behind}개</b> 밀려 있다<div class="hint">${(u.incoming || []).map(l => `<div>· ${escH(l)}</div>`).join("")}</div>`)
+      : row("상태", `최신이다 <span class="hint">${escH(u.checked_at || "")} 확인</span>`))
+    + (u.dirty ? row("주의", `<span class="warnx">이 PC 에서 고친 파일이 있다</span><div class="hint">${(u.dirty_files || []).map(f => `<div>· ${escH(f)}</div>`).join("")}
+        새 버전이 <b>같은 파일</b>을 건드리면 받기가 실패한다. 고친 것을 되돌리거나 그대로 두고 쓴다.</div>`) : "")
+    + (u.ahead ? row("", `<span class="hint">이 PC 에만 있는 커밋이 ${u.ahead}개 있다</span>`) : "")
+    + row("", `<button class="ubtn" data-upd="pc-check"${UPD.loading ? " disabled" : ""}>다시 확인</button><button class="ubtn pri" data-upd="pc-pull"${
+        u.behind && !u.error && !UPD.loading ? "" : " disabled"}>지금 받기</button><span class="hint">${UPD.msg}</span>`);
+  return h;
+}
+const updPaint = () => { const b = $("pf-upd"); if (b) b.innerHTML = updHtml(); };
+async function loadSrvUpd() {
+  try { UPD.srv = await getJson("/api/server-update"); } catch { UPD.srv = null; }
+  updPaint();
+}
+async function loadUpd(check) {
+  UPD.loading = true; UPD.msg = ""; updPaint();
+  await loadSrvUpd();
+  try { UPD.pc = await getJson(`/api/update?check=${!!check}`); } catch (e) { UPD.pc = { fail: e.message }; }
+  UPD.loading = false; updPaint();
+}
+async function askServer(action) {
+  const r = await fetch("/api/server-update", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.status);
+  return r.json();
+}
+async function updAct(a) {
+  if (a === "pc-check") return loadUpd(true);
+  if (a === "srv-check") {
+    try { await askServer("check"); UPD.smsg = "부탁함 — 1분 안에 GitHub 를 본다"; } catch (e) { UPD.smsg = e.message; }
+    updPaint(); setTimeout(loadSrvUpd, 65000);
+    return;
+  }
+  if (a === "srv-go") {
+    const s = UPD.srv || {};
+    if (!confirm((s.behind ? `새 판 ${s.behind}개로 서버를 갱신합니다.` : "새 판이 없습니다. 그래도 서버를 다시 빌드해 띄울까요?")
+                 + "\n\n1~2분 동안 서버 화면이 끊깁니다(시연 :8001 도).")) return;
+    try { await askServer("deploy"); } catch (e) { UPD.smsg = "부탁하지 못했다: " + e.message; updPaint(); return; }
+    const from = s.version || s.running, t0 = Date.now();
+    UPD.smsg = "부탁함 — 1분 안에 시작한다";
+    await loadSrvUpd();
+    clearInterval(UPD.wait);
+    // 끝날 때까지 본다 — 도는 동안 서버가 내려가 응답이 끊긴다. 다시 살아나 판이 바뀌면(또는 마지막 갱신이 새로 적히면) 끝
+    UPD.wait = setInterval(async () => {
+      let j = null;
+      try { j = await getJson("/api/server-update"); } catch {}
+      UPD.smsg = j ? (j.deploying ? "갱신 중…" : j.requested ? "곧 시작…" : "") : `다시 띄우는 중… ${Math.round((Date.now() - t0) / 1000)}초`;
+      if (j) UPD.srv = j;
+      if (j && !j.deploying && !j.requested && j.last && (j.version !== from || Date.parse(j.last.done) > t0 - 60000)) {
+        clearInterval(UPD.wait); UPD.smsg = "";
+        updPaint();
+        if (j.last.ok && confirm(`서버를 ${j.version} 으로 갱신했습니다. 화면을 새로고침할까요?`)) location.reload();
+        return;
+      }
+      if (Date.now() - t0 > 6 * 60000) { clearInterval(UPD.wait); UPD.smsg = "6분이 지나도 끝나지 않았다 — 서버를 확인하세요"; }
+      updPaint();
+    }, 4000);
+    return;
+  }
+  if (a !== "pc-pull") return;
+  UPD.loading = true; UPD.msg = "받는 중…"; updPaint();
+  let r;
+  try { r = await fetch("/api/update/pull", { method: "POST" }).then(x => x.json()); }
+  catch (e) { UPD.loading = false; UPD.msg = "받지 못했다: " + escH(e.message); updPaint(); return; }
+  UPD.loading = false;
+  if (!r.ok) { UPD.msg = `<span class="warnx">${escH(r.error || "받지 못했다")}</span>`; updPaint(); return; }
+  try { UPD.pc = await getJson("/api/update?check=false"); } catch {}
+  if (!r.changed.length) { UPD.msg = escH(r.note || "이미 최신이다"); updPaint(); return; }
+  UPD.msg = `${r.changed.length}개 파일을 받았다`;
+  // 새 의존성은 받는 자리에서 서버가 깔았다. 실패했으면 숨기지 않는다 — 다시 띄워도 그 기능만 실패로 남는다
+  let depNote = "";
+  if (r.deps?.ok) UPD.msg += " · 새 구성요소 설치함";
+  else if (r.deps) {
+    depNote = "\n\n⚠️ 새 구성요소를 깔지 못했다: " + (r.deps.error || "") + "\n   다시 띄워도 그 기능만 실패로 남는다. run.bat 창을 닫고 새로 띄우면 다시 깐다.";
+    UPD.msg += ` · <span class="warnx">새 구성요소 설치 실패</span>`;
+  }
+  updPaint();
+  // 화면만 바뀌었으면 새로고침, 파이썬이 바뀌었으면 서버를 다시 띄운다. ⚠️ 스크립트로 띄우지 않았으면 다시 안 살아난다 — 먼저 묻는다
+  if (!r.restart) { if (confirm("화면이 바뀌었습니다. 새로고침할까요?")) location.reload(); return; }
+  if (!confirm("서버 코드가 바뀌었습니다. 지금 서버를 다시 띄울까요?\n\n(run.bat / run.command 로 띄운 경우에만 자동으로 다시 살아납니다.\n"
+               + " 직접 실행 중이라면 손으로 다시 띄우세요.)" + depNote)) return;
+  UPD.msg = "다시 띄우는 중…"; updPaint();
+  try { await fetch("/api/update/restart", { method: "POST" }); } catch {}
+  for (let i = 0; i < 40; i++) {          // 다시 뜰 때까지 기다렸다가 새로고침한다
+    await new Promise(ok => setTimeout(ok, 1000));
+    try { await fetch("/api/status", { cache: "no-store" }); location.reload(); return; } catch {}
+  }
+  UPD.msg = `<span class="warnx">다시 뜨지 않았다 — 창을 확인하세요</span>`; updPaint();
+}
+$("prefs").addEventListener("click", ev => { const b = ev.target.closest?.("button[data-upd]"); if (b && !b.disabled) updAct(b.dataset.upd); });
 
 /* ── AWS 비활성화 — 관측소 점 오른쪽 클릭. 주변과 동떨어진 값(진주 한 곳 1㎜, 둘레 12~14㎜ — 고장 · 막힘)을 계산에서 뺀다 ──
    서버 설정 map.aws_off(벽면 화면 · 종합 화면도 같이) — 면(AWS 누적 · 1시간 IDW) · 강수 누적 카드 · 지금 오는 비에서 빠진다.
