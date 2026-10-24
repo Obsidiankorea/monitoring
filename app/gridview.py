@@ -876,8 +876,8 @@ def span_hours(since: str | None, end: datetime, hours: int = 12) -> int:
        0시 정각이면 오늘 몫이 아직 없다 — 한 장(어제 23~24시)이라도 보여 준다.
     날짜 지정은 ACC_SPAN_MAX(8일)까지 — 그보다 앞이면 그만큼만(설정이 7일 앞까지만 받는다)."""
     d0 = since_day(since, end)
-    if d0 is None:
-        return max(1, min(48, int(hours)))
+    if d0 is None:                     # 지난 N시간 — 화면 재생의 72시간 등(10-24 48 → 192)
+        return max(1, min(ACC_SPAN_MAX, int(hours)))
     cap = 48 if since in ("today", "yesterday") else ACC_SPAN_MAX
     return max(1, min(cap, int((end - d0).total_seconds() // 3600)))
 
@@ -1178,6 +1178,10 @@ SETTING_DEFAULT = {"layer": "obs60", "x4": False, "vsrt_n": 1,
                    "aws_off": [],
                    # 누적(격자 · AWS) 범례 눈금 — 0: 자동(자료 크기에 맞춰), 그 밖은 끝 눈금(㎜)으로 고정. 범례 오른쪽 클릭
                    "acc_scale": 0,
+                   # 바다 위젯 돌리기 — 0 이면 고른 탭 그대로, 아니면 그 초마다 예측 상위 ↔ 지금 오는 비(화면 재생과 따로)
+                   "sea_rot": 0,
+                   # 바다 위젯 예측 상위 — 시군당 몇 곳(1 · 2). 위젯 오른쪽 클릭
+                   "sea_per": 1,
                    # 바다 위젯 — 지도 위 반투명 판: off · fc(예측 상위) · now(지금 오는 비). W 키.
                    # ⚠️ 특보(alert) 탭은 뺐다 — 판이 너무 커졌다. 특보는 왼쪽 특보 줄(얇게)에(10-24). 남은 alert 값은 화면이 fc 로 읽는다
                    "sea_w": "fc",
@@ -1198,7 +1202,8 @@ _CHOICES = {"flow_step": (10, 20, 30, 60), "flow_hours": (1, 3, 6, 12),
             "acc_per": (0, 1, 2, 3),
             # 누적 눈금 — 0 = 자동, 나머지는 끝 눈금(㎜) 고정(map.html ACC_FIXED 와 같은 값)
             "acc_scale": (0, 30, 60, 150, 300, 800),
-            "sea_w": ("off", "fc", "now")}
+            "sea_w": ("off", "fc", "now"),
+            "sea_rot": (0, 10, 15, 20, 30, 60), "sea_per": (1, 2)}
 _TEXT = {"tl_stat", "panel", "acc_basis", "acc_from", "pal", "sea_w"}
 
 
@@ -1208,12 +1213,14 @@ def setting() -> dict:
 
 # 화면 재생 — 한 화면의 종류(map.html SLIDE 와 같은 이름). 누적: 지난 N시간 · N시부터 · 오늘/어제 0시부터 /
 # 지금: 1시간 · 15분 · 흐름 재생 / 예측: 초단기 +N · 단기 오늘 · 내일
-SHOW_T = ("acc_h", "acc_from", "acc_today", "acc_yday", "h1", "m15", "flow", "vsrt", "shrt_today", "shrt_tomorrow")
+SHOW_T = ("acc_h", "acc_from", "acc_day", "acc_today", "acc_yday", "h1", "m15", "flow", "vsrt", "shrt_today", "shrt_tomorrow")
+SHOW_SC = (0, 30, 60, 150, 300, 800)    # 화면마다 따로 쓰는 범례 끝 눈금(0 = 지도 설정 그대로)
 SHOW_MAX, SHOW_ITEMS = 30, 40
 
 
 def _clean_shows(lst) -> list[dict]:
-    """재생목록 검사 — 이름(30자) · 화면 1~40개 · 화면마다 종류 · 머무는 초(3~900) · 값(자료 b · 시간 h 1~48 · n 0~23).
+    """재생목록 검사 — 이름(30자) · 화면 1~40개 · 화면마다 종류 · 머무는 초(3~900) · 값(자료 b · 시간 h 1~192 · 시 n 0~23 ·
+    며칠 전 d 0~7 · 따로 쓰는 범례 sc).
     같은 이름이면 뒤의 것. 모르는 것은 ValueError(조용히 버리지 않는다 — 저장했다고 믿었는데 빠지면 안 된다)."""
     if not isinstance(lst, list) or len(lst) > SHOW_MAX:
         raise ValueError(f"shows 는 목록({SHOW_MAX}개까지)")
@@ -1233,12 +1240,16 @@ def _clean_shows(lst) -> list[dict]:
             x = {"t": it["t"], "sec": sec}
             if it.get("b") in ("grid", "aws"):
                 x["b"] = it["b"]
-            for k, lo, hi in (("h", 1, 48), ("n", 0, 23)):
+            for k, lo, hi in (("h", 1, ACC_SPAN_MAX), ("n", 0, 23), ("d", 0, ACC_DATE_DAYS)):
                 if it.get(k) is not None:
                     v = int(it[k])
                     if not lo <= v <= hi:
                         raise ValueError(f"{k} 는 {lo}~{hi}")
                     x[k] = v
+            if it.get("sc"):
+                if int(it["sc"]) not in SHOW_SC:
+                    raise ValueError(f"범례는 {SHOW_SC} 중 하나")
+                x["sc"] = int(it["sc"])
             clean.append(x)
         out[name] = {"name": name, "items": clean}
     return list(out.values())

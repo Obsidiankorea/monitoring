@@ -253,7 +253,7 @@ _SINCE = r"^(today|yesterday|hours|\d{8}|\d{10})$"   # 누적(acc) 층의 구간
 
 @app.get("/api/grid/sigun")
 async def api_grid_sigun(layer: str, tm: str | None = None, test: bool = False,
-                         case: str | None = None, hours: int | None = Query(None, ge=1, le=48),
+                         case: str | None = None, hours: int | None = Query(None, ge=1, le=gridview.ACC_SPAN_MAX),
                          since: str | None = Query(None, pattern=_SINCE)):
     """시군별 최대(+그 칸의 읍면동)·평균. 결측 칸은 평균에서 뺀다."""
     try:
@@ -264,7 +264,7 @@ async def api_grid_sigun(layer: str, tm: str | None = None, test: bool = False,
 
 @app.get("/api/grid/stations")
 async def api_grid_stations(layer: str, tm: str | None = None, test: bool = False,
-                            case: str | None = None, hours: int | None = Query(None, ge=1, le=48),
+                            case: str | None = None, hours: int | None = Query(None, ge=1, le=gridview.ACC_SPAN_MAX),
                             since: str | None = Query(None, pattern=_SINCE)):
     """관측소(경남 AWS) — 위치와 **격자와 같은 시각**의 실측값. 예측 층이면 위치만(status 'forecast').
     행마다 q = ok | missing(기상청 결측) | none(그 시각 값을 못 받음) | part(사례 누적, 일부 결측 — 하한)."""
@@ -336,7 +336,7 @@ async def api_grid_geo(name: str):
 
 @app.get("/api/grid/{layer}")
 async def api_grid(layer: str, tm: str | None = None, test: bool = False,
-                   case: str | None = None, hours: int | None = Query(None, ge=1, le=48),
+                   case: str | None = None, hours: int | None = Query(None, ge=1, le=gridview.ACC_SPAN_MAX),
                    since: str | None = Query(None, pattern=_SINCE)):
     """한 층의 격자 — 0.1㎜ uint16(65535 = 결측), 행은 남→북, gzip.
 

@@ -93,9 +93,16 @@ def test_put_setting_validates(monkeypatch):
     assert gridview.SETTING_DEFAULT["shows"] == [] and got == [{"name": "기본", "items": [{"t": "flow", "b": "grid", "sec": 60}]}]
     got = gridview.put_setting({"shows": shows[:1]})["shows"]
     assert [x.get("h") for x in got[0]["items"]] == [24, 48, None, None] and got[0]["items"][3]["n"] == 3
+    # 72시간 · 날짜(며칠 전) + 시부터 · 화면마다 따로 쓰는 범례(10-24)
+    got = gridview.put_setting({"shows": [{"name": "b", "items": [{"t": "acc_h", "b": "aws", "h": 72, "sec": 10, "sc": 150},
+                                                                    {"t": "acc_day", "d": 1, "n": 18, "sec": 10}, {"t": "shrt_tomorrow", "sec": 10, "sc": 150}]}]})
+    assert got["shows"][0]["items"] == [{"t": "acc_h", "sec": 10, "b": "aws", "h": 72, "sc": 150},
+                                        {"t": "acc_day", "sec": 10, "n": 18, "d": 1}, {"t": "shrt_tomorrow", "sec": 10, "sc": 150}]
+    assert gridview.SETTING_DEFAULT["sea_rot"] == 0 and gridview.put_setting({"sea_rot": 20, "sea_per": 2})["sea_per"] == 2
     for bad in ([{"name": "", "items": [{"t": "m15", "sec": 10}]}], [{"name": "a", "items": []}],
                 [{"name": "a", "items": [{"t": "radar", "sec": 10}]}], [{"name": "a", "items": [{"t": "m15", "sec": 1}]}],
-                [{"name": "a", "items": [{"t": "acc_h", "h": 99, "sec": 10}]}], "x"):
+                [{"name": "a", "items": [{"t": "acc_h", "h": 999, "sec": 10}]}], [{"name": "a", "items": [{"t": "acc_h", "sc": 70, "sec": 10}]}],
+                [{"name": "a", "items": [{"t": "acc_day", "d": 9, "sec": 10}]}], "x"):
         with pytest.raises(ValueError):
             gridview.put_setting({"shows": bad})
     for bad in ({"flow_step": 15}, {"play_ms": 50}, {"tl_stat": "sum"}, {"layer": "nope"},
@@ -111,6 +118,7 @@ def test_acc_window_custom_date(monkeypatch):
     end = datetime(2026, 10, 23, 15, 0)
     assert gridview.span_hours("20261020", end) == 3 * 24 + 15
     assert gridview.span_hours("yesterday", end) == 39 and gridview.span_hours(None, end, 12) == 12
+    assert gridview.span_hours(None, end, 72) == 72                                 # 지난 72시간(화면 재생)
     assert gridview.span_hours("20261001", end) == gridview.ACC_SPAN_MAX           # 너무 앞이면 끝까지만
     monkeypatch.setattr(gridview, "setting", lambda: {"acc_from": "date", "acc_date": "20261020", "acc_hours": 12})
     assert gridview.acc_window() == (12, "20261020")

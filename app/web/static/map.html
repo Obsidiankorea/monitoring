@@ -950,14 +950,31 @@ body.cam-edit #sw { pointer-events: none; opacity: .5; }
 #sw .sw-tabs button:last-child { border-right: 0; }
 #sw .sw-tabs button.on { color: var(--ink); background: color-mix(in oklab, var(--accent) 24%, transparent); }
 #sw .bt { font: 600 calc(12px * var(--k, 1)) var(--mono); color: var(--ink-3); white-space: nowrap; }
+#sw .sw-rot.on { color: var(--accent); }
+#sw .sw-prog { position: absolute; left: 12px; right: 12px; top: calc(36px * var(--k, 1)); height: 2px; border-radius: 1px; overflow: hidden;
+  background: color-mix(in oklab, var(--ink) 12%, transparent); }
+#sw .sw-prog::after { content: ""; position: absolute; inset: 0; background: var(--accent); transform-origin: left; transform: scaleX(0); }
+#sw .sw-prog.run::after { animation: sdfill var(--d, 20s) linear forwards; }
+#sw .sw-b { overflow: hidden; }
+/* 지금 오는 비 — 막대 대신 장소 + 시우량 칩, 테두리가 시우량 색(10-24) */
+#sw .nwh { font: 600 calc(11px * var(--k, 1)) var(--sans); color: var(--ink-3); padding: 0 2px calc(5px * var(--k, 1)); }
+#sw .nwg { display: grid; grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr)); gap: calc(4px * var(--k, 1)) calc(6px * var(--k, 1)); }
+#sw .nw { display: flex; align-items: center; justify-content: space-between; gap: 6px; height: calc(23px * var(--k, 1)); padding: 0 calc(7px * var(--k, 1));
+  border: 1.5px solid var(--c, var(--line)); border-radius: 6px; cursor: pointer; }
+#sw .nw.det { cursor: default; }
+#sw .nw:hover, #sw .nw.hov { background: color-mix(in oklab, var(--accent) 12%, transparent); }
+#sw .nw .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: calc(13px * var(--k, 1)); }
+#sw .nw .nm small { color: var(--ink-3); margin-right: 4px; font-size: calc(11px * var(--k, 1)); }
+#sw .nw b { flex: none; font: 700 calc(13.5px * var(--k, 1)) var(--mono); }
 #sw :is(.sw-x, .sw-sh) { background: transparent; border: 0; color: var(--ink-3); font-size: calc(14px * var(--k, 1)); cursor: pointer; padding: 0 2px; }
-#sw :is(.sw-x, .sw-sh):hover { color: var(--ink); }
+#sw :is(.sw-x, .sw-sh, .sw-rot):hover { color: var(--ink); }
+#sw .sw-rot { background: transparent; border: 0; color: var(--ink-3); font-size: calc(14px * var(--k, 1)); cursor: pointer; padding: 0 2px; }
 #sw .sw-lg:empty { display: none; }
 #sw .sw-lg { display: flex; justify-content: flex-end; padding-bottom: 4px; }
 #sw .sw-none { color: var(--ink-3); font-size: calc(13px * var(--k, 1)); padding: 4px 2px; }
 #sw .sw-tabs i { font-style: normal; }
 /* 세로로 길쭉한 판(tall) — 빈자리가 좁고 길면(거제 동쪽 바다 · 지도 위쪽 등) 이 꼴로. 특보는 이름 밑에 구역,
-   지금 오는 비는 15분 · 60분을 위아래로, 예측 상위는 칸을 좁힌다 */
+   지금 오는 비는 칩 한 칸, 예측 상위는 칸을 좁힌다 */
 #sw.tall { width: calc(262px * var(--k, 1)); }
 #sw.tall .sw-tabs i { display: none; }
 #sw.tall .sw-tabs button { padding: calc(4px * var(--k, 1)) calc(6px * var(--k, 1)); font-size: calc(11.5px * var(--k, 1)); }
@@ -969,6 +986,9 @@ body.cam-edit #sw { pointer-events: none; opacity: .5; }
 #sw.tall .fr, #sw.tall .fh { grid-template-columns: calc(62px * var(--k, 1)) 1fr calc(30px * var(--k, 1)); gap: 5px; padding: 0 2px; }
 #sw.tall .fr .cells i { font-size: calc(10.5px * var(--k, 1)); }
 #sw.tall .fr .sum { font-size: calc(13px * var(--k, 1)); }
+/* 세로 판의 시군당 2곳 — 시군을 읍면동 위에 작게 얹는다(62px 칸에 '거제 둔덕면'이 한 줄로는 잘린다) */
+#sw.tall .fr .nm2:has(.pre) { display: flex; flex-direction: column; justify-content: center; line-height: 1.05; font-size: calc(12.5px * var(--k, 1)); }
+#sw.tall .fr .nm2 small.pre { margin: 0; font-size: calc(9.5px * var(--k, 1)); }
 #sw.tall .fh { font-size: calc(10px * var(--k, 1)); }
 
 /* ── 화면 재생(P) — 아래 가운데 쪽 점(아이패드 화면 넘김 점처럼). 지금 화면은 길쭉한 알약에 남은 시간이 찬다.
@@ -1036,6 +1056,8 @@ body.show-on #play { bottom: 46px; }      /* 점 자리를 비운다 */
 #showdlg .row .no { font: 600 12px var(--mono); color: var(--ink-3); text-align: right; }
 #showdlg .row .nm { font-weight: 600; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 #showdlg .row .nm select { font-size: 12.5px; padding: 2px 4px; }
+#showdlg .row .nm .scl { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; color: var(--ink-2); margin-left: 4px; cursor: pointer; }
+#showdlg .row .nm select:disabled { opacity: .4; }
 #showdlg .row .ib2 { background: transparent; border: 0; color: var(--ink-3); cursor: pointer; font-size: 14px; padding: 0 4px; }
 #showdlg .row .ib2:hover { color: var(--ink); }
 #showdlg .empty { color: var(--ink-3); font-size: 13px; padding: 30px 10px; text-align: center; }
@@ -1056,6 +1078,7 @@ body.show-on #play { bottom: 46px; }      /* 점 자리를 비운다 */
 <main id="stage">
   <div class="rng-pop" id="stn-pop" hidden role="menu"></div>
   <div class="rng-pop" id="lg-pop" hidden role="menu"></div>
+  <div class="rng-pop" id="sw-ctx" hidden role="menu"></div>
   <div id="mapwrap">
     <svg id="under"></svg>
     <canvas id="cv"></canvas>
@@ -1144,8 +1167,9 @@ body.show-on #play { bottom: 46px; }      /* 점 자리를 비운다 */
   </div>
   <div id="sw" hidden aria-label="바다 위젯">
     <div class="sw-h" title="끌어서 옮기기 — 마지막으로 놓은 자리가 이 화면의 기본 자리(두 번 누르면 다시 자동 — 땅을 덜 덮는 빈자리)"><span class="sw-tabs">
-      <button type="button" data-m="fc" title="초단기 예측 순위 — 앞으로 6시간">예측<i> 상위</i></button><button type="button" data-m="now" title="지금 오는 비 순위 — 15분 · 60분">지금<i> 오는</i> 비</button></span>
-      <span class="sp"></span><span class="bt" id="sw-bt">—</span><button type="button" class="sw-sh" title="꼴 바꾸기 — 세로로 길쭉하게 ↔ 넓게(이 자리에 기억)">⇔</button><button type="button" class="sw-x" title="닫기 — 다시: W · 설정 › 화면 › 바다 위젯">✕</button></div>
+      <button type="button" data-m="fc" title="초단기 예측 순위 — 앞으로 6시간">예측<i> 상위</i></button><button type="button" data-m="now" title="지금 오는 비 순위 — 60분 시우량">지금<i> 오는</i> 비</button></span>
+      <span class="sp"></span><span class="bt" id="sw-bt">—</span><button type="button" class="sw-rot" title="돌리기 — 예측 상위 ↔ 지금 오는 비를 번갈아(화면 재생과 따로). 오른쪽 클릭으로 간격 · 시군당 곳 수">⟳</button><button type="button" class="sw-sh" title="꼴 바꾸기 — 세로로 길쭉하게 ↔ 넓게(이 자리에 기억)">⇔</button><button type="button" class="sw-x" title="닫기 — 다시: W · 설정 › 화면 › 바다 위젯">✕</button></div>
+    <i class="sw-prog" hidden></i>
     <div class="sw-lg" id="sw-lg"></div>
     <div class="sw-b" id="sw-b"></div>
   </div>
@@ -1211,7 +1235,11 @@ const ACC_FIXED = {
   800: [1, 50, 150, 300, 450, 600, 800],      // 극한호우(이틀 900㎜ 급)
 };
 const ACC_FIXED_NOTE = { 30: "약한 비", 60: "보통 비", 150: "기상청 일강수 눈금", 300: "호우", 800: "극한호우 — 이틀 900㎜ 급" };
-const accFix = () => ACC_FIXED[SET.acc_scale] || null;
+// 고정 끝 눈금 — 화면 재생의 '따로 쓰는 범례'(SLIDE_SC, 이 화면에서만)가 먼저, 아니면 서버 설정 acc_scale
+const scTop = () => SLIDE_SC || +SET.acc_scale || 0;
+const accFix = () => ACC_FIXED[scTop()] || null;
+/* 끝 눈금 T 의 칸 — 청색 7칸 · 기상청 색 열 칸 남짓 · 다양한 색조 스무 칸 남짓 */
+const scSteps = T => (richOn() ? richSteps(T) : fine(ACC_FIXED[T]));
 const accSteps = k => accFix() || ACC_LADDER[ACC_TIER[k] ?? 3];
 /* 지금 그린 누적 면(CURSTAT)으로 자를 고른다. 바뀌었으면 true(범례를 다시 그린다) */
 function updScale() {
@@ -1278,7 +1306,7 @@ function richSteps(T) {
 }
 /* 누적 층 눈금 — 청색 7칸 · 기상청 색 열 칸 남짓(ACC_FINE) · 다양한 색조 스무 칸 남짓 */
 function accStepsOf(k) {
-  if (richOn()) return richSteps(accFix() ? +SET.acc_scale : CASE && k === "acc" ? 700 : RICH_TOP[k] || accSteps(k).at(-1));
+  if (richOn()) return richSteps(accFix() ? scTop() : CASE && k === "acc" ? 700 : RICH_TOP[k] || accSteps(k).at(-1));
   return fine(k === "acc" && CASE ? accFix() || STEPS.event : accSteps(k));
 }
 const HOURLY = new Set(["obs15", "obs60", "aws60", "odam", "vsrt"]);
@@ -1370,12 +1398,13 @@ const COLLECT_OF = { obs15: "grid", obs60: "grid", obsday: "grid", acc: "grid", 
                      shrt_today: "short", shrt_tomorrow: "short" };
 const SET_DEFAULT = { flow_step: 10, flow_hours: 6, play_ms: 1200, tl_on: false, tl_stat: "max",
                       panel: "cards", acc_hours: 12, acc_from: "hours", acc_basis: "aws", sel_zoom: true, acc_fc: true, acc_h1: true,
-                      acc_per: 1, acc_full: false, aws_live: false, acc_qpf: false, qpf_ms: 600, acc_date: "", acc_hdr_pin: true, aws_off: [], acc_scale: 0, sea_w: "fc", shows: [] };
+                      acc_per: 1, acc_full: false, aws_live: false, acc_qpf: false, qpf_ms: 600, acc_date: "", acc_hdr_pin: true, aws_off: [], acc_scale: 0, sea_w: "fc", sea_rot: 0, sea_per: 1, shows: [] };
 
 let META = null, TOPO = null, GEO = null, MSIG = null, MEMD = null, EMDN = null;
 let SET = { ...SET_DEFAULT };
 // 화면 재생(P) 상태 — 아래 '화면 재생' 칸. saveSetting 이 먼저 본다(재생 중엔 서버 설정을 건드리지 않는다)
 const SHOW = { on: false, name: "", items: [], i: 0, timer: null, paused: false, prev: null };
+let SLIDE_SC = 0;                         // 화면 재생 — 그 화면만 따로 쓰는 범례 끝 눈금(0 = 지도 설정 그대로)
 const awsLive = () => !test && !CASE && !!SET.aws_live;      // AWS 실시간 감시(R) — setLive
 let kind = "obs60", vsrtN = 1, x4 = false;
 let OBS_TM = null;                      // 60분 층을 지난 시각으로 볼 때(재생·끌기)
@@ -1398,7 +1427,7 @@ const layerKey = () => kind === "vsrt" ? `vsrt+${vsrtN}` : kind;
 const metaOf = k => (META?.layers || []).find(x => x.id === k) || {};
 const stepsOf = k => (kmaOn() && HOURLY.has(k)) ? KMA_LG.steps
   : ACCK.has(k) ? accStepsOf(k) : k === "obs15" ? (x4 ? STEPS.m60 : STEPS.m15)
-  : (k === "obsday" || k.startsWith("shrt")) ? (richOn() ? richSteps(150) : fine(STEPS.day)) : STEPS.m60;
+  : (k === "obsday" || k.startsWith("shrt")) ? (SLIDE_SC ? scSteps(SLIDE_SC) : richOn() ? richSteps(150) : fine(STEPS.day)) : STEPS.m60;
 /* 15분 ×4 — 기상청 색이면 늘 ×4 다(레이더 색은 시간당 ㎜/h 의 자다) */
 const factor = () => (kind === "obs15" && (x4 || kmaOn())) ? 4 : 1;
 const tOf = key => new Date(+key.slice(0, 4), +key.slice(4, 6) - 1, +key.slice(6, 8),
@@ -1762,7 +1791,7 @@ function buildLegend() {
   lg.innerHTML = `<div class="lt">${unit}${x4b}</div>
     <div class="rows"><div class="band" title="${tip}" style="height:${bh}px">${cells}</div><div class="ticks">${ticks}</div></div>
     ${PAL !== "blue" && !kma ? `<div class="note">기상청 색을 아직 못 받았다 — 예측 분포 그림을 한 번 받으면 생긴다. 지금은 청색</div>` : ""}
-    ${ACCK.has(kind) && (!CASE || accFix()) ? `<div class="note" title="${accFix() ? `눈금을 ${SET.acc_scale}㎜ 끝으로 고정했다(${ACC_FIXED_NOTE[SET.acc_scale]}) — 화면 모두 같이. ` : "누적 눈금은 자료 크기에 맞춰 자동으로 고른다 — 경남 시군 최대 중 가장 큰 값이 끝 눈금 근처에 오게. 갱신해서 커지면 곧바로, 작아지면 다 들 때 바뀐다. "}범례를 오른쪽 클릭하면 색(청색 · 기상청 색 · 다양한 색조)과 눈금(자동 · 30 · 60 · 150 · 300 · 800㎜)을 고른다">${accFix() ? `고정 눈금 ${SET.acc_scale}㎜` : richOn() ? `자동 눈금 · 끝 ${st.at(-1)}` : "자동 눈금"}${ACC_HI[kind] != null && !CASE ? ` · 최대 ${(+ACC_HI[kind]).toFixed(ACC_HI[kind] >= 100 ? 0 : 1)}㎜` : ""}</div>` : ""}
+    ${ACCK.has(kind) && (!CASE || accFix()) ? `<div class="note" title="${accFix() ? `눈금을 ${scTop()}㎜ 끝으로 고정했다(${ACC_FIXED_NOTE[scTop()]})${SLIDE_SC ? " — 화면 재생에서 이 화면만" : " — 화면 모두 같이"}. ` : "누적 눈금은 자료 크기에 맞춰 자동으로 고른다 — 경남 시군 최대 중 가장 큰 값이 끝 눈금 근처에 오게. 갱신해서 커지면 곧바로, 작아지면 다 들 때 바뀐다. "}범례를 오른쪽 클릭하면 색(청색 · 기상청 색 · 다양한 색조)과 눈금(자동 · 30 · 60 · 150 · 300 · 800㎜)을 고른다">${accFix() ? `고정 눈금 ${scTop()}㎜${SLIDE_SC ? " · 이 화면" : ""}` : richOn() ? `자동 눈금 · 끝 ${st.at(-1)}` : "자동 눈금"}${ACC_HI[kind] != null && !CASE ? ` · 최대 ${(+ACC_HI[kind]).toFixed(ACC_HI[kind] >= 100 ? 0 : 1)}㎜` : ""}</div>` : ""}
     <div class="sw"><b class="h"></b>결측(땅)</div>
     <div class="sw"><b style="background:var(--land)"></b>0 · 비 없음</div>`;
   const b = $("b-x4");
@@ -2874,7 +2903,9 @@ const cardKey = () => isDay() ? kind : momentK() ? "moment" : "acc";
 async function cardsFromApi() {
   const { H } = accSpan();
   // 시군당 2곳 이상 · 시군 무관이면 읍면동 예측도 다 받는다(줄마다 그 읍면동 예상을 붙이려고)
-  const fq = selOn() ? `&sigun=${encodeURIComponent(selQ())}` : accPer() !== 1 && !momentK() && !isDay() ? `&sigun=${ALLSIG}` : "";
+  // 바다 위젯 예측 상위를 시군당 2곳으로 보면 그것도(읍면동 예측이 다 있어야 시군마다 둘을 고른다)
+  const fq = selOn() ? `&sigun=${encodeURIComponent(selQ())}`
+    : (accPer() !== 1 && !momentK() && !isDay()) || (swOn() && +SET.sea_per === 2) ? `&sigun=${ALLSIG}` : "";
   const [fc, now] = await Promise.all([getJson(`/api/forecast?hours=6${fq}`), selOn() ? nowEmd() : nowMinute()]);
   const acc = isDay() ? await accDay() : momentK() ? await accMoment() : ACC_BASIS === "grid" ? await accGrid(H, fc) : await accAws(H, fc);
   // 시군을 골랐으면 '지금 오는 비'·'예측 상위'도 그 시군(들) 읍면동 — 누적 카드와 같은 단위로 맞춘다
@@ -2883,7 +2914,8 @@ async function cardsFromApi() {
     fc: isDay() ? await fcDay() : {
           det: selOn(), labels: fc.labels || [], ft: acc.ft || [], bt: fc.tmfc ? `${hm(fc.tmfc)} 발표` : "—",
           rows: selOn() ? (fc.emd_sigun || []).map(e => ({ sig: e.sigun, label: e.emd, tag: multi() ? e.sigun : "", d: e.d.slice(0, 6), sum: e.sum }))
-                        : (fc.sigun || []).map(s => ({ sig: s.sigun, emd: s.emd, d: s.d.slice(0, 6), sum: s.sum })) },
+                        : (fc.sigun || []).map(s => ({ sig: s.sigun, emd: s.emd, d: s.d.slice(0, 6), sum: s.sum })),
+          emdAll: !selOn() && fc.emd_sigun ? fc.emd_sigun : null },
   };
 }
 /* 지도가 단기 오늘·내일이면 '예측 상위'도 그날로 — 읍면동마다 그날 합과 6시간씩(06·12·18·24시 끝) 합.
@@ -2943,8 +2975,9 @@ async function fcDay() {
 }
 /* 지금 오는 비 — 경남 전체는 기상청 매분자료(지점, 가장 빠르다) */
 async function nowMinute() {
-  const mn = await getJson(`/api/minute?n=6`);
-  const pick = l => (l || []).slice(0, 6).map(x => ({ sig: x.sigun, name: x.name, mm: x.mm }));
+  // 스무 곳까지 — 오른쪽 카드는 줄 수만큼, 바다 위젯 '지금 오는 비'는 장소 + 시우량 칩으로 더 많이
+  const mn = await getJson(`/api/minute?n=20`);
+  const pick = l => (l || []).slice(0, 20).map(x => ({ sig: x.sigun, name: x.name, mm: x.mm }));
   return { r15: pick(mn.r15), r60: pick(mn.r60), tm: mn.tm, sub: null };
 }
 /* 시군을 고르면 500m 격자 읍면동 최대(15분·60분 최신 칸) — 매분자료 지점은 한 시군에 두세 곳뿐이라
@@ -2955,7 +2988,7 @@ async function nowEmd() {
   return { r15: emdTop(a.rows), r60: emdTop(b.rows), tm: hm(b.tm || a.tm), det: true,
            sub: `${selName()} 읍면동 · 격자 500m` };
 }
-const emdTop = (rows, n = 6) => rows.filter(r => r.max != null).sort((x, y) => y.max - x.max).slice(0, n)
+const emdTop = (rows, n = 20) => rows.filter(r => r.max != null).sort((x, y) => y.max - x.max).slice(0, n)
   .map(r => ({ sig: r.sig, name: r.name, tag: multi() ? r.sig : "", mm: r.max, pos: r.col != null ? { x: r.col, y: r.row } : null }));
 // 읍면동 이름은 시군마다 겹친다(중앙동 등) — 시군|읍면동 으로 찾는다
 const fcMaps = fc => [Object.fromEntries((fc.sigun || []).map(s => [s.sigun, s])),
@@ -3425,10 +3458,10 @@ function renderNow(t = NOW_T, nRows = cardRows()) {
 }
 
 /* 예측 상위 — 6시간 합 순. 칸은 지도와 같은 색 단계 */
-function renderFc(t = FC_T, nRows = cardRows()) {
+function renderFc(t = FC_T, nRows = cardRows(), rowsIn = null) {
   const F = CARDS.fc;
   $(t.bt).textContent = F.bt;
-  const rows = F.rows.slice().sort((a, b) => b.sum - a.sum).slice(0, nRows);
+  const rows = (rowsIn || F.rows).slice().sort((a, b) => b.sum - a.sum).slice(0, nRows);
   const day = F.mode === "day";
   if (!rows.length || rows[0].sum <= 0) {
     $(t.lg).innerHTML = "";
@@ -4043,8 +4076,61 @@ const seaShort = r => r.replace(/^남해동부/, "").replace(/시동부앞바다
    (위젯이 그 바다 자리를 쓴다 — 바다 특보는 왼쪽 특보 줄에). ⚠️ 특보 탭은 판이 너무 커져 뺐다(10-24).
    예측 상위 · 지금 오는 비는 오른쪽 패널 카드와 같은 자료(CARDS)와 같은 그림(renderFc · renderNow)이다 */
 const SW_MODES = ["fc", "now", "off"];   // ⚠️ 특보 탭은 뺐다 — 판이 너무 커졌다. 특보는 왼쪽 특보 줄(얇게)에(10-24)
-const SW_ROWS = 5;
-let SW_N = SW_ROWS;                       // 지금 그린 줄 수 — 빈자리가 모자라면 4 · 3 줄로 줄인다(swAuto)
+// 위젯 몸 높이는 줄 수로 정한다 — 예측 상위 · 지금 오는 비 두 탭이 같은 크기(돌려도 판이 들썩이지 않게, 10-24).
+// 예측 상위 열 줄이 기본 — 빈자리가 모자라면 8 · 6 · 5 · 4 줄로(swAuto). 지금 오는 비는 그 높이를 장소 칩으로 채운다
+const SW_ROWS = 10;
+let SW_N = SW_ROWS;
+const swBodyH = n => (n * 30 + 24) * (V?.k || 1);
+/* 돌리기 — 서버 설정 sea_rot 초마다 예측 상위 ↔ 지금 오는 비(화면 재생과 따로). 보이는 탭(SW_ROT.m)은 이 화면에서만 바꾼다 */
+const SW_ROT = { m: null, t: null };
+const swRotOn = () => swOn() && +SET.sea_rot > 0;
+const swView = () => (swRotOn() && SW_ROT.m) || swMode();
+function swProg() {                      // 머리 밑 가는 줄 — 다음 탭까지 남은 시간
+  const pr = $("sw").querySelector(".sw-prog");
+  pr.hidden = !swRotOn();
+  if (pr.hidden) return;
+  pr.classList.remove("run"); void pr.offsetWidth;    // 처음부터 다시 차게
+  pr.style.setProperty("--d", `${SET.sea_rot}s`); pr.classList.add("run");
+}
+function swRotate(reset) {
+  clearInterval(SW_ROT.t); SW_ROT.t = null;
+  if (!swRotOn()) { SW_ROT.m = null; swProg(); return; }
+  if (reset || !SW_ROT.m) SW_ROT.m = swMode();
+  SW_ROT.t = setInterval(() => { SW_ROT.m = SW_ROT.m === "fc" ? "now" : "fc"; renderSw(); swProg(); }, SET.sea_rot * 1000);
+  swProg();
+}
+function setSwOpt(k, v) {
+  SET[k] = v; saveSetting({ [k]: v });
+  if (k === "sea_rot") swRotate(true);
+  if (k === "sea_per") { CARDS = null; loadCards(); }    // 시군당 2곳은 읍면동 예측을 다 받아야 한다
+  renderSw();
+}
+/* 예측 상위 시군당 2곳 — 읍면동 예측(emd_sigun)에서 시군마다 큰 둘 */
+function swFcRows() {
+  const F = CARDS.fc;
+  if (+SET.sea_per !== 2 || F.det || F.mode === "day" || !F.emdAll) return null;
+  const by = {};
+  for (const e of F.emdAll) (by[e.sigun] ||= []).push(e);
+  return Object.values(by).flatMap(l => l.sort((a, b) => b.sum - a.sum).slice(0, 2))
+    .map(e => ({ sig: e.sigun, label: e.emd, tag: e.sigun, d: e.d.slice(0, 6), sum: e.sum }));
+}
+/* 지금 오는 비 — 장소 + 시우량(60분) 칩. 막대 길이 대신 테두리를 시우량 색으로 — 같은 높이에 더 많이 */
+function renderNowSw(n) {
+  const N = CARDS.now;
+  if (N.cols) { renderNow(SW_T, n); return; }          // 사례 — 1시간 · 3시간 두 칸 그대로
+  $("sw-bt").textContent = N.tm || "—";
+  $("sw-lg").innerHTML = miniLegend(SIU, "시우량", true, "시우량 범주(㎜/h) — 칩 테두리 색. 지도 1시간 · 예측 상위와 같은 자");
+  const list = (N.r60 || []).filter(x => x.mm > 0), cols = $("sw").classList.contains("tall") ? 1 : 2;
+  const rows = Math.max(1, Math.floor((n * 30 + 24 - 22) / 27)), body = $("sw-b");
+  body.innerHTML = !list.length ? `<div class="sw-none">지난 1시간 비 없음</div>`
+    : `<div class="nwh">60분 시우량 · ${N.det ? "읍면동" : "지점"} 많은 순</div><div class="nwg" style="--cols:${cols}">`
+      + list.slice(0, rows * cols).map(x => {
+        const c = rampColor(x.mm, SIU, true) || "var(--line)", at = x.pos ? ` data-x="${x.pos.x}" data-y="${x.pos.y}"` : "";
+        return `<div class="nw${N.det ? " det" : ""}" data-s="${x.sig}"${at} style="--c:${c}" title="${x.sig} ${x.name} — 60분 ${x.mm.toFixed(1)}㎜">`
+          + `<span class="nm"><small>${N.det ? x.tag || "" : x.sig}</small>${x.name}</span><b>${x.mm.toFixed(1)}</b></div>`;
+      }).join("") + `</div>`;
+  rowEvents(body);
+}
 const swMode = () => (SW_MODES.includes(SET.sea_w) ? SET.sea_w : "fc");   // 예전 값 alert(특보)는 예측 상위로
 const swOn = () => swMode() !== "off";
 // 사람이 옮긴 자리 { x: 왼쪽/판 너비, t: 위 끝/판 높이 | b: 아래 끝에서/판 높이, tall } — 가까운 끝에 붙인다(줄 수가 바뀌어도 그 끝에 붙어 있게).
@@ -4054,28 +4140,33 @@ try { const p = JSON.parse(localStorage.getItem("gn-map-sw") || "null"); if (p &
 function setSw(m) {
   SET.sea_w = m;
   saveSetting({ sea_w: m });
+  if (swRotOn()) swRotate(true);                       // 돌리는 중이면 고른 탭부터 다시(탭 · W · 설정 모두)
   drawAlerts(); renderSw();
 }
 function renderSw() {
-  const box = $("sw"), m = swMode();
+  const box = $("sw");
   box.hidden = !swOn() || !V;
+  if (swRotOn() !== !!SW_ROT.t) swRotate();
   if (box.hidden) return;
+  const m = swView(), n = SWPOS ? SW_ROWS : SW_N;
   for (const b of box.querySelectorAll(".sw-tabs button")) b.classList.toggle("on", b.dataset.m === m);
+  box.querySelector(".sw-rot").classList.toggle("on", swRotOn());
   const body = $("sw-b"), bt = $("sw-bt");
+  body.style.height = swBodyH(n) + "px";                // 두 탭이 같은 크기
   $("sw-lg").innerHTML = "";
   if (!tlOn || SET.panel === "timeline" || !CARDS) {
     bt.textContent = "—";
     body.innerHTML = `<div class="sw-none">${tlOn && SET.panel !== "timeline" ? "읽는 중…" : "오른쪽 패널을 카드로 켜면 나온다(L · 설정 › 오른쪽 패널)"}</div>`;
   } else if (CARDS.err) { bt.textContent = "—"; body.innerHTML = `<div class="sw-none">불러오지 못했다 — ${CARDS.err}</div>`; }
   else if (m === "fc" && CASE) { bt.textContent = "—"; body.innerHTML = `<div class="sw-none">사례에는 초단기 예측이 없다 — 오른쪽 '호우 기준'을 본다</div>`; }
-  else if (m === "fc") renderFc(SW_T, SWPOS ? SW_ROWS : SW_N);
-  else renderNow(SW_T, SWPOS ? SW_ROWS : SW_N);
+  else if (m === "fc") renderFc(SW_T, n, swFcRows());
+  else renderNowSw(n);
   placeSw();
 }
 /* 빈자리 찾기 — 경남 땅을 가장 적게 덮는 자리. ⚠️ 처음에는 지도 빈자리 오른쪽 아래에 붙였더니 1920×1080 에서 거제를 덮었다(10-24).
    판을 8px 칸으로 나눠 경남 시군(이웃 부산 · 울산 · 바다는 빈자리로 친다)을 칠하고, 범례 · 재생 막대 · 제목 · 도구 · 오른쪽 패널은 못 가는 칸으로.
    넓은 꼴(430)과 세로로 길쭉한 꼴(262) 둘 다 재 보고 땅을 덜 덮는 쪽 — 같으면 지도 위쪽 오른편에 가까운 쪽(위에 빈자리가 있다는 말), 길쭉한 쪽.
-   지도 틀 · 패널 · 범례가 그대로면 다시 재지 않는다(1분마다 줄 수가 조금 바뀌어 판이 들썩이지 않게 — 높이가 40px 넘게 바뀔 때만) */
+   지도 틀 · 패널 · 범례가 그대로면 다시 재지 않는다(몸 높이는 줄 수로 정해져 탭을 넘겨도 같다 — 머리 등으로 높이가 40px 넘게 바뀔 때만) */
 let SW_AUTO = null;
 function swGrid(C) {
   const nx = Math.ceil(V.W / C), ny = Math.ceil(V.H / C);
@@ -4131,14 +4222,12 @@ function placeSw() {
     if (CAM || ZA || !FEAT) return;                       // 시군 확대 중엔 감춰져 있다 — 경남 전체로 돌아오면 잰다
     const r = el => { const q = el.getBoundingClientRect(); return `${q.left | 0},${q.top | 0},${q.width | 0},${q.height | 0}`; };
     const key = [V.W, V.H, V.s.toFixed(3), V.ox | 0, V.oy | 0, MT.sc.toFixed(3), MT.tx | 0, MT.ty | 0, tlOn, SET.panel,
-                 $("play").hidden ? "" : r($("play")), r($("legend")), swMode()].join("|");
-    // 두 꼴의 크기를 잰다. 줄이 있는 탭(예측 상위 · 지금 오는 비)은 5 · 4 · 3 줄 높이를 지금 그린 줄 수에서 어림한다
-    const m = swMode(), rowsOf = () => box.querySelector("#sw-b .mr, #sw-b .fr")?.offsetHeight || 0;   // m: fc · now
+                 $("play").hidden ? "" : r($("play")), r($("legend"))].join("|");
+    // 두 꼴의 크기를 잰다 — 몸 높이가 줄 수로 정해져 있어(두 탭 같은 크기) 10 · 8 · 6 · 5 · 4 줄 높이를 바로 안다
     const shape = tall => {
       box.classList.toggle("tall", tall);
-      const w = box.offsetWidth, h = box.offsetHeight, rh = rowsOf(), stack = m === "now" && tall ? 2 : 1;
-      const ns = !rh ? [SW_N] : [5, 4, 3];
-      return ns.map(n => ({ tall, n, w, h: h + (n - SW_N) * rh * stack }));
+      const w = box.offsetWidth, h = box.offsetHeight;
+      return [10, 8, 6, 5, 4].map(n => ({ tall, n, w, h: h + swBodyH(n) - swBodyH(SW_N) }));
     };
     const cands = [...shape(true), ...shape(false)];
     const hNow = cands.find(c => c.tall === !!SW_AUTO?.tall && c.n === SW_N)?.h || 0;
@@ -4172,7 +4261,33 @@ function placeSw() {
 }
 {
   const box = $("sw"), hd = box.querySelector(".sw-h");
-  box.querySelector(".sw-tabs").onclick = ev => { const b = ev.target.closest("[data-m]"); if (b && b.dataset.m !== swMode()) setSw(b.dataset.m); };
+  box.querySelector(".sw-tabs").onclick = ev => {
+    const b = ev.target.closest("[data-m]");
+    if (!b) return;
+    if (b.dataset.m !== swMode()) setSw(b.dataset.m);
+    else if (swRotOn()) { swRotate(true); renderSw(); }  // 같은 탭이어도 돌리는 중이면 그 탭부터 다시
+  };
+  box.querySelector(".sw-rot").onclick = () => setSwOpt("sea_rot", swRotOn() ? 0 : 20);
+  // 오른쪽 클릭 — 돌리기 간격 · 예측 상위 시군당 곳 수
+  box.addEventListener("contextmenu", ev => {
+    ev.preventDefault(); ev.stopPropagation();
+    const pop = $("sw-ctx"), rot = +SET.sea_rot || 0, per = +SET.sea_per === 2 ? 2 : 1;
+    pop.innerHTML = `<div class="g">돌리기 — 예측 상위 ↔ 지금 오는 비</div>`
+      + [[0, "끔 — 고른 탭 그대로"], [10, "10초"], [15, "15초"], [20, "20초"], [30, "30초"], [60, "1분"]].map(([v, l]) => `<button data-rot="${v}" class="${rot === v ? "on" : ""}">${l}</button>`).join("")
+      + `<div class="sep"></div><div class="g">예측 상위</div>`
+      + [[1, "시군당 1곳"], [2, "시군당 2곳 — 읍면동 둘"]].map(([v, l]) => `<button data-per="${v}" class="${per === v ? "on" : ""}">${l}</button>`).join("");
+    const rc = $("stage").getBoundingClientRect(), k = V?.k || 1;
+    pop.hidden = false;
+    const pw = pop.offsetWidth * k, ph = pop.offsetHeight * k;
+    pop.style.left = Math.max(4, Math.min(ev.clientX - rc.left, rc.width - pw - 8)) / k + "px";
+    pop.style.top = Math.max(4, Math.min(ev.clientY - rc.top - ph / 2, rc.height - ph - 8)) / k + "px";
+    void pop.offsetWidth; pop.classList.add("open");
+    for (const b of pop.querySelectorAll("button")) b.onclick = e => {
+      e.stopPropagation(); pop.classList.remove("open"); pop.hidden = true;
+      if (b.dataset.rot != null) setSwOpt("sea_rot", +b.dataset.rot); else setSwOpt("sea_per", +b.dataset.per);
+    };
+  });
+  document.addEventListener("pointerdown", ev => { if (!$("sw-ctx").hidden && !ev.target.closest?.("#sw-ctx")) { $("sw-ctx").classList.remove("open"); $("sw-ctx").hidden = true; } });
   box.querySelector(".sw-x").onclick = () => setSw("off");
   // 지금 자리를 기억한다 — 가까운 끝(위 · 아래)에 붙여서. 마지막으로 옮긴 자리가 이 화면의 기본 자리가 된다
   const savePos = (tall, h = box.offsetHeight) => {
@@ -4578,12 +4693,14 @@ function helpHtml(tab) {
       이 화면(브라우저)에 기억한다 — 바다 위젯 · 패널을 두고 경남을 어디에 놓을지. 시군을 골라 확대하면 그 틀이 먼저, 풀면 이 틀로</dd>
     <dt>특보 줄</dt><dd>왼쪽 특보 아이콘 — 아이콘들 밑에 얇게 세로로 펼친다(지도 왼쪽 빈자리, 지도가 그 오른쪽으로 비켜 선다). 바다 · 예비(태풍 등, 발효 예상 날짜 · 시간대) · 예정까지.
       머리를 끌어 옮긴다(위로 올려 아이콘을 덮어도 된다 — 불투명, 두 번 누르면 제자리). ✕ 나 아이콘을 누르면 접힌다</dd>
-    <dt>화면 재생 <code>P</code></dt><dd>오른쪽 위 화면 단추 — 여러 화면을 차례로(화면보호기처럼). 재생목록 창에서 화면(누적 지난 N시간 · N시부터 · 오늘/어제 0시부터 · 1시간 · 15분 · 흐름 재생 · 초단기 · 오늘/내일 24시까지)을
-      누르거나 끌어 넣고, 끌어서 차례, 줄마다 값과 시간. 같은 종류도 여럿. 저장하면 어느 화면에서나 불러온다. 재생 중엔 아래 점 — 누르면 그 화면, 올리면 멈춤 · 고치기 · 끝(<code>Esc</code>).
+    <dt>화면 재생 <code>P</code></dt><dd>오른쪽 위 화면 단추 — 여러 화면을 차례로(화면보호기처럼). 재생목록 창에서 화면(누적 지난 N시간(7일까지) · N시부터 · 날짜 지정(며칠 전 몇 시부터) · 오늘/어제 0시부터 · 1시간 · 15분 · 흐름 재생 · 초단기 · 오늘/내일 24시까지)을
+      누르거나 끌어 넣고, 끌어서 차례, 줄마다 값과 시간. 같은 종류도 여럿. 누적 · 단기는 줄마다 <b>범례</b>를 체크하면 그 화면만 따로 끝 눈금(30~800㎜) —
+      72시간 누적과 내일 24시까지를 같은 자로. 저장하면 어느 화면에서나 불러온다. 재생 중엔 아래 점 — 누르면 그 화면, 올리면 멈춤 · 고치기 · 끝(<code>Esc</code>).
       재생 중 바꾸는 층 · 구간은 이 화면에서만(다른 화면 설정은 그대로)</dd>
     <dt>바다 위젯 <code>W</code></dt><dd>지도 위 반투명 판 — 예측 상위(초단기 6시간) · 지금 오는 비를 머리 탭으로 고른다(<code>W</code> 는 차례로, 끝은 끔). 특보는 왼쪽 특보 줄에.
       자리는 스스로 찾는다 — 경남 땅을 가장 적게 덮는 빈자리, 좁고 길면 세로로 길쭉한 꼴로. 머리를 끌어 옮기면 마지막으로 놓은 자리가 이 화면의 기본 자리(두 번 누르면 다시 자동),
-      <code>⇔</code> · <code>⇕</code> 로 꼴을 바꾼다</dd>
+      <code>⇔</code> · <code>⇕</code> 로 꼴을 바꾼다. 두 탭은 같은 크기 — 지금 오는 비는 장소 + 60분 시우량 칩(테두리가 시우량 색).
+      머리의 <code>⟳</code> 은 두 탭을 저절로 번갈아(화면 재생과 따로, 머리 밑 가는 줄이 다음 탭까지) · 오른쪽 클릭은 돌리기 간격 · 예측 상위 시군당 1곳/2곳</dd>
     <dt>강수 누적 1h</dt><dd>줄 맨 오른쪽 — 최근 1시간 강수량. 바탕 없이 왼쪽 막대만 시우량 색, 많이 올수록 글자가 밝고 굵다(20㎜ 넘으면 흰 글자). 0 이면 흐리게. 막대 빗금과 같이 <code>H</code> 로 켜고 끈다</dd>
     <dt>색 — 약한 비는 바탕에 가깝게</dt><dd>0.1 · 1㎜ 처럼 거의 안 온 곳은 땅(바탕) 색에 가깝게 칠해 묻히고, 오는 곳만 밝게 솟는다(청색 · 기상청 색 둘 다).
       기상청 색으로 보면 누적은 눈금을 열 칸 남짓으로 잘게 나눠 하늘 · 파랑 · 초록 · 노랑 · 주황 · 빨강 · 보라가 다 나온다</dd>
@@ -4726,9 +4843,12 @@ function openPrefs() {
       <button data-th="gray" class="${th === "gray" ? "on" : ""}">회색</button>
       <button data-th="light" class="${th === "light" ? "on" : ""}">밝게</button></span></div>
     <div class="row"><span class="k">바다 위젯</span>${seg("sea_w", [["off", "끔"], ["fc", "예측 상위"], ["now", "지금 오는 비"]])}</div>
+    <div class="row"><span class="k">위젯 돌리기</span>${seg("sea_rot", [[0, "끔"], [10, "10초"], [15, "15초"], [20, "20초"], [30, "30초"], [60, "1분"]])}</div>
+    <div class="row"><span class="k">위젯 예측</span>${seg("sea_per", [[1, "시군당 1곳"], [2, "시군당 2곳"]])}</div>
     <div class="row"><span class="k"></span><span class="note">지도 위 반투명 판(W) — 경남 땅을 가장 적게 덮는 빈자리를 스스로 찾는다(좁고 길면 세로로 길쭉하게).
       머리를 끌어 옮기면 마지막으로 놓은 자리가 이 화면의 기본 자리(두 번 누르면 다시 자동), ⇔ · ⇕ 로 꼴을 바꾼다.
-      예측 상위 · 지금 오는 비는 오른쪽 패널(카드)과 같은 자료. 특보는 왼쪽 특보 줄에.</span></div>
+      예측 상위 · 지금 오는 비는 오른쪽 패널(카드)과 같은 자료. 특보는 왼쪽 특보 줄에.
+      돌리기는 두 탭을 그 간격으로 번갈아 보인다(화면 재생과 따로) · 시군당 2곳은 한 시군의 비 많은 읍면동 둘(위젯 위 오른쪽 클릭으로도).</span></div>
     <div class="row"><span class="k">지도 위치</span><span class="seg"><button data-cam="edit">고치기 (C)</button><button data-cam="reset"${ucOn() ? "" : " disabled"}>처음대로</button></span>
       <span class="note">${ucOn() ? `${Math.round(UC.z * 100)}% · 옮김` : "경남 전체가 꼭 차게(기본)"}</span></div>
     <div class="row"><span class="k">화면 재생</span><span class="seg"><button data-show="open">재생목록…</button><button data-show="play">${SHOW.on ? "끝" : "재생 ▶"}</button></span>
@@ -4766,6 +4886,7 @@ function openPrefs() {
     if (k === "aws_live") { setLive(v).then(openPrefs); return; }
     if (k === "acc_scale") { setAccScale(v); openPrefs(); return; }
     if (k === "sea_w") { setSw(v); openPrefs(); return; }
+    if (k === "sea_rot" || k === "sea_per") { setSwOpt(k, v); openPrefs(); return; }
     SET[k] = v;
     saveSetting({ [k]: v });
     if (k === "tl_on") setTL(v, false);
@@ -4959,8 +5080,9 @@ $("prefs").addEventListener("click", ev => { const b = ev.target.closest?.("butt
    ⚠️ 재생 중에는 층 · 누적 구간 · 자료를 **이 화면에서만** 바꾼다(saveSetting 이 막힌다) — 다른 화면 설정을 흔들지 않게.
    끝내면 재생 앞 상태로 돌아간다. 재생하던 목록 이름은 이 브라우저에 기억 — 새로고침해도 이어서(?show=이름 도) */
 const SLIDE = {
-  acc_h:      { g: "누적", nm: s => `${bn(s)} 지난 ${s.h}시간 누적`, p: ["b", "h"], d: { b: "aws", h: 24 }, tip: "지난 N시간(1~48)" },
+  acc_h:      { g: "누적", nm: s => `${bn(s)} 지난 ${s.h}시간 누적`, p: ["b", "h"], d: { b: "aws", h: 24 }, tip: "지난 N시간(1시간~7일)" },
   acc_from:   { g: "누적", nm: s => `${bn(s)} ${s.n}시부터 누적`, p: ["b", "n"], d: { b: "aws", n: 9 }, tip: "오늘 N시부터(지났으면 어제 N시부터)" },
+  acc_day:    { g: "누적", nm: s => `${bn(s)} ${dayNm(s.d)} ${s.n}시부터 누적`, p: ["b", "d", "n"], d: { b: "aws", d: 1, n: 18 }, tip: "날짜 지정 — 며칠 전 몇 시부터(어제 18시부터 · 3일 전 9시부터 …), 날마다 그날 기준" },
   acc_today:  { g: "누적", nm: s => `${bn(s)} 오늘 0시부터 누적`, p: ["b"], d: { b: "aws" }, tip: "오늘 0시부터 지금까지" },
   acc_yday:   { g: "누적", nm: s => `${bn(s)} 어제 0시부터 누적`, p: ["b"], d: { b: "aws" }, tip: "어제 0시부터 지금까지" },
   h1:         { g: "지금", nm: s => `${bn(s)} 1시간 강수량`, p: ["b"], d: { b: "aws" }, tip: "가장 최근 1시간" },
@@ -4971,6 +5093,8 @@ const SLIDE = {
   shrt_tomorrow: { g: "예측", nm: () => "내일 24시까지 강수량", p: [], d: {}, tip: "단기예보 내일 하루 합" },
 };
 const bn = s => (s.b === "aws" ? "AWS" : "격자");
+const dayNm = d => ["오늘", "어제", "그제"][d] || `${d}일 전`;
+const SC_OK = t => t.startsWith("acc_") || t.startsWith("shrt");   // 따로 쓰는 범례를 고를 수 있는 화면(누적 · 단기)
 const SHOW_SECS = [5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600];
 const fmtSec = n => (n >= 60 ? `${Math.floor(n / 60)}분${n % 60 ? ` ${n % 60}초` : ""}` : `${n}초`);
 const slideOf = (t, more = {}) => ({ t, ...SLIDE[t].d, sec: 30, ...more });
@@ -4995,9 +5119,15 @@ async function applySlide(s) {
     if (!today) H += 24;
     SET.acc_from = "hours"; SET.acc_hours = Math.max(1, Math.min(48, H)); SET._accLabel = `${today ? "오늘" : "어제"} ${s.n}시부터`;
   }
+  if (s.t === "acc_day") {                // 며칠 전 몇 시부터 — 날마다 그날 기준(재생목록이 낡지 않게). 아직 안 온 시각이면 지금 시
+    const t = NOWD(), d = new Date(t.getFullYear(), t.getMonth(), t.getDate() - s.d);
+    const n = s.d === 0 ? Math.min(s.n, t.getHours()) : s.n;
+    SET.acc_from = "date"; SET.acc_date = n ? `${ymd(d)}${String(n).padStart(2, "0")}` : ymd(d);
+  }
   if (s.t === "acc_today") SET.acc_from = "today";
   if (s.t === "acc_yday") SET.acc_from = "yesterday";
   if (s.t === "vsrt") vsrtN = s.n;
+  SLIDE_SC = SC_OK(s.t) && s.sc ? s.sc : 0;  // 이 화면만 따로 쓰는 범례(72시간 누적 ↔ 내일 24시까지를 같은 자로 견주기)
   CARDS = null;
   choose(slideKind(s), false);
   loadCards();
@@ -5036,6 +5166,7 @@ function stopShow() {
   $("b-show").classList.remove("on");
   const p = SHOW.prev;                   // 재생 앞으로 — 이 화면에서만 바꿨으니 되돌리기만
   stopPlay();
+  SLIDE_SC = 0;
   if (p) {
     ACC_BASIS = p.basis; Object.assign(SET, { acc_basis: p.sbasis, acc_from: p.from, acc_hours: p.hours, acc_date: p.date, _accLabel: "" });
     vsrtN = p.vsrtN; CARDS = null; choose(p.kind, false); loadCards();
@@ -5090,9 +5221,13 @@ function closeShowDlg() { $("showdlg").hidden = true; if (SHOW.on && SHOW.paused
 function sedRow(x, j) {
   const S = SLIDE[x.t], sel = (k, opts, v) => `<select data-k="${k}" data-j="${j}">${opts.map(([a, l]) => `<option value="${a}"${String(a) === String(v) ? " selected" : ""}>${l}</option>`).join("")}</select>`;
   const ps = S.p.map(k => k === "b" ? sel("b", [["aws", "AWS"], ["grid", "격자"]], x.b)
-    : k === "h" ? sel("h", [1, 2, 3, 6, 9, 12, 18, 24, 36, 48].map(v => [v, `${v}시간`]), x.h)
+    : k === "h" ? sel("h", [1, 2, 3, 6, 9, 12, 18, 24, 36, 48, 72, 96, 120, 144, 168].map(v => [v, v % 24 || v < 72 ? `${v}시간` : `${v}시간(${v / 24}일)`]), x.h)
+    : k === "d" ? sel("d", [...Array(ACC_DATE_DAYS + 1).keys()].map(v => [v, dayNm(v)]), x.d)
     : k === "n" ? sel("n", [...Array(24).keys()].map(v => [v, `${v}시부터`]), x.n)
-    : sel("n", [1, 2, 3, 4, 5, 6].map(v => [v, `+${v}시간`]), x.n)).join("");
+    : sel("n", [1, 2, 3, 4, 5, 6].map(v => [v, `+${v}시간`]), x.n)).join("")
+    // 따로 쓰는 범례 — 체크하면 이 화면만 그 끝 눈금(누적 · 단기). 72시간 누적 ↔ 내일 24시까지를 같은 자로
+    + (SC_OK(x.t) ? `<label class="scl" title="이 화면만 따로 범례(끝 눈금) — 끄면 지도 설정을 따른다"><input type="checkbox" data-k="scon" data-j="${j}"${x.sc ? " checked" : ""}>범례</label>`
+      + `<select data-k="sc" data-j="${j}"${x.sc ? "" : " disabled"}>${[30, 60, 150, 300, 800].map(v => `<option value="${v}"${(x.sc || 150) === v ? " selected" : ""}>${v}㎜</option>`).join("")}</select>` : "");
   return `<div class="row" draggable="true" data-j="${j}"><span class="h" title="끌어서 차례 바꾸기">⋮⋮</span><span class="no">${j + 1}</span>
     <span class="nm">${SLIDE[x.t].nm(x)}${ps}</span>${sel("sec", SHOW_SECS.map(v => [v, fmtSec(v)]), x.sec)}
     <button class="ib2" data-a="dup" data-j="${j}" title="같은 것 하나 더(값을 바꿔 쓴다 — 예: AWS 24 · 48시간)">⧉</button><button class="ib2" data-a="del" data-j="${j}" title="빼기">✕</button></div>`;
@@ -5160,6 +5295,7 @@ $("showdlg").addEventListener("change", ev => {
   if (t.id === "sd-nm") { SED.name = t.value.trim(); return; }
   const j = +t.dataset.j, k = t.dataset.k;
   if (!k || !SED.items[j]) return;
+  if (k === "scon") { if (t.checked) SED.items[j].sc = 150; else delete SED.items[j].sc; renderShowDlg(); return; }
   SED.items[j][k] = k === "b" ? t.value : +t.value;
   renderShowDlg();
 });
@@ -5608,6 +5744,7 @@ document.addEventListener("keydown", ev => {
   if (ev.key === "Escape") {
     if (!$("acc-ctx").hidden) { accCtx(null); return; }
     if (!$("lg-pop").hidden) { lgPop(null); return; }
+    if (!$("sw-ctx").hidden) { $("sw-ctx").classList.remove("open"); $("sw-ctx").hidden = true; return; }
     if (!$("stn-pop").hidden) { stnPop(null); return; }
     if (!$("showdlg").hidden) { closeShowDlg(); return; }
     if (!$("prefs").hidden) closePrefs(); else if (!$("help").hidden) closeHelp(); else if (selOn()) selectSig(null); else if (SHOW.on) stopShow();
