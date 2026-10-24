@@ -80,8 +80,11 @@ def test_put_setting_validates(monkeypatch):
     assert gridview.SETTING_DEFAULT["qpf_ms"] == 600 and gridview.put_setting({"qpf_ms": 250, "play_ms": 3000})["qpf_ms"] == 250
     # 강수 누적 카드 머리 고정 — 기본 고정(늘 보임)
     assert gridview.SETTING_DEFAULT["acc_hdr_pin"] is True and gridview.put_setting({"acc_hdr_pin": 0})["acc_hdr_pin"] is False
+    # 누적 눈금 — 기본 자동(0), 범례 오른쪽 클릭으로 끝 눈금 고정
+    assert gridview.SETTING_DEFAULT["acc_scale"] == 0 and gridview.put_setting({"acc_scale": 150})["acc_scale"] == 150
     for bad in ({"flow_step": 15}, {"play_ms": 50}, {"tl_stat": "sum"}, {"layer": "nope"},
-                {"overlays": ["bars"]}, {"overlays": "alerts"}, {"pal": "rainbow"}, {"acc_per": 5}, {"qpf_ms": 50}):
+                {"overlays": ["bars"]}, {"overlays": "alerts"}, {"pal": "rainbow"}, {"acc_per": 5}, {"qpf_ms": 50},
+                {"acc_scale": 100}):
         with pytest.raises((ValueError, LookupError)):
             gridview.put_setting(bad)
 

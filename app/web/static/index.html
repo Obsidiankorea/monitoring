@@ -141,6 +141,51 @@
   --zn-tail:     #8A5A1C;
 }
 
+/* 회색 테마 — 어두운 회색 바탕 · 조금 밝은 회색 판. 밝은 테마는 너무 눈부시고 다크는 너무 까맣다는 말에 더했다(10-24).
+   글자가 밝은 쪽이라 램프 방향은 다크와 같다(값이 클수록 밝다). 첫 칸은 회색 판에서 갈라지게 다크보다 한 톤 밝힌다.
+   map.html 의 같은 블록과 같은 값이다 — 한쪽만 고치지 않는다 */
+:root[data-theme="gray"] {
+  --ground:      #2B2F35;
+  --panel:       #363B42;
+  --panel-2:     #3E444C;
+  --raised:      #474E57;
+  --line:        #4C535D;
+  --line-soft:   #41474F;
+
+  --ink:         #F1F3F6;
+  --ink-2:       #BCC4CE;
+  --ink-3:       #8C96A2;
+
+  --accent:      #4DB3E6;
+  --accent-dim:  #2A6F99;
+
+  --rain-0:      #3A4048;
+  --rain-1:      #2E5878;
+  --rain-2:      #2C6E9E;
+  --rain-3:      #2E86C2;
+  --rain-4:      #3FA4DD;
+  --rain-5:      #6CC4EE;
+  --rain-6:      #A0DCF6;
+  --rain-7:      #DDF2FC;
+
+  --acc-0:       #34403E;
+  --acc-1:       #24524A;
+  --acc-2:       #1E6E62;
+  --acc-3:       #1C8E7E;
+  --acc-4:       #24B09C;
+  --acc-5:       #52CDBA;
+  --acc-6:       #8EE2D4;
+  --acc-7:       #D0F4EC;
+
+  --lv-ok:       #4FCB9A;
+  --lv-fail:     #FF9A70;
+
+  --on-fill:     #08111A;
+  --on-bar:      #08111A;
+  --on-accent:   #06121B;
+  --track:       #40464E;
+}
+
 @property --sweep { syntax: "<percentage>"; inherits: false; initial-value: 0%; }
 
 * { box-sizing: border-box; }
@@ -3938,6 +3983,7 @@ bindMenu("m-look", null, "",
   () => [
     { head: "테마" },
     { k: "t:dark",  l: "다크",   on: theme === "dark" },
+    { k: "t:gray",  l: "회색",   on: theme === "gray" },
     { k: "t:light", l: "라이트", on: theme === "light" },
     { sep: true },
     { head: "종합 화면" },
@@ -4164,6 +4210,8 @@ const THEME_BASE = {
            raised: "#1E2836", line: "#222D3C", away: "#000000", lineTo: "#5C6D80" },
   light: { ground: "#EEF2F7", panel: "#FFFFFF", panel2: "#F5F8FC",
            raised: "#E8EEF6", line: "#D3DCE7", away: "#9AACC2", lineTo: "#8A9BB0" },
+  gray:  { ground: "#2B2F35", panel: "#363B42", panel2: "#3E444C",
+           raised: "#474E57", line: "#4C535D", away: "#16191D", lineTo: "#7A848F" },
 };
 
 const _hex = h => {

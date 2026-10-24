@@ -85,6 +85,31 @@
   --lv-watch: #C08400; --lv-warn: #CF3320; --lv-severe: #7B3FBF; --lv-pre: #5A6C8C;
   --test: #7A8494;
 }
+/* 회색 테마 — 어두운 회색 바탕 · 조금 밝은 회색 판(밝게는 너무 눈부시고 어둡게는 너무 까맣다는 말에 10-24 더함).
+   글자가 밝은 쪽이라 강수 램프는 어둡게처럼 값이 클수록 밝다. 첫 칸은 회색 땅에서 갈라지게 어둡게보다 한 톤 밝힌다.
+   index.html 의 같은 블록과 같은 값이다 — 한쪽만 고치지 않는다 */
+:root[data-theme="gray"] {
+  --ground: #2B2F35; --panel: #363B42; --panel-2: #3E444C; --raised: #474E57;
+  --line: #4C535D; --line-soft: #41474F;
+  --ink: #F1F3F6; --ink-2: #BCC4CE; --ink-3: #8C96A2;
+  --accent: #4DB3E6;
+  --acc-past: #2E86C2; --acc-h1a: #A0DCF6; --acc-h1b: #3FA4DD;
+  --acc-kma: #22A592; --acc-kma-h1a: #A6EBDD; --acc-kma-h1b: #2DBBA4;
+  --rain-0: #3A4048; --rain-1: #2E5878; --rain-2: #2C6E9E; --rain-3: #2E86C2;
+  --rain-4: #3FA4DD; --rain-5: #6CC4EE; --rain-6: #A0DCF6; --rain-7: #DDF2FC;
+  --lv-fail: #FF9A70; --lv-ok: #4FCB9A;
+  --sea: #2B2F35;
+  --land: #383D44;
+  --land-nb: #32363C;
+  --bd: #AAB5C2; --bd-halo: rgba(30, 33, 38, .6);
+  --coast: #737D89;
+  --zone: #D3DAE2;
+  --halo: #2B2F35;
+  --hatch: #949FAC;
+  --nb-ink: #7F8995;
+  --on-accent: #06121B;
+  --test: #9AA3B0;
+}
 
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
@@ -413,6 +438,9 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 .rng-pop button.on { background: color-mix(in oklab, var(--accent) 18%, transparent); box-shadow: inset 3px 0 0 var(--accent); }
 .rng-pop .note { font: 500 12px var(--sans); color: var(--ink-3); padding: 6px 10px 4px; max-width: 230px; line-height: 1.4; }
 .rng-pop .sep { height: 1px; margin: 4px 6px; background: var(--line); }
+/* 누적 눈금 메뉴 — 이름 밑에 그 자의 눈금 */
+#lg-pop button small { font-weight: 500; color: var(--ink-3); margin-left: 6px; }
+#lg-pop button small.st { display: block; margin: 2px 0 0; font: 500 11.5px var(--mono); }
 /* 날짜 지정 — 그날 0시부터(오늘부터 7일 앞까지) */
 .rng-pop .dt { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 10px; border-radius: 8px;
   font: 600 14px var(--sans); color: var(--ink); }
@@ -860,6 +888,7 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 
 <main id="stage">
   <div class="rng-pop" id="stn-pop" hidden role="menu"></div>
+  <div class="rng-pop" id="lg-pop" hidden role="menu"></div>
   <div id="mapwrap">
     <svg id="under"></svg>
     <canvas id="cv"></canvas>
@@ -986,12 +1015,24 @@ const ACC_LADDER = [
   [1, 50, 150, 300, 450, 600, 800],
 ];
 const ACC_TIER = {}, ACC_HI = {};                       // 층마다(acc · aws) 고른 자 · 그때 hi
-const accSteps = k => ACC_LADDER[ACC_TIER[k] ?? 3];
+/* 누적 눈금 고정 — 범례 오른쪽 클릭(또는 설정 › 화면). 서버 설정 acc_scale(끝 눈금 ㎜, 0 = 자동). 화면 모두 같이.
+   자동이 갱신마다 자를 바꾸면 시각끼리 · 화면끼리 견주기 어렵다 — 그럴 때 하나로 묶어 둔다. 재현 사례도 고정이 먼저 */
+const ACC_FIXED = {
+  30: [0.1, 2, 5, 10, 15, 20, 30],
+  60: [0.1, 5, 10, 20, 30, 45, 60],
+  150: [0.1, 5, 10, 30, 50, 80, 150],         // 기상청 일강수 눈금 — 자동 이전에 하나뿐이던 자
+  300: [1, 20, 50, 100, 150, 200, 300],
+  800: [1, 50, 150, 300, 450, 600, 800],      // 극한호우(이틀 900㎜ 급)
+};
+const ACC_FIXED_NOTE = { 30: "약한 비", 60: "보통 비", 150: "기상청 일강수 눈금", 300: "호우", 800: "극한호우 — 이틀 900㎜ 급" };
+const accFix = () => ACC_FIXED[SET.acc_scale] || null;
+const accSteps = k => accFix() || ACC_LADDER[ACC_TIER[k] ?? 3];
 /* 지금 그린 누적 면(CURSTAT)으로 자를 고른다. 바뀌었으면 true(범례를 다시 그린다) */
 function updScale() {
   if (CASE || !ACCK.has(kind) || !CURSTAT) return false;
   const vals = CURSTAT.rows.filter(r => r.kind === "gn" && r.max != null).map(r => r.max);
   const hi = vals.length ? Math.max(...vals) : 0, top = i => ACC_LADDER[i].at(-1);
+  if (accFix()) { const was = ACC_HI[kind]; ACC_HI[kind] = hi; return was !== hi; }   // 고정 — 범례의 '최대' 글자만
   let t = ACC_LADDER.findIndex((_, i) => hi <= top(i) * 1.25);
   if (t < 0) t = ACC_LADDER.length - 1;
   const cur = ACC_TIER[kind];
@@ -1074,7 +1115,7 @@ const COLLECT_OF = { obs15: "grid", obs60: "grid", obsday: "grid", acc: "grid", 
                      shrt_today: "short", shrt_tomorrow: "short" };
 const SET_DEFAULT = { flow_step: 10, flow_hours: 6, play_ms: 1200, tl_on: false, tl_stat: "max",
                       panel: "cards", acc_hours: 12, acc_from: "hours", acc_basis: "aws", sel_zoom: true, acc_fc: true, acc_h1: true,
-                      acc_per: 1, acc_full: false, aws_live: false, acc_qpf: false, qpf_ms: 600, acc_date: "", acc_hdr_pin: true, aws_off: [] };
+                      acc_per: 1, acc_full: false, aws_live: false, acc_qpf: false, qpf_ms: 600, acc_date: "", acc_hdr_pin: true, aws_off: [], acc_scale: 0 };
 
 let META = null, TOPO = null, GEO = null, MSIG = null, MEMD = null, EMDN = null;
 let SET = { ...SET_DEFAULT };
@@ -1098,7 +1139,7 @@ let FEAT = null;                        // 시군 GeoJSON(강조용)
 const layerKey = () => kind === "vsrt" ? `vsrt+${vsrtN}` : kind;
 const metaOf = k => (META?.layers || []).find(x => x.id === k) || {};
 const stepsOf = k => (kmaOn() && HOURLY.has(k)) ? KMA_LG.steps
-  : k === "acc" ? (CASE ? STEPS.event : accSteps("acc")) : k === "aws" ? accSteps("aws") : k === "obs15" ? (x4 ? STEPS.m60 : STEPS.m15)
+  : k === "acc" ? (CASE ? accFix() || STEPS.event : accSteps("acc")) : k === "aws" ? accSteps("aws") : k === "obs15" ? (x4 ? STEPS.m60 : STEPS.m15)
   : (k === "obsday" || k.startsWith("shrt")) ? STEPS.day : STEPS.m60;
 /* 15분 ×4 — 기상청 색이면 늘 ×4 다(레이더 색은 시간당 ㎜/h 의 자다) */
 const factor = () => (kind === "obs15" && (x4 || kmaOn())) ? 4 : 1;
@@ -1115,7 +1156,7 @@ async function getJson(u) {
 function applyTheme(t) {
   let th = t || Q.get("theme");
   if (!th) { try { th = localStorage.getItem("gn-theme"); } catch {} }
-  th = th === "light" ? "light" : "dark";
+  th = th === "light" || th === "gray" ? th : "dark";
   document.documentElement.dataset.theme = th;
   return th;
 }
@@ -1457,7 +1498,7 @@ function buildLegend() {
   lg.innerHTML = `<div class="lt">${unit}${x4b}</div>
     <div class="rows"><div class="band" title="${tip}" style="height:${bh}px">${cells}</div><div class="ticks">${ticks}</div></div>
     ${PAL === "kma" && !kma ? `<div class="note">기상청 색을 아직 못 받았다 — 예측 분포 그림을 한 번 받으면 생긴다. 지금은 청색</div>` : ""}
-    ${ACCK.has(kind) && !CASE ? `<div class="note" title="누적 눈금은 자료 크기에 맞춰 자동으로 고른다(일곱 자 중 하나) — 경남 시군 최대 중 가장 큰 값이 끝 눈금 근처에 오게. 갱신해서 커지면 곧바로, 작아지면 다 들 때 바뀐다">자동 눈금${ACC_HI[kind] != null ? ` · 최대 ${(+ACC_HI[kind]).toFixed(ACC_HI[kind] >= 100 ? 0 : 1)}㎜` : ""}</div>` : ""}
+    ${ACCK.has(kind) && (!CASE || accFix()) ? `<div class="note" title="${accFix() ? `눈금을 ${SET.acc_scale}㎜ 끝으로 고정했다(${ACC_FIXED_NOTE[SET.acc_scale]}) — 화면 모두 같이. ` : "누적 눈금은 자료 크기에 맞춰 자동으로 고른다(일곱 자 중 하나) — 경남 시군 최대 중 가장 큰 값이 끝 눈금 근처에 오게. 갱신해서 커지면 곧바로, 작아지면 다 들 때 바뀐다. "}범례를 오른쪽 클릭하면 눈금을 고른다(자동 · 30 · 60 · 150 · 300 · 800㎜)">${accFix() ? `고정 눈금 ${SET.acc_scale}㎜` : "자동 눈금"}${ACC_HI[kind] != null && !CASE ? ` · 최대 ${(+ACC_HI[kind]).toFixed(ACC_HI[kind] >= 100 ? 0 : 1)}㎜` : ""}</div>` : ""}
     <div class="sw"><b class="h"></b>결측(땅)</div>
     <div class="sw"><b style="background:var(--land)"></b>0 · 비 없음</div>`;
   const b = $("b-x4");
@@ -1476,6 +1517,40 @@ async function togglePal() {
   buildLegend(); draw(); paintHead(); buildTL();
   if (CARDS && !CARDS.err) renderCards();
 }
+/* 누적 눈금 고르기 — 누적 층(격자 · AWS) 범례를 오른쪽 클릭. 자동 + 고정 다섯(ACC_FIXED) */
+function setAccScale(v) {
+  SET.acc_scale = v;
+  saveSetting({ acc_scale: v });
+  updScale(); buildLegend(); draw(); paintHead(); buildTL();
+  if (CARDS && !CARDS.err) renderCards();
+}
+function lgPop(ev) {
+  const pop = $("lg-pop");
+  if (!ev) { pop.classList.remove("open"); pop.hidden = true; return; }
+  const cur = accFix() ? SET.acc_scale : 0;
+  const auto = CASE ? STEPS.event : ACC_LADDER[ACC_TIER[kind] ?? 3];
+  const opt = (v, l, st) => `<button data-s="${v}" class="${cur === v ? "on" : ""}">${l}<small class="st">${st.join(" · ")}</small></button>`;
+  pop.innerHTML = `<div class="g">누적 눈금</div>`
+    + opt(0, `자동 — ${CASE ? "사례 눈금" : "자료 크기에 맞춰"}`, auto)
+    + Object.entries(ACC_FIXED).map(([v, st]) => opt(+v, `${v}㎜ <small>${ACC_FIXED_NOTE[v]}</small>`, st)).join("")
+    + `<div class="note">AWS 누적 · 격자 누적이 같이 바뀐다 — 화면 모두 같이(서버 설정). 설정(Ctrl+,) › 화면에도 있다</div>`;
+  // 범례 오른쪽 옆에 — 색 띠를 덮지 않게(고르면서 띠를 본다). 밑은 범례 밑에 맞춘다
+  const rc = $("stage").getBoundingClientRect(), lg = $("legend").getBoundingClientRect(), k = V?.k || 1;
+  pop.hidden = false;
+  const pw = pop.offsetWidth * k, ph = pop.offsetHeight * k;
+  pop.style.left = Math.max(4, Math.min(lg.right - rc.left + 10, rc.width - pw - 8)) / k + "px";
+  pop.style.top = Math.max(4, Math.min(lg.bottom - rc.top - ph, rc.height - ph - 8)) / k + "px";
+  void pop.offsetWidth; pop.classList.add("open");
+  for (const b of pop.querySelectorAll("button")) b.onclick = e => {
+    e.stopPropagation(); lgPop(null);
+    if (+b.dataset.s !== cur) setAccScale(+b.dataset.s);
+  };
+}
+$("legend").addEventListener("contextmenu", ev => {
+  if (!ACCK.has(kind)) return;                     // 시간 강수는 시우량 눈금 하나 — 고를 것이 없다
+  ev.preventDefault(); lgPop(ev);
+});
+document.addEventListener("pointerdown", ev => { if (!$("lg-pop").hidden && !ev.target.closest?.("#lg-pop")) lgPop(null); });
 
 /* ── 머리 ─────────────────────────────────────────────────────────── */
 /* 지금 시각 — 시연(스냅숏)이면 서버가 멈춰 둔 그 시각(/api/clock.js 가 맨 먼저 window.GN_NOW 를 둔다) */
@@ -4008,8 +4083,11 @@ function openPrefs() {
     <div class="row"><span class="k">타임라인 값</span>${seg("tl_stat", [["max", "시군 최대"], ["mean", "시군 평균"]])}</div>
     <h4>화면</h4>
     <div class="row"><span class="k">테마</span><span class="seg">
-      <button data-th="dark" class="${th !== "light" ? "on" : ""}">어둡게</button>
+      <button data-th="dark" class="${th === "dark" ? "on" : ""}">어둡게</button>
+      <button data-th="gray" class="${th === "gray" ? "on" : ""}">회색</button>
       <button data-th="light" class="${th === "light" ? "on" : ""}">밝게</button></span></div>
+    <div class="row"><span class="k">누적 눈금</span>${seg("acc_scale", [[0, "자동"], ...Object.keys(ACC_FIXED).map(v => [v, v + "㎜"])])}</div>
+    <div class="row"><span class="k"></span><span class="note">AWS · 격자 누적 범례 — 자동은 자료 크기에 맞춰 자를 바꾼다. 고정하면 시각끼리 · 화면끼리 같은 자로 견준다. 범례를 오른쪽 클릭해도 고른다.</span></div>
     <div class="row"><span class="k">시군 누르면</span>${seg("sel_zoom", [[true, "확대 — 읍면동 경계·이름"], [false, "테두리만"]])}</div>
     <div class="row"><span class="k">오른쪽 위 도구</span><span class="seg">${[["show", "항상"], ["auto", "마우스를 움직이면"], ["hide", "숨김"]]
       .map(([v, l]) => `<button data-tools="${v}" class="${TOOLS === v ? "on" : ""}">${l}</button>`).join("")}</span></div>
@@ -4037,6 +4115,7 @@ function openPrefs() {
     let v = b.dataset.v;
     v = (k === "tl_on" || k === "sel_zoom" || k === "aws_live") ? v === "true" : (k === "tl_stat" || k === "panel") ? v : +v;
     if (k === "aws_live") { setLive(v).then(openPrefs); return; }
+    if (k === "acc_scale") { setAccScale(v); openPrefs(); return; }
     SET[k] = v;
     saveSetting({ [k]: v });
     if (k === "tl_on") setTL(v, false);
@@ -4622,6 +4701,7 @@ document.addEventListener("keydown", ev => {
   if ((ev.ctrlKey || ev.metaKey) && ev.key === ",") { ev.preventDefault(); $("prefs").hidden ? openPrefs() : closePrefs(); return; }
   if (ev.key === "Escape") {
     if (!$("acc-ctx").hidden) { accCtx(null); return; }
+    if (!$("lg-pop").hidden) { lgPop(null); return; }
     if (!$("stn-pop").hidden) { stnPop(null); return; }
     if (!$("prefs").hidden) closePrefs(); else if (!$("help").hidden) closeHelp(); else if (selOn()) selectSig(null);
     return;

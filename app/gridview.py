@@ -1170,6 +1170,8 @@ SETTING_DEFAULT = {"layer": "obs60", "x4": False, "vsrt_n": 1,
                    "acc_hdr_pin": True,
                    # 비활성화한 AWS — [{id, name, sigun, org}]. 지도에서 관측소 점 오른쪽 클릭 → 비활성화. 면 · 카드 · 지금 오는 비에서 뺀다
                    "aws_off": [],
+                   # 누적(격자 · AWS) 범례 눈금 — 0: 자동(자료 크기에 맞춰), 그 밖은 끝 눈금(㎜)으로 고정. 범례 오른쪽 클릭
+                   "acc_scale": 0,
                    # 지도 위에 겹칠 레이어(왼쪽 위 '레이어'에서 켠다). 차츰 늘린다.
                    "overlays": []}
 OVERLAYS = ("alerts", "stations", "stnval")   # stnval = 관측소 옆 값 글자(관측소에 딸림)
@@ -1182,7 +1184,9 @@ _CHOICES = {"flow_step": (10, 20, 30, 60), "flow_hours": (1, 3, 6, 12),
             # 지도 색 — 청색 램프 / 기상청 레이더 색(범례 색 띠를 누르면 바뀐다)
             "pal": ("blue", "kma"),
             # 위 카드 줄 세우기 — 시군당 n곳, 0 = 시군 무관
-            "acc_per": (0, 1, 2, 3)}
+            "acc_per": (0, 1, 2, 3),
+            # 누적 눈금 — 0 = 자동, 나머지는 끝 눈금(㎜) 고정(map.html ACC_FIXED 와 같은 값)
+            "acc_scale": (0, 30, 60, 150, 300, 800)}
 _TEXT = {"tl_stat", "panel", "acc_basis", "acc_from", "pal"}
 
 
