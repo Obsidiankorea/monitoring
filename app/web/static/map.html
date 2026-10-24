@@ -499,8 +499,9 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
   70% { box-shadow: 0 0 0 8px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
 .cb { position: relative; flex: 1; min-height: 0; overflow: hidden; padding: 0 calc(10px * var(--k, 1)) calc(10px * var(--k, 1)); }
 .empty-note { color: var(--ink-3); font-size: calc(13px * var(--k, 1)); padding: 10px 8px; }
-/* 누적 줄 — 순위·다우지점 │ 누적 막대 + 예상 빗금 │ 선 그래프 │ 합 */
-.ar { display: grid; grid-template-columns: calc(118px * var(--k, 1)) 1fr calc(124px * var(--k, 1)) calc(56px * var(--k, 1));
+/* 누적 줄 — 순위·다우지점 │ 누적 막대 + 예상 빗금(값 글자) │ 선 그래프.
+   ⚠️ 예전에는 맨 오른쪽에 합(실측 + 예상) 칸이 있었다 — 막대 값 글자와 같은 말을 한 번 더 해서 뺐다(10-24) */
+.ar { display: grid; grid-template-columns: calc(118px * var(--k, 1)) 1fr calc(150px * var(--k, 1));
   align-items: center; gap: calc(10px * var(--k, 1)); height: var(--rh, 30px); padding: 0 6px; border-radius: 8px; cursor: pointer; }
 .ar:hover, .ar.hov, .mr:hover, .mr.hov, .fr:hover, .fr.hov { background: color-mix(in oklab, var(--accent) 13%, transparent); }
 .nm2 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 700; font-size: calc(15px * var(--k, 1)); }
@@ -536,8 +537,10 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
   font: 700 calc(13px * var(--k, 1)) var(--mono); color: var(--ink); text-shadow: 0 0 3px var(--halo), 0 0 6px var(--halo); }
 .abar .v i { font-style: normal; color: var(--rain-5); margin-left: 5px; }
 .ar svg { width: 100%; height: 82%; overflow: visible; }
-.tot { text-align: right; font: 700 calc(16px * var(--k, 1)) var(--mono); }
-.tot.z { color: var(--ink-3); font-weight: 500; }
+/* 선 그래프 봉우리 — 가장 많이 온 시각의 값. 카드에서 봉우리가 큰 몇 줄만(다 적으면 숫자 밭이 된다) */
+.sp-pk { fill: var(--ink); stroke: var(--halo); stroke-width: 3px; paint-order: stroke; font: 700 calc(10.5px * var(--k, 1)) var(--mono); }
+.sp-pd { fill: var(--rain-6); stroke: var(--halo); stroke-width: 1.5px; }
+.abar .v.dead { color: var(--ink-3); font-weight: 500; }
 .sp-a { fill: color-mix(in oklab, var(--rain-4) 26%, transparent); }
 .sp-l { fill: none; stroke: var(--rain-5); stroke-width: 1.5; stroke-linejoin: round; }
 .sp-fa { fill: color-mix(in oklab, var(--rain-4) 10%, transparent); }
@@ -857,7 +860,7 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
   <div id="rail" aria-label="강수 모니터링">
     <section class="card" id="c-acc">
       <div class="ch"><span class="live"></span><h3 id="acc-h" title="눌러서 기준 바꾸기 — AWS 관측소 ↔ 격자(500m)"><span id="acc-t">강수 누적</span><span class="bs"><b data-b="aws" title="AWS 관측소 — 지점(좌표) 값"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="4.3"/><path d="M8 1.3v3M8 11.7v3M1.3 8h3M11.7 8h3"/><circle class="f" cx="8" cy="8" r="1.2"/></svg></b><b data-b="grid" title="격자 500m — 칸 값"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.2" y="2.2" width="11.6" height="11.6" rx="1.2"/><path d="M6.07 2.2v11.6M9.93 2.2v11.6M2.2 6.07h11.6M2.2 9.93h11.6"/></svg></b></span></h3>
-        <button id="acc-fc" class="fctg on" aria-pressed="true" title="예상(앞으로 6시간) 보이기 — 막대의 연한 부분 · 선 그래프 점선 · 합 (F)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 12.5 7.5 8"/><path class="d" d="M8 8l5.5-5"/></svg></button>
+        <button id="acc-fc" class="fctg on" aria-pressed="true" title="예상(앞으로 6시간) 보이기 — 막대의 연한 부분(+값) · 선 그래프 점선 (F)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 12.5 7.5 8"/><path class="d" d="M8 8l5.5-5"/></svg></button>
         <button id="acc-h1" class="fctg on" aria-pressed="true" title="실측 중 최근 1시간 빗금으로 강조 (H)"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.6"/><path d="M8 5v3.2l2.2 1.4"/></svg></button>
         <button id="acc-full" class="fctg" aria-pressed="false" title="이 카드를 패널 가득 — 지금 오는 비 · 예측 상위를 감춘다. 다시 누르면 돌아온다 (G)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10"/></svg></button>
         <button id="acc-qpf" class="fctg" aria-pressed="false" title="아래에 초단기예측 이미지 재생(기상청 초단기강수예측 그림 · B 융합, 종합 화면 오른쪽 위와 같은 것) — 지금 오는 비 · 예측 상위 대신. 지도를 재생하면 그림이 같은 시각으로 따라간다 (Q)"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.2" y="3" width="11.6" height="10" rx="1.6"/><path class="d" d="M4.5 10.5c1.5-2.6 3-1 4.2-3.2s2-1.6 2.8-2.3"/></svg></button>
@@ -2786,7 +2789,7 @@ function renderAcc() {
   for (const r of rows) for (const v of [...r.d, ...r.fcd]) if (typeof v === "number" && v > smax) smax = v;
   // 축 끝은 줄들 가운데 예상이 가장 멀리 간 데까지(예상이 없는 줄이 맨 위여도 다른 줄이 밖으로 새지 않게)
   const t0 = Math.min(...rows[0].dt) - 1800e3, t1 = Math.max(rows[0].dt.at(-1), ...rows.flatMap(r => r.ft));
-  const SW = 124 * k, SH = rh * 0.82;
+  const SW = 150 * k, SH = rh * 0.82;
   const sx = t => (t - t0) / Math.max(1, t1 - t0) * SW, sy = v => SH - Math.min(v, smax) / smax * (SH - 3);
   // tn = 실측이 끝나는 '지금'. 단기는 전부 예보라 처음부터(마우스를 올리면 그 6시간 칸을 짚는다)
   A.sp = { t0, t1, SW, tn: A.day ? -Infinity : rows[0].dt.at(-1) };
@@ -2801,6 +2804,18 @@ function renderAcc() {
   // 다시 그리기 전 줄 자리 — 예상을 켜고 끄거나(합이 바뀐다) 시각이 바뀌어 순서가 달라지면 새 자리로 미끄러지게
   const before = new Map([...body.querySelectorAll(".ar[data-k]")].map(e => [e.dataset.k, e.getBoundingClientRect().top]));
   const lastNum = d => { for (let j = d.length - 1; j >= 0; j--) if (typeof d[j] === "number") return d[j]; return 0; };
+  // 봉우리 — 줄마다 실측 중 가장 많이 온 시각. 보이는 줄 가운데 봉우리가 큰 PEAK_N 줄만 값을 적는다(1㎜ 이상)
+  const PEAK_N = 5;
+  const peakOf = r => r.d.reduce((a, v, j) => (typeof v === "number" && (!a || v > a[1]) ? [r.dt[j], v] : a), null);
+  const peakSet = new Set(rows.slice(0, n).map(r => [r, peakOf(r)]).filter(([, p]) => p && p[1] >= 1)
+    .sort((a, b) => b[1][1] - a[1][1]).slice(0, PEAK_N).map(([r]) => r));
+  const peakTag = r => {
+    if (!peakSet.has(r)) return "";
+    const [t, v] = peakOf(r), x = sx(t), y = sy(v), fs = 10.5 * k, right = x > SW * 0.6;
+    const ty = Math.max(fs * 0.8, y + fs * 0.35);
+    return `<circle class="sp-pd" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(2.4 * k).toFixed(1)}"/>`
+      + `<text class="sp-pk" x="${(right ? x - 4 * k : x + 4 * k).toFixed(1)}" y="${ty.toFixed(1)}" text-anchor="${right ? "end" : "start"}">${v.toFixed(v >= 10 ? 0 : 1)}</text>`;
+  };
   body.innerHTML = rows.slice(0, n).map((r, i) => {
     const tot = r.sum + r.fc, o = r.sum / bmax * 100, f = r.fc / bmax * 100;
     // 실측 중 최근 1시간 — 실측 막대 안의 끝 몫(합을 넘지 않게)
@@ -2818,14 +2833,13 @@ function renderAcc() {
       <div class="abar"><div class="o${A.day ? " dayb" : hw >= o - 0.05 && !r.fc ? " all" : ""}" style="width:${o.toFixed(1)}%"></div>
         ${h1 >= 0.1 ? `<div class="h${r.fc ? "" : " end"}${hw >= o - 0.05 ? " all" : ""}" style="left:${(o - hw).toFixed(1)}%;width:${hw.toFixed(1)}%" title="그중 최근 1시간 ${h1.toFixed(1)}㎜"></div>` : ""}
         ${r.fc ? `<div class="f" style="left:${o.toFixed(1)}%;width:${f.toFixed(1)}%"></div>` : ""}
-        <span class="v" style="${vpos}"${ge}>${r.sum.toFixed(1)}${r.fc ? `<i>+${fcTxt(r.fc)}</i>` : ""}</span></div>
+        <span class="v${r.dead ? " dead" : ""}" style="${vpos}"${ge}>${r.dead ? "결측" : r.sum.toFixed(1)}${r.fc ? `<i>+${fcTxt(r.fc)}</i>` : ""}</span></div>
       <svg viewBox="0 0 ${SW.toFixed(0)} ${SH.toFixed(0)}" preserveAspectRatio="none">
         <path class="sp-a" d="${po.a}"/><path class="sp-l" d="${po.d}"/>
         <path class="sp-fa" d="${pf.a}"/><path class="sp-fl" d="${pf.d}"/>
         <line class="sp-now" x1="${xn}" x2="${xn}" y1="0" y2="${SH}"/>
         <line class="sp-head" x1="0" x2="0" y1="-2" y2="${SH + 2}" style="transform:translateX(-99px);visibility:hidden"/>
-        <line class="sp-hov" x1="0" x2="0" y1="-2" y2="${SH + 2}" style="transform:translateX(-99px)"/></svg>
-      <div class="tot ${tot && !r.dead ? "" : "z"}">${r.dead ? "결측" : ge + tot.toFixed(1)}</div></div>`;
+        <line class="sp-hov" x1="0" x2="0" y1="-2" y2="${SH + 2}" style="transform:translateX(-99px)"/>${peakTag(r)}</svg></div>`;
   }).join("") + (n < rows.length ? `<div class="case-note">외 ${rows.length - n}${A.basis === "grid" && A.sel ? "개 읍면동" : "곳"} — 적은 순이라 생략</div>` : "")
     + (A.note ? `<div class="case-note">${A.note}</div>` : "")
     + (A.moment ? `<div class="acc-lg">${A.basis === "aws"
