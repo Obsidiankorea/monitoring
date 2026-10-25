@@ -42,9 +42,9 @@
   --sea: #090D13;
   --land: #131B26;
   --land-nb: #0F151D;
-  --bd: #7D90A8;          /* 시군 경계 — 강수 청색 위에서도 보이게 밝게, 밑에 어두운 테두리(--bd-halo) */
-  --bd-halo: rgba(9, 13, 19, .62);
-  --coast: #4F6178;       /* 해안선·바깥 경계 */
+  --bd: #A6B6C9;          /* 시군 경계 — 강수 청색 위에서도 보이게 밝게, 밑에 어두운 테두리(--bd-halo) */
+  --bd-halo: rgba(9, 13, 19, .78);
+  --coast: #8A9CB2;       /* 해안선·바깥 경계 — ⚠️ #4F6178 은 청색 칸 위에서 묻혀 땅 · 바다가 안 갈렸다(10-25) */
   --zone: #A9BACD;        /* 권역 경계 */
   --halo: #090D13;        /* 글자 테두리 — 칠해진 칸 위에서도 읽히게 */
   --hatch: #8093A8;       /* 결측 빗금 */
@@ -82,8 +82,8 @@
   --sea: #E2E9F1;
   --land: #FFFFFF;
   --land-nb: #F2F5F9;
-  --bd: #6E8096; --bd-halo: rgba(255, 255, 255, .78);
-  --coast: #7F90A5;
+  --bd: #56677D; --bd-halo: rgba(255, 255, 255, .85);
+  --coast: #6C7D92;
   --zone: #2E3D50;
   --halo: #FFFFFF;
   --hatch: #6A7C92;
@@ -111,8 +111,8 @@
   --sea: #2B2F35;
   --land: #383D44;
   --land-nb: #32363C;
-  --bd: #AAB5C2; --bd-halo: rgba(30, 33, 38, .6);
-  --coast: #737D89;
+  --bd: #C3CCD6; --bd-halo: rgba(30, 33, 38, .75);
+  --coast: #A0AAB6;
   --zone: #D3DAE2;
   --halo: #2B2F35;
   --hatch: #949FAC;
@@ -299,10 +299,11 @@ body.tools-auto.moving #tools { opacity: 1; pointer-events: auto; }
 #over { pointer-events: none; }
 /* 경계 — 선 밑에 반대색 테두리(halo)를 깐다. ⚠️ 시군 경계색이 강수 청색과 명도가 비슷해 단기·누적처럼 넓게
    칠해지면 묻혔다. 비 없는 땅 위에서는 테두리가 바탕과 같은 색이라 예전 모양 그대로다 */
-#over .bh { fill: none; stroke: var(--bd-halo); stroke-width: 3.2; stroke-linejoin: round; }
-#over .bh.z { stroke-width: 5; }
-#over .sg { fill: none; stroke: var(--bd); stroke-width: 1.1; stroke-linejoin: round; }
-#over .cs { fill: none; stroke: var(--coast); stroke-width: 1.1; }
+/* 경계 — 강수 칸 위에서도 또렷이(10-25 굵게 · 밝게). 밑에 어두운 테두리(bh)를 깔고 위에 밝은 선 */
+#over .bh { fill: none; stroke: var(--bd-halo); stroke-width: 4; stroke-linejoin: round; }
+#over .bh.z { stroke-width: 5.5; }
+#over .sg { fill: none; stroke: var(--bd); stroke-width: 1.6; stroke-linejoin: round; }
+#over .cs { fill: none; stroke: var(--coast); stroke-width: 1.5; stroke-linejoin: round; }
 #over .zn { fill: none; stroke: var(--zone); stroke-width: 2.6; stroke-dasharray: 9 6; stroke-linecap: round; }
 #over .sb { fill: none; stroke: var(--zone); stroke-width: 1.5; stroke-dasharray: 3 5; opacity: .8; }
 #over #hl { fill: color-mix(in oklab, var(--accent) 12%, transparent); stroke: var(--accent); stroke-width: 3;
@@ -1435,7 +1436,7 @@ const COLLECT_OF = { obs15: "grid", obs60: "grid", obsday: "grid", acc: "grid", 
                      shrt_today: "short", shrt_tomorrow: "short" };
 const SET_DEFAULT = { flow_step: 10, flow_hours: 6, play_ms: 1200, tl_on: false, tl_stat: "max",
                       panel: "cards", acc_hours: 12, acc_from: "hours", acc_basis: "aws", sel_zoom: true, acc_fc: true, acc_h1: true,
-                      acc_per: 1, acc_full: false, aws_live: false, acc_qpf: false, qpf_ms: 600, acc_date: "", acc_hdr_pin: true, acc_tone: false, aws_off: [], acc_scale: 0, sea_w: "fc", sea_rot: 0, sea_per: 1, shows: [] };
+                      acc_per: 1, acc_full: false, aws_live: false, acc_qpf: false, qpf_ms: 600, acc_date: "", acc_hdr_pin: true, acc_tone: false, sea_grid: "dim", aws_off: [], acc_scale: 0, sea_w: "fc", sea_rot: 0, sea_per: 1, shows: [] };
 
 let META = null, TOPO = null, GEO = null, MSIG = null, MEMD = null, EMDN = null;
 let SET = { ...SET_DEFAULT };
@@ -1670,11 +1671,15 @@ function landMask(grid, h, w) {
   return LAND5;
 }
 
+/* 바다 격자 — 경남 · 부산 · 울산 땅(시군 칸 지도) 밖 칸(바다 · 그 너머)은 옅게 칠한다(서버 설정 sea_grid).
+   ⚠️ 바다 위 비도 땅과 같은 세기로 칠했더니 해안선이 묻혀 땅 · 바다가 갈리지 않았다(10-25). 다가오는 비 띠는 보이게 끄지는 않는다(기본) */
+const SEA_A = { full: 1, dim: 0.35, off: 0 };
+const seaA = () => SEA_A[SET.sea_grid] ?? SEA_A.dim;
 /* 격자 한 장을 칸 = 픽셀인 작은 그림으로. 층·눈금·테마마다 한 번만 만든다. */
 const OFF = new Map();
 function offscreen(gr) {
-  const steps = stepsOf(kind), fac = factor(), css = colsOf(kind);
-  const key = gr.ck + "|" + steps.join(",") + "|" + fac + "|" + css.join(",") + "|" + document.documentElement.dataset.theme;
+  const steps = stepsOf(kind), fac = factor(), css = colsOf(kind), sa = seaA();
+  const key = gr.ck + "|" + steps.join(",") + "|" + fac + "|" + css.join(",") + "|" + document.documentElement.dataset.theme + "|" + sa;
   if (OFF.has(key)) return OFF.get(key);
   const { h, w, u, grid } = gr;
   const table = lut(steps, fac, css), land = landMask(grid, h, w);
@@ -1689,7 +1694,8 @@ function offscreen(gr) {
       const v = u[src + c];
       if (v === MISSING) {
         if (land[src + c]) { mp[dst + c] = 0xff000000; nmiss++; }
-      } else px[dst + c] = table[v];
+      } else if (land[src + c] || sa === 1) px[dst + c] = table[v];
+      else if (sa) { const t = table[v]; px[dst + c] = (t & 0xffffff) | (Math.round((t >>> 24) * sa) << 24); }
     }
   }
   ic.putImageData(id, 0, 0);
@@ -4945,6 +4951,8 @@ function openPrefs() {
       <button data-th="dark" class="${th === "dark" ? "on" : ""}">어둡게</button>
       <button data-th="gray" class="${th === "gray" ? "on" : ""}">회색</button>
       <button data-th="light" class="${th === "light" ? "on" : ""}">밝게</button></span></div>
+    <div class="row"><span class="k">바다 격자</span>${seg("sea_grid", [["full", "그대로"], ["dim", "흐리게"], ["off", "끔"]])}</div>
+    <div class="row"><span class="k"></span><span class="note">경남 · 부산 · 울산 땅 밖(바다 · 그 너머) 칸을 옅게 — 땅 · 바다가 갈리게. 흐리게는 다가오는 비 띠가 보일 만큼(35%).</span></div>
     <div class="row"><span class="k">바다 위젯</span>${seg("sea_w", [["off", "끔"], ["fc", "예측 상위"], ["now", "지금 오는 비"], ["avg", "시군 평균"]])}</div>
     <div class="row"><span class="k">위젯 돌리기</span>${seg("sea_rot", [[0, "끔"], [10, "10초"], [15, "15초"], [20, "20초"], [30, "30초"], [60, "1분"]])}</div>
     <div class="row"><span class="k">위젯 예측</span>${seg("sea_per", [[1, "시군당 1곳"], [2, "시군당 2곳"]])}</div>
@@ -4985,7 +4993,7 @@ function openPrefs() {
   for (const b of $("prefs").querySelectorAll("button[data-k]")) b.onclick = () => {
     const k = b.dataset.k;
     let v = b.dataset.v;
-    v = (k === "tl_on" || k === "sel_zoom" || k === "aws_live") ? v === "true" : (k === "tl_stat" || k === "panel" || k === "sea_w") ? v : +v;
+    v = (k === "tl_on" || k === "sel_zoom" || k === "aws_live") ? v === "true" : (k === "tl_stat" || k === "panel" || k === "sea_w" || k === "sea_grid") ? v : +v;
     if (k === "aws_live") { setLive(v).then(openPrefs); return; }
     if (k === "acc_scale") { setAccScale(v); openPrefs(); return; }
     if (k === "sea_w") { setSw(v); openPrefs(); return; }
@@ -5000,6 +5008,7 @@ function openPrefs() {
     if (k === "qpf_ms" && QPF.play) qpfStart();
     if (k === "tl_stat") buildTL();
     if (k === "sel_zoom") { if (zoomOn()) ensureEmd(); camGo(true); }
+    if (k === "sea_grid") draw();
     openPrefs();
   };
   for (const b of $("prefs").querySelectorAll("button[data-show]")) b.onclick = () => {

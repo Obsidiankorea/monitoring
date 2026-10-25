@@ -1176,6 +1176,8 @@ SETTING_DEFAULT = {"layer": "obs60", "x4": False, "vsrt_n": 1,
                    "acc_hdr_pin": True,
                    # 강수 누적 막대 색 — False: 한 색, True: 지도 범례 색조(값마다 그 범주 색). 막대를 누르면 바뀐다
                    "acc_tone": False,
+                   # 바다 격자 — 경남 · 부산 · 울산 땅 밖 칸: full 그대로 · dim 옅게(기본) · off 칠하지 않음
+                   "sea_grid": "dim",
                    # 비활성화한 AWS — [{id, name, sigun, org}]. 지도에서 관측소 점 오른쪽 클릭 → 비활성화. 면 · 카드 · 지금 오는 비에서 뺀다
                    "aws_off": [],
                    # 누적(격자 · AWS) 범례 눈금 — 0: 자동(자료 크기에 맞춰), 그 밖은 끝 눈금(㎜)으로 고정. 범례 오른쪽 클릭
@@ -1205,8 +1207,8 @@ _CHOICES = {"flow_step": (10, 20, 30, 60), "flow_hours": (1, 3, 6, 12),
             # 누적 눈금 — 0 = 자동, 나머지는 끝 눈금(㎜) 고정(map.html ACC_FIXED 와 같은 값)
             "acc_scale": (0, 30, 60, 150, 300, 800),
             "sea_w": ("off", "fc", "now", "avg"),
-            "sea_rot": (0, 10, 15, 20, 30, 60), "sea_per": (1, 2)}
-_TEXT = {"tl_stat", "panel", "acc_basis", "acc_from", "pal", "sea_w"}
+            "sea_rot": (0, 10, 15, 20, 30, 60), "sea_per": (1, 2), "sea_grid": ("full", "dim", "off")}
+_TEXT = {"tl_stat", "panel", "acc_basis", "acc_from", "pal", "sea_w", "sea_grid"}
 
 
 def setting() -> dict:
