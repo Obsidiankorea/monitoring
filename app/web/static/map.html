@@ -592,7 +592,7 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 .sp-pd { fill: var(--rain-6); stroke: var(--halo); stroke-width: 1.5px; }
 /* 평균 시우량 — 가는 점선 + 작은 글자(봉우리보다 한 단계 흐리게) */
 .sp-avg { stroke: var(--ink-2); stroke-width: 1.1px; stroke-dasharray: 3 2.5; opacity: .85; }
-.sp-av { fill: var(--ink-2); stroke: var(--halo); stroke-width: 3px; paint-order: stroke; font: 600 calc(9.5px * var(--k, 1)) var(--sans); }
+.sp-av { fill: var(--ink-2); stroke: var(--halo); stroke-width: 3px; paint-order: stroke; font: 500 calc(10px * var(--k, 1)) var(--mono); }
 .acc-lg .av { height: 0 !important; border-top: 1.5px dashed var(--ink-2); vertical-align: 3px !important; border-radius: 0 !important; }
 .abar .v.dead { color: var(--ink-3); font-weight: 500; }
 /* 맨 오른쪽 — 최근 1시간 칩. 시우량 자(지도 1시간 · 지금 오는 비와 같은 색)로 칠한다. 0 이면 흐리게(10-24, 합 칸을 뺀 자리) */
@@ -3372,7 +3372,9 @@ function renderAcc() {
     return `<circle class="sp-pd" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(2.4 * k).toFixed(1)}"/>`
       + `<text class="sp-pk" x="${(right ? x - 4 * k : x + 4 * k).toFixed(1)}" y="${ty.toFixed(1)}" text-anchor="${right ? "end" : "start"}">${v.toFixed(v >= 10 ? 0 : 1)}</text>`;
   };
-  // 평균 시우량 — 실측 구간(0 인 시각도 넣어) 칸 값의 평균을 가로 점선으로, 글자는 봉우리 반대쪽 끝에(10-27).
+  // 평균 시우량 — 실측 구간(0 인 시각도 넣어) 칸 값의 평균을 가로 점선으로, 값은 봉우리 반대쪽 끝에(10-27).
+  // 글자는 숫자만(흐린 회색 · 가는 글씨) — 봉우리는 흰 굵은 글씨 + 점이라 갈린다. 무엇인지는 맨 아래 범례 '--- 평균 시우량'.
+  // ⚠️ '평균 8.5' · 윗첨자 avg · x̄ 를 견줘 보고 숫자만으로(10-27)
   // 누적 ÷ 시간과 같은 말 — '꾸준히 왔나 · 한 번에 쏟았나'를 봉우리와 견준다. 단기(예보 합)에는 긋지 않는다
   let anyAvg = false;
   const avgTag = r => {
@@ -3382,11 +3384,11 @@ function renderAcc() {
     const m = pts.reduce((a, [, v]) => a + v, 0) / pts.length;
     if (m < 0.1) return "";
     anyAvg = true;
-    const x0 = sx(pts[0][0]), x1 = sx(pts.at(-1)[0]), y = sy(m), fs = 9.5 * k, pk = peakOf(r);
+    const x0 = sx(pts[0][0]), x1 = sx(pts.at(-1)[0]), y = sy(m), fs = 10 * k, pk = peakOf(r);
     const left = !pk || sx(pk[0]) > (x0 + x1) / 2;          // 봉우리가 오른쪽이면 글자는 왼쪽 끝
     const ty = y - 3 * k < fs ? y + fs + 1 * k : y - 3 * k;
     return `<line class="sp-avg" x1="${x0.toFixed(1)}" x2="${x1.toFixed(1)}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}"/>`
-      + `<text class="sp-av" x="${(left ? x0 + 2 * k : x1 - 2 * k).toFixed(1)}" y="${ty.toFixed(1)}" text-anchor="${left ? "start" : "end"}">평균 ${m.toFixed(m >= 10 ? 0 : 1)}</text>`;
+      + `<text class="sp-av" x="${(left ? x0 + 2 * k : x1 - 2 * k).toFixed(1)}" y="${ty.toFixed(1)}" text-anchor="${left ? "start" : "end"}">${m.toFixed(m >= 10 ? 0 : 1)}</text>`;
   };
   // 최근 1시간 칩 — 시우량 자(SIU)로 칠한다. 막대 빗금과 같은 단추(H)로 켜고 끈다
   body.classList.toggle("h1c", h1On);
