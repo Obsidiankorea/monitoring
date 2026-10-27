@@ -78,8 +78,19 @@ def in_gyeongnam(reg_up: str, reg: str) -> bool:
     return reg_up.removesuffix("군") in SUBZONES
 
 
+def canon_reg(reg: str) -> str:
+    """세부구역 이름을 한 꼴로. '하동군북부' → '하동북부'.
+    ⚠️ API 가 세부구역을 '하동군북부' · '산청군서남부'처럼 군을 붙여 주기도 한다(10-27) — SUBZONES 꼴만 보면
+    시군을 못 찾아 특보 줄에 이름이 날것으로 · 지도에는 안 그어졌다."""
+    for sig in SUBZONES:
+        if reg.startswith(sig + "군") and reg.endswith("부") and len(reg) > len(sig) + 2:
+            return sig + reg[len(sig) + 1:]
+    return reg
+
+
 def sigun_of(reg: str) -> str | None:
-    """구역명에서 시군을 찾는다. '합천중부' → '합천'."""
+    """구역명에서 시군을 찾는다. '합천중부' · '합천군중부' → '합천'."""
+    reg = canon_reg(reg)
     for sig, subs in SUBZONES.items():
         if reg in subs:
             return sig
@@ -87,7 +98,8 @@ def sigun_of(reg: str) -> str | None:
 
 
 def sub_of(reg: str) -> str:
-    """세부구역 접미사. '합천중부' → '중'."""
+    """세부구역 접미사. '합천중부' · '합천군중부' → '중'."""
+    reg = canon_reg(reg)
     for subs in SUBZONES.values():
         if reg in subs:
             return subs[reg]

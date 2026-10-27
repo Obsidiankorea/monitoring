@@ -113,8 +113,11 @@ def normalize(raw: bytes | str, now: datetime) -> dict:
         return "warn" if name.endswith("경보") else "watch"
 
     out = []
+    rank = lambda s: ORDER.index(s) if s in ORDER else 99           # 관제순(창원 · 진주 · 통영 … 합천)
     for g in groups.values():
-        g["siguns"].sort(key=lambda s: ORDER.index(s) if s in ORDER else 99)
+        g["siguns"].sort(key=rank)
+        if not g["sea"]:
+            g["regions"].sort(key=lambda r: (rank(sigun_of(r)), r))
         out.append({
             "lv": lv_of(g["name"]), "name": g["name"], "sea": g["sea"],
             "tmfc": g["tmfc"][8:10] + ":" + g["tmfc"][10:12] if len(g["tmfc"]) >= 12 else g["tmfc"],

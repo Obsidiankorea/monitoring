@@ -90,6 +90,8 @@ def test_put_setting_validates(monkeypatch):
     assert gridview.SETTING_DEFAULT["acc_tone"] is False and gridview.put_setting({"acc_tone": 1})["acc_tone"] is True
     # 바다 격자 — 기본 옅게
     assert gridview.SETTING_DEFAULT["sea_grid"] == "dim" and gridview.put_setting({"sea_grid": "off"})["sea_grid"] == "off"
+    # 특보 줄 예비특보 — 기본 보이기
+    assert gridview.SETTING_DEFAULT["al_pre"] is True and gridview.put_setting({"al_pre": 0})["al_pre"] is False
     # 화면 재생 목록 — 같은 종류 여럿(AWS 24 · 48시간), 이름이 같으면 뒤의 것
     shows = [{"name": "기본", "items": [{"t": "acc_h", "b": "aws", "h": 24, "sec": 30}, {"t": "acc_h", "b": "aws", "h": 48, "sec": 20},
                                         {"t": "shrt_today", "sec": 15}, {"t": "vsrt", "n": 3, "sec": 10}]},

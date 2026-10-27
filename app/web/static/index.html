@@ -2483,13 +2483,39 @@ document.getElementById("zn-grid").addEventListener("mousemove", e => {
 });
 document.getElementById("zn-grid").addEventListener("mouseleave", () => tip.classList.remove("on"));
 
+/* 특보구역 → [시군, 세부(윗첨자)]. '하동군북부' · '하동북부' → ['하동', '북부'], '창원시' → ['창원', ''].
+   ⚠️ API 가 세부구역을 군을 붙여 주기도 한다(10-27). 바다 구역은 그대로 */
+function regPart(reg) {
+  for (const s of ORDER) if (reg.startsWith(s)) {
+    const rest = reg.slice(s.length).replace(/^[시군]/, "");
+    if (rest === "") return [s, ""];
+    if (/^[동서남북중]{1,2}부$/.test(rest)) return [s, rest];
+  }
+  return [reg, ""];
+}
+/* 같은 시군의 세부구역을 하나로 — 거창 북부 · 남부 → 거창(그 군의 세부가 다 들면), 산청 북부 · 서남부 → 산청 북부·서남부.
+   서버 domain/regions.py SUBZONES 와 같다. 바다 구역은 그대로 */
+const SUBZ = { 합천: ["서북부", "중부", "남부"], 산청: ["북부", "서남부", "동남부"], 함양: ["중부", "서북부"], 거창: ["북부", "남부"], 하동: ["북부", "남부"] };
+function mergeRegs(list) {
+  const out = [], by = new Map();
+  for (const [r, sub] of list) {
+    if (!ORDER.includes(r)) { out.push([r, sub]); continue; }
+    if (!by.has(r)) { by.set(r, new Set()); out.push([r, by.get(r)]); }
+    by.get(r).add(sub);
+  }
+  return out.map(([r, s]) => {
+    if (typeof s === "string") return [r, s];
+    const whole = s.has("") || (!!SUBZ[r] && SUBZ[r].every(x => s.has(x)));
+    return [r, whole ? "" : [...new Set([...(SUBZ[r] || []), ...s])].filter(x => s.has(x)).join("·")];
+  });
+}
 async function loadAlerts() {
   const j = DEMO ? DEMO.alerts : await getJson("/api/alerts");
   FEEDS.alerts.base = (j.base_time || "").slice(11, 16) + " 현재";
   const g = j.data || { groups: [], pending: [] };
   ALERTS = g.groups.map(x => ({
     lv: x.lv, name: x.name, sea: x.sea, tmfc: x.tmfc, spots: x.count,
-    regions: x.regions.map(r => [r, ""]), note: null,
+    regions: x.sea ? x.regions.map(r => [r, ""]) : mergeRegs(x.regions.map(regPart)), note: null,
   }));
   for (const k of Object.keys(ALERT_LV)) delete ALERT_LV[k];
   for (const x of g.groups)
@@ -2497,15 +2523,17 @@ async function loadAlerts() {
       if (x.lv === "warn" || !ALERT_LV[sig]) ALERT_LV[sig] = x.lv;
   const later = (g.pending || []).filter(x => x.kind === "later");
   if (later.length && ALERTS.length)
-    ALERTS[0].note = `발효 예정 <b>${later.length}건</b> — ${later.map(x => x.reg).join(", ")}`;
+    ALERTS[0].note = `발효 예정 <b>${later.length}건</b> — ${Object.entries(later.reduce((a, x) => ((a[x.name] ||= []).push(x), a), {}))
+      .map(([n, xs]) => `${n} ${mergeRegs(xs.map(x => regPart(x.reg)).sort((a, b) => (ORDER.indexOf(a[0]) + 1 || 99) - (ORDER.indexOf(b[0]) + 1 || 99)))
+        .map(([r, sub]) => r + (sub ? `<sup>${sub}</sup>` : "")).join(", ")}`).join(" / ")}`;
   /* 예비특보(태풍 · 호우 …) — 발효 중인 것 뒤에 예비 색으로. ⚠️ 예전에는 받기만 하고 띄우지 않아
      태풍 예비특보가 내려도 이 줄에는 '발효 중인 특보 없음'만 보였다(10-24). 이름 · 발효 예상이 같은 것끼리 묶는다 */
   const pre = {};
   for (const p of (g.pending || []).filter(x => x.kind === "pre")) {
     const k = `${p.name}|${p.when}`;
     const a = pre[k] ||= { lv: "pre", name: `${p.name} 예비특보`, sea: true, tmfc: p.when || "", spots: 0, regions: [], note: null, _s: new Set() };
-    const where = p.sigun || p.reg;
-    if (!a._s.has(where)) { a._s.add(where); a.regions.push([where, p.sea ? "바다" : ""]); }
+    const [where, sub] = p.sea ? [p.reg, "바다"] : regPart(p.reg || p.sigun || "");
+    if (!a._s.has(where + sub)) { a._s.add(where + sub); a.regions.push([where, sub]); }
     if (!p.sea) a.sea = false;
   }
   for (const a of Object.values(pre)) { a.spots = a._s.size; delete a._s; ALERTS.push(a); }

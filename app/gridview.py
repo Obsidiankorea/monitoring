@@ -1178,6 +1178,8 @@ SETTING_DEFAULT = {"layer": "obs60", "x4": False, "vsrt_n": 1,
                    "acc_tone": False,
                    # 바다 격자 — 경남 · 부산 · 울산 땅 밖 칸: full 그대로 · dim 옅게(기본) · off 칠하지 않음
                    "sea_grid": "dim",
+                   # 왼쪽 특보 줄에 예비특보(태풍 · 호우 …)를 보일지 — 줄 머리 밑 '예비' 체크
+                   "al_pre": True,
                    # 비활성화한 AWS — [{id, name, sigun, org}]. 지도에서 관측소 점 오른쪽 클릭 → 비활성화. 면 · 카드 · 지금 오는 비에서 뺀다
                    "aws_off": [],
                    # 누적(격자 · AWS) 범례 눈금 — 0: 자동(자료 크기에 맞춰), 그 밖은 끝 눈금(㎜)으로 고정. 범례 오른쪽 클릭
@@ -1264,7 +1266,7 @@ def put_setting(body: dict) -> dict:
     if "layer" in body:
         split(str(body["layer"]))            # 모르는 층이면 LookupError
         cur["layer"] = str(body["layer"])
-    for k in ("x4", "tl_on", "sel_zoom", "acc_fc", "acc_h1", "acc_full", "aws_live", "acc_qpf", "acc_hdr_pin", "acc_tone"):
+    for k in ("x4", "tl_on", "sel_zoom", "acc_fc", "acc_h1", "acc_full", "aws_live", "acc_qpf", "acc_hdr_pin", "acc_tone", "al_pre"):
         if k in body:
             cur[k] = bool(body[k])
     if "vsrt_n" in body:
