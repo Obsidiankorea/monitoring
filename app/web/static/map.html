@@ -4003,7 +4003,7 @@ function regSig(reg) {
 /* 세부구역 — 군마다 나뉜 특보구역(서버 domain/regions.py SUBZONES 와 같다). 다 들면 그 군 전체로 적는다 */
 const SUBZ = { 합천: ["서북", "중", "남"], 산청: ["북", "서남", "동남"], 함양: ["중", "서북"], 거창: ["북", "남"], 하동: ["북", "남"] };
 /* [[시군, 세부('' = 전체)], …] → '창원 · 진주 · 하동<sup>북부</sup>'. 관제순(창원 · 진주 · 통영 … 합천), 같은 시군은 한 번,
-   세부는 윗첨자(둘이면 '북부·남부' — 다 들면 시군만). 경남 열여덟이 다 들면 '경남 전역' */
+   세부는 윗첨자(둘이면 '북·서남부' — '부'는 끝에 한 번, 그 군의 세부가 다 들면 생략하고 시군만). 경남 열여덟이 다 들면 '경남 전역' */
 function regsHtml(items) {
   const by = {};
   for (const [s, sub] of items) if (s) (by[s] ||= new Set()).add(sub || "");
@@ -4012,7 +4012,7 @@ function regsHtml(items) {
   if (sigs.length === all.length && sigs.every(whole)) return `<span class="rg">경남 전역</span>`;
   return sigs.map(s => {
     const subs = whole(s) ? [] : [...new Set([...(SUBZ[s] || []), ...by[s]])].filter(x => x && by[s].has(x));
-    return `<span class="rg">${s}${subs.length ? `<sup>${subs.map(x => x + "부").join("·")}</sup>` : ""}</span>`;
+    return `<span class="rg">${s}${subs.length ? `<sup>${subs.join("·")}부</sup>` : ""}</span>`;
   }).join(" · ");
 }
 /* 특보 한 줄(발효 예정 · 예비)의 자리 — 육상은 [시군, 세부], 바다는 줄인 이름 */

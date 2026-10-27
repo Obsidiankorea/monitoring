@@ -2493,7 +2493,7 @@ function regPart(reg) {
   }
   return [reg, ""];
 }
-/* 같은 시군의 세부구역을 하나로 — 거창 북부 · 남부 → 거창(그 군의 세부가 다 들면), 산청 북부 · 서남부 → 산청 북부·서남부.
+/* 같은 시군의 세부구역을 하나로 — 거창 북부 · 남부 → 거창(그 군의 세부가 다 들면), 산청 북부 · 서남부 → 산청 북·서남부('부'는 끝에 한 번).
    서버 domain/regions.py SUBZONES 와 같다. 바다 구역은 그대로 */
 const SUBZ = { 합천: ["서북부", "중부", "남부"], 산청: ["북부", "서남부", "동남부"], 함양: ["중부", "서북부"], 거창: ["북부", "남부"], 하동: ["북부", "남부"] };
 function mergeRegs(list) {
@@ -2506,7 +2506,7 @@ function mergeRegs(list) {
   return out.map(([r, s]) => {
     if (typeof s === "string") return [r, s];
     const whole = s.has("") || (!!SUBZ[r] && SUBZ[r].every(x => s.has(x)));
-    return [r, whole ? "" : [...new Set([...(SUBZ[r] || []), ...s])].filter(x => s.has(x)).join("·")];
+    return [r, whole ? "" : [...new Set([...(SUBZ[r] || []), ...s])].filter(x => s.has(x)).map(x => x.replace(/부$/, "")).join("·") + "부"];
   });
 }
 async function loadAlerts() {
