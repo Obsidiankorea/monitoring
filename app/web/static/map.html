@@ -590,6 +590,16 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 /* 선 그래프 봉우리 — 가장 많이 온 시각의 값. 카드에서 봉우리가 큰 몇 줄만(다 적으면 숫자 밭이 된다) */
 .sp-pk { fill: var(--ink); stroke: var(--halo); stroke-width: 3px; paint-order: stroke; font: 700 calc(10.5px * var(--k, 1)) var(--mono); }
 .sp-pd { fill: var(--rain-6); stroke: var(--halo); stroke-width: 1.5px; }
+/* 선 그래프 마우스 — 그 줄의 짚은 칸(점) + 커서 위 쪽지 */
+.sp-hd { fill: var(--ink); stroke: var(--accent); stroke-width: 1.5px; opacity: 0; pointer-events: none; }
+.sp-hd.on { opacity: 1; }
+#sptip { position: fixed; z-index: 41; pointer-events: none; white-space: nowrap; padding: calc(5px * var(--k, 1)) calc(9px * var(--k, 1));
+  border-radius: 8px; font: 500 calc(13px * var(--k, 1))/1.4 var(--sans); color: var(--ink-2);
+  background: color-mix(in oklab, var(--panel) 96%, transparent); border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+#sptip b { color: var(--ink); font-weight: 700; }
+#sptip b.v { font-family: var(--mono); color: var(--accent); }
+#sptip i { font-style: normal; font-size: .85em; color: var(--rain-5); }
+#sptip small { display: block; font-size: calc(10.5px * var(--k, 1)); color: var(--ink-3); }
 /* 평균 시우량 — 가는 점선 + 작은 글자(봉우리보다 한 단계 흐리게) */
 .sp-avg { stroke: var(--ink-2); stroke-width: 1.1px; stroke-dasharray: 3 2.5; opacity: .85; }
 .sp-av { fill: var(--ink-2); stroke: var(--halo); stroke-width: 3px; paint-order: stroke; font: 500 calc(10px * var(--k, 1)) var(--mono); }
@@ -1233,6 +1243,7 @@ body.show-on #play { bottom: 46px; }      /* 점 자리를 비운다 */
 <div id="showdlg" hidden></div>
 <div id="help" hidden></div>
 <div id="pop" hidden></div>
+<div id="sptip" hidden></div>
 
 <script src="/api/clock.js"></script>
 <script src="vendor/d3-array.min.js"></script>
@@ -2191,6 +2202,7 @@ async function show(fade = false) {
 
 function choose(k, save) {
   const cardWas = cardKey();
+  ACC_HOLD = false;
   kind = k;
   if (!CASE) OBS_TM = null;              // 메뉴로 고르면 늘 '지금'(사례는 보던 시각 그대로)
   if (save) saveSetting(k === "vsrt" ? { layer: "vsrt", vsrt_n: vsrtN } : { layer: k });
@@ -2953,7 +2965,11 @@ function perSigun(list, val) {
   return ORDER_GN().flatMap(s => by[s] || []);
 }
 /* 위 카드가 지도를 따른다 — 누적이면 강수 누적, 단기면 그날 합, 15분 · 1시간 · 실황 · 초단기면 '그 시각' 값 */
-const momentK = () => !CASE && (kind === "obs15" || kind === "odam" || FLOWK.has(kind));
+// ACC_HOLD — 강수 누적 선 그래프에서 오른쪽 클릭으로 그 시각 1시간 지도로 갔을 때는 카드를 강수 누적에 붙들어 둔다
+// (그 시각 카드는 재생 흐름 몇 시간만 있어 지난 시각이면 빈 카드가 됐다 — 선 그래프에 지도 시각 세로선이 그어진다).
+// 층을 다시 고르면(메뉴 · 숫자 키 · 화면 재생) 풀린다
+let ACC_HOLD = false;
+const momentK = () => !CASE && !ACC_HOLD && (kind === "obs15" || kind === "odam" || FLOWK.has(kind));
 const cardKey = () => isDay() ? kind : momentK() ? "moment" : "acc";
 async function cardsFromApi() {
   const { H } = accSpan();
@@ -3349,7 +3365,8 @@ function renderAcc() {
   const SW = 150 * k, SH = rh * 0.82;
   const sx = t => (t - t0) / Math.max(1, t1 - t0) * SW, sy = v => SH - Math.min(v, smax) / smax * (SH - 3);
   // tn = 실측이 끝나는 '지금'. 단기는 전부 예보라 처음부터(마우스를 올리면 그 6시간 칸을 짚는다)
-  A.sp = { t0, t1, SW, tn: A.day ? -Infinity : rows[0].dt.at(-1) };
+  A.sp = { t0, t1, SW, sy, tn: A.day ? -Infinity : rows[0].dt.at(-1) };
+  A.vis = new Map(rows.slice(0, n).map(r => [`${r.sig}|${r.stn}`, r]));    // 선 그래프에 마우스 — 줄 → 값
   const sline = (ts, vs, from) => {
     let pts = ts.map((t, i) => [t, vs[i]]).filter(([, v]) => typeof v === "number");
     if (from) pts = [from, ...pts];
@@ -3429,7 +3446,7 @@ function renderAcc() {
         <path class="sp-fa" d="${pf.a}"/><path class="sp-fl" d="${pf.d}"/>
         <line class="sp-now" x1="${xn}" x2="${xn}" y1="0" y2="${SH}"/>
         <line class="sp-head" x1="0" x2="0" y1="-2" y2="${SH + 2}" style="transform:translateX(-99px);visibility:hidden"/>
-        <line class="sp-hov" x1="0" x2="0" y1="-2" y2="${SH + 2}" style="transform:translateX(-99px)"/>${avgTag(r)}${peakTag(r)}</svg>${h1On ? h1Chip(r, h1raw) : ""}</div>`;
+        <line class="sp-hov" x1="0" x2="0" y1="-2" y2="${SH + 2}" style="transform:translateX(-99px)"/>${avgTag(r)}${peakTag(r)}<circle class="sp-hd" cx="-99" cy="-99" r="${(3 * k).toFixed(1)}"/></svg>${h1On ? h1Chip(r, h1raw) : ""}</div>`;
   }).join("") + (n < rows.length ? `<div class="case-note">외 ${rows.length - n}${A.basis === "grid" && A.sel ? "개 읍면동" : "곳"} — 적은 순이라 생략</div>` : "")
     + (A.note ? `<div class="case-note">${A.note}</div>` : "")
     + (A.moment ? `<div class="acc-lg">${A.basis === "aws"
@@ -3483,12 +3500,77 @@ function toggleAccFc() {
 }
 /* 누적 줄 선 그래프 위를 지나가면 — 모든 줄에 그 시각 선, 예상 구간이면 예측 상위의 그 시각 열을 짚는다 */
 let HOVT = null;
+/* 선 그래프에 마우스 — 그 시각 세로 점선(모든 줄) + 커서 위에 '거제 일운면 19:00 8.2㎜'(그 줄, 가장 가까운 칸).
+   오른쪽 클릭 — 그 시각 시우량 지도로(실측은 1시간 층 그 시각, 예상은 초단기 +N). 선 그래프 밖은 카드 메뉴 그대로(10-27) */
+const p2 = v => String(v).padStart(2, "0");
+const tmStr = t => { const d = new Date(t); return `${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}${p2(d.getHours())}${p2(d.getMinutes())}`; };
+function spPick(body, ev) {
+  const sp = CARDS?.acc?.sp, svg = body.querySelector(".ar svg");
+  if (!sp || !svg) return null;
+  const b = svg.getBoundingClientRect(), x = ev.clientX - b.left;
+  if (x < 0 || x > b.width) return null;
+  const t = sp.t0 + x / b.width * (sp.t1 - sp.t0);
+  const row = ev.target.closest?.(".ar[data-k]"), d = row && CARDS.acc.vis?.get(row.dataset.k);
+  let p = null;
+  if (d && !d.dead) {
+    const near = (ts, vs, fc) => (ts || []).forEach((x, j) => {
+      if (typeof vs[j] === "number" && (!p || Math.abs(x - t) < Math.abs(p.t - t))) p = { t: x, v: vs[j], fc };
+    });
+    near(d.dt, d.d, false); near(d.ft, d.fcd || [], true);
+  }
+  return { t, row, d, p };
+}
+function spTip(h, ev) {
+  const tip = $("sptip");
+  for (const c of document.querySelectorAll("#acc-b .sp-hd.on")) c.classList.remove("on");
+  if (!h?.p) { tip.hidden = true; return; }
+  const { d, p, row } = h, sp = CARDS.acc.sp, dot = row.querySelector(".sp-hd");
+  if (dot) {
+    dot.setAttribute("cx", ((p.t - sp.t0) / (sp.t1 - sp.t0) * sp.SW).toFixed(1));
+    dot.setAttribute("cy", sp.sy(p.v).toFixed(1));
+    dot.classList.add("on");
+  }
+  const dt = new Date(p.t), today = dt.toDateString() === NOWD().toDateString();
+  const tg = d.tag ?? d.sig, nm = tg && tg !== d.stn ? `${tg} ${d.stn}` : d.stn || d.sig;   // 줄 이름과 같게(시군 + 지점 · 읍면동)
+  const go = CARDS.acc.day ? "" : `<small>오른쪽 클릭 — 그 시각 ${p.fc && !CASE ? "초단기 예측" : "1시간 강수량"} 지도</small>`;
+  tip.innerHTML = `<b>${nm}</b> ${today ? "" : `${dt.getMonth() + 1}.${dt.getDate()}. `}${p2(dt.getHours())}:${p2(dt.getMinutes())}`
+    + ` <b class="v">${p.v.toFixed(1)}㎜</b>${p.fc ? ` <i>예상</i>` : ""}${go}`;
+  tip.hidden = false;
+  const w = tip.offsetWidth, hh = tip.offsetHeight;
+  tip.style.left = Math.max(4, Math.min(innerWidth - w - 4, ev.clientX + 14)) + "px";
+  tip.style.top = Math.max(4, ev.clientY - hh - 12) + "px";
+}
+/* 그 시각 시우량 지도로 — 실측은 1시간 층(AWS 기준이면 AWS 1시간, 격자면 60분) 그 시각, 예상은 초단기 +N, 사례는 가장 가까운 장.
+   위 카드는 강수 누적 그대로(ACC_HOLD) — 선 그래프에 지금 지도 시각 세로선. 누적 지도로는 층 메뉴 · 숫자 키로 돌아간다 */
+function goHour(p) {
+  const A = CARDS?.acc;
+  if (!A || A.day) return;
+  stopPlay();
+  highlight(null); link(null); hot(null);              // 줄에 올렸던 빛줄 · 고리 — 줄이 다시 그려져도 남지 않게
+  const was = cardKey();
+  ACC_HOLD = true;
+  if (CASE) {
+    const fr = CASEM?.frames || [];
+    if (!fr.length) return;
+    kind = "obs60";
+    OBS_TM = fr.reduce((a, f) => (Math.abs(tOf(f) - p.t) < Math.abs(tOf(a) - p.t) ? f : a));
+  } else if (p.fc) {
+    kind = "vsrt"; vsrtN = Math.max(1, Math.min(6, Math.round((p.t - A.sp.tn) / 3600e3))); OBS_TM = null;
+  } else {
+    kind = (A.basis || ACC_BASIS) === "grid" ? "obs60" : "aws60";
+    const tm = tmStr(p.t);
+    OBS_TM = tm === metaOf(kind).tm ? null : tm;
+  }
+  $("sptip").hidden = true;
+  show(true);
+  if (cardKey() !== was) loadCards();
+}
 function hovEvents(body) {
   body.onmousemove = ev => {
-    const sp = CARDS?.acc?.sp, svg = body.querySelector(".ar svg");
-    if (!sp || !svg) return;
-    const r = svg.getBoundingClientRect(), x = ev.clientX - r.left;
-    const t = x >= 0 && x <= r.width ? sp.t0 + x / r.width * (sp.t1 - sp.t0) : null;
+    const sp = CARDS?.acc?.sp;
+    if (!sp || !body.querySelector(".ar svg")) return;
+    const h = spPick(body, ev), t = h ? h.t : null;
+    spTip(h, ev);
     if (t === HOVT) return;
     HOVT = t;
     body.classList.toggle("hovt", t != null);
@@ -3496,7 +3578,13 @@ function hovEvents(body) {
     for (const l of body.querySelectorAll(".sp-hov")) l.style.transform = `translateX(${px.toFixed(1)}px)`;
     cardsPlayhead();
   };
-  body.onmouseleave = () => { HOVT = null; body.classList.remove("hovt"); cardsPlayhead(); };
+  body.onmouseleave = () => { HOVT = null; body.classList.remove("hovt"); spTip(null); cardsPlayhead(); };
+  body.oncontextmenu = ev => {
+    const h = spPick(body, ev);
+    if (!h?.p || CARDS?.acc?.day) return;          // 선 그래프 밖 · 단기 — 카드 메뉴(줄 세우기) 그대로
+    ev.preventDefault(); ev.stopPropagation();
+    goHour(h.p);
+  };
 }
 
 /* 시우량 범주(㎜/h) — 지금 오는 비 · 예측 상위(초단기) · 지도 1시간 층이 **한 자**를 쓴다(종합 화면 시우량 램프와 같다).
@@ -4875,6 +4963,9 @@ function helpHtml(tab) {
       자리는 스스로 찾는다 — 경남 땅을 가장 적게 덮는 빈자리, 좁고 길면 세로로 길쭉한 꼴로. 머리를 끌어 옮기면 마지막으로 놓은 자리가 이 화면의 기본 자리(두 번 누르면 다시 자동),
       <code>⇔</code> · <code>⇕</code> 로 꼴을 바꾼다. 두 탭은 같은 크기 — 지금 오는 비는 장소 + 60분 시우량 칩(테두리가 시우량 색).
       머리의 <code>⟳</code> 은 세 탭을 저절로 차례로(화면 재생과 따로, 머리 밑 가는 줄이 다음 탭까지) · 오른쪽 클릭은 돌리기 간격 · 예측 상위 시군당 1곳/2곳</dd>
+    <dt>강수 누적 선 그래프</dt><dd>마우스를 올리면 커서 위에 그 줄 · 그 시각 값(<code>거제 일운면 19:00 8.2㎜</code>, 가장 가까운 칸 — 그 칸에 점).
+      <b>오른쪽 클릭</b>은 그 시각 시우량 지도로 — 실측은 1시간 층(AWS 기준이면 AWS 1시간, 격자면 60분) 그 시각, 예상은 초단기 +N.
+      카드는 강수 누적 그대로 두고 선 그래프에 지도 시각 세로선. 누적 지도로는 층 메뉴 · 숫자 키로. 이름 · 막대 자리 오른쪽 클릭은 줄 세우기 메뉴 그대로</dd>
     <dt>강수 누적 막대 누르기</dt><dd>막대 색이 바뀐다 — 한 색 ↔ <b>지도 범례 색조</b>(값마다 메인 지도의 그 범주 색 — 자동 · 고정 눈금, 청색 · 기상청 · 다양한 색조 그대로).
       줄의 이름 · 선 그래프를 누르면 전처럼 시군 고르기. 모든 화면이 같이(서버 설정)</dd>
     <dt>강수 누적 1h</dt><dd>줄 맨 오른쪽 — 최근 1시간 강수량. 바탕 없이 왼쪽 막대만 시우량 색, 많이 올수록 글자가 밝고 굵다(20㎜ 넘으면 흰 글자). 0 이면 흐리게. 막대 빗금과 같이 <code>H</code> 로 켜고 끈다</dd>
