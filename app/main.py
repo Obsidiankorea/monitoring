@@ -458,6 +458,16 @@ async def api_grid_emdwin():
         raise HTTPException(404, str(e)) from e
 
 
+@app.get("/api/ai/watch")
+async def api_ai_watch():
+    """지금 위키 기준(통제 · 사전대피 · 긴급대피)에 가까워졌거나(70%↑) 닿은 곳 — 지도 표식 · 왼쪽 위험 아이콘용.
+    텔레그램 알림 설정과 무관하게 언제나 읽는다(2분 캐시)."""
+    try:
+        return await asyncio.to_thread(aiwatch.snapshot, _ai_base(None))
+    except Exception as e:                      # noqa: BLE001
+        raise HTTPException(503, aiwatch._mask(e)[:200]) from e
+
+
 @app.get("/api/ai/ante")
 async def api_ai_ante():
     """경남 읍면동마다 직전 5일(120시간) 누적 최대 칸 — 정시 격자가 5일치 모이지 않았으면 ok=false(계산하지 않는다)."""

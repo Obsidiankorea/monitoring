@@ -68,6 +68,32 @@ def _scan(base: str) -> dict[str, tuple[str, tuple]]:
     return out
 
 
+_SNAP: dict = {"t": 0.0, "v": None}
+SNAP_TTL = 120          # 화면이 몇 초마다 물어도 이만큼은 같은 판정을 돌려 준다(훑는 데 수 초)
+
+
+def snapshot(base: str) -> dict:
+    """화면용 — 지금 기준에 가까워졌거나 닿은 곳(텔레그램 켜고 끄는 것과 무관). 시군별로 묶어 센 것 먼저."""
+    now_t = time.time()
+    if _SNAP["v"] is not None and now_t - _SNAP["t"] < SNAP_TTL:
+        return _SNAP["v"]
+    found = _scan(base)
+    items = [{"sigun": x[0], "emd": x[1], "fam": x[2], "stage": x[3], "rule": x[4], "st": st}
+             for st, x in found.values()]
+    stage = next((i for i in items if i["fam"] == "비상단계"), None)
+    items = [i for i in items if i["fam"] != "비상단계"]
+    items.sort(key=lambda i: (-STAGE_RANK.get(i["stage"], 0), -RANK.get(i["st"], 0), i["sigun"], i["emd"]))
+    sg: dict[str, dict] = {}
+    for i in items:
+        d = sg.setdefault(i["sigun"], {"met": 0, "near": 0, "top": 0})
+        d[i["st"]] += 1
+        d["top"] = max(d["top"], STAGE_RANK.get(i["stage"], 0) * 10 + RANK[i["st"]])
+    out = {"at": datetime.now().strftime("%m.%d %H:%M"), "n": len(items), "stage": stage["emd"] if stage else None,
+           "sigun": sg, "items": items}
+    _SNAP.update(t=now_t, v=out)
+    return out
+
+
 def _diff(now: dict, state: dict, ts: float) -> tuple[list, dict]:
     """새로 생겼거나 상태가 올라간 것만 골라 낸다. 상태는 보이는 것만 남기고 KEEP_S 지난 것은 지운다."""
     new = [(st, x) for k, (st, x) in now.items()
