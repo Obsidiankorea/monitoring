@@ -251,6 +251,10 @@ def situation(sigun: str, base: str = "http://127.0.0.1:8000") -> dict:
 STL = {"met": "충족", "near": "근접(70%↑)", "unknown": "모름", "no": "아님"}
 
 
+def _na(v):
+    return "자료 없음" if v is None else v
+
+
 def brief(s: dict, top: int = 4) -> str:
     """LLM 맥락 · 사람이 읽는 짧은 글 — 닿았거나 가까운 것만 적는다."""
     t = s.get("tm") or ""
@@ -266,7 +270,8 @@ def brief(s: dict, top: int = 4) -> str:
     for r in s["emd"][:top]:
         rn = r["rain"]
         hit = [f"{fam} {c['stage']} '{c['rule']}' {STL[c['st']]}" for fam, cs in r["ladders"].items() for c in cs if c["st"] in ("met", "near")]
-        out.append(f"· {r['emd']} — 1h {rn['1h']} · 3h {rn['3h']} · 24h {rn['24h']} · 15분 {r['m15']} · 앞으로 6h {r['fc6h']}(최대 {r['fc_peak']}/h)"
+        fc = f"앞으로 6h {r['fc6h']}(최대 {r['fc_peak']}/h)" if r["fc6h"] is not None else "앞으로 6h 예측 자료 없음"
+        out.append(f"· {r['emd']} — 1h {rn['1h']} · 3h {rn['3h']} · 24h {rn['24h']} · 15분 {_na(r['m15'])} · {fc}"
                    f" · 우려지역 {', '.join(f'{k} {v}' for k, v in r['risk'].items()) or '없음'}")
         if hit:
             out.append("   닿음/근접: " + "; ".join(hit))
