@@ -13,3 +13,4 @@ def test_claude_env_token_file(tmp_path, monkeypatch):
     assert env["CLAUDE_CODE_OAUTH_TOKEN"] == "tok-1" and "ANTHROPIC_API_KEY" not in env
     f.write_text("CLAUDE_CODE_OAUTH_TOKEN = tok-2\n", "utf-8")
     assert llm._claude_env()["CLAUDE_CODE_OAUTH_TOKEN"] == "tok-2"
+

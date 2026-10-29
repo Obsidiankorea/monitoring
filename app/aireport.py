@@ -548,6 +548,22 @@ def _analogs(o: dict, siguns: list[str]) -> list[str]:
     return out
 
 
+def _calm(o: dict, rows: list[dict], hit: bool = False) -> bool:
+    """비가 없고 올 우려도 없다 — 호우특보 · 상황전파(시간당 20㎜ · 일 100㎜) · 재난문자 기준 · 대피 기준 해당 없음,
+    앞으로 6시간 시군 합 30㎜ 미만 · 시간당 20㎜ 미만. 이때는 자료를 펼치지 않고 '언제부터 필요한가'만 보인다."""
+    return not (hit or any(g["name"].startswith("호우") for g in o["groups"])
+                or any(r["relay"] or r["cbs"] or (r["fc_sum"] or 0) >= 30 or (r["fc_peak"] or 0) >= 20 for r in rows))
+
+
+def _quiet(o: dict, sigun: str | None, rows: list[dict], title: str, when: list[str], refs: list[str]) -> dict:
+    """한가할 때의 짧은 보고 — 지금 상태 한 줄 + 언제부터 필요한가 + 참고."""
+    top = max(rows, key=lambda r: r["fc_sum"] or 0, default=None)
+    now_ = "호우특보 없음 · 기준에 닿은 곳 없음 · " + (f"앞으로 6시간 가장 많은 곳 {top['sigun']} {top['fc_sum']:g}㎜" if top and top["fc_sum"] else "앞으로 6시간 비 예보 거의 없음")
+    return {**_hdr(o, sigun, f"{title} — 지금은 해당 없음"),
+            "sections": [{"h": "지금", "items": [now_]}, {"h": "이렇게 되면 필요하다", "items": when},
+                         {"h": "참고 — 위키 · 책자", "items": _refs(refs)}]}
+
+
 MEETING = {"초기대응": ("예비 상황판단회의", "자연재난과장"), "비상 1단계": ("초기 상황판단회의", "자연재난과장"),
            "비상 2단계": ("본 상황판단회의", "도민안전본부장")}
 
@@ -579,6 +595,13 @@ def _m_meeting(base, sigun):
         decide.append("도 → 시군 사전대피 권고 · 대피명령 요청 여부 ([[통제·대피 기준]] 실행 절차)")
     decide += ["대책본부 회의 개최 · 시군 지원(인력 · 장비 · 방재물자)",
                "학교 휴교 협의(교육청) — 등교 시간 전 호우 지속 예보면", "재난문자 · 재난방송 요청(통합지원본부장 → 지상파)"]
+    if _calm(o, rows, bool(hit)):
+        return _quiet(o, sigun, rows, "상황판단회의", [
+            "예비 상황판단회의 · 초기대응 — 호우주의보 발표(3개 시군 이하) ([[위기경보와 비상단계]])",
+            "초기 상황판단회의 · 비상 1단계 — 주의보 4개 시군 이상 또는 경보 2개 시군 이하",
+            "본 상황판단회의 · 비상 2단계 — 호우경보 3개 시군 이상",
+            "그 전이라도 상황전파 기준(시간당 20㎜ · 일 100㎜)에 닿는 곳이 생기면 이 화면이 자료를 펼친다"],
+            ["상황판단회의", "위기경보와 비상단계"])
     sec = [{"h": "1. 기상상황(현황 · 전망)", "items": wx}, {"h": "2. 재난상황", "items": dis},
            {"h": "3. 과거 재해이력 비교", "items": _analogs(o, risk_sg or [r["sigun"] for r in rows])
             + _uosim((risk_sg or [r["sigun"] for r in rows])[:6])
@@ -596,6 +619,13 @@ def _m_evac(base, sigun):
     o, sits = _scope(base, sigun)
     emerg = _hits(sits, ("긴급대피",), ("met",))
     pre = _hits(sits, ("사전대피",), ("met", "near"))
+    rows0 = o["rows"] if not sigun else [r for r in o["rows"] if r["sigun"] == sigun]
+    if _calm(o, rows0, bool(emerg or pre)):
+        return _quiet(o, sigun, rows0, "대피 판단", [
+            "산사태 · 하천 · 지하공간 · 침수 — 읍면동마다 위키 우려지역 기준에 닿거나 가까워지면(70% 이상) 이 화면이 대상 지구와 대피장소를 펼친다",
+            "사전대피는 예보, 긴급대피는 실황이 기준 — 시군을 고르면 그 시군 읍면동까지 본다 ([[통제·대피 기준]])",
+            "야간(21~06시) 전에 비가 예상되면 일몰 전 사전대피를 먼저 본다"],
+            ["통제·대피 기준", "대피명령 길라잡이"])
     sec = []
     sec.append({"h": "긴급대피 기준 — 실황으로 해당", "items": [f"{a} {b['emd']} {f}: {c['rule']}" for a, b, f, c in emerg][:12] or ["없음"]})
     sec.append({"h": "사전대피 기준 — 예보로 해당 · 가까움", "items": [f"{a} {b['emd']} {f}: {c['rule']} ({STL[c['st']]})" for a, b, f, c in pre][:12] or ["없음"]})
@@ -620,6 +650,12 @@ def _m_evac(base, sigun):
 def _m_control(base, sigun):
     o, sits = _scope(base, sigun)
     rows = o["rows"] if not sigun else [r for r in o["rows"] if r["sigun"] == sigun]
+    if _calm(o, rows):
+        return _quiet(o, sigun, rows, "통제(지하차도 · 하천)", [
+            "지하차도 · 지하공간 — 호우특보가 나면 통제 기준에 해당(침수심 5㎝ 이상이면 통제)",
+            "지하공간 15분 강우 14㎜ 이상이면 눈여겨보고, 20㎜ 사전대피 · 30㎜(+ 시간당 55㎜) 긴급대피 기준 ([[통제·대피 기준]])",
+            "하천 — 시간당 30㎜ 이상이 3시간 지속된다는 예보 · 홍수주의보면 통제"],
+            ["통제·대피 기준", "인명피해 우려지역"])
     under, river = [], []
     for r in rows:
         sb = _sites_by(r["sigun"])
@@ -652,6 +688,11 @@ def _m_msg(base, sigun):
     o, sits = _scope(base, sigun)
     rows = o["rows"] if not sigun else [r for r in o["rows"] if r["sigun"] == sigun]
     cbs = [f"{r['sigun']} — 시간당 {r['r1']:g}㎜ · 3시간 {r['r3']:g}㎜" for r in rows if r["cbs"]]
+    if _calm(o, rows, bool(_hits(sits, ("긴급대피", "사전대피"), ("met", "near")))):
+        return _quiet(o, sigun, rows, "재난문자", [
+            "긴급재난문자 기준 — 시간당 50㎜ + 3시간 90㎜, 또는 시간당 72㎜ (기상청 송출)",
+            "호우특보 · 대피 기준 해당 · 상황전파 기준에 닿으면 상황에 맞는 표준문안(90자)을 이 화면이 골라 보여 준다"],
+            ["재난문자 송출기준", "재난문자 표준문안"])
     tbl = {}
     for a, b in _rows("재난문자 표준문안"):
         tbl.setdefault(a.replace("**", "").strip(), b)
