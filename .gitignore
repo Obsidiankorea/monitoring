@@ -20,4 +20,6 @@ __pycache__/
 tools/.cache/
 
 # 시연(굳힌 것) — 서버 /state/snaps · PC data/snaps. 저장소에 넣지 않는다(화면의 지금 저장 · 지우기)
-data/snaps/
+data/snaps/*
+# 가상 ×4 시연만 저장소에 둔다(내부망 PC 에서 git pull 로 바로 시연) — make_scaled_snap.py 로 만든 것, 실제 자료 아님
+!data/snaps/fake-*/
