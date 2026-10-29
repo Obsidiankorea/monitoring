@@ -24,7 +24,15 @@ from pathlib import Path
 
 import httpx
 
-WIKI = Path(os.environ.get("GN_WIKI") or r"C:\Users\ms\obsidian\재난")
+def _default_wiki() -> Path:
+    """GN_WIKI 가 없으면 이 사용자 홈의 obsidian/재난(행정 PC — 환경변수 없이 압축만 풀어 둔다), 그다음 개발 PC 경로."""
+    for c in (Path.home() / "obsidian" / "재난", Path(r"C:\Users\ms\obsidian\재난")):
+        if (c / "tools" / "lookup.py").is_file():
+            return c
+    return Path.home() / "obsidian" / "재난"
+
+
+WIKI = Path(os.environ["GN_WIKI"]) if os.environ.get("GN_WIKI") else _default_wiki()
 WINDOWS = (1, 3, 12, 24, 48)
 RN1_CAP = 30.0
 SIGUN_FULL = {"창원": "창원시", "진주": "진주시", "통영": "통영시", "사천": "사천시", "김해": "김해시", "밀양": "밀양시",
@@ -113,8 +121,18 @@ def ladders(r: dict, night: bool, alerts: list[str]) -> dict:
     return out
 
 
+NO_WIKI = {"sites": [], "source_basis": "위키 없음(GN_WIKI) — 우려지역 · 지구별 기준이 빠진 채 수치만 본다"}
+
+
+def _no_wiki(vault, sigun, emd=None, kind="all"):
+    return NO_WIKI
+
+
 @lru_cache(maxsize=1)
 def _lookup_fn():
+    """위키 tools/lookup.py. 위키가 없는 PC(행정 PC 등)면 빈 결과 — 보고는 수치만으로 돌아간다(deploy.sh 의 경고와 같다)."""
+    if not (WIKI / "tools" / "lookup.py").is_file():
+        return _no_wiki
     sys.path.insert(0, str(WIKI / "tools"))
     from lookup import lookup_sites  # noqa: E402 — 위키 쪽 읽기 전용 도구
     return lookup_sites

@@ -14,6 +14,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+from pathlib import Path
 
 import httpx
 
@@ -36,6 +37,17 @@ def _claude_env() -> dict:
         env["CLAUDE_CODE_OAUTH_TOKEN"] = t
         env.pop("ANTHROPIC_API_KEY", None)           # 있으면 이쪽이 이겨 API 요금으로 나간다
     return env
+
+
+def _claude_exe() -> str | None:
+    """PATH 의 claude, 없으면 설치기가 두는 자리(~/.local/bin) — 서버가 설치 전에 켜져 PATH 가 옛것이어도 찾는다."""
+    exe = shutil.which("claude")
+    if exe:
+        return exe
+    for c in (Path.home() / ".local" / "bin" / "claude.exe", Path.home() / ".local" / "bin" / "claude"):
+        if c.is_file():
+            return str(c)
+    return None
 
 
 def configured() -> str | None:
@@ -67,9 +79,9 @@ def ask(system: str, user: str) -> str:
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"]
     if m == "claude-cli":
-        exe = shutil.which("claude")
+        exe = _claude_exe()
         if not exe:
-            raise RuntimeError("claude 명령이 없다")
+            raise RuntimeError("claude 명령이 없다 — Claude Code 를 설치했으면 PATH 에 넣거나 서버를 다시 켠다")
         model = os.environ.get("GN_AI_MODEL")
         p = subprocess.run([exe, "-p", "--output-format", "text", "--no-session-persistence",
                             *(["--model", model] if model else []),

@@ -457,7 +457,10 @@ async def api_ai_ask(body: dict):
     text = str(body.get("text") or "").strip()[:500]
     if not text:
         raise HTTPException(400, "q 또는 text")
-    return await asyncio.to_thread(aireport.ask_free, _ai_base(body.get("base")), text, sigun)
+    try:
+        return await asyncio.to_thread(aireport.ask_free, _ai_base(body.get("base")), text, sigun)
+    except FileNotFoundError as e:
+        raise HTTPException(503, f"LLM 위키를 못 찾았다(GN_WIKI): {e}")
 
 
 @app.get("/api/aws/match")
