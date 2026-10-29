@@ -538,6 +538,13 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 .ch .bt { font: 600 calc(12px * var(--k, 1)) var(--mono); color: var(--ink-2); border: 1px solid var(--line); border-radius: 6px; padding: 1px 7px; white-space: nowrap; }
 .ch .src { font: 600 calc(11px * var(--k, 1)) var(--sans); color: var(--accent); white-space: nowrap; }
 .ch .src.fell { color: var(--lv-fail); }
+.ch .src .gsw { display: inline-flex; gap: 3px; align-items: center; }
+.ch .src .gsw b { cursor: pointer; font-weight: 600; color: var(--ink-3); padding: 1px 3px; border-radius: 5px; }
+.ch .src .gsw b.on { color: var(--accent); background: color-mix(in oklab, var(--accent) 16%, transparent); }
+.ch .src .gsw b:not(.on):hover { color: var(--ink); }
+.ch .src .gsw i { font-style: normal; color: var(--ink-3); opacity: .6; }
+.ch .src .gsw.lock b { cursor: default; }
+.ch .src .gsw.lock b:not(.on) { opacity: .35; text-decoration: line-through; }
 .ch .live { width: 7px; height: 7px; border-radius: 50%; background: var(--lv-ok); flex: none; animation: pulse 2.4s infinite; }
 @keyframes pulse {
   0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--lv-ok) 55%, transparent); }
@@ -714,10 +721,10 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
   font: 700 10.5px/16px var(--sans); color: #fff; background: var(--ink-3); border: 1.5px solid var(--panel); }
 /* 기준 근접 — 위키 기준에 70%↑ 가까워졌거나 닿은 곳이 있을 때만 나타난다. 붉게 숨 쉰다 */
 .ly-ic.risk { width: 46px; height: 46px; color: #fff; background: #c8321f; border-color: #ff8a73;
-  animation: riskpulse 1.6s ease-in-out infinite; }
+  animation: riskpulse 1.6s ease-in-out 4; }      /* 처음 몇 번만 — 계속 움직이면 정신사납다 */
 .ly-ic.risk svg { width: 24px; height: 24px; stroke-width: 2; }
 .ly-ic.risk svg circle { fill: currentColor; stroke: currentColor; }
-.ly-ic.risk.near { background: #b9701a; border-color: #f0b46a; animation-duration: 2.6s; }
+.ly-ic.risk.near { background: #b9701a; border-color: #f0b46a; }
 .ly-ic.risk[aria-expanded="true"] { background: #c8321f; filter: brightness(1.12); }
 .ly-ic.risk.near[aria-expanded="true"] { background: #b9701a; }
 .ly-ic.risk .bd { background: #fff; color: #a52814; border-color: #c8321f; }
@@ -729,6 +736,9 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 #ly-risk-pop .rh b { font-size: 15px; color: #ff7a63; }
 #ly-risk-pop .rh span { font-size: 11.5px; color: var(--ink-3); }
 #ly-risk-pop .rh i { margin-left: auto; font-style: normal; cursor: pointer; color: var(--ink-3); font-size: 16px; }
+#ly-risk-pop .rm { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ink-2); padding: 2px 0 8px; cursor: pointer; }
+#ly-risk-pop .rm input { margin: 0; width: 15px; height: 15px; accent-color: #c8321f; cursor: pointer; }
+#ly-risk-pop .rm small { color: var(--ink-3); font-size: 11.5px; }
 #ly-risk-pop .rg { border-top: 1px solid var(--line); padding: 7px 0 4px; }
 #ly-risk-pop .rg > .s { display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 700; font-size: 14px; }
 #ly-risk-pop .rg > .s small { font: 600 11px var(--sans); color: var(--ink-3); }
@@ -742,7 +752,7 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 /* 지도의 시군 이름 — ⚠ 를 앞에 붙이고 붉게. 새로 생긴 곳은 한동안 깜박인다 */
 #over .nm.wa { fill: #ff7a63; }
 #over .nm.wa.near { fill: #f0b46a; }
-#over .nm.wa.bl { animation: nmblink .7s steps(2, jump-none) 18; }
+#over .nm.wa.bl { animation: nmblink .7s steps(2, jump-none) 6; }
 @keyframes nmblink { 0% { opacity: 1; } 50% { opacity: .15; } 100% { opacity: 1; } }
 /* 펼친 메뉴·범례 — 아이콘 오른쪽. 위치(top)는 누른 아이콘에 맞춘다 */
 #layers .ly-pop { position: absolute; left: calc(100% + 10px); top: 0; }
@@ -3174,7 +3184,9 @@ async function accAws(H, fc) {
   const [FC, FE] = fcMaps(fc);
   const live = r => r.bad < r.d.length;              // 자료를 아예 안 주는 지점이 0으로 1등이 되지 않게
   const base = { H, ft, basis: "aws", fell, bt: `${lastHM} 실측`,
-                 src: test ? "테스트" : fell ? "경남 AWS 안 됨→기상청" : rain.src === "bangjae" ? `경남+기상청 AWS ${rain.count}` : "기상청 AWS 56" };
+                 src: test ? "테스트" : fell ? "경남 AWS 안 됨 → 기상청 AWS 56곳" : rain.src === "bangjae" && !SET.gn_off ? `경남+기상청 AWS ${rain.count}곳` : "기상청 AWS 56곳",
+                 // 경남AWS / 기상청AWS 토글 — 내부망이 아니라 경남 AWS 가 안 오면(fell) 기상청으로 고정
+                 gnSel: test ? null : (fell || SET.gn_off ? "kma" : "gn"), gnLock: !test && fell && !SET.gn_off };
   const own = rain.src === "bangjae" || rain.src === "test";      // 경남 AWS(스방, 내부망)까지 든 자료
   /* 관리기관 — 서버가 준 org(경남 AWS 목록 · 기상청 지점번호), 없으면 기상청 지점번호면 기상청 */
   const orgOf = r => r.org || (SITEBY.has(r.stn) || !own ? "kma" : "gn");
@@ -3425,7 +3437,12 @@ function renderAcc() {
   // 설명을 누르면 누적 구간을 고른다(실황·테스트의 강수 누적만 — 단기·사례는 구간이 정해져 있다)
   $("acc-sub").classList.toggle("pick", !CASE && !A.day && !A.moment);
   $("acc-sub").textContent = fcOn ? sub : sub.replace(" + 예상 6시간", "");
-  $("acc-src").textContent = A.src; $("acc-src").classList.toggle("fell", !!A.fell);
+  if (A.basis === "aws" && A.gnSel) {
+    $("acc-src").innerHTML = `<span class="gsw${A.gnLock ? " lock" : ""}">`
+      + `<b data-v="gn" class="${A.gnSel === "gn" ? "on" : ""}">경남AWS</b><i>/</i><b data-v="kma" class="${A.gnSel === "kma" ? "on" : ""}">기상청AWS</b></span>`;
+    $("acc-src").title = A.src + (A.gnLock ? " — 이 서버는 내부망(스방)에 닿지 않아 기상청 AWS 로 고정" : " — 눌러서 경남AWS ↔ 기상청AWS");
+    $("acc-src").classList.remove("fell");
+  } else { $("acc-src").textContent = A.src; $("acc-src").title = ""; $("acc-src").classList.toggle("fell", !!A.fell); }
   $("acc-bt").textContent = A.bt;
   const val = r => r.sum + r.fc;
   // 예상을 끄면 예상 몫을 뺀다 — 단, '그 시각' 카드의 선 그래프 예측(초단기) 구간은 흐름 그대로 둔다
@@ -4063,7 +4080,7 @@ const TIPS = new Map([
 let OV = new Set();
 /* 켜진 레이어 아이콘 — 누르면 그 범례·설명이 오른쪽으로 펼쳐진다(다시 누르면 닫힌다). 하나씩만 */
 const OV_IC = {
-  alerts: `<svg viewBox="0 0 24 24"><path d="M12 3.5 2.8 19.5h18.4z"/><path d="M12 9.5v4.5"/><circle cx="12" cy="16.8" r=".6" fill="currentColor"/></svg>`,
+  alerts: `<svg viewBox="0 0 24 24"><path d="M7 16.5a4.2 4.2 0 0 1-.5-8.3 5.6 5.6 0 0 1 10.8 1.3A3.5 3.5 0 0 1 17 16.5"/><path d="m12.6 12-2.4 3.6h2.8L11.4 20"/></svg>`,
   stations: `<svg viewBox="0 0 24 24"><path d="M12 4 20 12 12 20 4 12z"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/></svg>`,
 };
 let LY_OPEN = null;                     // 펼친 범례(stations) — 창마다 기억
@@ -5190,6 +5207,19 @@ document.addEventListener("click", ev => {
   if (POP_PIN && !ev.target.closest?.("#pop")) hidePop();
 }, true);
 
+/* 경남 AWS 전체 끄기 · 켜기 — 비활성 AWS 와 같이 기억해 둔 면 · 통계를 버리고 새로. 설정 › 관측소 · 강수 누적 카드의 경남AWS / 기상청AWS 가 같이 쓴다 */
+async function setGnOff(v) {
+  SET.gn_off = v;
+  try { await fetch("/api/settings/map", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ gn_off: v }) }); } catch {}
+  GRIDS.clear(); STATS.clear(); STNC.clear(); OFF.clear(); EMDC.clear(); show(); loadFlow(); CARDS = null; loadCards();
+}
+$("acc-src").addEventListener("click", ev => {
+  const b = ev.target.closest(".gsw b[data-v]");
+  if (!b || b.closest(".gsw.lock")) return;
+  const v = b.dataset.v === "kma";
+  if (v !== !!SET.gn_off) setGnOff(v);
+});
+
 /* ── 설정(Ctrl+,) — 서버에 둔다(어느 PC 에서 열어도 같게) ─────────────────── */
 /* 설정을 탭으로 — 머리글(h4)마다 한 탭. 길어서 화면 밖으로 잘리던 것을 나눈다. 고른 탭은 기억한다 */
 let PF_TAB = 0;
@@ -5341,12 +5371,7 @@ function openPrefs() {
     let v = b.dataset.v;
     v = (k === "tl_on" || k === "sel_zoom" || k === "aws_live" || k === "al_pre" || k === "gn_off") ? v === "true" : (k === "tl_stat" || k === "panel" || k === "sea_w" || k === "sea_grid") ? v : +v;
     if (k === "aws_live") { setLive(v).then(openPrefs); return; }
-    if (k === "gn_off") {            // 경남 AWS 전체 끄기 · 켜기 — 비활성 AWS 와 같이 기억해 둔 면 · 통계를 버리고 새로
-      SET.gn_off = v;
-      fetch("/api/settings/map", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ gn_off: v }) })
-        .then(() => { GRIDS.clear(); STATS.clear(); STNC.clear(); OFF.clear(); EMDC.clear(); show(); loadFlow(); CARDS = null; loadCards(); openPrefs(); });
-      return;
-    }
+    if (k === "gn_off") { setGnOff(v).then(openPrefs); return; }
     if (k === "acc_scale") { setAccScale(v); openPrefs(); return; }
     if (k === "sea_w") { setSw(v); openPrefs(); return; }
     if (k === "sea_rot" || k === "sea_per") { setSwOpt(k, v); openPrefs(); return; }
@@ -6061,9 +6086,11 @@ $("b-ai").onclick = () => aiToggle();
 
 /* ── 기준 근접 알림(화면) — 위키 기준에 70%↑ 가까워졌거나 닿은 곳: 지도 시군명 ⚠ · 왼쪽 위험 아이콘 · 목록 팝업 ── */
 let WATCH = null, WATCH_OPEN = false;
+let WATCH_MAP = true;                                     // 지도의 시군명에 ⚠ · 색을 낼지(팝업의 '지도에 표시') — 이 브라우저에 기억
+try { WATCH_MAP = localStorage.getItem("gn-map-watchmap") !== "0"; } catch {}
 const WATCH_SEEN = new Set(), WATCH_BL = new Map();      // 본 시군 · 깜박임 끝 시각
 function paintWatch() {
-  const sg = WATCH?.sigun || {};
+  const sg = WATCH_MAP ? WATCH?.sigun || {} : {};
   for (const t of document.querySelectorAll("#over .nm[data-s]")) {
     const n = t.dataset.s, d = sg[n];
     t.classList.toggle("wa", !!d);
@@ -6078,6 +6105,7 @@ function watchPaintList() {
   for (const i of items) (by[i.sigun] ||= []).push(i);
   const names = Object.keys(by).sort((a, b) => WATCH.sigun[b].top - WATCH.sigun[a].top);
   pop.innerHTML = `<div class="rh"><b>⚠ 기준 근접 ${names.length}개 시군</b><span>${WATCH.at} 기준 · ${items.length}건</span><i data-x title="닫기">✕</i></div>`
+    + `<label class="rm"><input type="checkbox" data-map ${WATCH_MAP ? "checked" : ""}> 지도에 표시 <small>시군 이름에 ⚠ · 색</small></label>`
     + names.map(n => {
       const d = WATCH.sigun[n];
       return `<div class="rg"><div class="s" data-s="${escH(n)}" title="이 시군을 고른다">${escH(n)}<small>충족 ${d.met} · 근접 ${d.near}</small></div>`
@@ -6114,6 +6142,11 @@ async function loadWatch() {
 $("ly-risk").onclick = () => watchOpen(!WATCH_OPEN);
 $("ly-risk-pop").addEventListener("click", ev => {
   if (ev.target.closest("[data-x]")) return watchOpen(false);
+  if (ev.target.matches("[data-map]")) {
+    WATCH_MAP = ev.target.checked;
+    try { localStorage.setItem("gn-map-watchmap", WATCH_MAP ? "1" : "0"); } catch {}
+    return paintWatch();
+  }
   const s = ev.target.closest(".s[data-s]");
   if (s) setSel([s.dataset.s]);
 });
