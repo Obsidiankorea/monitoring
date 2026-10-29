@@ -962,6 +962,8 @@ def acc_sum(hours: int = 12, since: str | None = None, now: datetime | None = No
 
 
 _WIN_CACHE: dict[tuple, dict] = {}
+_ANTE_CACHE: dict[tuple, dict] = {}
+ANTE_MISS_OK = 3        # 직전 5일 120시간 중 이만큼까지 빠져도 쓴다(그 이상이면 데이터가 모자란 것)
 
 
 def _emd_max(arr: np.ndarray) -> dict[int, float]:
@@ -1236,6 +1238,8 @@ SETTING_DEFAULT = {"layer": "obs60", "x4": False, "vsrt_n": 1,
                    "al_pre": True,
                    # 비활성화한 AWS — [{id, name, sigun, org}]. 지도에서 관측소 점 오른쪽 클릭 → 비활성화. 면 · 카드 · 지금 오는 비에서 뺀다
                    "aws_off": [],
+                   # 경남 AWS(스방 · 내부망) 전체 끄기 — 켜면 수집을 멈추고 면 · 카드 · 지금 오는 비에서 경남 AWS 를 모두 뺀다(기상청 AWS 만)
+                   "gn_off": False,
                    # 누적(격자 · AWS) 범례 눈금 — 0: 자동(자료 크기에 맞춰), 그 밖은 끝 눈금(㎜)으로 고정. 범례 오른쪽 클릭
                    "acc_scale": 0,
                    # 바다 위젯 돌리기 — 0 이면 고른 탭 그대로, 아니면 그 초마다 예측 상위 → 지금 오는 비 → 시군 평균(화면 재생과 따로)
@@ -1320,7 +1324,7 @@ def put_setting(body: dict) -> dict:
     if "layer" in body:
         split(str(body["layer"]))            # 모르는 층이면 LookupError
         cur["layer"] = str(body["layer"])
-    for k in ("x4", "tl_on", "sel_zoom", "acc_fc", "acc_h1", "acc_full", "aws_live", "acc_qpf", "acc_hdr_pin", "acc_tone", "al_pre"):
+    for k in ("x4", "tl_on", "sel_zoom", "acc_fc", "acc_h1", "acc_full", "aws_live", "acc_qpf", "acc_hdr_pin", "acc_tone", "al_pre", "gn_off"):
         if k in body:
             cur[k] = bool(body[k])
     if "vsrt_n" in body:
@@ -1408,4 +1412,37 @@ def _synth(kind: str, grid: str, off_min: int) -> np.ndarray:
         x, y = gridproj.hr_xy(128.35, 35.55)      # 의령·합천 사이 한 조각을 결측으로
         out[(abs(col - x) < 6) & (abs(row - y) < 4)] = np.nan
     out.setflags(write=False)                     # 기억해 두고 나눠 쓰므로 고치지 못하게
+    return out
+
+
+def emd_antecedent(hours: int = 120, now: datetime | None = None) -> dict:
+    """읍면동마다 직전 5일(120시간) 누적 최대 칸 — 위키 '선행 누적강우량'([[통제·대피 기준]]). AI 상황판단용.
+    정시 60분 격자 + '지금' 칸. **정시 격자가 hours 시간치 모여 있지 않으면 계산하지 않는다**(빠진 시간이 ANTE_MISS_OK 를 넘으면
+    ok=False, rows 없음) — 모자란 채 합하면 선행강우를 작게 말하는 거짓이 된다. 격자는 정시 칸을 9일 보관한다(gridstore.KEEP_HOURLY_DAYS)."""
+    now = now or clock.now()
+    want, have = _acc_keys(hours, None, now, False)
+    miss = hours - len(have)                       # 짧게 받았으면(보관 시작 전) want 가 hours 보다 짧을 수 있다
+    out = {"hours": hours, "have": len(have), "want": hours, "missing": miss, "ok": False, "from": want[0] if want else None,
+           "to": want[-1] if want else None, "rows": []}
+    if len(want) < hours or miss > ANTE_MISS_OK:
+        return out
+    tk = _grid_tail_key(want[-1])
+    ck = (tuple(have), tk)
+    if ck in _ANTE_CACHE:
+        return _ANTE_CACHE[ck]
+    frames = _acc_frames(want, have, now, False)
+    got = [f for f in frames if f is not None]
+    tot = got[0].copy()
+    for f in got[1:]:
+        tot = tot + f
+    tail = _grid_tail(want[-1], tk) if tk else None
+    if tail is not None:
+        tot = np.where(np.isfinite(tail), tot + tail, tot)
+    emds = {e["id"]: e for e in gridstore.geo()["emd"]}
+    out["ok"] = True
+    out["tail"] = tk
+    out["rows"] = [{"sig": emds[i]["sigun"], "emd": emds[i]["name"], "mm": round(v, 1)} for i, v in _emd_max(tot).items() if i in emds]
+    if len(_ANTE_CACHE) > 3:
+        _ANTE_CACHE.pop(next(iter(_ANTE_CACHE)))
+    _ANTE_CACHE[ck] = out
     return out

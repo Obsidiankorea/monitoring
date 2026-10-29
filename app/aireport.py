@@ -36,7 +36,7 @@ def _cached(key, fn, ttl=120):
 @lru_cache(maxsize=1)
 def _index() -> dict:
     out = {}
-    for p in ai.WIKI.rglob("*.md"):
+    for p in ai.wiki().rglob("*.md"):
         if any(x in p.parts for x in (".obsidian", "_install", "raw")):
             continue
         out.setdefault(p.stem, p)
@@ -51,7 +51,7 @@ def page(name: str) -> dict:
     t = p.read_text("utf-8")
     fm = t.split("---", 2)[1] if t.startswith("---") else ""
     g = lambda k: (m.group(1).strip() if (m := re.search(rf"^{k}:\s*(.+)$", fm, re.M)) else "")  # noqa: E731
-    return {"name": name, "summary": g("summary"), "src": g("출처"), "date": g("기준일"), "path": str(p.relative_to(ai.WIKI))}
+    return {"name": name, "summary": g("summary"), "src": g("출처"), "date": g("기준일"), "path": str(p.relative_to(ai.wiki()))}
 
 
 def ref(name: str) -> str:
@@ -94,7 +94,7 @@ def overview(base: str) -> dict:
         for sg in ai.SIGUN_FULL:
             r1, r3, r24 = (a1.get(sg) or {}), (a3.get(sg) or {}), (a24.get(sg) or {})
             v1, v3, v24 = r1.get("sum") or 0, r3.get("sum") or 0, r24.get("sum") or 0
-            sites = ai._lookup()(ai.WIKI, ai.SIGUN_FULL[sg], kind="all")["sites"]
+            sites = ai._lookup()(ai.wiki(), ai.SIGUN_FULL[sg], kind="all")["sites"]
             f = fc.get(sg) or {}
             rows.append({"sigun": sg, "emd1": r1.get("name"), "r1": v1, "r3": v3, "emd3": r3.get("name"), "r24": v24,
                          "m15": (m15.get(sg) or {}).get("max"), "fc_sum": f.get("sum"), "fc_emd": f.get("emd"),
@@ -138,6 +138,8 @@ def _emd_line(s: dict, r: dict, sites_by: dict) -> str:
     ln = f"{s['sigun']} {r['emd']} — " + " · ".join(b for b in bits if b)
     if r.get("fc6h"):
         ln += f" · 앞으로 6시간 {r['fc6h']:g}㎜"
+    if r.get("ante") is not None and r["ante"] >= 60:
+        ln += f" · 직전 5일 {r['ante']:g}㎜(선행강우 기준 120㎜)"
     hits = [f"{fam} {c['stage']} 기준({c['rule']}) {STL[c['st']]}" for fam, cs in r["ladders"].items() for c in cs if c["st"] in STL]
     if hits:
         ln += ". " + "; ".join(hits[:3])
@@ -146,6 +148,17 @@ def _emd_line(s: dict, r: dict, sites_by: dict) -> str:
     if names:
         ln += ". 우려지역: " + ", ".join(names)
     return ln
+
+
+def _ante_note(sits: list[dict]) -> str:
+    """'선행 5일 강우' 확인 문구 — 5일치 격자가 모였으면 대시보드가 계산했다는 것, 아니면 데이터가 없어 못 한다는 것."""
+    a = next((s.get("ante") for s in sits if s.get("ante")), None)
+    if a and a.get("ok"):
+        return "직전 5일 강우는 대시보드가 격자로 계산했다(읍면동 최대 칸). 산림청 산사태 예측정보 · 토양함수 · 하천 수위는 따로 확인"
+    if a:
+        return (f"직전 5일 강우는 계산하지 못했다 — 정시 격자 {a.get('have')}시간치뿐(5일 = {a.get('want')}시간 필요). "
+                "산림청 산사태 예측정보 · 토양함수 · 하천 수위도 따로 확인")
+    return "직전 5일 강우 · 산림청 산사태 예측정보 · 토양함수 · 하천 수위는 따로 확인"
 
 
 def _site_name(x: dict) -> str:
@@ -169,7 +182,7 @@ def _relay_txt(r: dict) -> str:
 
 def _sites_by(sigun: str) -> dict:
     out: dict = {}
-    for x in ai._lookup()(ai.WIKI, ai.SIGUN_FULL.get(sigun, sigun), kind="all")["sites"]:
+    for x in ai._lookup()(ai.wiki(), ai.SIGUN_FULL.get(sigun, sigun), kind="all")["sites"]:
         out.setdefault(x["읍면동"], []).append(x)
     return out
 
@@ -222,14 +235,14 @@ Q_SIG = [("order", "어느 읍면동을 먼저 봐야 하나?"), ("sites", "산�
          ("msg", "주민 재난문자 문안 초안"), ("book", "연락처 · 책자 어디를 보면 되나?")]
 
 
-MODES = [("all", "종합"), ("meeting", "상황판단회의"), ("evac", "대피 판단"), ("control", "통제(지하차도 · 하천)"),
-         ("msg", "재난문자"), ("brief", "상황보고")]
+MODES = [("all", "종합"), ("meeting", "상황판단회의"), ("dept", "단계별 부서 임무"), ("evac", "대피 판단"),
+         ("control", "통제(지하차도 · 하천)"), ("msg", "재난문자"), ("brief", "상황보고")]
 
 
 def report(base: str, sigun: str | None = None, mode: str = "all") -> dict:
     """mode — all(종합) · meeting(상황판단회의) · evac(대피 판단) · control(지하차도 · 하천 통제) · msg(재난문자) · brief(상황보고)."""
     if mode and mode != "all":
-        fn = {"meeting": _m_meeting, "evac": _m_evac, "control": _m_control, "msg": _m_msg, "brief": _m_brief}.get(mode)
+        fn = {"meeting": _m_meeting, "dept": _m_dept, "evac": _m_evac, "control": _m_control, "msg": _m_msg, "brief": _m_brief}.get(mode)
         if fn:
             r = fn(base, sigun)
             r.setdefault("questions", [{"id": k, "label": v} for k, v in (Q_SIG if sigun else Q_ALL)])
@@ -277,7 +290,7 @@ def report(base: str, sigun: str | None = None, mode: str = "all") -> dict:
     st = (o["stage"] or {}).get("stage")
     if st != "비상 2단계":
         nxt.append("호우경보 3개 시군 이상 → 도 비상 2단계" if st == "비상 1단계" else "호우주의보 4개 시군 이상 → 도 비상 1단계")
-    nxt.append("산림청 산사태 예측정보 · 하천 수위 · 선행 5일 강우 · 토양함수는 대시보드에 없다 — 따로 확인")
+    nxt.append(_ante_note(sits))
     return {"scope": "경남", "title": "경남 전체", "tm": o["tm"],
             "sections": [{"h": "상황", "items": sit}, {"h": "중요한 점", "items": imp}, {"h": "할 일", "items": tasks},
                          {"h": "살펴볼 곳", "items": look or ["특별히 살펴볼 읍면동 없음"]}, {"h": "다음 확인", "items": nxt},
@@ -317,7 +330,7 @@ def _report_sigun(base: str, sigun: str) -> dict:
         nxt.append("가까워진 기준: " + "; ".join(near[:4]))
     if s["night"]:
         nxt.append("취약시간대 — 시간당 30㎜ 이상 예보가 나오면 산사태 사전대피 조건")
-    nxt.append("산림청 산사태 예측정보 · 하천 수위 · 선행 5일 강우 · 토양함수는 따로 확인")
+    nxt.append(_ante_note([s]))
     return {"scope": sigun, "title": full, "tm": s["tm"],
             "sections": [{"h": "상황", "items": sit}, {"h": "중요한 점", "items": imp}, {"h": "할 일", "items": tasks},
                          {"h": "살펴볼 곳", "items": look or ["우려지역이 있는 읍면동에 비 없음"]}, {"h": "다음 확인", "items": nxt},
@@ -564,6 +577,61 @@ def _quiet(o: dict, sigun: str | None, rows: list[dict], title: str, when: list[
                          {"h": "참고 — 위키 · 책자", "items": _refs(refs)}]}
 
 
+# ── 판례로 본 점검(⚠️) — 위키 [[판례 업무별 적용]] · 판례 쪽. 작성자 해석이며 판시가 아니다([[판례 인용규칙]]) ──
+def _pan(num: int) -> dict | None:
+    stem = next((k for k in _index() if k.startswith(f"판례 {num:02d} ")), None)
+    if not stem:
+        return None
+    t = _index()[stem].read_text("utf-8")
+    fm = t.split("---", 2)[1] if t.startswith("---") else ""
+    g = lambda k: (m.group(1).strip().strip('"') if (m := re.search(rf"^{k}:\s*(.+)$", fm, re.M)) else "")  # noqa: E731
+    app = ""
+    if "## 도·시군 등 업무 적용" in t:
+        app = t.split("## 도·시군 등 업무 적용", 1)[1].split("\n", 1)[1].strip().split("\n\n", 1)[0].replace("\n", " ")
+    summ = g("summary").split(" — ", 1)[-1]
+    return {"stem": stem, "court": g("court"), "date": g("decision_date"), "no": g("case_number"), "type": g("legal_type"),
+            "status": g("status"), "grade": g("evidence_grade"), "summary": summ, "apply": app}
+
+
+def _record_items(*labels: str) -> list[str]:
+    """[[판례 업무별 적용]] '권장 기록 항목' 중 그 이름으로 시작하는 줄."""
+    p_ = _index().get("판례 업무별 적용")
+    if not p_:
+        return []
+    sec = p_.read_text("utf-8").split("## 권장 기록 항목", 1)[-1]
+    return [ln.lstrip("- ").strip() for ln in sec.splitlines() if ln.startswith("- ") and any(ln.lstrip("- ").startswith(x) for x in labels)]
+
+
+def _judicial(nums: list[int], record: tuple[str, ...], why: str) -> dict | None:
+    """⚠️ 판례로 본 점검 — 지금 상황(why)에서 예전에 책임이 문제된 조치와, 그래서 남겨 둘 기록. 비가 없을 때는 쓰지 않는다."""
+    items = [f"⚠️ {why} — 아래는 판례를 바탕으로 한 업무 점검 해석이다(판시 아님). 책임은 사무분장 · 관리청 · 정보를 안 시점 · 조치 가능성에 따라 다르다 ([[판례 인용규칙]])"]
+    for n in nums:
+        c = _pan(n)
+        if c:
+            items.append(f"⚠️ [[{c['stem']}]] — {c['court']} {c['date']} {c['no']}({c['type']} · {c['status']} · 근거 {c['grade']}): {c['summary']}"
+                         + (f" ▶ 점검: {c['apply'][:230]}" if c["apply"] else ""))
+    rec = _record_items(*record)
+    if rec:
+        items.append("⚠️ 남겨 둘 기록 — " + " / ".join(rec[:3]) + " (하지 않은 조치를 나중에 문서로 보충하지 않는다)")
+    return {"h": "⚠️ 판례로 본 점검", "items": items} if len(items) > 1 else None
+
+
+def _table(page_name: str, heading: str) -> list[list[str]]:
+    """위키 페이지의 '## 제목' 아래 표 줄(머리줄 · 구분선 뺀 것)."""
+    p_ = _index().get(page_name)
+    if not p_:
+        return []
+    sec = p_.read_text("utf-8").split(f"## {heading}", 1)
+    if len(sec) < 2:
+        return []
+    out = []
+    for ln in sec[1].split("\n## ", 1)[0].splitlines():
+        c = [x.strip().replace("**", "") for x in ln.strip().strip("|").split("|")]
+        if ln.startswith("|") and len(c) >= 2 and not set(c[0]) <= set("-: ") and c[0] not in ("단계", "반", "기관"):
+            out.append(c)
+    return out
+
+
 MEETING = {"초기대응": ("예비 상황판단회의", "자연재난과장"), "비상 1단계": ("초기 상황판단회의", "자연재난과장"),
            "비상 2단계": ("본 상황판단회의", "도민안전본부장")}
 
@@ -602,6 +670,7 @@ def _m_meeting(base, sigun):
             "본 상황판단회의 · 비상 2단계 — 호우경보 3개 시군 이상",
             "그 전이라도 상황전파 기준(시간당 20㎜ · 일 100㎜)에 닿는 곳이 생기면 이 화면이 자료를 펼친다"],
             ["상황판단회의", "위기경보와 비상단계"])
+    jud = _judicial([18, 3, 19, 20], ("판단", "위험정보"), "상황판단회의 · 비상근무 단계에서")
     sec = [{"h": "1. 기상상황(현황 · 전망)", "items": wx}, {"h": "2. 재난상황", "items": dis},
            {"h": "3. 과거 재해이력 비교", "items": _analogs(o, risk_sg or [r["sigun"] for r in rows])
             + _uosim((risk_sg or [r["sigun"] for r in rows])[:6])
@@ -610,9 +679,56 @@ def _m_meeting(base, sigun):
            {"h": "4. 논의 · 결정할 것", "items": decide},
            {"h": "5. 후속조치", "items": ["비상근무 실시 · 회의 결과 시군 · 관계기관 전파", "현장상황지원관 파견 · 현장 비상지원본부(현장CP) 전진배치 검토",
                                          "상황전파 통화 기록 · 대피 · 통제 현황 집계(세대 · 인원)"]},
-           {"h": "참고 — 위키 · 책자", "items": _refs(["상황판단회의", "위기경보와 비상단계", "경남 시군별 우심피해 이력", "경남 자연재난 피해 통계 2015-2024",
+           *([jud] if jud else []),
+           {"h": "참고 — 위키 · 책자", "items": _refs(["상황판단회의", "위기경보와 비상단계", "판례 업무별 적용", "경남 시군별 우심피해 이력", "경남 자연재난 피해 통계 2015-2024",
                                                     "재해연보 읽는 법과 한계", "경남 자연재난 이력"] + [c["name"] for c in _cases()] + ["현장상황관리관"])}]
     return {**_hdr(o, sigun, f"{name} 자료"), "sections": sec}
+
+
+def _m_dept(base, sigun):
+    """비상단계별 어느 부서(반)가 무엇을 하나 — 위키 [[비상단계별 협업부서 임무]] 표를 지금 상황에 맞춰 보인다."""
+    o, sits = _scope(base, sigun)
+    st = (o["stage"] or {}).get("stage")
+    rows = o["rows"] if not sigun else [r for r in o["rows"] if r["sigun"] == sigun]
+    cmd = {c[0]: c[1] for c in _table("비상단계별 협업부서 임무", "단계별 지휘")}
+    hit = _hits(sits, ("긴급대피", "사전대피"), ("met", "near"))
+    if not st and _calm(o, rows, bool(hit)):
+        return _quiet(o, sigun, rows, "단계별 부서 임무", [
+            f"{k} — {v[:150]}" for k, v in cmd.items()] + ["주의보가 나면(초기대응) 이 화면이 지금 단계에서 일하는 반 · 부서와 먼저 부를 협업기관을 보여 준다"],
+            ["비상단계별 협업부서 임무", "위기경보와 비상단계"])
+    bans = _table("비상단계별 협업부서 임무", "비상1~3단계 임무반")
+    kinds = {c[0]: c for c in bans}
+    why: dict[str, str] = {}
+    fams = {f for _, _, f, _ in hit}
+    if hit:
+        for k in kinds:
+            if any(w in k for w in ("긴급 생활안정", "사회질서", "수습구조")):
+                why[k] = "대피 기준 해당 · 가까움 — 취약계층 대피 · 출입통제 · 강제대피 협조"
+    if fams & {"하천", "지하공간", "침수·해안"} or any(a.startswith("호우") for r in rows for a in r["alerts"]):
+        for k in kinds:
+            if any(w in k for w in ("시설응급복구", "교통대책")):
+                why[k] = "지하차도 · 하천 · 도로 통제 대상 — 시설 응급조치 · 우회"
+    if any(r["cbs"] or r["relay"] for r in rows):
+        for k in kinds:
+            if "홍보" in k:
+                why[k] = "상황전파 · 재난문자 기준 — 주민 행동요령 홍보"
+    first = [k for k in kinds if "상황관리 총괄" in k]
+    rel = [k for k in kinds if k in why and k not in first]
+    rest = [k for k in kinds if k not in first and k not in rel]
+    sec = [{"h": "지금 단계", "items": [f"{st or '초기대응 이전(주의보 없음)'} — " + (cmd.get("초기대응", "") if st == "초기대응" else cmd.get("비상1~3단계", ""))[:200]]}]
+    if st and st != "초기대응":
+        sec.append({"h": "일을 맡는 반 — 지금 상황에 맞는 것 먼저", "items": [f"{k}: {kinds[k][1]} — {kinds[k][2][:170]}" for k in first]
+                    + [f"{k}: {kinds[k][1]} — {kinds[k][2][:150]}  ◀ {why[k]}" for k in rel]
+                    + (["그 밖의 반: " + " · ".join(re.sub(r"^[①-⑬]\s*", "", k) for k in rest)] if rest else [])})
+    co = {c[0]: c[1] for c in _table("비상단계별 협업부서 임무", "협업기관")}
+    pick = ["창원기상대", "경상남도경찰청", "한국전력공사", "제39보병사단"] + (["한국농어촌공사", "한국수자원공사"] if "하천" in fams else [])
+    firm = [f"{k}: {v[:140]}" for k in co for v in [co[k]] if any(k.startswith(x[:6]) or x in k for x in pick)]
+    sec.append({"h": "협업기관 — 먼저 연락할 곳", "items": firm[:6] or ["위키 표를 읽지 못했다"]})
+    nxt = {"초기대응": "호우주의보 4개 시군 이상 또는 호우경보 발표 → 비상 1단계(초기 상황판단회의)",
+           "비상 1단계": "호우경보 3개 시군 이상 → 비상 2단계(본 상황판단회의)", "비상 2단계": "더 오르는 단계는 없다 — 대책본부 운영 · 중앙 보고"}.get(st or "", "호우주의보 발표 → 초기대응")
+    sec.append({"h": "다음 단계", "items": [nxt]})
+    sec.append({"h": "참고 — 위키 · 책자", "items": _refs(["비상단계별 협업부서 임무", "상황근무체계", "재난안전대책본부 조직", "실국별 행동매뉴얼", "시군 상황관리반 행동매뉴얼"])})
+    return {**_hdr(o, sigun, "단계별 부서 임무"), "sections": sec}
 
 
 def _m_evac(base, sigun):
@@ -641,9 +757,12 @@ def _m_evac(base, sigun):
         "발령권자: 시장 · 군수 · 구청장(대책본부장) — 긴급하면 읍면동장이 주민대피명령 (재난안전법 제40조)",
         "취약계층 먼저 · 일몰 전 사전대피 원칙" + (" — 지금 야간: 대피로 · 이동 수단 안전 먼저 확인" if o["night"] else ""),
         "사전대피는 예보, 긴급대피는 실황이 기준 — 지구별 원문 기준은 [[시군별 통제·대피계획]]"]})
-    sec.append({"h": "확인할 것", "items": ["산림청 산사태 예측정보(사전대피 첫 조건) · 선행 5일 강우 · 토양함수 · 하천 수위",
+    jud = _judicial([1, 3, 22], ("위험정보", "대피"), "대피 판단 · 경보 전파에서")
+    if jud:
+        sec.append(jud)
+    sec.append({"h": "확인할 것", "items": [_ante_note(sits) + " (사전대피 첫 조건: 산림청 예측정보)",
                                          "원문 기준의 '그리고/또는' · 붙은 조건은 판정하지 않았다"]})
-    sec.append({"h": "참고 — 위키 · 책자", "items": _refs(["대피명령 길라잡이", "통제·대피 기준", "시군별 통제·대피계획", "주민대피관리계획"])})
+    sec.append({"h": "참고 — 위키 · 책자", "items": _refs(["대피명령 길라잡이", "통제·대피 기준", "시군별 통제·대피계획", "주민대피관리계획", "판례 업무별 적용"])})
     return {**_hdr(o, sigun, "대피 판단"), "sections": sec}
 
 
@@ -680,7 +799,8 @@ def _m_control(base, sigun):
            {"h": "하천 기준 대조", "items": rv[:10] or ["하천 통제 · 대피 기준에 닿은 곳 없음(30㎜/h 3시간 지속 예보 · 누적 200㎜ + 30㎜/h)"]},
            {"h": "기준 · 유의", "items": ["지하차도: 호우특보 발령 · 침수심 5㎝ 이상이면 통제. 4인 담당자(공무원 2 · 민간 1 · 경찰 1) — [[통제·대피 기준]]",
                                          "하천: 30㎜/h 이상 3시간 지속 예보 · 홍수주의보면 통제", "하천 수위 · 침수심 · CCTV 는 대시보드에 없다 — 시군 · 홍수통제소 확인"]},
-           {"h": "참고 — 위키 · 책자", "items": _refs(["통제·대피 기준", "인명피해 우려지역", "도로 침수 낙석 사면붕괴 확인사항"])}]
+           *([j] if (j := _judicial([18, 4, 6, 11], ("대피", "시설"), "지하차도 · 하천 · 도로 통제에서")) else []),
+           {"h": "참고 — 위키 · 책자", "items": _refs(["통제·대피 기준", "인명피해 우려지역", "도로 침수 낙석 사면붕괴 확인사항", "판례 업무별 적용"])}]
     return {**_hdr(o, sigun, "통제(지하차도 · 하천)"), "sections": sec}
 
 
@@ -737,3 +857,11 @@ def _m_brief(base, sigun):
                                  "다우지점은 관측소가 아니라 격자 최대 칸 읍면동이다 — 보고서에는 관측소 값(AWS)을 쓴다"]},
            {"h": "참고 — 위키 · 책자", "items": _refs(["표준 문서 목록", "위기경보와 비상단계"])}]
     return {**_hdr(o, sigun, "상황보고"), "sections": sec}
+
+
+def reset_cache() -> None:
+    """위키 폴더를 바꿨을 때 — 위키에서 읽어 둔 것을 다 비운다."""
+    _TTL.clear()
+    _index.cache_clear()
+    page.cache_clear()
+    _cases.cache_clear()

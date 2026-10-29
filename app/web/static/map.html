@@ -1507,7 +1507,7 @@ const COLLECT_OF = { obs15: "grid", obs60: "grid", obsday: "grid", acc: "grid", 
                      shrt_today: "short", shrt_tomorrow: "short" };
 const SET_DEFAULT = { flow_step: 10, flow_hours: 6, play_ms: 1200, tl_on: false, tl_stat: "max",
                       panel: "cards", acc_hours: 12, acc_from: "hours", acc_basis: "aws", sel_zoom: true, acc_fc: true, acc_h1: true,
-                      acc_per: 1, acc_full: false, aws_live: false, acc_qpf: false, qpf_ms: 600, acc_date: "", acc_hdr_pin: true, acc_tone: false, sea_grid: "dim", al_pre: true, aws_off: [], acc_scale: 0, sea_w: "fc", sea_rot: 0, sea_per: 1, shows: [] };
+                      acc_per: 1, acc_full: false, aws_live: false, acc_qpf: false, qpf_ms: 600, acc_date: "", acc_hdr_pin: true, acc_tone: false, sea_grid: "dim", al_pre: true, aws_off: [], gn_off: false, acc_scale: 0, sea_w: "fc", sea_rot: 0, sea_per: 1, shows: [] };
 
 let META = null, TOPO = null, GEO = null, MSIG = null, MEMD = null, EMDN = null;
 let SET = { ...SET_DEFAULT };
@@ -5245,6 +5245,9 @@ function openPrefs() {
       .map(([v, l]) => `<button data-tools="${v}" class="${TOOLS === v ? "on" : ""}">${l}</button>`).join("")}</span></div>
     <div class="row"><span class="k"></span><span class="note">패널 · 도움말 · 설정 — 숨겨도 제목 메뉴 아래와 단축키(L · ? · Ctrl+,)로 연다.</span></div>
     <h4>관측소</h4>
+    <div class="row"><span class="k">경남 AWS(내부망)</span>${seg("gn_off", [[false, "쓴다"], [true, "끈다"]])}</div>
+    <div class="row"><span class="k"></span><span class="note">끄면 스방 수집을 멈추고, 면(AWS 누적 · 1시간) · 강수 누적 카드 · 지금 오는 비에서 경남 AWS 를 모두 뺀다 — 기상청 AWS 만 쓴다.
+      내부망 밖(집 · 서버)에서 스방에 닿지 않을 때, 또는 내부망에서도 경남 AWS 값을 빼고 보고 싶을 때. 한 곳씩 빼는 것은 아래 비활성 AWS.</span></div>
     <div class="row"><span class="k">비활성 AWS</span><span class="note">${offList().length ? `${offList().length}곳 — 면(AWS 누적 · 1시간) · 강수 누적 카드 · 지금 오는 비(종합 화면도)에서 뺐다.` : "없음."}
       지도에서 관측소(S)를 켜고 점을 오른쪽 클릭 → 비활성화. 주변과 동떨어진 값(고장 · 막힘)을 빼고 둘레 관측소로 면을 다시 메운다.</span></div>
     ${offList().map(x => `<div class="row"><span class="k">${x.sigun}</span><span class="offnm">${x.name}<small>${x.org === "gn" ? "경남 AWS" : `기상청 ${x.id}`}</small></span>
@@ -5255,18 +5258,36 @@ function openPrefs() {
       이 PC 는 <b>지금 받기</b>(git pull — 이 PC 에서 손댄 파일이 있으면 받지 않는다), 서버(언레이드)는 <b>서버 갱신</b>(1분 안에 서버가 다시 빌드해 띄운다).
       자동으로 받지 않는다 — 누를 때만.</span></div>
     <div class="upd" id="pf-upd">${updHtml()}</div>
+    <h4>AI 알림</h4>
+    <div class="row"><span class="note">AI 팝업을 열지 않아도, 위키 기준(통제 · 사전대피 · 긴급대피)에 <b>가까워지거나(70%↑) 닿으면</b> 텔레그램으로 알린다 — 새로 생기거나 한 단계 오른 것만, 5분마다 본다.
+      <b>켜는 서버는 한 곳만</b>(PC 와 서버를 둘 다 켜면 같은 알림이 두 번 간다). 기본은 끔.</span></div>
+    <div class="row"><span class="k">알림</span><span class="seg"><button id="pf-al-off" type="button">끔</button><button id="pf-al-on" type="button">켬</button></span><button id="pf-al-test" type="button">시험 발송</button></div>
+    <div class="row"><span class="note" id="pf-al-st">읽는 중…</span></div>
+    <h4>AI 위키</h4>
+    <div class="row"><span class="note">AI 상황판단(I)이 기준 · 우려지역 · 책자 쪽수를 읽는 재난업무 LLM 위키(옵시디언) 폴더. <b>이 서버(PC)</b> 안의 경로다 —
+      폴더에 <code>tools/lookup.py</code> 와 문서(.md)가 있어야 한다. 비우고 저장하면 환경변수(GN_WIKI) · 기본으로 돌아간다.</span></div>
+    <div class="row"><input id="pf-wiki" style="flex:1;min-width:0;font:inherit" spellcheck="false" placeholder="예: C:\Users\...\재난   또는   /mnt/user/appdata/.../재난"><button id="pf-wiki-save" type="button">저장</button></div>
+    <div class="row"><span class="note" id="pf-wiki-st">읽는 중…</span></div>
     <h4>데모</h4>
     <div class="demo-list" id="pf-demo"><div class="al-none">읽는 중…</div></div>
     <div class="keys"><kbd>1</kbd>~<kbd>8</kbd> 층 · <kbd>Space</kbd> 재생 · <kbd>←</kbd><kbd>→</kbd> 한 장씩 · <kbd>L</kbd> 패널 · <kbd>A</kbd> 특보 · <kbd>S</kbd> 관측소 · <kbd>V</kbd> 지점 값 · <kbd>B</kbd> 누적 기준 · <kbd>F</kbd> 누적 예상 · <kbd>H</kbd> 최근 1시간 · <kbd>G</kbd> 위 카드 가득 · <kbd>R</kbd> 실시간 감시 · <kbd>Q</kbd> 초단기예측 이미지 · <kbd>W</kbd> 바다 위젯 · <kbd>C</kbd> 지도 위치 · <kbd>P</kbd> 화면 재생 · <kbd>T</kbd> 테스트 · <kbd>?</kbd> 도움말 · <kbd>Ctrl</kbd>+<kbd>,</kbd> 설정</div>
   </div>`;
   prefTabs();
+  loadWiki();
+  loadAlert();
   $("prefs").hidden = false;
   $("pf-x").onclick = closePrefs;
   for (const b of $("prefs").querySelectorAll("button[data-k]")) b.onclick = () => {
     const k = b.dataset.k;
     let v = b.dataset.v;
-    v = (k === "tl_on" || k === "sel_zoom" || k === "aws_live" || k === "al_pre") ? v === "true" : (k === "tl_stat" || k === "panel" || k === "sea_w" || k === "sea_grid") ? v : +v;
+    v = (k === "tl_on" || k === "sel_zoom" || k === "aws_live" || k === "al_pre" || k === "gn_off") ? v === "true" : (k === "tl_stat" || k === "panel" || k === "sea_w" || k === "sea_grid") ? v : +v;
     if (k === "aws_live") { setLive(v).then(openPrefs); return; }
+    if (k === "gn_off") {            // 경남 AWS 전체 끄기 · 켜기 — 비활성 AWS 와 같이 기억해 둔 면 · 통계를 버리고 새로
+      SET.gn_off = v;
+      fetch("/api/settings/map", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ gn_off: v }) })
+        .then(() => { GRIDS.clear(); STATS.clear(); STNC.clear(); OFF.clear(); EMDC.clear(); show(); loadFlow(); CARDS = null; loadCards(); openPrefs(); });
+      return;
+    }
     if (k === "acc_scale") { setAccScale(v); openPrefs(); return; }
     if (k === "sea_w") { setSw(v); openPrefs(); return; }
     if (k === "sea_rot" || k === "sea_per") { setSwOpt(k, v); openPrefs(); return; }
@@ -5457,6 +5478,68 @@ async function updAct(a) {
   }
   UPD.msg = `<span class="warnx">다시 뜨지 않았다 — 창을 확인하세요</span>`; updPaint();
 }
+/* ── AI 기준 근접 알림(설정) ── */
+let ALERT = null;
+function alertPaint(msg) {
+  const st = $("pf-al-st");
+  if (!st || !ALERT) return;
+  $("pf-al-on")?.classList.toggle("on", !!ALERT.on);
+  $("pf-al-off")?.classList.toggle("on", !ALERT.on);
+  const l = ALERT.last || {};
+  st.innerHTML = msg || [ALERT.ready ? "" : `<span class="warnx">텔레그램 키가 없다 — config/api_keys.txt 의 TELEGRAM_BOT_TOKEN · TELEGRAM_CHAT_ID</span>`,
+    ALERT.on ? `<b>켜 둠</b>${l.at ? ` — 마지막 확인 ${l.at} · 본 것 ${l.seen}건 · 보낸 것 ${l.sent}건` : " — 아직 한 번도 안 돌았다(5분 안에)"}` : "꺼 둠",
+    l.err ? `<span class="warnx">마지막 오류: ${escH(l.err)}</span>` : ""].filter(Boolean).join(" · ");
+}
+async function loadAlert() {
+  try { ALERT = await getJson("/api/settings/ai-alert"); alertPaint(); }
+  catch (e) { const st = $("pf-al-st"); if (st) st.innerHTML = `<span class="warnx">못 읽었다 — ${escH(e.message)}</span>`; }
+}
+$("prefs").addEventListener("click", async ev => {
+  const id = ev.target.id;
+  if (id !== "pf-al-on" && id !== "pf-al-off" && id !== "pf-al-test") return;
+  const st = $("pf-al-st");
+  try {
+    if (id === "pf-al-test") {
+      st.textContent = "보내는 중…";
+      const r = await fetch("/api/ai/alert-test", { method: "POST" });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.detail || r.status);
+      alertPaint("시험 알림을 보냈다 — 텔레그램을 확인한다");
+      return;
+    }
+    const r = await fetch("/api/settings/ai-alert", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ on: id === "pf-al-on" }) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.detail || r.status);
+    ALERT = j; alertPaint();
+  } catch (e) { alertPaint(`<span class="warnx">${escH(e.message)}</span>`); }
+});
+/* ── AI 위키 폴더(설정) ── */
+function wikiPaint(w, msg) {
+  const st = $("pf-wiki-st");
+  if (!st) return;
+  st.innerHTML = msg || (w.ok ? `<b>쓰는 중</b> — ${escH(w.path)} · 문서 ${w.md}개 · 우려지역 CSV ${w.csv ? "있음" : "없음"} · 출처 ${w.source}`
+    : `<span class="warnx">못 쓴다</span> — ${escH(w.path)} (${!w.dir ? "폴더가 없다" : !w.lookup ? "tools/lookup.py 가 없다" : "문서가 없다"}) · 출처 ${w.source}`);
+}
+async function loadWiki() {
+  try {
+    const w = await getJson("/api/settings/ai-wiki");
+    if ($("pf-wiki")) { $("pf-wiki").value = w.source === "설정" ? w.path : ""; $("pf-wiki").placeholder = `비우면 ${w.source === "설정" ? "기본" : w.source}`; }
+    wikiPaint(w);
+  } catch (e) { wikiPaint(null, `<span class="warnx">못 읽었다 — ${escH(e.message)}</span>`); }
+}
+$("prefs").addEventListener("click", async ev => {
+  if (ev.target.id !== "pf-wiki-save") return;
+  const b = ev.target;
+  b.disabled = true;
+  try {
+    const res = await fetch("/api/settings/ai-wiki", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ path: $("pf-wiki").value }) });
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.detail || res.status);
+    wikiPaint(j);
+    if (AIW.open) aiLoad();
+  } catch (e) { wikiPaint(null, `<span class="warnx">저장하지 않았다 — ${escH(e.message)}</span>`); }
+  b.disabled = false;
+});
 $("prefs").addEventListener("click", ev => { const b = ev.target.closest?.("button[data-upd]"); if (b && !b.disabled) updAct(b.dataset.upd); });
 
 /* ── 화면 재생(P) — 화면보호기처럼 여러 화면을 차례로(10-24) ───────────────────────────

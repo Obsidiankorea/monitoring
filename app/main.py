@@ -32,7 +32,7 @@ from fastapi import Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, serverupdate, snaps, update
+from . import aiwatch, clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, serverupdate, sites, snaps, update
 from .collectors import alerts, bangjae_rain, forecast, grid_rain, qpf, rain, shortfc
 from .config import CACHE, INTERVALS, POLL_DEFAULT
 
@@ -74,6 +74,8 @@ async def run_one(kind: str, force: bool = False) -> dict:
     if config.DEMO:
         # 시연 — 기상청을 부르지 않는다(굳힌 시각 뒤 자료가 끼면 '가장 새 것'이 바뀐다). 수동 조회·과거 메우기도
         return {"ok": False, "kind": kind, "error": "시연 — 수집하지 않는다"}
+    if kind == "bangjae" and sites.gn_off():
+        return {"ok": False, "kind": kind, "error": "경남 AWS(내부망) 끔 — 설정 › 관측소에서 켠다"}
     async with _locks[kind]:
         try:
             fn = COLLECTORS[kind]
@@ -116,6 +118,8 @@ async def lifespan(app: FastAPI):
             continue
         sched.add_job(run_one, "interval", seconds=sec, args=[kind],
                       id=kind, max_instances=1, coalesce=True)
+    # AI 기준 근접 알림 — 5분마다 훑는다. 켜 둔 서버에서만 보낸다(설정 › AI 알림, 기본 끔 — aiwatch.py)
+    sched.add_job(aiwatch.run, "interval", seconds=300, id="aiwatch", max_instances=1, coalesce=True)
     # 하루 한 번 묵은 자료 치우기 — 안 하면 DB 와 이미지 캐시가 계속 자란다
     sched.add_job(_nightly, "cron", hour=4, minute=20, id="maint",
                   max_instances=1, coalesce=True)
@@ -414,7 +418,7 @@ async def api_ai_situation(sigun: str, base: str | None = None):
     try:
         s = await asyncio.to_thread(ai.situation, sigun, me)
     except FileNotFoundError as e:
-        raise HTTPException(503, f"LLM 위키를 못 찾았다(GN_WIKI): {e}")
+        raise HTTPException(503, f"LLM 위키를 못 찾았다(설정 › AI 위키): {e}")
     s["brief"] = ai.brief(s)
     return s
 
@@ -424,6 +428,15 @@ async def api_grid_emdwin():
     """경남 읍면동마다 1 · 3 · 12 · 24 · 48시간 누적 · 15분 최대 칸(격자 500m) — 한 번에. AI 상황판단 · Hermes 도구용."""
     try:
         return await asyncio.to_thread(gridview.emd_windows)
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
+
+
+@app.get("/api/ai/ante")
+async def api_ai_ante():
+    """경남 읍면동마다 직전 5일(120시간) 누적 최대 칸 — 정시 격자가 5일치 모이지 않았으면 ok=false(계산하지 않는다)."""
+    try:
+        return await asyncio.to_thread(gridview.emd_antecedent)
     except LookupError as e:
         raise HTTPException(404, str(e)) from e
 
@@ -440,11 +453,58 @@ async def api_ai_report(sigun: str | None = None, base: str | None = None, mode:
     try:
         r = await asyncio.to_thread(aireport.report, _ai_base(base), sigun or None, mode)
     except FileNotFoundError as e:
-        raise HTTPException(503, f"LLM 위키를 못 찾았다(GN_WIKI): {e}")
+        raise HTTPException(503, f"LLM 위키를 못 찾았다(설정 › AI 위키): {e}")
     r["llm"] = llm.mode()
     r["modes"] = [{"id": k, "label": v} for k, v in aireport.MODES]
     r.setdefault("mode", "all")
     return r
+
+
+@app.get("/api/settings/ai-wiki")
+async def api_ai_wiki_get():
+    from . import ai
+    path, src = ai.wiki_source()
+    return {**await asyncio.to_thread(ai.wiki_check, path), "source": src, "default": ai.DEFAULT_WIKI}
+
+
+@app.put("/api/settings/ai-wiki")
+async def api_ai_wiki_put(body: dict):
+    """LLM 위키 폴더 — {path}. 빈 값이면 설정을 지우고 환경변수(GN_WIKI) · 기본으로 돌아간다."""
+    from . import ai
+    r = await asyncio.to_thread(ai.set_wiki, str(body.get("path") or ""))
+    if not r["saved"]:
+        why = "폴더가 없다" if not r["dir"] else "tools/lookup.py 가 없다" if not r["lookup"] else "문서(.md)가 없다"
+        raise HTTPException(400, f"위키로 쓸 수 없다 — {why}: {r['path']}")
+    return {**r, "source": ai.wiki_source()[1], "default": ai.DEFAULT_WIKI}
+
+
+@app.get("/api/settings/ai-alert")
+async def api_ai_alert_get():
+    return aiwatch.status()
+
+
+@app.put("/api/settings/ai-alert")
+async def api_ai_alert_put(body: dict):
+    """기준 근접 알림 켜고 끄기 — {on: bool}. 켜는 서버는 한 곳만(PC 와 서버를 둘 다 켜면 두 번 간다)."""
+    on = bool(body.get("on"))
+    if on and not aiwatch.ready():
+        raise HTTPException(400, "텔레그램 키가 없다 — config/api_keys.txt 의 TELEGRAM_BOT_TOKEN · TELEGRAM_CHAT_ID")
+    db.put_setting("ai_alert", {"on": on})
+    if not on:
+        db.put_setting("ai_alert_state", {})
+    return aiwatch.status()
+
+
+@app.post("/api/ai/alert-test")
+async def api_ai_alert_test():
+    """시험 발송 — 누르는 사람이 직접 한 번. 기준 판정과 무관한 짧은 글 한 줄."""
+    if not aiwatch.ready():
+        raise HTTPException(400, "텔레그램 키가 없다")
+    try:
+        await aiwatch.send("⚠️ 경남 AI 상황판단 — 시험 알림입니다(설정에서 눌렀을 때만 갑니다).")
+    except Exception as e:                      # noqa: BLE001
+        raise HTTPException(502, aiwatch._mask(e)[:200]) from e
+    return {"ok": True}
 
 
 @app.post("/api/ai/ask")

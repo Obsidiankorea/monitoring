@@ -32,7 +32,33 @@ def _default_wiki() -> Path:
     return Path.home() / "obsidian" / "재난"
 
 
-WIKI = Path(os.environ["GN_WIKI"]) if os.environ.get("GN_WIKI") else _default_wiki()
+DEFAULT_WIKI = str(_default_wiki())
+
+
+def wiki_source() -> tuple[Path, str]:
+    """위키 폴더와 그 출처 — 화면 설정(DB ai_wiki) > 환경변수 GN_WIKI > 기본."""
+    from . import db
+    try:
+        v = str(db.get_setting("ai_wiki", "") or "").strip()
+    except Exception:                                   # noqa: BLE001 — DB 가 아직 없을 때
+        v = ""
+    if v:
+        return Path(v), "설정"
+    if os.environ.get("GN_WIKI"):
+        return Path(os.environ["GN_WIKI"]), "환경변수"
+    return Path(DEFAULT_WIKI), "기본"
+
+
+def wiki() -> Path:
+    return wiki_source()[0]
+
+
+def wiki_check(path: Path) -> dict:
+    """그 폴더가 쓸 수 있는 위키인가 — 폴더 · tools/lookup.py · 우려지역 CSV · 문서 수."""
+    md = sum(1 for x in path.rglob("*.md") if ".obsidian" not in x.parts) if path.is_dir() else 0
+    has = (path / "tools" / "lookup.py").exists()
+    return {"path": str(path), "dir": path.is_dir(), "lookup": has,
+            "csv": (path / "data" / "인명피해 우려지역.csv").exists(), "md": md, "ok": path.is_dir() and has and md > 0}
 WINDOWS = (1, 3, 12, 24, 48)
 RN1_CAP = 30.0
 SIGUN_FULL = {"창원": "창원시", "진주": "진주시", "통영": "통영시", "사천": "사천시", "김해": "김해시", "밀양": "밀양시",
@@ -101,6 +127,8 @@ def ladders(r: dict, night: bool, alerts: list[str]) -> dict:
         "산사태": [
             {"stage": "통제", "rule": "일/누적 100㎜↑ + 20㎜/h↑ 예보", "st": _all(_st(accum, 100), _st(fpk, 20))},
             {"stage": "사전대피", "rule": "일/누적 200㎜↑ + 50㎜/h↑ 예보", "st": _all(_st(accum, 200), f50)},
+            # 선행 5일 120㎜ 는 대시보드가 격자로 계산한다. 뒤의 '산사태 위험 증가 예보'(산림청)는 없어서 → 충족으로는 못 친다(모름)
+            {"stage": "사전대피", "rule": "선행 5일 120㎜↑ + 산사태 위험 증가 예보(산림청)", "st": _all(_st(r.get("ante"), 120), "unknown")},
             {"stage": "사전대피", "rule": "취약시간대(21~06시) 30㎜/h↑ 예보",
              "st": ("no" if not night else _st(fpk, 30))},
             {"stage": "긴급대피", "rule": "50㎜/h↑ + 일 170㎜↑(실황)", "st": _all(_st(o1, 50), _st(o24, 170))},
@@ -131,9 +159,10 @@ def _no_wiki(vault, sigun, emd=None, kind="all"):
 @lru_cache(maxsize=1)
 def _lookup_fn():
     """위키 tools/lookup.py. 위키가 없는 PC(행정 PC 등)면 빈 결과 — 보고는 수치만으로 돌아간다(deploy.sh 의 경고와 같다)."""
-    if not (WIKI / "tools" / "lookup.py").is_file():
+    sys.modules.pop("lookup", None)                     # 위키를 바꿨으면 그 쪽 도구로
+    if not (wiki() / "tools" / "lookup.py").is_file():
         return _no_wiki
-    sys.path.insert(0, str(WIKI / "tools"))
+    sys.path.insert(0, str(wiki() / "tools"))
     from lookup import lookup_sites  # noqa: E402 — 위키 쪽 읽기 전용 도구
     return lookup_sites
 
@@ -205,6 +234,11 @@ def situation(sigun: str, base: str = "http://127.0.0.1:8000") -> dict:
     acc = {h: {r["emd"]: r.get(f"{h}h") for r in mine_rows} for h in WINDOWS}
     m15 = {r["emd"]: r.get("15m") for r in mine_rows}
     tm, src = w.get("tm"), "기상청 고해상도 격자(500m) · 매시 60분 합 + 지금 칸(일강수 증분)"
+    try:
+        an = _get(base, "/api/ai/ante")                    # 직전 5일 — 5일치 격자가 없으면 ok=False
+    except Exception:                                      # noqa: BLE001
+        an = {"ok": False, "have": 0, "want": 120, "missing": 120}
+    ante = {r["emd"]: r["mm"] for r in an.get("rows", []) if r["sig"] == sigun} if an.get("ok") else {}
     fc = _get(base, "/api/forecast", hours=6, sigun=sigun)
     fce = {e["emd"]: e for e in fc.get("emd_sigun", []) if e.get("sigun") == sigun}
     al = (_get(base, "/api/alerts").get("data") or {})
@@ -214,7 +248,7 @@ def situation(sigun: str, base: str = "http://127.0.0.1:8000") -> dict:
     now = datetime.strptime(tm, "%Y%m%d%H%M") if tm else datetime.now()
     night = now.hour >= 21 or now.hour < 6
 
-    sites = _lookup()(WIKI, SIGUN_FULL.get(sigun, sigun), kind="all")
+    sites = _lookup()(wiki(), SIGUN_FULL.get(sigun, sigun), kind="all")
     by_emd: dict[str, list] = defaultdict(list)
     for s in sites["sites"]:
         by_emd[s["읍면동"]].append(s)
@@ -228,7 +262,8 @@ def situation(sigun: str, base: str = "http://127.0.0.1:8000") -> dict:
             run = run + 1 if v >= 30 else 0
             best = max(best, run)
         row = {"emd": name, "rain": {f"{h}h": acc[h].get(name) for h in WINDOWS}, "m15": m15.get(name),
-               "fc6h": f.get("sum"), "fc_peak": f.get("peak"), "fc_hours": d, "fc_run30": best if d else None}
+               "fc6h": f.get("sum"), "fc_peak": f.get("peak"), "fc_hours": d, "fc_run30": best if d else None,
+               "ante": ante.get(name)}
         r1, r3, r24 = row["rain"]["1h"] or 0, row["rain"]["3h"] or 0, row["rain"]["24h"] or 0
         row["cbs"] = (r1 >= 50 and r3 >= 90) or r1 >= 72                   # [[재난문자 송출기준]]
         row["relay"] = r1 >= 20 or r24 >= 100                               # [[시군 상황관리반 행동매뉴얼]] 상황전파
@@ -250,6 +285,7 @@ def situation(sigun: str, base: str = "http://127.0.0.1:8000") -> dict:
     emds.sort(key=lambda r: (-r["hot"], -(r["max_pct"] or -1), -(r["rain"]["3h"] or 0)))
     return {
         "sigun": sigun, "tm": tm, "night": night, "rain_src": src, "fc_tmfc": fc.get("tmfc"),
+        "ante": {k: an.get(k) for k in ("ok", "have", "want", "missing", "from", "to")},
         "alerts": mine, "pending": pend, "stage": _stage(groups),
         "risk_total": dict(Counter(FAMILY_OF.get(s["유형"], "야외·기타") for s in sites["sites"])),
         "emd": emds,
@@ -288,8 +324,9 @@ def brief(s: dict, top: int = 4) -> str:
     for r in s["emd"][:top]:
         rn = r["rain"]
         hit = [f"{fam} {c['stage']} '{c['rule']}' {STL[c['st']]}" for fam, cs in r["ladders"].items() for c in cs if c["st"] in ("met", "near")]
+        an_ = f" · 선행 5일 {r['ante']:g}" if r.get("ante") is not None else ""
         fc = f"앞으로 6h {r['fc6h']}(최대 {r['fc_peak']}/h)" if r["fc6h"] is not None else "앞으로 6h 예측 자료 없음"
-        out.append(f"· {r['emd']} — 1h {rn['1h']} · 3h {rn['3h']} · 24h {rn['24h']} · 15분 {_na(r['m15'])} · {fc}"
+        out.append(f"· {r['emd']} — 1h {rn['1h']} · 3h {rn['3h']} · 24h {rn['24h']} · 15분 {_na(r['m15'])}{an_} · {fc}"
                    f" · 우려지역 {', '.join(f'{k} {v}' for k, v in r['risk'].items()) or '없음'}")
         if hit:
             out.append("   닿음/근접: " + "; ".join(hit))
@@ -307,3 +344,24 @@ if __name__ == "__main__":
     print(brief(s))
     if "--json" in sys.argv:
         print(json.dumps(s, ensure_ascii=False, indent=1)[:4000])
+
+
+def set_wiki(path: str) -> dict:
+    """위키 폴더를 바꾼다(빈 값 = 설정 지움). 쓸 수 없는 폴더면 바꾸지 않고 이유를 돌려준다. 바꾸면 위키에서 읽은 캐시를 다 비운다."""
+    from . import db
+    path = (path or "").strip().strip('"')
+    if path:
+        chk = wiki_check(Path(path))
+        if not chk["ok"]:
+            return {**chk, "saved": False}
+    db.put_setting("ai_wiki", path)
+    reset_wiki_cache()
+    return {**wiki_check(wiki()), "saved": True}
+
+
+def reset_wiki_cache() -> None:
+    _lookup_fn.cache_clear()
+    _LK.clear()
+    _GET.clear()
+    from . import aireport
+    aireport.reset_cache()
