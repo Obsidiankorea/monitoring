@@ -12,6 +12,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 TZ=Asia/Seoul \
     HOST=0.0.0.0 PORT=8000 GN_STATE=/state \
     SKIP_COLLECT=bangjae
 
+# AI 상황판단 자유 질문(GN_AI=claude-cli) — Claude Code 를 공식 설치 스크립트로. 인증은 실행할 때
+# config/claude/token.txt(claude setup-token)로 한다 — 이미지에 굽지 않는다. 빼려면 --build-arg WITH_CLAUDE=0
+ARG WITH_CLAUDE=1
+ENV PATH="/root/.local/bin:$PATH" DISABLE_AUTOUPDATER=1
+RUN if [ "$WITH_CLAUDE" = "1" ]; then \
+      apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
+      && rm -rf /var/lib/apt/lists/* \
+      && curl -fsSL https://claude.ai/install.sh | bash && claude --version; fi
+
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

@@ -1,5 +1,6 @@
 # 비밀 — 이미지에 굽지 않는다(실행할 때 연결)
 config/api_keys.txt
+config/claude/
 .env
 
 # 쌓이는 자료 — 서버에서는 바깥 폴더(GN_STATE)에

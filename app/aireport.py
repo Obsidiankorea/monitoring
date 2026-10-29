@@ -417,7 +417,8 @@ def ask_free(base: str, text: str, sigun: str | None = None) -> dict:
     if not llm.mode():
         return {"sections": [{"h": "자유 질문", "items": [
             "LLM 이 연결되지 않았다 — 위 예상 질문은 바로 답한다.",
-            "NAS 에서는 Hermes 가 답한다(GN_AI=openai + 주소 · 키). 이 PC 시험은 GN_AI=claude-cli 로 켠다."]}], "source": "없음"}
+            "켜는 법: GN_AI=claude-cli(Claude Code — PC 로그인 또는 config/claude/token.txt) 또는 "
+            "GN_AI=openai(Hermes 등 OpenAI 호환 주소 · 키)."]}], "source": "없음"}
     rep = report(base, sigun)
     ctx = "\n".join(f"[{s['h']}]\n" + "\n".join("- " + i for i in s["items"]) for s in rep["sections"])
     if sigun:
