@@ -18,3 +18,10 @@ def test_saver_on_raises_short_only(monkeypatch):
     assert main.intervals()["alerts"] == 300
     st["api_saver"]["min"] = 15
     assert main.intervals()["rain"] == 900
+
+
+def test_root_redirects_to_map():
+    from fastapi.testclient import TestClient
+    r = TestClient(main.app).get("/?show=a", follow_redirects=False)
+    assert r.status_code == 307 and r.headers["location"] == "/map.html?show=a"
+    assert TestClient(main.app).get("/index.html", follow_redirects=False).headers["location"] == "/map.html"

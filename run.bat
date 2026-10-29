@@ -172,7 +172,7 @@ if defined APPBROWSER (echo [*] 웹앱 창으로 엽니다) else (echo [*] 기본 브라우저
 
 rem [!] 뜨자마자 열면 흰 화면이 뜬다. /api/status 가 응답할 때까지 기다렸다 연다.
 start "" /b powershell -NoProfile -Command ^
-  "$b='%APPBROWSER%'; 1..90 | %%{ Start-Sleep 1; try { Invoke-WebRequest -UseBasicParsing '%URL%/api/status' -TimeoutSec 2 | Out-Null; if ($b) { Start-Process $b -ArgumentList '--app=%URL%','--window-size=1600,900' } else { Start-Process '%URL%' }; break } catch {} }"
+  "$b='%APPBROWSER%'; 1..90 | %%{ Start-Sleep 1; try { Invoke-WebRequest -UseBasicParsing '%URL%/api/status' -TimeoutSec 2 | Out-Null; if ($b) { Start-Process $b -ArgumentList '--app=%URL%/map.html','--window-size=1600,900' } else { Start-Process '%URL%/map.html' }; break } catch {} }"
 
 rem -- 5. 서버 --------------------------------------------------------
 rem 화면에서 [업데이트]로 새 코드를 받으면 서버가 종료 코드 42로 스스로 끝난다.

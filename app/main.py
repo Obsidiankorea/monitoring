@@ -894,6 +894,14 @@ async def no_cache_html(request, call_next):
     return resp
 
 
+@app.get("/", include_in_schema=False)
+@app.get("/index.html", include_in_schema=False)
+async def root_to_map(request: Request):
+    """종합 대시보드(index.html)는 폐기 — 경남 기상지도(map.html)로 통일. 쿼리(show · 시연 등)는 그대로 넘긴다."""
+    q = request.url.query
+    return RedirectResponse("/map.html" + (f"?{q}" if q else ""), status_code=307)
+
+
 if STATIC.exists():
     app.mount("/", StaticFiles(directory=STATIC, html=True), name="static")
 

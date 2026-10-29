@@ -4784,6 +4784,7 @@ function drawStations() {
   let dia = dia0;
   const marks = [], boxes = [];
   for (const s of STN.rows) {
+    if (SET.gn_off && s.org === "gn") continue;            // 경남 AWS(내부망) 끔 — 꺼진 표식(빗금 점)을 216곳 깔지 않는다
     dia = s.org === "gn" ? (x, y, rr) => circ(x, y, rr * 0.72) : dia0;
     const x = V.toX(s.x), y = V.toY(s.y), dim = selOn() && !isSel(s.sigun) ? " dim" : "";
     boxes.push({ x0: x - r, x1: x + r, y0: y - r, y1: y + r });
