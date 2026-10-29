@@ -148,6 +148,11 @@ if not errorlevel 1 (
   set /a PORT=%PORT%+1
   goto findport
 )
+rem 8001 은 시연 서버 자리다 - 실황이 거기 앉으면 시연 링크가 실황을 가리킨다
+if "%PORT%"=="8001" (
+  set /a PORT=%PORT%+1
+  goto findport
+)
 
 set URL=http://localhost:%PORT%
 rem [!] 준비 확인은 127.0.0.1 로 - localhost 는 IPv6(::1)부터 두드려 2초 제한에 매번 걸리고,
@@ -176,6 +181,20 @@ if defined APPBROWSER (echo [*] 웹앱 창으로 엽니다) else (echo [*] 기본 브라우저
 rem [!] 뜨자마자 열면 흰 화면이 뜬다. /api/status 가 응답할 때까지 기다렸다 연다.
 start "" /b powershell -NoProfile -Command ^
   "$b='%APPBROWSER%'; 1..90 | %%{ Start-Sleep 1; try { Invoke-WebRequest -UseBasicParsing '%PROBE%' -TimeoutSec 2 | Out-Null; if ($b) { Start-Process $b -ArgumentList '--app=%URL%/map.html','--window-size=1600,900' } else { Start-Process '%URL%/map.html' }; break } catch {} }"
+
+rem -- 4-1. 시연 서버(:8001) -------------------------------------------
+rem 시연(굳혀 둔 그때 자료)은 실황과 별개 서버가 낸다. 화면의 시연 줄은 :8001 로 가니
+rem 안 떠 있으면 '연결을 거부했습니다' 가 뜬다(언레이드의 gn-demo 와 같은 자리).
+rem 이미 떠 있으면(앞선 실행이 남긴 창) 건너뛴다. 수집하지 않으니 API 호출은 늘지 않는다.
+rem [!] --port 8001 을 꼭 준다 - PORT 환경변수(실황 포트)가 그대로 넘어가 덮어쓰기 때문.
+netstat -ano | findstr /r /c:"LISTENING" | findstr /c:":8001 " >nul
+if not errorlevel 1 (
+  echo [*] 시연 서버 :8001 은 이미 떠 있습니다
+) else (
+  echo [*] 시연 서버를 띄웁니다 -^> http://localhost:8001
+  start "시연 서버 :8001" /min "%PY%" -m app.main --demo --port 8001
+)
+echo.
 
 rem -- 5. 서버 --------------------------------------------------------
 rem 화면에서 [업데이트]로 새 코드를 받으면 서버가 종료 코드 42로 스스로 끝난다.
