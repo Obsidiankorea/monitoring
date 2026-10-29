@@ -910,6 +910,47 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 #prefs .top b { font-size: 18px; }
 #prefs .top .sp { flex: 1; }
 #prefs .top button { background: transparent; border: 0; color: var(--ink-2); font-size: 20px; cursor: pointer; }
+/* AI 상황판단 팝업(I) — 고른 시군(없으면 경남 전체)의 보고 · 예상 질문 · 더 묻기. 지도는 그대로 보이게 오른쪽에 뜬다 */
+#aiw { position: fixed; top: 64px; right: 24px; bottom: 24px; width: min(640px, calc(100vw - 48px)); z-index: 30;
+  display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: 0 18px 60px rgb(0 0 0 / .45); opacity: 0; transform: translateY(8px) scale(.985); pointer-events: none;
+  transition: opacity .18s, transform .18s; }
+#aiw.open { opacity: 1; transform: none; pointer-events: auto; }
+#aiw .hd { display: flex; align-items: center; gap: 10px; padding: 14px 18px 10px; border-bottom: 1px solid var(--line); }
+#aiw .hd b { font-size: 17px; }
+#aiw .hd .sc { font-size: 13px; color: var(--accent); background: color-mix(in oklab, var(--accent) 14%, transparent); border-radius: 999px; padding: 2px 10px; }
+#aiw .hd .tm { color: var(--ink-3); font-size: 12.5px; flex: 1; }
+#aiw .hd button { background: transparent; border: 0; color: var(--ink-2); cursor: pointer; font-size: 13px; }
+#aiw .hd .x { font-size: 18px; }
+#aiw .md { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 18px 6px; border-bottom: 1px solid var(--line); }
+#aiw .md button { font: 600 13px var(--sans); color: var(--ink-2); background: transparent; border: 1px solid transparent;
+  border-radius: 8px; padding: 5px 11px; cursor: pointer; }
+#aiw .md button:hover { color: var(--ink); border-color: var(--line); }
+#aiw .md button.on { color: var(--on-accent); background: var(--accent); }
+#aiw .bd { flex: 1; overflow: auto; padding: 6px 18px 12px; }
+#aiw .sec { margin: 12px 0 4px; }
+#aiw .sec h5 { margin: 0 0 6px; font-size: 13px; letter-spacing: .06em; color: var(--ink-3); }
+#aiw .sec.todo h5 { color: var(--accent); }
+#aiw .sec ul { margin: 0; padding-left: 18px; }
+#aiw .sec li { margin: 4px 0; font-size: 14px; line-height: 1.55; color: var(--ink); }
+#aiw .sec.todo ol { margin: 0; padding-left: 20px; } #aiw .sec.todo li { font-weight: 500; }
+#aiw .sec.ref li { font-size: 12.5px; color: var(--ink-2); }
+#aiw .wk { color: var(--accent); font-size: .92em; white-space: nowrap; }
+#aiw .q { margin: 16px 0 4px; padding: 8px 12px; border-radius: 10px; background: color-mix(in oklab, var(--accent) 12%, transparent); font-weight: 600; font-size: 14px; }
+#aiw .ans { border-left: 0; padding: 0 0 4px; }
+#aiw .ans pre { white-space: pre-wrap; font: 14px/1.6 var(--sans); margin: 6px 0; }
+#aiw .src { font-size: 11.5px; color: var(--ink-3); }
+#aiw .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 18px 6px; border-top: 1px solid var(--line); }
+#aiw .chips button { font: 500 13px var(--sans); color: var(--ink); background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: 999px; padding: 5px 12px; cursor: pointer; }
+#aiw .chips button:hover { border-color: var(--accent); color: var(--accent); }
+#aiw form { display: flex; gap: 8px; padding: 6px 18px 14px; }
+#aiw form input { flex: 1; min-width: 0; font: 14px var(--sans); color: var(--ink); background: var(--panel-2);
+  border: 1px solid var(--line); border-radius: 9px; padding: 8px 11px; }
+#aiw form input:focus { outline: none; border-color: var(--accent); }
+#aiw form button { font: 600 14px var(--sans); color: var(--on-accent); background: var(--accent); border: 0; border-radius: 9px; padding: 0 16px; cursor: pointer; }
+#aiw .ld { color: var(--ink-3); font-size: 14px; padding: 18px 0; }
+#aiw .ft { font-size: 11.5px; color: var(--ink-3); padding: 0 18px 10px; }
 #prefs .box { max-height: calc(100vh - 32px); display: flex; flex-direction: column; }
 #prefs .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: 0 0 8px; flex: none; }
 #prefs .tabs button { background: transparent; border: 0; border-bottom: 2px solid transparent; color: var(--ink-3);
@@ -1233,8 +1274,19 @@ body.show-on #play { bottom: 46px; }      /* 점 자리를 비운다 */
     <button id="b-show" class="ib" aria-label="화면 재생" title="화면 재생 — 여러 화면을 차례로(화면보호기처럼) · 재생목록 만들기 (P)"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="m10.5 8.6 4 2.4-4 2.4z" class="f"/><circle cx="9" cy="20.2" r=".9" class="f"/><circle cx="12" cy="20.2" r=".9" class="f"/><circle cx="15" cy="20.2" r=".9" class="f"/></svg></button>
     <button id="b-cam" class="ib" aria-label="지도 위치" title="지도 위치 — 끌어서 옮기기 · 휠로 키우기 줄이기, 이 화면에 기억 (C)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18"/><path d="m9 5.5 3-3 3 3M9 18.5l3 3 3-3M5.5 9l-3 3 3 3M18.5 9l3 3-3 3"/></svg></button>
     <button id="b-tl" class="ib" aria-label="패널" title="오른쪽 패널 — 강수 누적 · 지금 오는 비 · 예측 상위 (L)"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M14.5 4v16M17 8.5h1.5M17 12h1.5M17 15.5h1.5"/></svg></button>
+    <button id="b-ai" class="ib" aria-label="AI 상황판단" title="AI 상황판단 — 고른 시군의 산사태 대피기준까지 % · 특보 · 재난문자 기준 (I)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.4L12 15l-1.8-4.6L5.5 9l4.7-1.4z"/><path d="M18 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg></button>
     <button id="b-help" class="ib" aria-label="도움말" title="도움말 — 용어 · 자료 출처 (?)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.4a2.6 2.6 0 0 1 5 .9c0 1.8-2.5 2.3-2.5 3.9"/><circle cx="12" cy="17.3" r=".9" class="f"/></svg></button>
     <button id="b-prefs" class="ib" aria-label="설정" title="설정 (Ctrl+,)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+  </div>
+  <div id="aiw" role="dialog" aria-label="AI 상황판단" aria-hidden="true">
+    <div class="hd"><b>AI 상황판단</b><span class="sc" id="aiw-sc">경남 전체</span><span class="tm" id="aiw-tm"></span>
+      <button id="aiw-all" type="button" hidden title="경남 전체 보고로">경남 전체로</button>
+      <button id="aiw-re" type="button" title="다시 만들기">↻</button><button class="x" id="aiw-x" type="button" aria-label="닫기 (Esc)">✕</button></div>
+    <div class="md" id="aiw-md" role="tablist" aria-label="보고 목적"></div>
+    <div class="bd" id="aiw-bd"></div>
+    <div class="chips" id="aiw-q"></div>
+    <form id="aiw-f" autocomplete="off"><input id="aiw-in" placeholder="더 물어보기 — 예: 동해면 대피장소까지 길은 안전한가?" maxlength="300"><button type="submit">묻기</button></form>
+    <div class="ft">수치는 대시보드, 기준 · 절차는 재난업무 LLM 위키. 판단 · 대피명령은 권한자(시장 · 군수) — 이 보고는 기준과의 대조다.</div>
   </div>
   <div id="dbg" hidden></div>
   <div id="toast" hidden role="status"></div>
@@ -1970,7 +2022,7 @@ function paintHead() {
     : kind === "acc" && CUR?.live ? `${L.src || ""} + 정시 뒤 ${hm(CUR.live)}까지(일강수 차)` : (L.src || "");
   const b = [];
   const past = isPast();
-  if (window.GN_SNAP) b.push(`<span class="badge snap" title="${window.GN_SNAP.title} — ${window.GN_SNAP.note || ""}">시연 · ${md(window.GN_SNAP.now)} ${hm(window.GN_SNAP.now)} 저장</span>`);
+  if (window.GN_SNAP) b.push(`<span class="badge snap" title="${window.GN_SNAP.title} — ${window.GN_SNAP.note || ""}">${window.GN_SNAP.fake ? "가상 시연(실제 아님)" : "시연"} · ${md(window.GN_SNAP.now)} ${hm(window.GN_SNAP.now)} 저장</span>`);
   if (CASE) b.push(`<span class="badge past">재현 · ${CASEM?.title || CASE}</span>`);
   else if (test) b.push(`<span class="badge test">테스트</span>`);
   else if (pinned(kind)) b.push(`<span class="badge past">지난 시각 보기 (tm=${PIN_TM})</span>`);
@@ -4839,8 +4891,69 @@ function toast(msg) {
   clearTimeout(TOASTT);
   TOASTT = setTimeout(() => { t.classList.remove("on"); setTimeout(() => { t.hidden = true; }, 250); }, 2200);
 }
+/* ── AI 상황판단 팝업(I) — 고른 시군(없으면 경남 전체)의 보고 → 예상 질문(규칙) → 더 묻기(LLM, 서버 GN_AI) ──
+   보고와 예상 질문은 서버가 대시보드 수치와 위키 기준으로 만든다(app/aireport.py) — LLM 없이도 된다. */
+const AIW = { open: false, seq: 0, scope: null, mode: "all" };
+try { AIW.mode = localStorage.getItem("gn-ai-mode") || "all"; } catch {}
+const aiEsc = t => String(t ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
+const aiTxt = t => aiEsc(t).replace(/\[\[([^\]]+)\]\]/g, '<span class="wk">$1</span>');
+function aiSections(secs) {
+  return secs.map(x => {
+    const todo = x.h === "할 일", ref = x.h.startsWith("참고");
+    const list = x.items.map(i => `<li>${aiTxt(i)}</li>`).join("");
+    return `<div class="sec${todo ? " todo" : ""}${ref ? " ref" : ""}"><h5>${aiEsc(x.h)}</h5>${todo ? `<ol>${list}</ol>` : `<ul>${list}</ul>`}</div>`;
+  }).join("");
+}
+async function aiLoad() {
+  if (!AIW.open) return;
+  const sg = SELS[0] || null, my = ++AIW.seq;
+  AIW.scope = sg;
+  $("aiw-sc").textContent = sg || "경남 전체";
+  $("aiw-all").hidden = !sg;
+  $("aiw-tm").textContent = "";
+  $("aiw-bd").innerHTML = `<div class="ld">${sg || "경남 전체"} 보고를 만드는 중… (읍면동 · 우려지역 · 기준 대조)</div>`;
+  $("aiw-q").innerHTML = "";
+  let r;
+  const qs = new URLSearchParams({ mode: AIW.mode });
+  if (sg) qs.set("sigun", sg);
+  try { r = await getJson(`/api/ai/report?${qs}`); }
+  catch (e) { if (my === AIW.seq) $("aiw-bd").innerHTML = `<div class="ld">못 만들었다 — ${aiEsc(e.message)}</div>`; return; }
+  if (my !== AIW.seq) return;
+  $("aiw-tm").textContent = r.tm ? `${md(r.tm)} ${hm(r.tm)} 실황 기준${window.GN_SNAP?.fake ? " · 가상" : ""}` : "";
+  $("aiw-md").innerHTML = (r.modes || []).map(m => `<button type="button" role="tab" data-m="${m.id}" class="${m.id === (r.mode || "all") ? "on" : ""}"
+    aria-selected="${m.id === (r.mode || "all")}">${aiEsc(m.label)}</button>`).join("");
+  $("aiw-bd").innerHTML = (r.title && r.mode && r.mode !== "all" ? `<div class="sec"><h5>${aiEsc(r.title)}</h5></div>` : "") + aiSections(r.sections);
+  $("aiw-q").innerHTML = r.questions.map(q => `<button type="button" data-q="${q.id}">${aiEsc(q.label)}</button>`).join("");
+  $("aiw-in").placeholder = r.llm ? "더 물어보기 — 지금 상황과 위키를 보고 답한다" : "더 물어보기 — (LLM 미연결: 위 질문 단추만 답한다)";
+}
+async function aiAsk(body, label) {
+  const bd = $("aiw-bd"), my = AIW.seq;
+  const blk = document.createElement("div");
+  blk.innerHTML = `<div class="q">${aiEsc(label)}</div><div class="ans"><div class="ld">답을 찾는 중…</div></div>`;
+  bd.appendChild(blk);
+  blk.scrollIntoView({ behavior: "smooth", block: "start" });
+  let a;
+  try {
+    const res = await fetch("/api/ai/ask", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sigun: AIW.scope, ...body }) });
+    a = await res.json();
+    if (!res.ok) throw new Error(a.detail || res.status);
+  } catch (e) { a = { sections: [{ h: "답", items: ["못 받았다 — " + e.message] }] }; }
+  if (my !== AIW.seq) return;
+  blk.querySelector(".ans").innerHTML = (a.text ? `<pre>${aiTxt(a.text)}</pre>` : aiSections(a.sections || []))
+    + `<div class="src">${aiEsc(a.source || "")}</div>`;
+}
+function aiToggle(on = !AIW.open) {
+  AIW.open = on;
+  $("aiw").classList.toggle("open", on);
+  $("aiw").setAttribute("aria-hidden", String(!on));
+  $("b-ai").classList.toggle("on", on);
+  if (on) aiLoad();
+}
+
 function setSel(list) {
   SELS = list.slice(0, SEL_MAX);
+  if (AIW.open && AIW.scope !== (list[0] || null)) setTimeout(aiLoad, 0);   // 시군을 바꾸면 그 시군 보고로
   drawSel(); drawStations(); hot(null); link(null);
   $("acc-sel").hidden = !selOn();
   $("acc-sel").textContent = selOn() ? `${selName()} ✕` : "";
@@ -5765,6 +5878,26 @@ $("tl-x").onclick = () => setTL(false);
 $("tl-stat").onclick = () => { SET.tl_stat = SET.tl_stat === "mean" ? "max" : "mean"; saveSetting({ tl_stat: SET.tl_stat }); buildTL(); };
 $("b-prefs").onclick = openPrefs;
 $("b-help").onclick = () => ($("help").hidden ? openHelp() : closeHelp());
+$("b-ai").onclick = () => aiToggle();
+$("aiw-x").onclick = () => aiToggle(false);
+$("aiw-re").onclick = () => aiLoad();
+$("aiw-all").onclick = () => selectSig(null);
+$("aiw-q").onclick = ev => { const b = ev.target.closest("[data-q]"); if (b) aiAsk({ q: b.dataset.q }, b.textContent); };
+$("aiw-md").onclick = ev => {
+  const b = ev.target.closest("[data-m]");
+  if (!b || b.dataset.m === AIW.mode) return;
+  AIW.mode = b.dataset.m;
+  try { localStorage.setItem("gn-ai-mode", AIW.mode); } catch {}
+  aiLoad();
+};
+$("aiw-f").onsubmit = ev => {
+  ev.preventDefault();
+  const t = $("aiw-in").value.trim();
+  if (!t) return;
+  $("aiw-in").value = "";
+  aiAsk({ text: t }, t);
+};
+$("aiw-in").addEventListener("keydown", ev => { if (ev.key === "Escape") { ev.stopPropagation(); aiToggle(false); } });
 $("acc-h").onclick = toggleBasis;
 $("acc-fc").onclick = ev => { ev.stopPropagation(); toggleAccFc(); };
 $("acc-sub").onclick = ev => { if ($("acc-sub").classList.contains("pick")) { ev.stopPropagation(); rangePop(); } };
@@ -6019,6 +6152,7 @@ document.addEventListener("keydown", ev => {
     if (!$("sw-ctx").hidden) { $("sw-ctx").classList.remove("open"); $("sw-ctx").hidden = true; return; }
     if (!$("stn-pop").hidden) { stnPop(null); return; }
     if (!$("showdlg").hidden) { closeShowDlg(); return; }
+    if (AIW.open) { aiToggle(false); return; }
     if (!$("prefs").hidden) closePrefs(); else if (!$("help").hidden) closeHelp(); else if (selOn()) selectSig(null); else if (SHOW.on) stopShow();
     return;
   }
@@ -6027,6 +6161,7 @@ document.addEventListener("keydown", ev => {
   const i = (CASE ? "12" : "123456").indexOf(ev.key);
   if (i >= 0) { stopPlay(); pickLayer(keyKind(i)); }
   else if ((ev.key === "t" || ev.key === "T") && !CASE) setTest(!test);
+  else if ((ev.key === "i" || ev.key === "I") && !CASE) aiToggle();
   else if (ev.key === "l" || ev.key === "L") setTL(!tlOn);
   else if (ev.key === "c" || ev.key === "C") camEdit(!CAM_EDIT);
   else if ((ev.key === "p" || ev.key === "P") && !CASE) (SHOW.on ? stopShow() : showQuick());

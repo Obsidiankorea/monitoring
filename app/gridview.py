@@ -961,6 +961,60 @@ def acc_sum(hours: int = 12, since: str | None = None, now: datetime | None = No
     return out
 
 
+_WIN_CACHE: dict[tuple, dict] = {}
+
+
+def _emd_max(arr: np.ndarray) -> dict[int, float]:
+    """칸 배열 → {읍면동 id: 그 읍면동 안 가장 큰 칸}. 결측 칸은 뺀다."""
+    _, memd = gridstore.masks()
+    ids, v = memd.ravel(), np.asarray(arr, dtype="f8").ravel()
+    ok = (ids > 0) & np.isfinite(v)
+    out = np.full(int(memd.max()) + 1, -np.inf)
+    np.maximum.at(out, ids[ok].astype(np.int64), v[ok])
+    return {int(i): float(out[i]) for i in np.nonzero(np.isfinite(out))[0]}
+
+
+def emd_windows(windows=(1, 3, 12, 24, 48), now: datetime | None = None) -> dict:
+    """경남 읍면동마다 1 · 3 · 12 · 24 · 48시간 누적 최대 칸과 15분 최대 칸 — 한 번에(AI 상황판단용).
+    강수 누적 카드(acc)와 같은 합: 정시 60분 격자 + '지금' 칸(일강수 증분). 48시간치를 한 번만 읽어 창마다 더한다.
+    ⚠️ 시군 줄의 읍면동 이름은 읍면동 지도(mask) 기준 — 카드의 '최대 칸 읍면동'과 경계 칸에서 다를 수 있다."""
+    now = now or clock.now()
+    top = max(windows)
+    want, have = _acc_keys(top, None, now, False)
+    tk = _grid_tail_key(want[-1])
+    k15 = gridstore.keys("obs15")
+    ck = (tuple(want), tuple(have), tk, k15[-1] if k15 else None, tuple(windows))
+    if ck in _WIN_CACHE:
+        return _WIN_CACHE[ck]
+    frames = _acc_frames(want, have, now, False)
+    tail = _grid_tail(want[-1], tk) if tk else None
+    emds = {e["id"]: e for e in gridstore.geo()["emd"]}
+    per: dict[int, dict] = {}
+    for h in windows:
+        got = [f for f in frames[-h:] if f is not None]
+        if not got:
+            continue
+        tot = got[0].copy()
+        for f in got[1:]:
+            tot = tot + f
+        if tail is not None:
+            tot = np.where(np.isfinite(tail), tot + tail, tot)
+        for i, v in _emd_max(tot).items():
+            per.setdefault(i, {})[f"{h}h"] = round(v, 1)
+    if k15:
+        a15 = gridstore.load("obs15", k15[-1])
+        if a15 is not None:
+            for i, v in _emd_max(a15).items():
+                per.setdefault(i, {})["15m"] = round(v, 1)
+    rows = [{"sig": emds[i]["sigun"], "emd": emds[i]["name"], **vals} for i, vals in per.items() if i in emds]
+    out = {"tm": tk or want[-1], "hourly_to": want[-1], "tail": tk, "m15_tm": k15[-1] if k15 else None,
+           "windows": list(windows), "missing": len(want) - len(have), "rows": rows}
+    if len(_WIN_CACHE) > 4:
+        _WIN_CACHE.pop(next(iter(_WIN_CACHE)))
+    _WIN_CACHE[ck] = out
+    return out
+
+
 def acc(hours: int = 12, sigun: str | None = None, now: datetime | None = None,
         test: bool = False, since: str | None = None) -> dict:
     """지난 hours 시간(가장 최근 정시 격자까지) 격자 누적 — 시군 줄, 또는 sigun 의 읍면동 줄.

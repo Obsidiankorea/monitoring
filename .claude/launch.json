@@ -25,6 +25,21 @@
       "port": 8001
     },
     {
+      "name": "dashboard-fake",
+      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeArgs": [
+        "-m",
+        "app.main",
+        "--snap",
+        "fake-20261019-x4",
+        "--port",
+        "8002",
+        "--ai",
+        "claude-cli"
+      ],
+      "port": 8002
+    },
+    {
       "name": "dashboard-collect",
       "runtimeExecutable": ".venv/Scripts/python.exe",
       "runtimeArgs": [

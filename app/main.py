@@ -405,6 +405,61 @@ async def api_server_update_ask(body: dict | None = None, request: Request = Non
         raise HTTPException(404, str(e))
 
 
+@app.get("/api/ai/situation")
+async def api_ai_situation(sigun: str, base: str | None = None):
+    """AI 상황판단 — 시군 하나의 지금 수치(이 서버 API)와 LLM 위키 기준(산사태 지구 대피기준까지 %)을 맞대 놓는다.
+    판단하지 않는다(app/ai.py). base 를 주면 그 대시보드 서버의 자료로(시험용 — 예: NAS)."""
+    from . import ai
+    me = base or f"http://127.0.0.1:{os.environ.get('PORT', '8000')}"
+    try:
+        s = await asyncio.to_thread(ai.situation, sigun, me)
+    except FileNotFoundError as e:
+        raise HTTPException(503, f"LLM 위키를 못 찾았다(GN_WIKI): {e}")
+    s["brief"] = ai.brief(s)
+    return s
+
+
+@app.get("/api/ai/emdwin")
+async def api_grid_emdwin():
+    """경남 읍면동마다 1 · 3 · 12 · 24 · 48시간 누적 · 15분 최대 칸(격자 500m) — 한 번에. AI 상황판단 · Hermes 도구용."""
+    try:
+        return await asyncio.to_thread(gridview.emd_windows)
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
+
+
+def _ai_base(base: str | None) -> str:
+    return base or f"http://127.0.0.1:{os.environ.get('PORT', '8000')}"
+
+
+@app.get("/api/ai/report")
+async def api_ai_report(sigun: str | None = None, base: str | None = None, mode: str = "all"):
+    """AI 상황판단 보고 — 시군이 없으면 경남 전체. 상황 · 중요한 점 · 할 일 · 살펴볼 곳 · 다음 확인 · 참고(책자 쪽수).
+    규칙으로 만든다(LLM 없이). 예상 질문 목록을 같이 준다(app/aireport.py)."""
+    from . import aireport, llm
+    try:
+        r = await asyncio.to_thread(aireport.report, _ai_base(base), sigun or None, mode)
+    except FileNotFoundError as e:
+        raise HTTPException(503, f"LLM 위키를 못 찾았다(GN_WIKI): {e}")
+    r["llm"] = llm.mode()
+    r["modes"] = [{"id": k, "label": v} for k, v in aireport.MODES]
+    r.setdefault("mode", "all")
+    return r
+
+
+@app.post("/api/ai/ask")
+async def api_ai_ask(body: dict):
+    """예상 질문(q = id) 은 규칙으로, 자유 질문(text) 은 LLM(GN_AI)으로 답한다."""
+    from . import aireport
+    sigun = body.get("sigun") or None
+    if body.get("q"):
+        return await asyncio.to_thread(aireport.answer, _ai_base(body.get("base")), str(body["q"]), sigun)
+    text = str(body.get("text") or "").strip()[:500]
+    if not text:
+        raise HTTPException(400, "q 또는 text")
+    return await asyncio.to_thread(aireport.ask_free, _ai_base(body.get("base")), text, sigun)
+
+
 @app.get("/api/aws/match")
 async def api_aws_match():
     """경남 AWS(스방) 지점마다 경남 AWS 목록과 짝지어졌나 — 위치 출처(kma · aws · emd 임시 · none). 내부망 점검용."""
@@ -551,7 +606,7 @@ async def api_clock_js():
     snap = None
     if config.SNAP_META:
         m = config.SNAP_META
-        snap = {k: m.get(k) for k in ("name", "title", "now", "note", "alerts")}
+        snap = {k: m.get(k) for k in ("name", "title", "now", "note", "alerts", "fake")}
         snap["acc"] = m.get("acc") or ({"from": "hours", "hours": m["hours"]} if m.get("hours") else None)
     body = f"window.GN_NOW={json.dumps(clock.epoch_ms())};window.GN_SNAP={json.dumps(snap, ensure_ascii=False)};"
     return Response(body, media_type="application/javascript", headers={"Cache-Control": "no-store"})
@@ -737,6 +792,8 @@ if __name__ == "__main__":
         os.environ["NO_COLLECT"] = "1"
     if "--port" in argv:
         os.environ["PORT"] = argv[argv.index("--port") + 1]
+    if "--ai" in argv:                        # AI 상황판단 자유 질문 — claude-cli(이 PC 시험) | openai(Hermes 등)
+        os.environ["GN_AI"] = argv[argv.index("--ai") + 1]
     if "--snap" in argv or "--demo" in argv:   # 시연 서버 — 굳혀 둔 그 시각 자료로(수집 안 함). 기본 포트 8001
         os.environ["GN_DEMO"] = "1"
         if "--snap" in argv:
