@@ -68,7 +68,7 @@ def ask(system: str, user: str) -> str:
                            cwd=str(config.ROOT / "data"), env=_claude_env())
         if p.returncode != 0:
             msg = (p.stderr or p.stdout or "claude 실패")[-300:]
-            if "auth" in msg.lower() or "log in" in msg.lower() or "401" in msg:
+            if any(w in msg.lower() for w in ("auth", "log in", "logged in", "/login", "401")):
                 msg = f"Claude 로그인이 없거나 만료됐다 — `claude setup-token` 값을 {TOKEN_FILE.relative_to(config.ROOT)} 에. ({msg.strip()[:120]})"
             raise RuntimeError(msg)
         return p.stdout.strip()

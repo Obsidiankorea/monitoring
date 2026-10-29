@@ -538,6 +538,8 @@ def _analogs(o: dict, siguns: list[str]) -> list[str]:
         for sg in siguns:
             if sg in c["rows"] and sg in by:
                 now_, then = by[sg], c["rows"][sg]
+                if now_["r1"] < 10 and now_["r24"] < 20:     # 비가 거의 없으면 견줄 것이 없다
+                    continue
                 cmp1 = "시간당은 그때를 넘었다" if now_["r1"] > then["h1"] else f"시간당은 그때보다 {then['h1'] - now_['r1']:.0f}㎜ 적다"
                 cmp24 = ("24시간은 그때 최대일을 넘었다" if now_["r24"] > then["day"]
                          else f"24시간은 그때 최대일보다 {then['day'] - now_['r24']:.0f}㎜ 적다")
