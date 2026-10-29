@@ -150,6 +150,9 @@ if not errorlevel 1 (
 )
 
 set URL=http://localhost:%PORT%
+rem [!] 준비 확인은 127.0.0.1 로 - localhost 는 IPv6(::1)부터 두드려 2초 제한에 매번 걸리고,
+rem     90번 다 놓쳐 창이 안 열린다. 서버는 127.0.0.1 에만 뜬다.
+set PROBE=http://%HOST%:%PORT%/api/status
 echo [*] 서버를 띄웁니다 -^> %URL%
 echo [*] 처음에는 자료를 받느라 화면이 채워지기까지 10~40초 걸립니다
 echo.
@@ -172,7 +175,7 @@ if defined APPBROWSER (echo [*] 웹앱 창으로 엽니다) else (echo [*] 기본 브라우저
 
 rem [!] 뜨자마자 열면 흰 화면이 뜬다. /api/status 가 응답할 때까지 기다렸다 연다.
 start "" /b powershell -NoProfile -Command ^
-  "$b='%APPBROWSER%'; 1..90 | %%{ Start-Sleep 1; try { Invoke-WebRequest -UseBasicParsing '%URL%/api/status' -TimeoutSec 2 | Out-Null; if ($b) { Start-Process $b -ArgumentList '--app=%URL%/map.html','--window-size=1600,900' } else { Start-Process '%URL%/map.html' }; break } catch {} }"
+  "$b='%APPBROWSER%'; 1..90 | %%{ Start-Sleep 1; try { Invoke-WebRequest -UseBasicParsing '%PROBE%' -TimeoutSec 2 | Out-Null; if ($b) { Start-Process $b -ArgumentList '--app=%URL%/map.html','--window-size=1600,900' } else { Start-Process '%URL%/map.html' }; break } catch {} }"
 
 rem -- 5. 서버 --------------------------------------------------------
 rem 화면에서 [업데이트]로 새 코드를 받으면 서버가 종료 코드 42로 스스로 끝난다.
