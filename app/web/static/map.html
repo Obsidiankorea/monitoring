@@ -721,35 +721,39 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 .ly-ic.risk { width: 46px; height: 46px; color: #fff; background: #c8321f; border-color: #ff8a73;
   animation: riskpulse 1.6s ease-in-out 4; }      /* 처음 몇 번만 — 계속 움직이면 정신사납다 */
 .ly-ic.risk svg { width: 24px; height: 24px; stroke-width: 2; }
-.ly-ic.risk svg circle { fill: currentColor; stroke: currentColor; }
-.ly-ic.risk.near { background: #b9701a; border-color: #f0b46a; }
-.ly-ic.risk[aria-expanded="true"] { background: #c8321f; filter: brightness(1.12); }
-.ly-ic.risk.near[aria-expanded="true"] { background: #b9701a; }
-.ly-ic.risk .bd { background: #fff; color: #a52814; border-color: #c8321f; }
-@keyframes riskpulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,90,60,.65), 0 8px 24px rgba(0,0,0,.25); }
-  50% { box-shadow: 0 0 0 9px rgba(255,90,60,0), 0 8px 24px rgba(0,0,0,.25); } }
-#ly-risk-pop { z-index: 8; width: 340px; max-height: min(66vh, 540px); overflow-y: auto; overscroll-behavior: contain; padding: 10px 12px 12px;
+.ly-ic.risk svg circle[r=".6"] { fill: currentColor; stroke: currentColor; }
+.ly-ic.risk.ct { background: #b7860f; border-color: #f0cf6a; }                 /* 통제 — 노랑(주의) */
+.ly-ic.risk.ev.mid { background: #d4561f; border-color: #ff9d6e; }             /* 대피 — 사전대피만이면 주황빨강, 긴급대피가 있으면 진한 빨강 */
+.ly-ic.risk[aria-expanded="true"] { filter: brightness(1.15); }
+.ly-ic.risk .bd { background: #fff; color: #5a1a0e; border-color: currentColor; }
+@keyframes riskpulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,120,70,.65), 0 8px 24px rgba(0,0,0,.25); }
+  50% { box-shadow: 0 0 0 9px rgba(255,120,70,0), 0 8px 24px rgba(0,0,0,.25); } }
+.rpop { z-index: 8; width: 340px; max-height: min(66vh, 540px); overflow-y: auto; overscroll-behavior: contain; padding: 10px 12px 12px;
   background: var(--panel); backdrop-filter: none; border-color: #c8321f; }
-#ly-risk-pop .rh { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
-#ly-risk-pop .rh b { font-size: 15px; color: #ff7a63; }
-#ly-risk-pop .rh span { font-size: 11.5px; color: var(--ink-3); }
-#ly-risk-pop .rh i { margin-left: auto; font-style: normal; cursor: pointer; color: var(--ink-3); font-size: 16px; }
-#ly-risk-pop .rm { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ink-2); padding: 2px 0 8px; cursor: pointer; }
-#ly-risk-pop .rm input { margin: 0; width: 15px; height: 15px; accent-color: #c8321f; cursor: pointer; }
-#ly-risk-pop .rm small { color: var(--ink-3); font-size: 11.5px; }
-#ly-risk-pop .rg { border-top: 1px solid var(--line); padding: 7px 0 4px; }
-#ly-risk-pop .rg > .s { display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 700; font-size: 14px; }
-#ly-risk-pop .rg > .s small { font: 600 11px var(--sans); color: var(--ink-3); }
-#ly-risk-pop .rg > .s:hover { color: var(--accent); }
-#ly-risk-pop .rg .it { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; font-size: 12.5px; padding: 2px 0 2px 4px; color: var(--ink-2); }
-#ly-risk-pop .rg .it b { color: var(--ink); font-weight: 600; }
-#ly-risk-pop .rg .it em { grid-column: 2; font-style: normal; font-size: 11.5px; color: var(--ink-3); }
-#ly-risk-pop .tg { font: 700 10.5px var(--sans); border-radius: 4px; padding: 1px 6px; color: #fff; align-self: start; margin-top: 2px; }
-#ly-risk-pop .tg.met { background: #c8321f; } #ly-risk-pop .tg.near { background: #b9701a; }
-#ly-risk-pop .nt { font-size: 11.5px; color: var(--ink-3); margin-top: 8px; line-height: 1.5; }
-/* 지도의 시군 이름 — ⚠ 를 앞에 붙이고 붉게. 새로 생긴 곳은 한동안 깜박인다 */
-#over .nm.wa { fill: #ff7a63; }
-#over .nm.wa.near { fill: #f0b46a; }
+.rpop.ct { border-color: #b7860f; }
+.rpop .rh { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.rpop .rh b { font-size: 15px; color: #ff7a63; }
+.rpop.ct .rh b { color: #f0cf6a; }
+.rpop .rh span { font-size: 11.5px; color: var(--ink-3); }
+.rpop .rh i { margin-left: auto; font-style: normal; cursor: pointer; color: var(--ink-3); font-size: 16px; }
+.rpop .rm { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ink-2); padding: 2px 0 8px; cursor: pointer; }
+.rpop .rm input { margin: 0; width: 15px; height: 15px; accent-color: #c8321f; cursor: pointer; }
+.rpop .rm small { color: var(--ink-3); font-size: 11.5px; }
+.rpop .rg { border-top: 1px solid var(--line); padding: 7px 0 4px; }
+.rpop .rg > .s { display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 700; font-size: 14px; }
+.rpop .rg > .s small { font: 600 11px var(--sans); color: var(--ink-3); }
+.rpop .rg > .s:hover { color: var(--accent); }
+.rpop .rg .it { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; font-size: 12.5px; padding: 2px 0 2px 4px; color: var(--ink-2); }
+.rpop .rg .it b { color: var(--ink); font-weight: 600; }
+.rpop .rg .it em { grid-column: 2; font-style: normal; font-size: 11.5px; color: var(--ink-3); }
+.rpop .tg { font: 700 10.5px var(--sans); border-radius: 4px; padding: 1px 6px; color: #fff; align-self: start; margin-top: 2px; white-space: nowrap; }
+.rpop .tg.s3 { background: #c8321f; } .rpop .tg.s2 { background: #d4561f; } .rpop .tg.s1 { background: #b7860f; }   /* 긴급대피 · 사전대피 · 통제 */
+.rpop .tg.near { background: transparent; box-shadow: inset 0 0 0 1.5px currentColor; }                         /* 근접은 속 빈 딱지 */
+.rpop .tg.near.s3 { color: #ff7a63; } .rpop .tg.near.s2 { color: #ff9d6e; } .rpop .tg.near.s1 { color: #f0cf6a; }
+.rpop .nt { font-size: 11.5px; color: var(--ink-3); margin-top: 8px; line-height: 1.5; }
+/* 지도의 시군 이름 — 앞에 표식 · 색(긴급대피 빨강 > 사전대피 주황 > 통제 노랑). 근접만이면 조금 옅게. 새로 생긴 곳은 한동안 깜박인다 */
+#over .nm.wa.s3 { fill: #ff7a63; } #over .nm.wa.s2 { fill: #ff9d6e; } #over .nm.wa.s1 { fill: #f0cf6a; }
+#over .nm.wa.near { opacity: .8; }
 #over .nm.wa.bl { animation: nmblink .7s steps(2, jump-none) 6; }
 @keyframes nmblink { 0% { opacity: 1; } 50% { opacity: .15; } 100% { opacity: 1; } }
 /* 펼친 메뉴·범례 — 아이콘 오른쪽. 위치(top)는 누른 아이콘에 맞춘다 */
@@ -1292,11 +1296,15 @@ body.show-on #play { bottom: 46px; }      /* 점 자리를 비운다 */
       <button id="ly-btn" class="ly-ic" aria-haspopup="true" aria-expanded="false" aria-label="레이어" title="레이어 — 지도 위에 겹칠 것 (A: 기상특보 · S: 관측소)">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2.5 8 12 13l9.5-5z"/><path d="M2.5 12.5 12 17.5l9.5-5M2.5 16.5 12 21.5l9.5-5" opacity=".6"/></svg>
       </button>
-      <button id="ly-risk" class="ly-ic risk" hidden aria-expanded="false" aria-label="기준 근접" title="위키 기준(통제 · 사전대피 · 긴급대피)에 70% 이상 가까워졌거나 닿은 곳 — 눌러서 목록 · 다시 누르면 닫기">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 2.8 19.5h18.4z"/><path d="M12 10v4.6"/><circle cx="12" cy="17.2" r=".6"/></svg><span class="bd" id="ly-risk-n">0</span>
+      <button id="ly-risk-e" class="ly-ic risk ev" hidden aria-expanded="false" aria-label="주민대피 기준" title="주민대피 — 사전대피 · 긴급대피 기준에 70% 이상 가까워졌거나 닿은 곳. 눌러서 목록 · 다시 누르면 닫기">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 2.8 19.5h18.4z"/><path d="M12 10v4.6"/><circle cx="12" cy="17.2" r=".6"/></svg><span class="bd" id="ly-risk-n-e">0</span>
+      </button>
+      <button id="ly-risk-c" class="ly-ic risk ct" hidden aria-expanded="false" aria-label="긴급통제 기준" title="긴급통제 — 통제 기준에 닿은 곳(지하차도 · 하천 · 도로). 눌러서 목록 · 다시 누르면 닫기">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M7.2 12h9.6"/></svg><span class="bd" id="ly-risk-n-c">0</span>
       </button>
       <div id="ly-act"></div>
-      <div class="ly-pop" id="ly-risk-pop" hidden role="dialog" aria-label="기준 근접 목록"></div>
+      <div class="ly-pop rpop ev" id="ly-risk-pop-e" hidden role="dialog" aria-label="주민대피 기준 목록"></div>
+      <div class="ly-pop rpop ct" id="ly-risk-pop-c" hidden role="dialog" aria-label="긴급통제 기준 목록"></div>
       <div class="ly-pop" id="ly-menu" hidden></div>
       <div class="ly-pop" id="ly-alerts" hidden></div>
       <div class="ly-pop" id="ly-stn" hidden></div>
@@ -6082,72 +6090,90 @@ $("b-prefs").onclick = openPrefs;
 $("b-help").onclick = () => ($("help").hidden ? openHelp() : closeHelp());
 $("b-ai").onclick = () => aiToggle();
 
-/* ── 기준 근접 알림(화면) — 위키 기준에 70%↑ 가까워졌거나 닿은 곳: 지도 시군명 ⚠ · 왼쪽 위험 아이콘 · 목록 팝업 ── */
-let WATCH = null, WATCH_OPEN = false;
-let WATCH_MAP = true;                                     // 지도의 시군명에 ⚠ · 색을 낼지(팝업의 '지도에 표시') — 이 브라우저에 기억
+/* ── 기준 근접 알림(화면) — 위키 기준에 70%↑ 가까워졌거나 닿은 곳. 단계가 다르니 팝업을 둘로 나눈다:
+   주민대피(긴급대피 > 사전대피) · 긴급통제(통제). 대피가 더 윗단계다([[통제·대피 기준]] 통제 → 사전대피 → 긴급대피) ──
+   지도 시군명: 앞에 표식(⚠ 대피 · 🚧 통제) + 색. 시군에 둘 다 있으면 대피 쪽이 이긴다 */
+const WG = {
+  e: { name: "주민대피", ic: "⚠", stages: ["긴급대피", "사전대피"], title: "주민대피 기준 근접" },
+  c: { name: "긴급통제", ic: "🚧", stages: ["통제"], title: "긴급통제 기준 근접" },
+};
+const WS = { 긴급대피: 3, 사전대피: 2, 통제: 1 };
+let WATCH = null, WATCH_OPEN = null;                       // 열린 팝업 e | c | null
+let WATCH_MAP = true;                                      // 지도의 시군명에 표식 · 색을 낼지(팝업의 '지도에 표시') — 이 브라우저에 기억
 try { WATCH_MAP = localStorage.getItem("gn-map-watchmap") !== "0"; } catch {}
-const WATCH_SEEN = new Set(), WATCH_BL = new Map();      // 본 시군 · 깜박임 끝 시각
+const WATCH_SEEN = { e: new Set(), c: new Set() }, WATCH_BL = new Map();   // 본 시군 · 깜박임 끝 시각
+const wItems = g => (WATCH?.items || []).filter(i => WG[g].stages.includes(i.stage));
+function wSigun() {                                        // 시군 → { g: 'e'|'c', s: 가장 센 단계(1~3), near: 충족 없이 근접만 }
+  const out = {};
+  for (const i of WATCH?.items || []) {
+    const s = WS[i.stage] || 0, g = s >= 2 ? "e" : "c", d = out[i.sigun];
+    if (!d || s > d.s || (s === d.s && i.st === "met")) out[i.sigun] = { g, s, near: i.st !== "met" };
+  }
+  return out;
+}
 function paintWatch() {
-  const sg = WATCH_MAP ? WATCH?.sigun || {} : {};
+  const sg = WATCH_MAP ? wSigun() : {};
   for (const t of document.querySelectorAll("#over .nm[data-s]")) {
     const n = t.dataset.s, d = sg[n];
+    t.classList.remove("s1", "s2", "s3");
     t.classList.toggle("wa", !!d);
-    t.classList.toggle("near", !!d && !d.met);
+    t.classList.toggle("near", !!d?.near);
     t.classList.toggle("bl", !!d && (WATCH_BL.get(n) || 0) > Date.now());
-    t.textContent = d ? `⚠ ${n}` : n;
+    if (d) t.classList.add("s" + d.s);
+    t.textContent = d ? `${WG[d.g].ic} ${n}` : n;
   }
 }
-function watchPaintList() {
-  const pop = $("ly-risk-pop"), items = WATCH?.items || [];
-  const by = {};
+function watchPaintList(g) {
+  const pop = $("ly-risk-pop-" + g), items = wItems(g), by = {};
   for (const i of items) (by[i.sigun] ||= []).push(i);
-  const names = Object.keys(by).sort((a, b) => WATCH.sigun[b].top - WATCH.sigun[a].top);
-  pop.innerHTML = `<div class="rh"><b>⚠ 기준 근접 ${names.length}개 시군</b><span>${WATCH.at} 기준 · ${items.length}건</span><i data-x title="닫기">✕</i></div>`
-    + `<label class="rm"><input type="checkbox" data-map ${WATCH_MAP ? "checked" : ""}> 지도에 표시 <small>시군 이름에 ⚠ · 색</small></label>`
-    + names.map(n => {
-      const d = WATCH.sigun[n];
-      return `<div class="rg"><div class="s" data-s="${escH(n)}" title="이 시군을 고른다">${escH(n)}<small>충족 ${d.met} · 근접 ${d.near}</small></div>`
-        + by[n].slice(0, 8).map(i => `<div class="it"><span class="tg ${i.st}">${i.st === "met" ? "충족" : "근접"}</span><b>${escH(i.emd)} — ${escH(i.fam)} ${escH(i.stage)}</b><em>${escH(i.rule)}</em></div>`).join("")
-        + (by[n].length > 8 ? `<div class="it"><span></span><em>… 외 ${by[n].length - 8}건</em></div>` : "") + `</div>`;
-    }).join("")
-    + `<div class="nt">${WATCH.stage ? `비상단계 기준: ${escH(WATCH.stage)}. ` : ""}근접 = 기준 수치의 70% 이상. 자세한 대피장소 · 근거는 AI 상황판단(I). 판단 · 명령은 권한자 몫 — 기준과의 대조일 뿐이다.</div>`;
+  const top = n => Math.max(...by[n].map(i => WS[i.stage] * 10 + (i.st === "met" ? 5 : 0)));
+  const names = Object.keys(by).sort((a, b) => top(b) - top(a));
+  const row = i => `<div class="it"><span class="tg s${WS[i.stage]}${i.st === "met" ? "" : " near"}">${i.stage} ${i.st === "met" ? "충족" : "근접"}</span><b>${escH(i.emd)} — ${escH(i.fam)}</b><em>${escH(i.rule)}</em></div>`;
+  pop.innerHTML = `<div class="rh"><b>${WG[g].ic} ${WG[g].title} ${names.length}개 시군</b><span>${WATCH.at} 기준 · ${items.length}건</span><i data-x title="닫기">✕</i></div>`
+    + `<label class="rm"><input type="checkbox" data-map ${WATCH_MAP ? "checked" : ""}> 지도에 표시 <small>시군 이름에 ${WG.e.ic} · ${WG.c.ic} 와 색</small></label>`
+    + names.map(n => `<div class="rg"><div class="s" data-s="${escH(n)}" title="이 시군을 고른다">${escH(n)}<small>충족 ${by[n].filter(i => i.st === "met").length} · 근접 ${by[n].filter(i => i.st !== "met").length}</small></div>`
+      + by[n].slice(0, 8).map(row).join("")
+      + (by[n].length > 8 ? `<div class="it"><span></span><em>… 외 ${by[n].length - 8}건</em></div>` : "") + `</div>`).join("")
+    + `<div class="nt">${g === "e" ? "긴급대피 = 실황 기준(실제 내린 비) · 사전대피 = 예보 기준. 대피장소 · 근거는 AI 상황판단(I). " : "통제 = 출입 · 통행 제한 단계(대피보다 아래). "}근접 = 기준 수치의 70% 이상. 판단 · 명령은 권한자 몫 — 기준과의 대조일 뿐이다.</div>`;
 }
-function watchOpen(on) {
-  WATCH_OPEN = on && !!WATCH?.n;
-  const b = $("ly-risk"), pop = $("ly-risk-pop");
-  b.setAttribute("aria-expanded", String(WATCH_OPEN));
-  pop.hidden = !WATCH_OPEN;
-  if (WATCH_OPEN) { watchPaintList(); pop.style.top = b.offsetTop + "px"; }
+function watchOpen(g) {                                     // g: 'e' | 'c' | null(닫기)
+  if (g && !wItems(g).length) g = null;
+  WATCH_OPEN = g;
+  for (const k of ["e", "c"]) {
+    const b = $("ly-risk-" + k), pop = $("ly-risk-pop-" + k), on = k === g;
+    b.setAttribute("aria-expanded", String(on));
+    pop.hidden = !on;
+    if (on) { watchPaintList(k); pop.style.top = b.offsetTop + "px"; }
+  }
 }
 async function loadWatch() {
   try { WATCH = await getJson("/api/ai/watch"); } catch { return; }
-  const b = $("ly-risk"), n = Object.keys(WATCH.sigun || {}).length;
-  b.hidden = !n;
-  if (n) {
-    b.classList.toggle("near", !Object.values(WATCH.sigun).some(d => d.met));
-    $("ly-risk-n").textContent = n;
-    b.title = `위키 기준에 70% 이상 가까워졌거나 닿은 곳 ${n}개 시군 — 눌러서 목록 · 다시 누르면 닫기`;
+  let fresh = null;
+  for (const g of ["e", "c"]) {
+    const b = $("ly-risk-" + g), items = wItems(g), has = new Set(items.map(i => i.sigun));
+    b.hidden = !has.size;
+    $("ly-risk-n-" + g).textContent = has.size;
+    if (g === "e") b.classList.toggle("mid", !items.some(i => i.stage === "긴급대피"));   // 긴급대피가 없으면(사전대피만) 한 단계 옅게
+    for (const n of has) if (!WATCH_SEEN[g].has(n)) { WATCH_SEEN[g].add(n); WATCH_BL.set(n, Date.now() + 25000); fresh ||= g; }
+    for (const n of [...WATCH_SEEN[g]]) if (!has.has(n)) WATCH_SEEN[g].delete(n);       // 사라졌다 다시 생기면 새로
   }
-  let fresh = false;
-  for (const k of Object.keys(WATCH.sigun || {})) {
-    if (!WATCH_SEEN.has(k)) { WATCH_SEEN.add(k); WATCH_BL.set(k, Date.now() + 25000); fresh = true; }
-  }
-  for (const k of [...WATCH_SEEN]) if (!WATCH.sigun?.[k]) WATCH_SEEN.delete(k);   // 사라졌다 다시 생기면 새로
   paintWatch();
-  if (fresh) { watchOpen(true); setTimeout(paintWatch, 26000); }                  // 새로 생겼으면 목록을 펼친다
-  else if (WATCH_OPEN) { n ? watchPaintList() : watchOpen(false); }
+  if (fresh) { watchOpen(WATCH_OPEN === "e" ? "e" : fresh); setTimeout(paintWatch, 26000); }   // 새로 생겼으면 그 목록을 펼친다
+  else if (WATCH_OPEN) watchOpen(wItems(WATCH_OPEN).length ? WATCH_OPEN : null);
 }
-$("ly-risk").onclick = () => watchOpen(!WATCH_OPEN);
-$("ly-risk-pop").addEventListener("click", ev => {
-  if (ev.target.closest("[data-x]")) return watchOpen(false);
-  if (ev.target.matches("[data-map]")) {
-    WATCH_MAP = ev.target.checked;
-    try { localStorage.setItem("gn-map-watchmap", WATCH_MAP ? "1" : "0"); } catch {}
-    return paintWatch();
-  }
-  const s = ev.target.closest(".s[data-s]");
-  if (s) setSel([s.dataset.s]);
-});
+for (const g of ["e", "c"]) {
+  $("ly-risk-" + g).onclick = () => watchOpen(WATCH_OPEN === g ? null : g);
+  $("ly-risk-pop-" + g).addEventListener("click", ev => {
+    if (ev.target.closest("[data-x]")) return watchOpen(null);
+    if (ev.target.matches("[data-map]")) {
+      WATCH_MAP = ev.target.checked;
+      try { localStorage.setItem("gn-map-watchmap", WATCH_MAP ? "1" : "0"); } catch {}
+      return paintWatch();
+    }
+    const s = ev.target.closest(".s[data-s]");
+    if (s) setSel([s.dataset.s]);
+  });
+}
 setTimeout(loadWatch, 2500);
 setInterval(loadWatch, 150000);
 $("aiw-x").onclick = () => aiToggle(false);
