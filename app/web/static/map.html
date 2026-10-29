@@ -539,12 +539,10 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 .ch .src { font: 600 calc(11px * var(--k, 1)) var(--sans); color: var(--accent); white-space: nowrap; }
 .ch .src.fell { color: var(--lv-fail); }
 .ch .src .gsw { display: inline-flex; gap: 3px; align-items: center; }
-.ch .src .gsw b { cursor: pointer; font-weight: 600; color: var(--ink-3); padding: 1px 3px; border-radius: 5px; }
-.ch .src .gsw b.on { color: var(--accent); background: color-mix(in oklab, var(--accent) 16%, transparent); }
-.ch .src .gsw b:not(.on):hover { color: var(--ink); }
-.ch .src .gsw i { font-style: normal; color: var(--ink-3); opacity: .6; }
+.ch .src .gsw b { cursor: pointer; font-weight: 600; color: var(--accent); padding: 1px 5px; border-radius: 5px; }
+.ch .src .gsw b:hover { background: color-mix(in oklab, var(--accent) 18%, transparent); }
 .ch .src .gsw.lock b { cursor: default; }
-.ch .src .gsw.lock b:not(.on) { opacity: .35; text-decoration: line-through; }
+.ch .src .gsw.lock b:hover { background: none; }
 .ch .live { width: 7px; height: 7px; border-radius: 50%; background: var(--lv-ok); flex: none; animation: pulse 2.4s infinite; }
 @keyframes pulse {
   0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--lv-ok) 55%, transparent); }
@@ -3438,9 +3436,9 @@ function renderAcc() {
   $("acc-sub").classList.toggle("pick", !CASE && !A.day && !A.moment);
   $("acc-sub").textContent = fcOn ? sub : sub.replace(" + 예상 6시간", "");
   if (A.basis === "aws" && A.gnSel) {
-    $("acc-src").innerHTML = `<span class="gsw${A.gnLock ? " lock" : ""}">`
-      + `<b data-v="gn" class="${A.gnSel === "gn" ? "on" : ""}">경남AWS</b><i>/</i><b data-v="kma" class="${A.gnSel === "kma" ? "on" : ""}">기상청AWS</b></span>`;
-    $("acc-src").title = A.src + (A.gnLock ? " — 이 서버는 내부망(스방)에 닿지 않아 기상청 AWS 로 고정" : " — 눌러서 경남AWS ↔ 기상청AWS");
+    // 지금 쓰는 쪽 하나만 보인다 — 글자를 누르면 다른 쪽으로(⇄). 내부망이 아니면 기상청AWS 로 고정(누를 수 없다)
+    $("acc-src").innerHTML = `<span class="gsw${A.gnLock ? " lock" : ""}"><b data-v="${A.gnSel === "gn" ? "kma" : "gn"}">${A.gnSel === "gn" ? "경남AWS" : "기상청AWS"}${A.gnLock ? "" : " ⇄"}</b></span>`;
+    $("acc-src").title = A.src + (A.gnLock ? " — 이 서버는 내부망(스방)에 닿지 않아 기상청 AWS 로 고정" : ` — 눌러서 ${A.gnSel === "gn" ? "기상청AWS" : "경남AWS"}로`);
     $("acc-src").classList.remove("fell");
   } else { $("acc-src").textContent = A.src; $("acc-src").title = ""; $("acc-src").classList.toggle("fell", !!A.fell); }
   $("acc-bt").textContent = A.bt;
@@ -5961,7 +5959,7 @@ async function putOff(list) {
   show(); loadFlow(); CARDS = null; loadCards();
 }
 $("stage").addEventListener("contextmenu", ev => {
-  if (CASE || !V || !GEO || ev.target.closest("#tl, #play, #legend, #layers, #rail, #pop, #stn-pop, #sw, #camgrab, #cambar")) return;
+  if (CASE || !V || !GEO || ev.target.closest("#tl, #play, #legend, #layers, #rail, #pop, #stn-pop, #sw, #camgrab, #cambar, #tools, #aiw, #showdots")) return;
   const rc = $("stage").getBoundingClientRect();
   const mx = (ev.clientX - rc.left - MT.tx) / MT.sc, my = (ev.clientY - rc.top - MT.ty) / MT.sc;
   const st = stationAt(mx, my);
@@ -6030,7 +6028,7 @@ function valueAt(gx, gy) {
   return CUR.u[r * CUR.w + c];
 }
 $("stage").addEventListener("mousemove", ev => {
-  if (!V || !GEO || ev.target.closest("#tl, #play, #legend, #layers, #rail, #pop, #sw, #camgrab, #cambar")) { $("tip").hidden = true; $("stage").style.cursor = ""; return; }
+  if (!V || !GEO || ev.target.closest("#tl, #play, #legend, #layers, #rail, #pop, #sw, #camgrab, #cambar, #tools, #aiw, #showdots")) { $("tip").hidden = true; $("stage").style.cursor = ""; return; }
   const rc = $("stage").getBoundingClientRect(), x = ev.clientX - rc.left, y = ev.clientY - rc.top;
   const mx = (x - MT.tx) / MT.sc, my = (y - MT.ty) / MT.sc;
   const gx = V.fromX(mx), gy = V.fromY(my), v = valueAt(gx, gy), tip = $("tip");
@@ -6070,7 +6068,7 @@ $("stage").addEventListener("mouseleave", () => { $("tip").hidden = true; highli
 /* 시군을 누르면 고른다 — 오른쪽 패널이 그 시군 읍면동(격자)·지점(AWS)으로 바뀐다. 다시 누르거나 바다를 누르면 푼다.
    Ctrl(⌘)+클릭은 더하기·빼기 — 여러 시군 읍면동을 한 판에 견준다 */
 $("stage").addEventListener("click", ev => {
-  if (!V || !GEO || ev.target.closest("#tl, #play, #legend, #rail, #layers, #tip, #sw, #camgrab, #cambar")) return;
+  if (!V || !GEO || ev.target.closest("#tl, #play, #legend, #rail, #layers, #tip, #sw, #camgrab, #cambar, #tools, #aiw, #showdots")) return;
   const rc = $("stage").getBoundingClientRect();
   const mx = (ev.clientX - rc.left - MT.tx) / MT.sc, my = (ev.clientY - rc.top - MT.ty) / MT.sc;
   const sg = sigunAt(V.fromX(mx), V.fromY(my));
