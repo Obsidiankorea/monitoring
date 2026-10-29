@@ -58,10 +58,36 @@ COLLECTORS = {"rain": rain.collect, "forecast": forecast.collect,
               # 경남 지도 — 500m 격자(15분·60분·일)와 실황 5km. 경남 bbox 만 잘라 둔다.
               "grid": grid_rain.collect, "odam": grid_rain.collect_odam}
 
-def intervals() -> dict:
+def base_intervals() -> dict:
     """수집 주기 — 저장한 것 위에 기본값을 깐다. 저장한 뒤에 생긴 수집기(minute 등)도 기본 주기로 돈다.
     ⚠️ 저장한 것만 읽으면 새 수집기가 영영 예약되지 않는다."""
     return {**INTERVALS, **db.get_setting("intervals", INTERVALS)}
+
+
+def saver() -> dict:
+    """API 절약 모드 — 켜면 수집 주기가 min 분보다 짧은 수집기를 min 분마다로 늦춘다(긴 것은 그대로).
+    alerts=False 면 특보(발표 리듬이 없고 늦으면 안 된다)는 늦추지 않는다."""
+    c = {"on": False, "min": 5, "alerts": False, **(db.get_setting("api_saver", {}) or {})}
+    c["min"] = max(1, min(60, int(c["min"])))
+    return c
+
+
+def intervals() -> dict:
+    """실제로 도는 수집 주기(초) — 기본 · 저장값에 절약 모드를 얹은 것."""
+    cur, sv = base_intervals(), saver()
+    if not sv["on"]:
+        return cur
+    return {k: (v if (k == "alerts" and not sv["alerts"]) else max(v, sv["min"] * 60)) for k, v in cur.items()}
+
+
+def reschedule_all() -> None:
+    sched = getattr(app.state, "sched", None)
+    if not sched:
+        return
+    for k, sec in intervals().items():
+        job = sched.get_job(k)
+        if job:
+            job.reschedule("interval", seconds=sec)
 
 
 # 한 자료를 두 번 동시에 받지 않게 — 주기가 겹치거나 수동 조회가 끼어들 수 있다
@@ -640,16 +666,36 @@ async def api_settings_qpf(body: dict):
 @app.put("/api/settings/intervals")
 async def api_settings_intervals(body: dict):
     """수집 주기. ⚠️ 화면 갱신 주기와 다르다 — 이건 기상청을 실제로 부르는 간격이다."""
-    cur = intervals()
+    cur = base_intervals()
     for k in COLLECTORS:
         if k in body:
-            sec = max(30, min(3600, int(body[k])))
-            cur[k] = sec
-            job = app.state.sched.get_job(k) if app.state.sched else None
-            if job:
-                job.reschedule("interval", seconds=sec)
+            cur[k] = max(30, min(3600, int(body[k])))
     db.put_setting("intervals", cur)
-    return {"intervals": cur}
+    reschedule_all()
+    return {"intervals": intervals()}
+
+
+@app.get("/api/settings/saver")
+async def api_saver_get():
+    return {**saver(), "intervals": intervals(), "base": base_intervals()}
+
+
+@app.put("/api/settings/saver")
+async def api_saver_put(body: dict):
+    """API 절약 모드 — {on, min(1~60분), alerts}. 켜면 기상청 호출 간격을 min 분 이상으로 늦춘다."""
+    cur = saver()
+    if "on" in body:
+        cur["on"] = bool(body["on"])
+    if "alerts" in body:
+        cur["alerts"] = bool(body["alerts"])
+    if "min" in body:
+        try:
+            cur["min"] = max(1, min(60, int(body["min"])))
+        except (TypeError, ValueError):
+            raise HTTPException(400, "min: 1~60 분 숫자")
+    db.put_setting("api_saver", cur)
+    reschedule_all()
+    return {**saver(), "intervals": intervals(), "base": base_intervals()}
 
 
 @app.post("/api/refresh/{kind}")
