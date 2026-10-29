@@ -38,9 +38,19 @@ def _claude_env() -> dict:
     return env
 
 
-def mode() -> str | None:
+def configured() -> str | None:
+    """GN_AI 가 있으면 그것, 없어도 토큰 파일이 있으면 claude-cli(행정 PC 처럼 환경변수를 못 쓰는 곳)."""
     m = (os.environ.get("GN_AI") or "").strip().lower()
-    return m if m in ("openai", "claude-cli") else None
+    if m in ("openai", "claude-cli"):
+        return m
+    try:
+        return "claude-cli" if TOKEN_FILE.read_text("utf-8-sig").strip() else None
+    except OSError:
+        return None
+
+
+def mode() -> str | None:
+    return configured()
 
 
 def ask(system: str, user: str) -> str:
