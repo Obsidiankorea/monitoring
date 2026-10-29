@@ -5,7 +5,7 @@
   GN_AI=claude-cli — `claude -p`(Claude Code, 구독 사용량). 느리다(수십 초). 도구를 다 막고(읽기 · 쓰기 · 웹 없이)
                      받은 맥락만으로 답하게 한다. PC 는 깔린 claude 의 로그인을, NAS(도커)는 장기 토큰을 쓴다:
                      `claude setup-token` 으로 받은 값을 config/claude/token.txt 에 — 부를 때마다 읽으니 넣으면 바로 켜진다.
-                     GN_AI_MODEL 이 있으면 --model 로 넘긴다.
+                     GN_AI_MODEL 이 있으면 --model 로 넘긴다. 환경변수를 못 쓰는 PC 는 config/claude/model.txt 한 줄(예: haiku).
 ⚠️ Max · Pro 구독은 본인 사용 전제다 — 여러 사람이 쓰는 업무용이면 API 키(GN_AI=openai 호환 또는 Console 키)로.
 ⚠️ 키 · 토큰은 config/ 파일 또는 환경변수로만. 로그 · 화면에 찍지 않는다.
 """
@@ -23,6 +23,18 @@ from . import config
 TIMEOUT = 150
 _DENY = "Bash Edit Write Read Glob Grep WebFetch WebSearch NotebookEdit Task Agent"
 TOKEN_FILE = config.ROOT / "config" / "claude" / "token.txt"
+MODEL_FILE = config.ROOT / "config" / "claude" / "model.txt"
+
+
+def _model() -> str | None:
+    """GN_AI_MODEL, 없으면 config/claude/model.txt(부를 때마다 읽는다 — 바꾸면 바로)."""
+    m = (os.environ.get("GN_AI_MODEL") or "").strip()
+    if m:
+        return m
+    try:
+        return MODEL_FILE.read_text("utf-8-sig").strip() or None
+    except OSError:
+        return None
 
 
 def _claude_env() -> dict:
@@ -82,7 +94,7 @@ def ask(system: str, user: str) -> str:
         exe = _claude_exe()
         if not exe:
             raise RuntimeError("claude 명령이 없다 — Claude Code 를 설치했으면 PATH 에 넣거나 서버를 다시 켠다")
-        model = os.environ.get("GN_AI_MODEL")
+        model = _model()
         p = subprocess.run([exe, "-p", "--output-format", "text", "--no-session-persistence",
                             *(["--model", model] if model else []),
                             "--append-system-prompt", system, "--disallowedTools", _DENY],
