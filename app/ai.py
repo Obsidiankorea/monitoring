@@ -114,8 +114,63 @@ def _all(*parts) -> str:
     return "near" if all(p in ("met", "near") for p in parts) else "no"
 
 
+def _part(label: str, v, need, unit: str = "㎜", eta: dict | None = None) -> dict:
+    """기준 한 토막 — 지금 값 · 기준 · 비율(%) · 남은 양. 값을 모르면 pct · left 가 None."""
+    return {"label": label, "now": v, "need": need, "unit": unit,
+            "pct": None if v is None else round(v / need * 100),
+            "left": None if v is None else round(max(need - v, 0), 1), "eta": eta}
+
+
+def _eta(v, need, hours: list, labels: list) -> dict | None:
+    """쌓이는 값(누적)이 시간별 예보를 더해 기준에 처음 닿는 시각 — {'at': '14', 'i': 2}.
+    예보 시간 안에 안 닿으면 {'at': None}. 이미 닿았거나 값 · 예보가 없으면 None.
+    ⚠️ 창에서 빠져나가는 옛 비는 빼지 않는다 → 실제보다 이르게 나올 수 있다."""
+    if v is None or v >= need or not hours:
+        return None
+    s = v
+    for i, x in enumerate(hours):
+        s += x or 0
+        if s >= need:
+            return {"at": labels[i] if i < len(labels) else None, "i": i}
+    return {"at": None, "i": None}
+
+
+def _gap(*parts: dict) -> dict | None:
+    """규칙 하나(조건이 '그리고'로 묶임)가 기준에서 얼마나 먼가 — 가장 먼 조건이 병목이다.
+    아는 조건이 하나도 없으면 None. 모르는 조건이 섞였으면 partial(비율은 아는 조건만)."""
+    known = [p for p in parts if p["pct"] is not None]
+    if not known:
+        return None
+    w = min(known, key=lambda p: p["pct"])
+    unmet = [p for p in known if p["left"] > 0]
+    partial = len(known) < len(parts)
+    eta = None
+    if unmet and not partial and all(p["eta"] for p in unmet):      # 안 쌓이는 조건(시우량 등)이 남았으면 시각을 말하지 않는다
+        got = [p["eta"] for p in unmet]
+        eta = {"at": None} if any(e["at"] is None for e in got) else max(got, key=lambda e: e["i"])
+    return {"pct": w["pct"], "left": w["left"], "unit": w["unit"], "by": w["label"], "partial": partial,
+            "eta": eta, "parts": list(parts)}
+
+
+def gap_text(c: dict) -> str:
+    """판정 한 줄(c)에 붙일 글 — '기준 78% · 남은 22㎜(일/누적) · 예보대로면 14시경 닿음'. 모르면 빈 글."""
+    g = c.get("gap")
+    if not g:
+        return ""
+    s = f"기준 {g['pct']}%"
+    if g["left"]:
+        s += f" · 남은 {g['left']:g}{g['unit']}({g['by']})"
+    e = g["eta"]
+    if e:
+        s += f" · 예보대로면 {e['at']}시경 닿음" if e["at"] else " · 예보 시간 안엔 안 닿음"
+    if g["partial"]:
+        s += " · 일부 조건은 모름"
+    return s
+
+
 def ladders(r: dict, night: bool, alerts: list[str]) -> dict:
-    """읍면동 하나 — [[통제·대피 기준]] 3대 유형 단계별 조건 대조(위키 표의 숫자 그대로)."""
+    """읍면동 하나 — [[통제·대피 기준]] 3대 유형 단계별 조건 대조(위키 표의 숫자 그대로).
+    st 는 '그 조건에 닿았나', gap 은 '기준에서 얼마나 먼가'(비율 · 남은 양 · 닿는 시각)."""
     rain, fpk, f3 = r["rain"], r["fc_peak"], r["fc_run30"]
     o1, o24, o48, q15 = rain["1h"], rain["24h"], rain["48h"], r["m15"]
     accum = max(x for x in (o24, o48) if x is not None) if (o24 is not None or o48 is not None) else None
@@ -123,27 +178,47 @@ def ladders(r: dict, night: bool, alerts: list[str]) -> dict:
     f50 = "unknown" if fpk is None or fcap else _st(fpk, 50)
     f55 = "unknown" if fpk is None or fcap else _st(fpk, 55)
     hoou = [a for a in alerts if a.startswith("호우")]
+    fh, fl = r.get("fc_hours") or [], r.get("fc_labels") or []
+    fpk_ok = None if fpk is None or fcap else fpk          # 30 에 막힌 예보는 50·55 와 견줄 수 없다
+
+    def cum(label, v, need):                               # 쌓이는 값 — 예보 시우량을 더해 닿는 시각도 본다
+        return _part(label, v, need, eta=_eta(v, need, fh, fl))
+
+    def one(label, v, need, unit="㎜"):
+        return _part(label, v, need, unit)
+
     out = {
         "산사태": [
-            {"stage": "통제", "rule": "일/누적 100㎜↑ + 20㎜/h↑ 예보", "st": _all(_st(accum, 100), _st(fpk, 20))},
-            {"stage": "사전대피", "rule": "일/누적 200㎜↑ + 50㎜/h↑ 예보", "st": _all(_st(accum, 200), f50)},
+            {"stage": "통제", "rule": "일/누적 100㎜↑ + 20㎜/h↑ 예보", "st": _all(_st(accum, 100), _st(fpk, 20)),
+             "gap": _gap(cum("일/누적", accum, 100), one("예보 시우량", fpk, 20, "㎜/h"))},
+            {"stage": "사전대피", "rule": "일/누적 200㎜↑ + 50㎜/h↑ 예보", "st": _all(_st(accum, 200), f50),
+             "gap": _gap(cum("일/누적", accum, 200), one("예보 시우량", fpk_ok, 50, "㎜/h"))},
             # 선행 5일 120㎜ 는 대시보드가 격자로 계산한다. 뒤의 '산사태 위험 증가 예보'(산림청)는 없어서 → 충족으로는 못 친다(모름)
-            {"stage": "사전대피", "rule": "선행 5일 120㎜↑ + 산사태 위험 증가 예보(산림청)", "st": _all(_st(r.get("ante"), 120), "unknown")},
+            {"stage": "사전대피", "rule": "선행 5일 120㎜↑ + 산사태 위험 증가 예보(산림청)", "st": _all(_st(r.get("ante"), 120), "unknown"),
+             "gap": _gap(one("선행 5일", r.get("ante"), 120), one("산림청 예보", None, 1))},
             {"stage": "사전대피", "rule": "취약시간대(21~06시) 30㎜/h↑ 예보",
-             "st": ("no" if not night else _st(fpk, 30))},
-            {"stage": "긴급대피", "rule": "50㎜/h↑ + 일 170㎜↑(실황)", "st": _all(_st(o1, 50), _st(o24, 170))},
-            {"stage": "긴급대피", "rule": "누적 270㎜↑(실황)", "st": _st(o48, 270)},
+             "st": ("no" if not night else _st(fpk, 30)),
+             "gap": _gap(one("예보 시우량", fpk, 30, "㎜/h")) if night else None},
+            {"stage": "긴급대피", "rule": "50㎜/h↑ + 일 170㎜↑(실황)", "st": _all(_st(o1, 50), _st(o24, 170)),
+             "gap": _gap(one("1시간", o1, 50, "㎜/h"), cum("24시간", o24, 170))},
+            {"stage": "긴급대피", "rule": "누적 270㎜↑(실황)", "st": _st(o48, 270),
+             "gap": _gap(cum("48시간", o48, 270))},
         ],
         "하천": [
-            {"stage": "통제", "rule": "30㎜/h↑ 3시간 이상 지속 예보", "st": _st(f3, 3)},
-            {"stage": "사전대피", "rule": "누적 200㎜↑ + 30㎜/h↑ 예보", "st": _all(_st(accum, 200), _st(fpk, 30))},
-            {"stage": "긴급대피", "rule": "누적 200㎜↑ + 30㎜/h↑ 실제", "st": _all(_st(accum, 200), _st(o1, 30))},
+            {"stage": "통제", "rule": "30㎜/h↑ 3시간 이상 지속 예보", "st": _st(f3, 3),
+             "gap": _gap(one("30㎜/h↑ 이어진 시간", f3, 3, "시간"))},
+            {"stage": "사전대피", "rule": "누적 200㎜↑ + 30㎜/h↑ 예보", "st": _all(_st(accum, 200), _st(fpk, 30)),
+             "gap": _gap(cum("일/누적", accum, 200), one("예보 시우량", fpk, 30, "㎜/h"))},
+            {"stage": "긴급대피", "rule": "누적 200㎜↑ + 30㎜/h↑ 실제", "st": _all(_st(accum, 200), _st(o1, 30)),
+             "gap": _gap(cum("일/누적", accum, 200), one("1시간", o1, 30, "㎜/h"))},
             {"stage": "긴급대피", "rule": "호우경보 발령", "st": "met" if "호우경보" in hoou else "no"},
         ],
         "지하공간": [
             {"stage": "통제", "rule": "(지하차도) 호우특보 발령", "st": "met" if hoou else "no"},
-            {"stage": "사전대피", "rule": "15분 20㎜↑ + 시간당 55㎜↑ 예보", "st": _all(_st(q15, 20), f55)},
-            {"stage": "긴급대피", "rule": "15분 30㎜↑ + 시간당 55㎜↑ 실제", "st": _all(_st(q15, 30), _st(o1, 55))},
+            {"stage": "사전대피", "rule": "15분 20㎜↑ + 시간당 55㎜↑ 예보", "st": _all(_st(q15, 20), f55),
+             "gap": _gap(one("15분", q15, 20), one("예보 시우량", fpk_ok, 55, "㎜/h"))},
+            {"stage": "긴급대피", "rule": "15분 30㎜↑ + 시간당 55㎜↑ 실제", "st": _all(_st(q15, 30), _st(o1, 55)),
+             "gap": _gap(one("15분", q15, 30), one("1시간", o1, 55, "㎜/h"))},
         ],
     }
     return out
@@ -262,7 +337,8 @@ def situation(sigun: str, base: str = "http://127.0.0.1:8000") -> dict:
             run = run + 1 if v >= 30 else 0
             best = max(best, run)
         row = {"emd": name, "rain": {f"{h}h": acc[h].get(name) for h in WINDOWS}, "m15": m15.get(name),
-               "fc6h": f.get("sum"), "fc_peak": f.get("peak"), "fc_hours": d, "fc_run30": best if d else None,
+               "fc6h": f.get("sum"), "fc_peak": f.get("peak"), "fc_hours": d, "fc_labels": fc.get("labels") or [],
+               "fc_run30": best if d else None,
                "ante": ante.get(name)}
         r1, r3, r24 = row["rain"]["1h"] or 0, row["rain"]["3h"] or 0, row["rain"]["24h"] or 0
         row["cbs"] = (r1 >= 50 and r3 >= 90) or r1 >= 72                   # [[재난문자 송출기준]]
@@ -295,6 +371,7 @@ def situation(sigun: str, base: str = "http://127.0.0.1:8000") -> dict:
         "limits": ["지구 좌표가 없어 읍면동 안 가장 많이 온 격자(500m)로 견준다 — 지구 강우의 상한",
                    f"초단기 예보 시우량은 {RN1_CAP:g}㎜ 에서 막혀 온다 — 50·55㎜/h 예보 조건은 '모름'",
                    "선행 5일 강우 · 토양함수 · 하천수위 · 침수심 · 예측정보(산림청 산사태 예보)는 여기 없다 — 따로 확인",
+                   "기준 N% · 남은 ㎜ · 닿는 시각은 가장 먼 조건 기준이다 — 닿는 시각은 예보 시우량을 지금 누적에 더한 것이라 창에서 빠지는 옛 비는 빼지 않아 실제보다 이를 수 있다",
                    "목록에 없다고 위험이 없는 것이 아니다", "대피명령은 시장·군수·구청장 권한(재난안전법 제40조)",
                    sites["source_basis"]],
         "wiki": [f"[[{SIGUN_FULL.get(sigun, sigun)}]] (산사태 위험지역)", "[[통제·대피 기준]]", "[[시군 상황관리반 행동매뉴얼]]",
@@ -323,7 +400,8 @@ def brief(s: dict, top: int = 4) -> str:
     out.append("재난문자 기준(실황): " + (", ".join(cbs) if cbs else "없음"))
     for r in s["emd"][:top]:
         rn = r["rain"]
-        hit = [f"{fam} {c['stage']} '{c['rule']}' {STL[c['st']]}" for fam, cs in r["ladders"].items() for c in cs if c["st"] in ("met", "near")]
+        hit = [f"{fam} {c['stage']} '{c['rule']}' {STL[c['st']]}" + (f" ({gap_text(c)})" if gap_text(c) else "")
+               for fam, cs in r["ladders"].items() for c in cs if c["st"] in ("met", "near")]
         an_ = f" · 선행 5일 {r['ante']:g}" if r.get("ante") is not None else ""
         fc = f"앞으로 6h {r['fc6h']}(최대 {r['fc_peak']}/h)" if r["fc6h"] is not None else "앞으로 6h 예측 자료 없음"
         out.append(f"· {r['emd']} — 1h {rn['1h']} · 3h {rn['3h']} · 24h {rn['24h']} · 15분 {_na(r['m15'])}{an_} · {fc}"

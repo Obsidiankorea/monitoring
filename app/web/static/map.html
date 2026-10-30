@@ -746,6 +746,7 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 .rpop .rg .it { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; font-size: 12.5px; padding: 2px 0 2px 4px; color: var(--ink-2); }
 .rpop .rg .it b { color: var(--ink); font-weight: 600; }
 .rpop .rg .it em { grid-column: 2; font-style: normal; font-size: 11.5px; color: var(--ink-3); }
+.rpop .rg .it .gp { grid-column: 2; font: 600 11.5px var(--mono); color: var(--ink-2); }
 .rpop .tg { font: 700 10.5px var(--sans); border-radius: 4px; padding: 1px 6px; color: #fff; align-self: start; margin-top: 2px; white-space: nowrap; }
 .rpop .tg.s3 { background: #c8321f; } .rpop .tg.s2 { background: #d4561f; } .rpop .tg.s1 { background: #b7860f; }   /* 긴급대피 · 사전대피 · 통제 */
 .rpop .tg.near { background: transparent; box-shadow: inset 0 0 0 1.5px currentColor; }                         /* 근접은 속 빈 딱지 */
@@ -6128,13 +6129,13 @@ function watchPaintList(g) {
   for (const i of items) (by[i.sigun] ||= []).push(i);
   const top = n => Math.max(...by[n].map(i => WS[i.stage] * 10 + (i.st === "met" ? 5 : 0)));
   const names = Object.keys(by).sort((a, b) => top(b) - top(a));
-  const row = i => `<div class="it"><span class="tg s${WS[i.stage]}${i.st === "met" ? "" : " near"}">${i.stage} ${i.st === "met" ? "충족" : "근접"}</span><b>${escH(i.emd)} — ${escH(i.fam)}</b><em>${escH(i.rule)}</em></div>`;
+  const row = i => `<div class="it"><span class="tg s${WS[i.stage]}${i.st === "met" ? "" : " near"}">${i.stage} ${i.st === "met" ? "충족" : "근접"}</span><b>${escH(i.emd)} — ${escH(i.fam)}</b><em>${escH(i.rule)}</em>${i.gap ? `<span class="gp">${escH(i.gap)}</span>` : ""}</div>`;
   pop.innerHTML = `<div class="rh"><b>${WG[g].ic} ${WG[g].title} ${names.length}개 시군</b><span>${WATCH.at} 기준 · ${items.length}건</span><i data-x title="닫기">✕</i></div>`
     + `<label class="rm"><input type="checkbox" data-map ${WATCH_MAP ? "checked" : ""}> 지도에 표시 <small>시군 이름에 ${WG.e.ic} · ${WG.c.ic} 와 색</small></label>`
     + names.map(n => `<div class="rg"><div class="s" data-s="${escH(n)}" title="이 시군을 고른다">${escH(n)}<small>충족 ${by[n].filter(i => i.st === "met").length} · 근접 ${by[n].filter(i => i.st !== "met").length}</small></div>`
       + by[n].slice(0, 8).map(row).join("")
       + (by[n].length > 8 ? `<div class="it"><span></span><em>… 외 ${by[n].length - 8}건</em></div>` : "") + `</div>`).join("")
-    + `<div class="nt">${g === "e" ? "긴급대피 = 실황 기준(실제 내린 비) · 사전대피 = 예보 기준. 대피장소 · 근거는 AI 상황판단(I). " : "통제 = 출입 · 통행 제한 단계(대피보다 아래). "}근접 = 기준 수치의 70% 이상. 판단 · 명령은 권한자 몫 — 기준과의 대조일 뿐이다.</div>`;
+    + `<div class="nt">${g === "e" ? "긴급대피 = 실황 기준(실제 내린 비) · 사전대피 = 예보 기준. 대피장소 · 근거는 AI 상황판단(I). " : "통제 = 출입 · 통행 제한 단계(대피보다 아래). "}근접 = 기준 수치의 70% 이상. 남은 ㎜ · 닿는 시각은 가장 먼 조건 기준이며, 시각은 예보 시우량을 지금 누적에 더한 값이라 실제보다 이를 수 있다. 판단 · 명령은 권한자 몫 — 기준과의 대조일 뿐이다.</div>`;
 }
 function watchOpen(g) {                                     // g: 'e' | 'c' | null(닫기)
   if (g && !wItems(g).length) g = null;

@@ -47,6 +47,9 @@ async def send(text: str) -> None:
             raise RuntimeError(f"텔레그램 {r.status_code}")
 
 
+_GAP: dict[str, str] = {}      # 열쇠 → 기준 N% · 남은 ㎜ · 닿는 시각 글(화면 목록에만 쓴다. 알림 문자는 그대로)
+
+
 def _scan(base: str) -> dict[str, tuple[str, tuple]]:
     """지금 알릴 만한 것 — {열쇠: (상태, (시군, 읍면동, 유형, 단계, 기준))}. 비상단계는 시군 자리에 '도'."""
     o = aireport.overview(base)
@@ -65,6 +68,7 @@ def _scan(base: str) -> dict[str, tuple[str, tuple]]:
                         continue
                     k = f"{sg}|{e['emd']}|{fam}|{c['stage']}|{c['rule']}"
                     out[k] = (c["st"], (sg, e["emd"], fam, c["stage"], c["rule"]))
+                    _GAP[k] = ai.gap_text(c)
     return out
 
 
@@ -78,8 +82,8 @@ def snapshot(base: str) -> dict:
     if _SNAP["v"] is not None and now_t - _SNAP["t"] < SNAP_TTL:
         return _SNAP["v"]
     found = _scan(base)
-    items = [{"sigun": x[0], "emd": x[1], "fam": x[2], "stage": x[3], "rule": x[4], "st": st}
-             for st, x in found.values()]
+    items = [{"sigun": x[0], "emd": x[1], "fam": x[2], "stage": x[3], "rule": x[4], "st": st, "gap": _GAP.get(k, "")}
+             for k, (st, x) in found.items()]
     stage = next((i for i in items if i["fam"] == "비상단계"), None)
     items = [i for i in items if i["fam"] != "비상단계"]
     items.sort(key=lambda i: (-STAGE_RANK.get(i["stage"], 0), -RANK.get(i["st"], 0), i["sigun"], i["emd"]))

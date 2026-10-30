@@ -25,3 +25,18 @@ def test_msg_groups_by_emd():
            ("met", ("고성", "동해면", "산사태", "사전대피", "c")), ("met", ("도", "비상 2단계", "비상단계", "", "호우경보 11개 시군"))]
     m = aiwatch._msg(new, "10.19 00:10")
     assert "2곳" in m and "비상 2단계 진입" in m and m.count("창원 진동면") == 1 and "산사태 긴급대피 충족" in m
+
+
+def test_snapshot_items_carry_the_gap_text(monkeypatch):
+    """화면 목록에는 '기준 N% · 남은 ㎜ · 닿는 시각' 글이 같이 간다(알림 문자는 그대로)."""
+    gap = {"pct": 80, "left": 20, "unit": "㎜", "by": "일/누적", "partial": False, "eta": {"at": "15", "i": 1}, "parts": []}
+    lad = {"산사태": [{"stage": "사전대피", "rule": "r", "st": "near", "gap": gap},
+                    {"stage": "긴급대피", "rule": "호우경보 발령", "st": "met"}]}
+    monkeypatch.setattr(aiwatch.aireport, "overview", lambda base: {
+        "stage": None, "rows": [{"sigun": "함양", "relay": True, "cbs": False, "alerts": [], "fc_sum": 0, "fc_peak": 0}]})
+    monkeypatch.setattr(aiwatch.aireport, "situation", lambda sg, base: {"emd": [{"emd": "서하면", "ladders": lad}]})
+    monkeypatch.setitem(aiwatch._SNAP, "v", None)
+    items = aiwatch.snapshot("http://x")["items"]
+    by = {i["rule"]: i for i in items}
+    assert by["r"]["gap"] == "기준 80% · 남은 20㎜(일/누적) · 예보대로면 15시경 닿음"
+    assert by["호우경보 발령"]["gap"] == ""

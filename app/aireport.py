@@ -131,6 +131,12 @@ def _next(tm: str | None) -> str:
 STL = {"met": "해당", "near": "가까움"}
 
 
+def _gt(c: dict) -> str:
+    """판정 줄 뒤에 붙일 '[기준 78% · 남은 22㎜(일/누적) · 예보대로면 14시경 닿음]' — 모르면 빈 글."""
+    t = ai.gap_text(c)
+    return f" [{t}]" if t else ""
+
+
 def _emd_line(s: dict, r: dict, sites_by: dict) -> str:
     rn = r["rain"]
     bits = [f"시간당 {rn['1h']:g}㎜" if rn["1h"] is not None else "", f"3시간 {rn['3h']:g}㎜" if rn["3h"] is not None else "",
@@ -140,7 +146,7 @@ def _emd_line(s: dict, r: dict, sites_by: dict) -> str:
         ln += f" · 앞으로 6시간 {r['fc6h']:g}㎜"
     if r.get("ante") is not None and r["ante"] >= 60:
         ln += f" · 직전 5일 {r['ante']:g}㎜(선행강우 기준 120㎜)"
-    hits = [f"{fam} {c['stage']} 기준({c['rule']}) {STL[c['st']]}" for fam, cs in r["ladders"].items() for c in cs if c["st"] in STL]
+    hits = [f"{fam} {c['stage']} 기준({c['rule']}) {STL[c['st']]}{_gt(c)}" for fam, cs in r["ladders"].items() for c in cs if c["st"] in STL]
     if hits:
         ln += ". " + "; ".join(hits[:3])
     names = [f"{x['유형']} {_site_name(x)}({x['리']}{', ' + x['인원'] + '명' if x['인원'] not in ('', '-') else ''}{' → ' + x['대피장소'] if x['대피장소'] not in ('', '-') else ''})"
@@ -325,7 +331,7 @@ def _report_sigun(base: str, sigun: str) -> dict:
     tasks = _tasks(s["stage"], _few([r["emd"] for r in relay], 6), [s], s["night"], cbs, f"{full} ")
     look = [_emd_line(s, r, sb) for r in [x for x in s["emd"] if x["risk"]][:4]]
     nxt = [f"{_next(s['tm'])} 실황 · 초단기 새 발표"]
-    near = [f"{r['emd']} {fam} {c['stage']}({c['rule']})" for r in s["emd"] for fam, cs in r["ladders"].items() for c in cs if c["st"] == "near"]
+    near = [f"{r['emd']} {fam} {c['stage']}({c['rule']}){_gt(c)}" for r in s["emd"] for fam, cs in r["ladders"].items() for c in cs if c["st"] == "near"]
     if near:
         nxt.append("가까워진 기준: " + "; ".join(near[:4]))
     if s["night"]:
