@@ -50,3 +50,43 @@ def test_dam_release_rise_is_flagged_only_when_it_really_grows():
     river._HIST.clear()
     river._push("d", "202610311500", 50.0)
     assert river._row(s, {"ymdhm": "202610311600", "swl": "90", "inf": "30", "tototf": "52"})["rise"] is False
+
+
+def _wl(id_, name, stage, v, thr=(3.0, 4.0, 5.0, 6.0), **k):
+    return {"id": id_, "kind": "wl", "name": name, "up": False, "sigun": "합천", "stage": stage, "v": v, "thr": list(thr),
+            "gap": k.get("gap"), "d1h": k.get("d1h"), "t": "202610311600", **{x: y for x, y in k.items() if x not in ("gap", "d1h")}}
+
+
+def test_alerts_fire_once_per_new_level_and_reset_below_attention():
+    rows = [_wl("a", "적포교", 2, 4.1), {"id": "d", "kind": "dam", "name": "합천댐", "up": False, "rise": True, "out": 180.0, "d1h": 120.0}]
+    new, st = river._diff_alerts(rows, {})
+    assert len(new) == 2 and "주의보 수위 도달" in new[0] and "방류 늘어남" in new[1]
+    assert river._diff_alerts(rows, st)[0] == []                            # 같은 단계 · 같은 방류는 다시 알리지 않는다
+    rows[0] = _wl("a", "적포교", 3, 5.2)
+    assert "경보" in river._diff_alerts(rows, st)[0][0]                     # 한 단계 더 오르면 다시
+    rows[0] = _wl("a", "적포교", 0, 2.0)
+    rows[1]["rise"] = False
+    assert river._diff_alerts(rows, st)[1] == {}                            # 내려오면 지운다
+    assert river._diff_alerts([_wl("u", "위쪽", 3, 9.0, **{})] and [{**_wl("u", "위쪽", 3, 9.0), "up": True}], {})[0] == []   # 위쪽 수위는 알리지 않는다
+
+
+def test_summary_text_and_tone(monkeypatch):
+    monkeypatch.setitem(river._LIVE, "rows", [_wl("a", "적포교", 0, 2.4, gap=0.6), _wl("b", "황강교", 0, 1.0, gap=2.0)])
+    s = river.summary()
+    assert s["tone"] == 0 and "관심 수위 이상 없음" in s["text"] and "적포교" in s["text"]
+    monkeypatch.setitem(river._LIVE, "rows", [_wl("a", "적포교", 3, 5.3, gap=0.7)])
+    s = river.summary()
+    assert s["tone"] == 3 and s["n"] == 1 and s["top"] == "적포교 경보"
+
+
+def test_ai_river_rules_in_ladder():
+    from app import ai
+    rv = {"stage": 2, "name": "적포교", "wl": 4.2, "thr": [3.0, 4.0, 5.0, 6.0], "gap": 0.8, "d1h": 0.1, "t": "x", "n": 3, "dams": []}
+    row = {"rain": {"1h": 0, "3h": 0, "24h": 0, "48h": 0}, "fc_peak": 0, "fc_run30": 0, "m15": 0, "ante": 0}
+    lad = ai.ladders(row, False, [], rv)["하천"]
+    ctl = next(c for c in lad if c["rule"].startswith("홍수주의보 수준"))
+    evac = next(c for c in lad if c["rule"].startswith("홍수경보 수준"))
+    assert ctl["st"] == "met" and ctl["stage"] == "통제"
+    assert evac["st"] == "near" and evac["gap"]["left"] == 0.8             # 경보 수위 5.0 − 4.2
+    assert next(c for c in ai.ladders(row, False, [], None)["하천"] if c["rule"].startswith("홍수경보"))["st"] == "unknown"
+    assert "적포교 4.20m 주의보" in ai.river_text(rv) and "자료가 없다" in ai.river_text(None)

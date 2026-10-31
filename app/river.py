@@ -16,7 +16,7 @@ from pathlib import Path
 
 import httpx
 
-from . import config
+from . import config, db
 from .domain.gridproj import hr_xy
 
 log = logging.getLogger("river")
@@ -247,6 +247,59 @@ def status() -> dict:
             "nfld": _LIVE["nfld"], "high": n}
 
 
+def summary() -> dict | None:
+    """경남 전체 한 줄 — AI 보고 · 속보용. tone: 0 없음 · 1 관심 · 2 주의보 · 3 경보 이상. 자료가 없으면 None."""
+    rows = _LIVE["rows"]
+    wl = [s for s in rows if s["kind"] == "wl" and s.get("stage", -1) >= 0 and not s["up"] and "저수지" not in s["name"] and (s["thr"][0] or 0) < 30]
+    if not wl:
+        return None
+    cnt = [sum(1 for s in wl if s["stage"] == i) for i in range(5)]
+    hi = sorted((s for s in wl if s["stage"] >= 1), key=lambda s: (-s["stage"], s.get("gap") or 99))
+    rise = [s for s in rows if s["kind"] != "wl" and s.get("rise")]
+    t = f"하천 · 댐(홍수통제소 원시값): 기준 수위 있는 {len(wl)}곳 중 "
+    if hi:
+        t += "관심 수위 이상 " + ", ".join(f"{s['name']} {STAGES[s['stage']]}({s['v']:.2f}m)" for s in hi[:4]) + (f" 외 {len(hi) - 4}곳" if len(hi) > 4 else "")
+    else:
+        near = min((s for s in wl if s.get("gap") is not None), key=lambda s: s["gap"], default=None)
+        t += "관심 수위 이상 없음" + (f"(가장 가까운 곳 {near['name']} {near['v']:.2f}m, 관심까지 {near['gap']}m)" if near else "")
+    t += " · 방류 늘어난 댐·보: " + (", ".join(f"{s['name']} {s['out']:g}㎥/s{'(위쪽)' if s['up'] else ''}" for s in rise[:4]) or "없음")
+    return {"text": t, "tone": max(s["stage"] for s in wl) if hi else 0, "n": len(hi), "cnt": cnt,
+            "top": f"{hi[0]['name']} {STAGES[hi[0]['stage']]}" if hi else ""}
+
+
+def _diff_alerts(rows: list[dict], state: dict) -> tuple[list[str], dict]:
+    """새로 알릴 것 — 경남 수위 관측소가 주의보 수위 이상으로 오르거나 한 단계 더 오를 때 · 댐 · 보 방류가 늘기 시작할 때(한 번씩).
+    관심 수위 밑으로 내려오면 다시 알릴 수 있게 지운다."""
+    new, st = [], dict(state)
+    for s in rows:
+        k, n = s["id"], s["name"]
+        if s["kind"] == "wl":
+            if s["up"] or "저수지" in n or s.get("stage", -1) < 0:
+                continue
+            if s["stage"] >= 2 and s["stage"] > st.get(k, 0):
+                new.append(f"{n} {STAGES[s['stage']]} 수위 도달 — {s['v']:.2f}m" + (f"(1시간 {s['d1h']:+g}m)" if s.get("d1h") else ""))
+                st[k] = s["stage"]
+            elif s["stage"] < 1:
+                st.pop(k, None)
+        elif s.get("rise"):
+            if not st.get(k):
+                new.append(f"{n} 방류 늘어남 — {s['out']:g}㎥/s(1시간 {s['d1h']:+g})" + (" · 낙동강 위쪽" if s["up"] else ""))
+                st[k] = 1
+        else:
+            st.pop(k, None)
+    return new, st
+
+
+async def _notify() -> None:
+    from . import aiwatch                                      # 순환 import 를 피해 부를 때 읽는다
+    if not aiwatch.ready() or not aiwatch.cfg()["on"]:
+        return
+    new, st = _diff_alerts(_LIVE["rows"], db.get_setting("river_alert", {}) or {})
+    if new:
+        await aiwatch.send("🌊 하천 · 댐 (홍수통제소 원시값)\n" + "\n".join("· " + x for x in new) + "\n공식 판단은 홍수통제소 발표로.")
+    db.put_setting("river_alert", st)                          # 보낸 뒤에 기억 — 보내다 실패하면 다음에 다시
+
+
 async def run() -> None:
     """스케줄러가 10분마다 부른다 — 키가 없거나 시연 서버면 건너뛴다."""
     if config.DEMO or not _key():
@@ -256,3 +309,8 @@ async def run() -> None:
     except Exception as e:                                    # noqa: BLE001
         _LIVE["err"] = str(e)[:160].replace(_key(), "***")
         log.warning("하천 수집 실패: %s", _LIVE["err"])
+        return
+    try:
+        await _notify()
+    except Exception as e:                                    # noqa: BLE001
+        log.warning("하천 알림 실패: %s", str(e)[:100].replace(_key(), "***"))

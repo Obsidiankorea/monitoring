@@ -13,7 +13,7 @@ from collections import Counter
 from datetime import datetime, timedelta
 from functools import lru_cache
 
-from . import ai
+from . import ai, river
 
 FAM_SHORT = {"산사태": "산사태", "하천": "하천", "지하공간": "지하공간", "침수·해안": "침수·해안", "야외·기타": "야외"}
 CONTACTS = ("연락처 · 담당자는 위키에 두지 않는다(실명 · 전화번호) → 원문에서: "
@@ -275,6 +275,9 @@ def report(base: str, sigun: str | None = None, mode: str = "all") -> dict:
                             for sg, d in own.items()) + " — 도 단계와 별개")
     wet = [r for r in rows if r["fc_sum"]]
     top_fc = max(wet, key=lambda r: r["fc_sum"]) if wet else None
+    rs = river.summary()
+    if rs:
+        sit.append(rs["text"])
     sit.append("앞으로 6시간: " + (f"가장 많은 곳 {top_fc['sigun']} {top_fc['fc_emd']} {top_fc['fc_sum']:g}㎜(최대 시간당 {top_fc['fc_peak']:g}㎜)"
                                 if top_fc else "비 예보 거의 없음"))
     relay = [r for r in rows if r["relay"]]
@@ -321,6 +324,10 @@ def _flash_sigun(s: dict, full: str) -> dict:
     if sd:
         txt += f" 비상단계 {sd['stage']}" + (f"(수동 입력 · 특보 기준 {sd['auto']})" if sd["set"] else "")
     txt += f" · 우려지역 기준: {rain or '닿은 곳 없음'}"
+    rv = s.get("river")
+    if rv and rv["stage"] >= 1:
+        txt += f" · 하천 {rv['name']} {ai.RV_NAME[rv['stage']]} 수위"
+        tone = max(tone, 3 if rv["stage"] >= 3 else rv["stage"])
     rank = {"긴급대피": 3, "사전대피": 2, "통제": 1}
     best = max(((rank[c["stage"]], c["st"] == "met", r["emd"], fam, c) for r in s["emd"] for fam, cs2 in r["ladders"].items()
                 for c in cs2 if c["st"] in ("met", "near") and c.get("gap")), key=lambda x: x[:2], default=None)
@@ -347,6 +354,10 @@ def _flash_all(o: dict, sits: list[dict], own: dict) -> dict:
         tone = max(tone, t)
     if hit:
         parts.append("우려지역 기준: " + _few(hit, 4))
+    rs = river.summary()
+    if rs and rs["n"]:
+        parts.append(f"하천 {rs['top']}" + (f" 외 {rs['n'] - 1}곳" if rs["n"] > 1 else ""))
+        tone = max(tone, 3 if rs["tone"] >= 3 else rs["tone"])
     if len(parts) == 1:
         parts.append("경남 전체 평시 — 호우특보 · 우려지역 기준 근접 없음")
     return {"tone": tone, "text": " · ".join(parts)}
@@ -362,6 +373,7 @@ def _report_sigun(base: str, sigun: str) -> dict:
     sd = ai.sigun_stage(sigun, s["alerts"], [p["name"] for p in s["pending"]], ai.overrides().get(sigun))
     sit.append("시군 비상단계: " + (ai.stage_text(sigun, sd) if sd else "이 시군의 매뉴얼은 위키에 아직 없다 — 도 기준만 본다"))
     sit.append("우려지역(위키): " + " · ".join(f"{FAM_SHORT[k]} {v}" for k, v in sorted(s["risk_total"].items(), key=lambda x: -x[1])))
+    sit.append(ai.river_text(s.get("river")))
     relay = [r for r in s["emd"] if r["relay"]]
     imp = []
     if relay:
@@ -375,6 +387,9 @@ def _report_sigun(base: str, sigun: str) -> dict:
     cbs = [r["emd"] for r in s["emd"] if r["cbs"]]
     if cbs:
         imp.append("긴급재난문자 기준 해당 가능: " + _few(cbs, 8))
+    rv = s.get("river")
+    if rv and rv["stage"] >= 2:
+        imp.append(f"하천 수위: {rv['name']} {ai.RV_NAME[rv['stage']]} 수위 이상({rv['wl']:.2f}m) — 하천변 통제 · 대피 판단 확인(홍수통제소 홍수정보)")
     if not imp:
         imp.append("기준에 닿은 곳 없음")
     full = ai.SIGUN_FULL.get(sigun, sigun)

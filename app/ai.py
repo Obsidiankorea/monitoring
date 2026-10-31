@@ -179,7 +179,31 @@ def rain_state(cs: list[dict]) -> tuple[int, str]:
     return tone, " · ".join(f"{g} {'충족' if st == 'met' else '근접'}" for g, st in items)
 
 
-def ladders(r: dict, night: bool, alerts: list[str]) -> dict:
+def river_of(sigun: str) -> dict | None:
+    """그 시군의 하천 수위(홍수통제소, app/river.py) — 기준 수위가 있는 관측소 가운데 가장 높은 단계(같으면 다음 단계까지 가장 가까운 곳).
+    저수지 수위계(해발 값)는 하천 기준과 견줄 수 없어 뺀다. 자료가 없으면 None."""
+    from . import river
+    rows = [s for s in river.status()["rows"] if s["kind"] == "wl" and s.get("sigun") == sigun and s.get("stage", -1) >= 0
+            and "저수지" not in s["name"] and (s["thr"][0] or 0) < 30]
+    if not rows:
+        return None
+    b = max(rows, key=lambda s: (s["stage"], -(s.get("gap") if s.get("gap") is not None else 99)))
+    dams = [s for s in river.status()["rows"] if s["kind"] != "wl" and (s.get("sigun") == sigun or (s.get("up") and s.get("rise")))]
+    return {"stage": b["stage"], "name": b["name"], "wl": b["v"], "thr": b["thr"], "gap": b.get("gap"), "d1h": b.get("d1h"),
+            "t": b.get("t"), "n": len(rows), "dams": [{k: d.get(k) for k in ("name", "out", "inf", "rise", "up")} for d in dams if d.get("out") is not None]}
+
+
+def _riv(rv: dict | None, need: int) -> tuple[str, dict | None]:
+    """하천 수위 단계(0 정상 · 1 관심 · 2 주의보 · 3 경보 · 4 심각)가 need 에 닿았나 → (st, gap). 한 단계 모자라면 근접."""
+    if not rv:
+        return "unknown", None
+    st = "met" if rv["stage"] >= need else "near" if rv["stage"] == need - 1 else "no"
+    t = rv["thr"][need - 1] if len(rv["thr"]) >= need else None
+    gap = _gap(_part(f"{rv['name']} 수위", rv["wl"], t, "m")) if (t and rv["wl"] is not None) else None
+    return st, gap
+
+
+def ladders(r: dict, night: bool, alerts: list[str], rv: dict | None = None) -> dict:
     """읍면동 하나 — [[통제·대피 기준]] 3대 유형 단계별 조건 대조(위키 표의 숫자 그대로).
     st 는 '그 조건에 닿았나', gap 은 '기준에서 얼마나 먼가'(비율 · 남은 양 · 닿는 시각)."""
     rain, fpk, f3 = r["rain"], r["fc_peak"], r["fc_run30"]
@@ -223,6 +247,9 @@ def ladders(r: dict, night: bool, alerts: list[str]) -> dict:
             {"stage": "긴급대피", "rule": "누적 200㎜↑ + 30㎜/h↑ 실제", "st": _all(_st(accum, 200), _st(o1, 30)),
              "gap": _gap(cum("일/누적", accum, 200), one("1시간", o1, 30, "㎜/h"))},
             {"stage": "긴급대피", "rule": "호우경보 발령", "st": "met" if "호우경보" in hoou else "no"},
+            # 홍수통제소 수위(app/river.py) — 시군 안 관측소 가운데 가장 높은 단계. 제방 만수위 90% · 교량 수위 90% · 댐 방류 예보는 자료가 없다
+            {"stage": "통제", "rule": "홍수주의보 수준 하천수위(주의보 수위↑, 홍수통제소)", "st": _riv(rv, 2)[0], "gap": _riv(rv, 2)[1]},
+            {"stage": "긴급대피", "rule": "홍수경보 수준 하천수위(경보 수위↑, 홍수통제소)", "st": _riv(rv, 3)[0], "gap": _riv(rv, 3)[1]},
         ],
         "지하공간": [
             {"stage": "통제", "rule": "(지하차도) 호우특보 발령", "st": "met" if hoou else "no"},
@@ -429,6 +456,7 @@ def situation(sigun: str, base: str = "http://127.0.0.1:8000") -> dict:
     now = datetime.strptime(tm, "%Y%m%d%H%M") if tm else datetime.now()
     night = now.hour >= 21 or now.hour < 6
 
+    rv = river_of(sigun)
     sites = _lookup()(wiki(), SIGUN_FULL.get(sigun, sigun), kind="all")
     by_emd: dict[str, list] = defaultdict(list)
     for s in sites["sites"]:
@@ -451,7 +479,7 @@ def situation(sigun: str, base: str = "http://127.0.0.1:8000") -> dict:
         row["relay"] = r1 >= 20 or r24 >= 100                               # [[시군 상황관리반 행동매뉴얼]] 상황전파
         fam = Counter(FAMILY_OF.get(s["유형"], "야외·기타") for s in by_emd.get(name, []))
         row["risk"] = dict(fam)
-        lad = ladders(row, night, mine)
+        lad = ladders(row, night, mine, rv)
         row["ladders"] = {k: v for k, v in lad.items() if fam.get(k)}       # 그 유형 우려지역이 있을 때만
         row["sites"] = []
         for rule, n in Counter(s["대피기준"] for s in by_emd.get(name, []) if FAMILY_OF.get(s["유형"]) == "산사태").most_common():
@@ -468,7 +496,7 @@ def situation(sigun: str, base: str = "http://127.0.0.1:8000") -> dict:
     return {
         "sigun": sigun, "tm": tm, "night": night, "rain_src": src, "fc_tmfc": fc.get("tmfc"),
         "ante": {k: an.get(k) for k in ("ok", "have", "want", "missing", "from", "to")},
-        "alerts": mine, "pending": pend, "stage": _stage(groups),
+        "alerts": mine, "pending": pend, "stage": _stage(groups), "river": rv,
         "risk_total": dict(Counter(FAMILY_OF.get(s["유형"], "야외·기타") for s in sites["sites"])),
         "emd": emds,
         "rules": {"cbs": "1시간 50㎜ + 3시간 90㎜ 동시, 또는 1시간 72㎜(기상청 긴급재난문자)",
@@ -476,7 +504,7 @@ def situation(sigun: str, base: str = "http://127.0.0.1:8000") -> dict:
                   "principle": "사전대피는 예보, 긴급대피는 실황 · 일몰 전 사전대피 · 그 유형 우려지역에만 적용"},
         "limits": ["지구 좌표가 없어 읍면동 안 가장 많이 온 격자(500m)로 견준다 — 지구 강우의 상한",
                    f"초단기 예보 시우량은 {RN1_CAP:g}㎜ 에서 막혀 온다 — 50·55㎜/h 예보 조건은 '모름'",
-                   "선행 5일 강우 · 토양함수 · 하천수위 · 침수심 · 예측정보(산림청 산사태 예보)는 여기 없다 — 따로 확인",
+                   "선행 5일 강우 · 토양함수 · 침수심 · 제방 만수위 · 교량 수위 · 댐 방류 예보 · 예측정보(산림청 산사태 예보)는 여기 없다 — 따로 확인(하천 수위는 홍수통제소 원시값을 연결했다)",
                    "기준 N% · 남은 ㎜ · 닿는 시각은 가장 먼 조건 기준이다 — 닿는 시각은 예보 시우량을 지금 누적에 더한 것이라 창에서 빠지는 옛 비는 빼지 않아 실제보다 이를 수 있다",
                    "목록에 없다고 위험이 없는 것이 아니다", "대피명령은 시장·군수·구청장 권한(재난안전법 제40조)",
                    sites["source_basis"]],
@@ -486,6 +514,23 @@ def situation(sigun: str, base: str = "http://127.0.0.1:8000") -> dict:
 
 
 STL = {"met": "충족", "near": "근접(70%↑)", "unknown": "모름", "no": "아님"}
+RV_NAME = ["정상", "관심", "주의보", "경보", "심각"]
+
+
+def river_text(rv: dict | None) -> str:
+    """하천 · 댐 한 줄(홍수통제소 원시값). 자료가 없으면 그렇게 적는다 — 없는 것을 정상으로 치지 않는다."""
+    if not rv:
+        return "하천 수위(홍수통제소): 이 시군은 기준 수위가 있는 관측소 자료가 없다 — 따로 확인"
+    s = f"하천 수위(홍수통제소 원시값): {rv['name']} {rv['wl']:.2f}m {RV_NAME[rv['stage']]}"
+    if rv.get("gap") is not None and rv["stage"] < 4:
+        s += f" · {RV_NAME[rv['stage'] + 1]} 수위까지 {rv['gap']}m"
+    if rv.get("d1h"):
+        s += f" · 1시간 {'+' if rv['d1h'] > 0 else ''}{rv['d1h']}m"
+    s += f" (기준 수위 있는 {rv['n']}곳 중 기준에 가장 가까운 곳)"
+    dm = [d for d in rv.get("dams") or [] if (d["out"] or 0) >= 1 or d["rise"]]
+    if dm:
+        s += " · 댐·보 방류: " + ", ".join(f"{d['name']} {round(d['out'], 1):g}㎥/s{'▲' if d['rise'] else ''}{'(위쪽)' if d['up'] else ''}" for d in dm[:4])
+    return s
 
 
 def _na(v):
@@ -504,6 +549,7 @@ def brief(s: dict, top: int = 4) -> str:
     out.append("상황전파 기준(20㎜/h · 일 100㎜): " + (", ".join(relay) if relay else "없음"))
     cbs = [r["emd"] for r in s["emd"] if r["cbs"]]
     out.append("재난문자 기준(실황): " + (", ".join(cbs) if cbs else "없음"))
+    out.append(river_text(s.get("river")))
     for r in s["emd"][:top]:
         rn = r["rain"]
         hit = [f"{fam} {c['stage']} '{c['rule']}' {STL[c['st']]}" + (f" ({gap_text(c)})" if gap_text(c) else "")
