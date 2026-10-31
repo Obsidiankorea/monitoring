@@ -32,7 +32,7 @@ from fastapi import Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import aiwatch, clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, serverupdate, sites, snaps, update
+from . import aiwatch, lawwatch, clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, serverupdate, sites, snaps, update
 from .collectors import alerts, bangjae_rain, forecast, grid_rain, qpf, rain, shortfc
 from .config import CACHE, INTERVALS, POLL_DEFAULT
 
@@ -146,6 +146,8 @@ async def lifespan(app: FastAPI):
                       id=kind, max_instances=1, coalesce=True)
     # AI 기준 근접 알림 — 5분마다 훑는다. 켜 둔 서버에서만 보낸다(설정 › AI 알림, 기본 끔 — aiwatch.py)
     sched.add_job(aiwatch.run, "interval", seconds=300, id="aiwatch", max_instances=1, coalesce=True)
+    # 법령 변경 감시 — 하루 한 번(LAW_OC 가 있는 서버에서만). 위키는 고치지 않고 제안 파일만 남긴다(app/lawwatch.py)
+    sched.add_job(lawwatch.run, "cron", hour=9, minute=10, id="lawwatch", max_instances=1, coalesce=True)
     # 하루 한 번 묵은 자료 치우기 — 안 하면 DB 와 이미지 캐시가 계속 자란다
     sched.add_job(_nightly, "cron", hour=4, minute=20, id="maint",
                   max_instances=1, coalesce=True)
@@ -458,6 +460,20 @@ async def api_grid_emdwin():
         raise HTTPException(404, str(e)) from e
 
 
+@app.get("/api/law")
+async def api_law():
+    """법령 변경 감시 — 켜졌나(LAW_OC) · 마지막으로 본 결과 · 제안 파일 목록."""
+    return lawwatch.status()
+
+
+@app.post("/api/law/run")
+async def api_law_run():
+    """지금 한 번 본다(시험용). 처음이면 기준만 기억하고 제안은 만들지 않는다."""
+    if not config.KEYS.get("LAW_OC"):
+        raise HTTPException(400, "LAW_OC 없음 — config/api_keys.txt")
+    return await lawwatch.run()
+
+
 @app.get("/api/ai/sigunstage")
 async def api_ai_sigunstage():
     """도 비상단계 + 시군 매뉴얼이 위키에 있는 시군(거제 · 통영)의 비상단계 — 지금 특보 기준에 사람이 바꾼 값을 얹어서."""
@@ -517,6 +533,15 @@ async def api_ai_report(sigun: str | None = None, base: str | None = None, mode:
     r["modes"] = [{"id": k, "label": v} for k, v in aireport.MODES]
     r.setdefault("mode", "all")
     return r
+
+
+@app.post("/api/ai/wiki/reset")
+async def api_ai_wiki_reset():
+    """위키 폴더 내용이 바뀐 뒤(tools/sync_wiki.sh) 위키에서 읽어 둔 것(우려지역 표 · 보고 캐시)을 비운다. 폴더 설정은 그대로."""
+    from . import ai
+    await asyncio.to_thread(ai.reset_wiki_cache)
+    aiwatch._SNAP["v"] = None
+    return ai.wiki_check(ai.wiki())
 
 
 @app.get("/api/settings/ai-wiki")
