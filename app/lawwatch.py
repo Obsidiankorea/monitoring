@@ -1,6 +1,6 @@
 """법령 변경 감시 — 위키가 인용하는 법령이 바뀌었거나 바뀔 예정이면 알리고, 위키를 고칠 '제안' 파일을 남긴다.
 
-하루 한 번(서버 한 곳) 법제처 국가법령정보 Open API 로 감시 목록(config/law_watch.json)의 법령마다 현행 · 시행예정을 본다.
+하루 한 번(서버 한 곳) 법제처 국가법령정보 Open API 로 감시 목록(config/law_watch.json)의 법령 · 행정규칙 · 자치법규마다 현행(법령은 시행예정도)을 본다.
   · 처음 한 번은 지금 값을 기준으로 기억만 한다(제안 없음).
   · 그 뒤 현행 법령일련번호 · 시행일이 바뀌었거나 새 '시행예정'이 생기면 제안 파일을 쓴다 — STATE/law/proposals/날짜-법령명.md
     (위키에서 그 법령을 인용하는 페이지 목록 · 원문 링크 · 할 일). **위키는 고치지 않는다** — 검토 · 반영은 사람이 위키 쪽에서 한다.
@@ -28,23 +28,39 @@ WATCH_FILE = config.ROOT / "config" / "law_watch.json"
 OUT = config.STATE / "law" / "proposals"
 
 
+# 감시 종류별 조회 — target(법제처 API 이름) · 응답 필드. 행정규칙은 시행예정 조회가 없어 현행만, 법령 · 자치법규는 nw=3 이 현행
+SPEC = {
+    "eflaw": {"name": "법령명한글", "serial": "법령일련번호", "promul": "공포일자", "nw": 3, "pend": True, "page": "법령"},
+    "admrul": {"name": "행정규칙명", "serial": "행정규칙일련번호", "promul": "발령일자", "nw": None, "pend": False, "page": "행정규칙"},
+    "ordin": {"name": "자치법규명", "serial": "자치법규일련번호", "promul": "공포일자", "nw": 3, "pend": False, "page": "자치법규"},
+}
+
+
+def _key(w: dict) -> str:
+    """상태 기억 키 — 법령은 예전처럼 이름 그대로, 나머지는 종류를 앞에 붙인다(이름이 겹쳐도 안 섞이게)."""
+    t = w.get("target", "eflaw")
+    return w["name"] if t == "eflaw" else f"{t}:{w['name']}"
+
+
 def watch_list() -> list[dict]:
     return json.loads(WATCH_FILE.read_text("utf-8"))["laws"]
 
 
-def _rows(obj) -> list[dict]:
-    """응답 어디에 있든 '법령명한글'을 가진 항목들(목록 하나면 dict, 여럿이면 list 로 오는 것을 모두 받는다)."""
+def _rows(obj, field: str) -> list[dict]:
+    """응답 어디에 있든 이름 필드(field)를 가진 항목들(목록 하나면 dict, 여럿이면 list 로 오는 것을 모두 받는다)."""
     if isinstance(obj, dict):
-        if "법령명한글" in obj:
+        if field in obj:
             return [obj]
-        return [r for v in obj.values() for r in _rows(v)]
+        return [r for v in obj.values() for r in _rows(v, field)]
     if isinstance(obj, list):
-        return [r for v in obj for r in _rows(v)]
+        return [r for v in obj for r in _rows(v, field)]
     return []
 
 
-def _fetch(name: str, nw: int) -> list[dict]:
-    """법령 목록 조회(target=eflaw) — nw 3 = 현행 · 2 = 시행예정. 법령명이 정확히 같은 것만."""
+def _fetch(w: dict, nw: int | None) -> list[dict]:
+    """목록 조회 — nw 3 = 현행 · 2 = 시행예정(법령). 이름이 정확히 같은 것만(자치법규는 w['org'] 가 있으면 그 지자체만)."""
+    t = w.get("target", "eflaw")
+    name, f = w["name"], SPEC[t]["name"]
     oc = config.KEYS.get("LAW_OC")
     if not oc:
         raise RuntimeError("LAW_OC 없음 — config/api_keys.txt")
@@ -52,24 +68,25 @@ def _fetch(name: str, nw: int) -> list[dict]:
     for url in URLS:                                       # https 가 안 되면 http(법제처 안내 예시는 http)
         try:
             r = httpx.get(url, timeout=30, verify=config.VERIFY_SSL,
-                          params={"OC": oc, "target": "eflaw", "type": "JSON", "query": name, "nw": nw, "display": 100})
+                          params={"OC": oc, "target": t, "type": "JSON", "query": name, "display": 100} | ({"nw": nw} if nw else {}))
             r.raise_for_status()
             try:
                 body = r.json()
             except ValueError:
                 raise RuntimeError(r.text[:120].strip() or "JSON 이 아닌 응답")
-            return [x for x in _rows(body) if x.get("법령명한글") == name]
+            return [x for x in _rows(body, f) if x.get(f) == name and w.get("org", "") in x.get("지자체기관명", w.get("org", ""))]
         except (httpx.HTTPError, RuntimeError) as e:
             err = e
     raise RuntimeError(f"{name}: {str(err)[:150]}")
 
 
-def _snap(name: str) -> dict:
-    cur = _fetch(name, 3)
-    pend = _fetch(name, 2)
+def _snap(w: dict) -> dict:
+    sp = SPEC[w.get("target", "eflaw")]
+    cur = _fetch(w, sp["nw"])
+    pend = _fetch(w, 2) if sp["pend"] else []
     c = cur[0] if cur else {}
-    return {"serial": c.get("법령일련번호"), "enforce": c.get("시행일자"), "promul": c.get("공포일자"), "kind": c.get("제개정구분명"),
-            "pending": sorted(f"{p.get('법령일련번호')}|{p.get('시행일자')}|{p.get('제개정구분명')}" for p in pend)}
+    return {"serial": c.get(sp["serial"]), "enforce": c.get("시행일자"), "promul": c.get(sp["promul"]), "kind": c.get("제개정구분명"),
+            "pending": sorted(f"{p.get(sp['serial'])}|{p.get('시행일자')}|{p.get('제개정구분명')}" for p in pend)}
 
 
 def _changes(name: str, old: dict | None, new: dict) -> list[str]:
@@ -106,16 +123,18 @@ def _cites(name: str, aliases: list[str]) -> list[str]:
     return hit
 
 
-def _write(name: str, aliases: list[str], lines: list[str], now: datetime) -> Path:
+def _write(w: dict, lines: list[str], now: datetime) -> Path:
+    name, aliases = w["name"], w.get("aliases", [])
+    t = w.get("target", "eflaw")
     OUT.mkdir(parents=True, exist_ok=True)
     f = OUT / f"{now:%Y-%m-%d}-{re.sub(r'[^0-9A-Za-z가-힣]+', '_', name)}.md"
     cites = _cites(name, aliases)
     f.write_text("\n".join([
-        "---", "type: 제안", "status: 검토대기", f"법령: {name}", f"감지일: {now:%Y-%m-%d}", "---",
+        "---", "type: 제안", "status: 검토대기", f"법령: {name}", f"종류: {SPEC[t]['page']}", f"감지일: {now:%Y-%m-%d}", "---",
         f"# 법령 변경 감지 — {name}", "",
         *[f"- {x}" for x in lines], "",
         "## 위키에서 이 법령을 인용하는 페이지", *([f"- [[{c}]]" for c in cites] or ["- (찾지 못함)"]), "",
-        f"## 원문\n- https://www.law.go.kr/법령/{quote(name)}", "",
+        f"## 원문\n- https://www.law.go.kr/{SPEC[t]['page']}/{quote(name)}", "",
         "## 할 일", "1. 원문(신구조문 대비)으로 바뀐 조문을 확인한다.",
         "2. 위 페이지의 해당 조문 · 판본 · 기준일을 고친다(숫자는 원문에서만).", "3. [[log]] 에 한 줄 적고 이 파일의 status 를 `처리됨`으로 바꾼다.", ""]), "utf-8")
     return f
@@ -128,20 +147,20 @@ def check(now: datetime | None = None) -> dict:
     first = not state
     changed, errors = [], []
     for w in watch_list():
-        name = w["name"]
+        name, sk = w["name"], _key(w)
         try:
-            new = _snap(name)
+            new = _snap(w)
         except RuntimeError as e:
             errors.append(str(e))
             continue
         if not new["serial"] and not new["pending"]:
             errors.append(f"{name}: 법제처 목록에 없다(법령명 확인)")
             continue
-        lines = _changes(name, state.get(name), new)
+        lines = _changes(name, state.get(sk), new)
         if lines:
-            _write(name, w.get("aliases", []), lines, now)
+            _write(w, lines, now)
             changed.append((name, lines))
-        state[name] = new
+        state[sk] = new
     db.put_setting("law_state", state)
     return {"checked": len(watch_list()), "changed": changed, "errors": errors, "first": first}
 
