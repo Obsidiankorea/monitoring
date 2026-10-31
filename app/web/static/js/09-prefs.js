@@ -457,13 +457,23 @@ $("prefs").addEventListener("click", async ev => {
   b.disabled = false;
 });
 /* API 키 — 서버 config/api_keys.txt 를 고친다. 값은 받아 오지 않고 설정 여부 · 끝 네 글자만 */
+/* 줄 아래 한 줄 — 만료 · 상태 · 발급처 · 정리 문서(docs/api/*.md 맨 위 칸에서 읽어 온 것) */
+function keyInfo(k) {
+  const d = k.dday, ex = k.expire
+    ? (d == null ? escH(k.expire) : `<span${d <= 30 ? ' class="warnx"' : ""}>만료 ${escH(k.expire)} (${d >= 0 ? `D-${d}` : `${-d}일 지남`})</span>`)
+    : '<span class="warnx">만료일 미기재</span>';
+  return [ex, k.state && escH(k.state), k.acct && `계정 ${escH(k.acct)}`,
+    /^https:\/\//.test(k.site) && `<a href="${escH(k.site)}" target="_blank" rel="noopener">발급처 ↗</a>`,
+    `<a href="/api/keydoc/${escH(k.doc)}" target="_blank" rel="noopener">정리 문서 ↗</a>`].filter(Boolean).join(" · ");
+}
 function keysPaint(j, msg = "") {
   const box = $("pf-keys");
   if (!box) return;
   box.innerHTML = (j?.keys || []).map(k => `<div class="row" data-key="${k.name}"><span class="k" style="width:190px" title="${escH(k.use)}">${escH(k.label)}</span>
       <span class="note" style="width:84px">${k.set ? `설정됨${k.tail ? ` ···${escH(k.tail)}` : ""}` : "없음"}</span>
       <input type="password" autocomplete="off" spellcheck="false" placeholder="새 값" style="flex:1;min-width:0;font:inherit"${j.demo ? " disabled" : ""}>
-      <button type="button" data-ks="save"${j.demo ? " disabled" : ""}>저장</button>${k.set ? `<button type="button" data-ks="del"${j.demo ? " disabled" : ""}>지우기</button>` : ""}</div>`).join("")
+      <button type="button" data-ks="save"${j.demo ? " disabled" : ""}>저장</button>${k.set ? `<button type="button" data-ks="del"${j.demo ? " disabled" : ""}>지우기</button>` : ""}</div>
+      <div class="row"><span class="k" style="width:190px"></span><span class="note">${keyInfo(k)}</span></div>`).join("")
     + (msg ? `<div class="row"><span class="note">${msg}</span></div>` : "");
 }
 async function loadKeys() {

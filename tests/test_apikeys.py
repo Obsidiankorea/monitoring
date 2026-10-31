@@ -36,3 +36,13 @@ def test_status_never_returns_the_value(keys):
     st = {k["name"]: k for k in apikeys.status()}
     assert st["DATA_GO_KR_KEY"]["set"] and st["DATA_GO_KR_KEY"]["tail"] == "1234" and "abcdefghij" not in str(st)
     assert not st["LAW_OC"]["set"]
+
+
+def test_every_key_has_a_doc_with_front_matter():
+    for name, _, _, doc in apikeys.EDITABLE:
+        f = apikeys.front(doc)
+        assert f.get("발급처") and f.get("관리URL", "").startswith("https://"), (name, doc)
+        assert name in f.get("키이름", ""), (name, doc)
+    assert apikeys.dday("2000-01-01") < 0 and apikeys.dday("없음") is None
+    row = next(r for r in apikeys.status() if r["name"] == "HRFCO_KEY")
+    assert row["doc"] == "hrfco" and row["site"].startswith("https://")

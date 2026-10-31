@@ -29,7 +29,7 @@ from pathlib import Path
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, HTTPException, Query
 from fastapi import Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from . import aiwatch, apikeys, lawwatch, river, clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, serverupdate, sites, snaps, update
@@ -489,6 +489,17 @@ async def api_river():
 async def api_keys():
     """설정 › API 키 — 어떤 키가 설정돼 있나(값은 주지 않는다: 설정됨 · 끝 네 글자만)."""
     return {"keys": apikeys.status(), "demo": config.DEMO}
+
+
+@app.get("/api/keydoc/{slug}")
+async def api_keydoc(slug: str):
+    """설정 › API 키 줄의 '문서' 링크 — docs/api/ 의 정리 문서(마크다운 글 그대로). 목록에 있는 이름만."""
+    if slug not in apikeys.SLUGS and slug != "00-목록":
+        raise HTTPException(404)
+    try:
+        return PlainTextResponse((apikeys.DOCS / f"{slug}.md").read_text("utf-8-sig"))
+    except OSError as e:
+        raise HTTPException(404) from e
 
 
 @app.put("/api/keys")

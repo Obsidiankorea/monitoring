@@ -6,28 +6,50 @@
 from __future__ import annotations
 
 import os
+import re
+from datetime import date
 
 from . import config
 
-# (이름, 화면에 보일 말, 어디에 쓰나)
+# (이름, 화면에 보일 말, 어디에 쓰나, docs/api/ 안 문서 이름) — 만료 · 발급처 · 계정은 그 문서 맨 위 칸에서 읽는다
 EDITABLE = [
-    ("ORG_API_KEY", "기상청 API허브(기관용)", "특보 · 격자 · 관측 수집 전부"),
-    ("LAW_OC", "법제처 국가법령정보(OC)", "법령 · 행정규칙 · 자치법규 변경 감시 — 서버 공인 IP 등록 필요"),
-    ("HRFCO_KEY", "홍수통제소(HRFCO)", "하천 수위 · 댐 · 보 · 홍수예보 — 지도 레이어 '하천·댐'"),
-    ("DATA_GO_KR_KEY", "공공데이터포털", "산림청 산사태 예보(승인 뒤)"),
-    ("TELEGRAM_BOT_TOKEN", "텔레그램 봇 토큰", "AI 알림 · 법령 알림"),
-    ("TELEGRAM_CHAT_ID", "텔레그램 채팅 번호", "알림 받을 곳"),
+    ("ORG_API_KEY", "기상청 API허브(기관용)", "특보 · 격자 · 관측 수집 전부", "kma-apihub"),
+    ("LAW_OC", "법제처 국가법령정보(OC)", "법령 · 행정규칙 · 자치법규 변경 감시 — 서버 공인 IP 등록 필요", "law-go-kr"),
+    ("HRFCO_KEY", "홍수통제소(HRFCO)", "하천 수위 · 댐 · 보 · 홍수예보 — 지도 레이어 '하천·댐'", "hrfco"),
+    ("DATA_GO_KR_KEY", "공공데이터포털", "산림청 산사태 예보(승인 뒤)", "data-go-kr"),
+    ("TELEGRAM_BOT_TOKEN", "텔레그램 봇 토큰", "AI 알림 · 법령 알림", "telegram"),
+    ("TELEGRAM_CHAT_ID", "텔레그램 채팅 번호", "알림 받을 곳", "telegram"),
 ]
-NAMES = {n for n, _, _ in EDITABLE}
+NAMES = {n for n, *_ in EDITABLE}
+DOCS = config.ROOT / "docs" / "api"
+SLUGS = {d for *_, d in EDITABLE}
 FILE = config.ROOT / "config" / "api_keys.txt"
+
+
+def front(slug: str) -> dict:
+    """문서 맨 위 `---` 칸(줄마다 `이름: 값`)을 읽는다. 문서가 없거나 칸이 없으면 빈 값."""
+    try:
+        t = (DOCS / f"{slug}.md").read_text("utf-8-sig")
+    except OSError:
+        return {}
+    m = re.match(r"---\r?\n(.*?)\r?\n---", t, re.S)
+    return {k.strip(): v.strip() for k, _, v in (ln.partition(":") for ln in m.group(1).splitlines())} if m else {}
+
+
+def dday(text: str) -> int | None:
+    try:
+        return (date.fromisoformat(text) - date.today()).days
+    except ValueError:
+        return None
 
 
 def status() -> list[dict]:
     out = []
-    for name, label, use in EDITABLE:
-        v = config.KEYS.get(name, "")
+    for name, label, use, doc in EDITABLE:
+        v, f = config.KEYS.get(name, ""), front(doc)
         out.append({"name": name, "label": label, "use": use, "set": bool(v), "tail": v[-4:] if len(v) > 8 else "",
-                    "env": bool(os.environ.get(name))})
+                    "env": bool(os.environ.get(name)), "doc": doc, "site": f.get("관리URL", ""), "acct": f.get("계정", ""),
+                    "expire": f.get("만료", ""), "dday": dday(f.get("만료", "")), "state": f.get("상태", "")})
     return out
 
 
