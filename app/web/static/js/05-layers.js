@@ -516,7 +516,7 @@ function swFit(G, w, h) {
 }
 function placeSw() {
   const box = $("sw");
-  if (box.hidden || !V || box.classList.contains("drag")) return;
+  if (box.hidden || !V?.W || !V.H || box.classList.contains("drag")) return;   // 판 크기 0(숨은 창으로 열림) — 재면 boot 가 끊긴다. 크기가 잡히면 relayout 이 다시 부른다
   let x, y;
   if (SWPOS) {
     box.classList.toggle("tall", !!SWPOS.tall);

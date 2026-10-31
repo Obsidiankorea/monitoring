@@ -898,7 +898,6 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 #over #emd path { fill: none; stroke: var(--ink-2); stroke-width: 1.1; stroke-linejoin: round; opacity: .55; }
 #over .en { font-weight: 600; fill: var(--ink-2); text-anchor: middle; dominant-baseline: central; }
 #over .en .pc { fill: var(--lv-warn); font-weight: 700; }
-#stg path { pointer-events: none; stroke: none; }
 /* 날아가는 동안 — 선은 viewBox 로 같이 커지되 굵기는 그대로, 글자·점은 잠깐 감췄다가 다 오면 새로 그린다 */
 #stage.zooming #mapwrap path { vector-effect: non-scaling-stroke; }
 #over :is(#names, #labels, #stns, #rivr, #wbadge, #ranks, #hot, #emdn) { transition: opacity .25s; }

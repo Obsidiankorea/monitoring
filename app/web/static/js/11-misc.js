@@ -187,7 +187,6 @@ function wEmdPct() {                                       // "시군|읍면동"
   return m;
 }
 const STG_C = { "평시": "c0", "평시 및 초기대응": "c0", "준비(관심)": "c1", "비상 1단계": "c2", "비상 2단계": "c3", "비상 3단계": "c4", "비상 2·3단계": "c34" };
-const STG_RGB = { c0: "143,214,138", c1: "110,195,238", c2: "240,207,58", c3: "242,147,58", c4: "229,72,58", c34: "235,110,58" };   // 지도 음영 — 위기경보 관심 Blue · 주의 Yellow · 경계 Orange · 심각 Red
 const wStg = n => WATCH?.stages?.[n] || null;               // 시군 비상단계(매뉴얼이 위키에 있는 시군만) {stage, auto, why, set, do, ...}
 const stgChip = d => d ? `<span class="stg ${STG_C[d.stage] || "c0"}${d.std ? " std" : ""}" title="${escH((d.set ? `수동 입력 — 특보 기준 ${d.auto}: ${d.why}` : d.why) + (d.std ? " · 거제시 매뉴얼 준용(이 시군 매뉴얼은 위키에 아직 없다)" : ""))}">${escH(d.stage)}${d.set ? " ✎" : ""}</span>` : "";
 function wSigun() {                                        // 시군 → { g: 'e'|'c', s: 가장 센 단계(1~3), near: 충족 없이 근접만 }
@@ -209,16 +208,7 @@ function paintWatch() {
     if (d) t.classList.add("s" + d.s);
     t.textContent = d ? `${WG[d.g].ic} ${n}` : n;
   }
-  drawStageShade();
   try { drawStations(); } catch {}                         // 읍면동 이름 옆 기준 N% 를 새 값으로
-}
-function drawStageShade() {                                // 시군 비상단계 음영 — 매뉴얼이 위키에 있는 시군만(위기경보 Blue · Yellow · Orange · Red, 평시 연두)
-  const g = $("stg");
-  if (!g || !FEAT || !PATH) return;
-  g.innerHTML = FEAT.filter(ft => wStg(ft.properties.sigun)).map(ft => {
-    const n = ft.properties.sigun, d = wStg(n), c = STG_C[d.stage] || "c0";
-    return `<path d="${PATH(ft)}" fill="rgba(${STG_RGB[c]},${c === "c0" ? 0.16 : 0.32})"><title>${escH(n)} ${escH(d.stage)}</title></path>`;
-  }).join("");
 }
 function watchPaintList(g) {
   const pop = $("ly-risk-pop-" + g), items = wItems(g), by = {};
@@ -305,7 +295,7 @@ $("ly-fc-pop").addEventListener("change", async ev => {      // 사람이 시군
     const r = await fetch("/api/ai/sigunstage", { method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sigun: sel.dataset.stg, stage: sel.value || null }) });
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.status);
-    await loadWatch();                                       // 칩 · 지도 음영을 새 값으로
+    await loadWatch();                                       // 칩을 새 값으로
     fcLoad();
   } catch (e) {
     sel.disabled = false;
