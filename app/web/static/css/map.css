@@ -1,0 +1,1291 @@
+/* 토큰은 index.html 과 같은 이름·같은 값이다. 한쪽만 고치지 않는다. */
+:root {
+  --ground: #090D13; --panel: #111823; --panel-2: #18202C; --raised: #1E2836;
+  --line: #222D3C; --line-soft: #1A2330;
+  --ink: #E8EEF6; --ink-2: #94A5B8; --ink-3: #5C6D80;
+  --accent: #2FA3DC;
+  /* 누적 막대 — 실측 · 그중 최근 1시간(빗금 두 색) */
+  --acc-past: #2280B8; --acc-h1a: #96DBF6; --acc-h1b: #2FA3DC;
+  --acc-kma: #1F9E8C; --acc-kma-h1a: #A6EBDD; --acc-kma-h1b: #2DBBA4;
+  --rain-0: #16202C; --rain-1: #1B3A55; --rain-2: #1E5B87; --rain-3: #2280B8;
+  --rain-4: #2FA3DC; --rain-5: #5EC3EE; --rain-6: #96DBF6; --rain-7: #D7F0FC;
+  --lv-fail: #FF8A5B; --lv-ok: #3FB98A;
+
+  /* 지도 전용 */
+  --sea: #090D13;
+  --land: #131B26;
+  --land-nb: #0F151D;
+  --bd: #A6B6C9;          /* 시군 경계 — 강수 청색 위에서도 보이게 밝게, 밑에 어두운 테두리(--bd-halo) */
+  --bd-halo: rgba(9, 13, 19, .78);
+  --coast: #8A9CB2;       /* 해안선·바깥 경계 — ⚠️ #4F6178 은 청색 칸 위에서 묻혀 땅 · 바다가 안 갈렸다(10-25) */
+  --zone: #A9BACD;        /* 권역 경계 */
+  --halo: #090D13;        /* 글자 테두리 — 칠해진 칸 위에서도 읽히게 */
+  --hatch: #8093A8;       /* 결측 빗금 */
+  --nb-ink: #56677B;
+  /* 특보 예약색 — 특보에만 쓴다(index.html 과 같은 값). 강수는 청색 면, 특보는 이 색의 **선**이다 */
+  --lv-watch: #E8B23A;    /* 주의보 */
+  --lv-warn: #F2543D;     /* 경보 */
+  --lv-severe: #A265E8;   /* 중대경보 */
+  --lv-pre: #6E7FA6;      /* 예비특보 */
+  /* 테스트 모드 — **색을 쓰지 않는다.** 보라로 뒀더니 특보(중대경보 보라)를 켜자 헷갈렸다 */
+  --test: #8A94A4;
+  --on-accent: #06121B;
+
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --sans: "IBM Plex Sans KR", system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --ease: cubic-bezier(.2, .8, .2, 1);
+
+  /* 지도 강수 램프(지도 전용 — 종합 화면 --rain-* 과 따로). **약한 쪽은 땅(바탕) 색에 가깝게** — 거의 안 온 곳
+     (0.1 · 1㎜)은 바탕에 묻히고, 오는 곳만 밝게 솟는다(10-24). ⚠️ 예전에는 --rain-1(#1B3A55)부터 또렷한 남색이라
+     0.1~10㎜ 가 넓게 파랗게 칠해져 많이 오는 곳이 안 갈렸다 */
+  --map-r1: #172230; --map-r2: #1A3148; --map-r3: #1C496E; --map-r4: #216799;
+  --map-r5: #2C8DC9; --map-r6: #5EC3EE; --map-r7: #CBEDFB;
+  --h1-hi: #8ED8F8; --h1-top: #FFFFFF;     /* 강수 누적 1h — 10㎜ 넘으면 밝게, 20㎜ 넘으면 흰 글자 */
+}
+:root[data-theme="light"] {
+  --ground: #EEF2F7; --panel: #FFFFFF; --panel-2: #F5F8FC; --raised: #E8EEF6;
+  --line: #D3DCE7; --line-soft: #E5EBF3;
+  --ink: #101821; --ink-2: #47596D; --ink-3: #7688A0;
+  --accent: #1B7FBF;
+  --acc-past: #4A8CC4; --acc-h1a: #0E4A73; --acc-h1b: #2E86C2;
+  --acc-kma: #3AA897; --acc-kma-h1a: #0C5C50; --acc-kma-h1b: #2E9E8C;
+  --rain-0: #F1F5FA; --rain-1: #DDEDF8; --rain-2: #BADCF1; --rain-3: #86C0E4;
+  --rain-4: #2E86C2; --rain-5: #1B6698; --rain-6: #0E4A73; --rain-7: #073050;
+  --lv-fail: #C4521E; --lv-ok: #12805A;
+  --sea: #E2E9F1;
+  --land: #FFFFFF;
+  --land-nb: #F2F5F9;
+  --bd: #56677D; --bd-halo: rgba(255, 255, 255, .85);
+  --coast: #6C7D92;
+  --zone: #2E3D50;
+  --halo: #FFFFFF;
+  --hatch: #6A7C92;
+  --nb-ink: #8C9BAE;
+  --on-accent: #FFFFFF;
+  --lv-watch: #C08400; --lv-warn: #CF3320; --lv-severe: #7B3FBF; --lv-pre: #5A6C8C;
+  --test: #7A8494;
+  --map-r1: #EDF3F9; --map-r2: #D3E6F5; --map-r3: #A5CDEB; --map-r4: #66A9DA;
+  --map-r5: #2E86C2; --map-r6: #1B6698; --map-r7: #0B3F66;
+  --h1-hi: #1B6698; --h1-top: #0B3F66;
+}
+/* 회색 테마 — 어두운 회색 바탕 · 조금 밝은 회색 판(밝게는 너무 눈부시고 어둡게는 너무 까맣다는 말에 10-24 더함).
+   글자가 밝은 쪽이라 강수 램프는 어둡게처럼 값이 클수록 밝다. 첫 칸은 회색 땅에서 갈라지게 어둡게보다 한 톤 밝힌다.
+   index.html 의 같은 블록과 같은 값이다 — 한쪽만 고치지 않는다 */
+:root[data-theme="gray"] {
+  --ground: #2B2F35; --panel: #363B42; --panel-2: #3E444C; --raised: #474E57;
+  --line: #4C535D; --line-soft: #41474F;
+  --ink: #F1F3F6; --ink-2: #BCC4CE; --ink-3: #8C96A2;
+  --accent: #4DB3E6;
+  --acc-past: #2E86C2; --acc-h1a: #A0DCF6; --acc-h1b: #3FA4DD;
+  --acc-kma: #22A592; --acc-kma-h1a: #A6EBDD; --acc-kma-h1b: #2DBBA4;
+  --rain-0: #3A4048; --rain-1: #2E5878; --rain-2: #2C6E9E; --rain-3: #2E86C2;
+  --rain-4: #3FA4DD; --rain-5: #6CC4EE; --rain-6: #A0DCF6; --rain-7: #DDF2FC;
+  --lv-fail: #FF9A70; --lv-ok: #4FCB9A;
+  --sea: #2B2F35;
+  --land: #383D44;
+  --land-nb: #32363C;
+  --bd: #C3CCD6; --bd-halo: rgba(30, 33, 38, .75);
+  --coast: #A0AAB6;
+  --zone: #D3DAE2;
+  --halo: #2B2F35;
+  --hatch: #949FAC;
+  --nb-ink: #7F8995;
+  --on-accent: #06121B;
+  --test: #9AA3B0;
+  --map-r1: #3D444D; --map-r2: #3A5069; --map-r3: #326A93; --map-r4: #2F82BE;
+  --map-r5: #3FA4DD; --map-r6: #8AD2F3; --map-r7: #E0F4FD;
+  --h1-hi: #9EDDF8; --h1-top: #FFFFFF;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  display: flex; flex-direction: column;
+  background: var(--ground); color: var(--ink);
+  font-family: var(--sans); font-size: 14px; line-height: 1.4;
+  -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums;
+  overflow: hidden;
+}
+button { font-family: inherit; }
+
+/* ── 지도 위 제목(머리줄 대신) — 왼쪽 위에 떠 있다. 누르면 층 메뉴(실측 · 예측)가 내려온다 ── */
+#lefttop { position: absolute; left: 18px; top: 14px; z-index: 6; display: flex; flex-direction: column;
+  align-items: flex-start; gap: 12px; pointer-events: none; }
+#lefttop > * { pointer-events: auto; }
+#hud { color: var(--ink); text-shadow: 0 0 3px var(--halo), 0 0 9px var(--halo), 0 0 16px var(--halo); }
+.ttl-wrap { position: relative; display: inline-block; }
+#ttl { display: inline-flex; align-items: center; gap: 6px; margin: -4px 0 0 -10px; padding: 3px 10px 3px 10px;
+  border: 1px solid transparent; border-radius: 12px; background: transparent; color: inherit; cursor: pointer;
+  font: 700 30px/1.15 var(--sans); letter-spacing: -.015em; text-shadow: inherit;
+  transition: background .2s, border-color .2s, box-shadow .2s; }
+#ttl:hover, #ttl[aria-expanded="true"] { background: color-mix(in oklab, var(--panel) 72%, transparent);
+  border-color: var(--line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 8px 26px rgba(0,0,0,.22); text-shadow: none; }
+#ttl .chev { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round;
+  stroke-linejoin: round; opacity: .55; transition: transform .3s var(--ease), opacity .2s; }
+#ttl:hover .chev { opacity: .9; }
+#ttl[aria-expanded="true"] .chev { transform: rotate(180deg); opacity: .9; }
+/* 층을 바꾸면 제목이 아래에서 스며 올라온다 */
+#lname.swap { animation: ttlin .42s var(--ease); }
+@keyframes ttlin { from { opacity: 0; transform: translateY(7px); filter: blur(3px); } to { opacity: 1; transform: none; filter: none; } }
+.hud-sub { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 3px; }
+#ltime { font: 600 18px var(--mono); white-space: nowrap; }
+#lsrc { font-size: 12.5px; color: var(--ink-2); margin-top: 3px; white-space: nowrap; cursor: pointer; }
+/* 출처 줄 — 누르면 접는다(작은 '출처 ▸'만), 다시 누르면 편다. 이 화면(브라우저)마다 기억 */
+#lsrc.fold { font-size: 0; }
+#lsrc.fold::before { content: "출처 ▸"; font-size: 11px; color: var(--ink-3); }
+#badges { display: inline-flex; gap: 6px; text-shadow: none; }
+.badge {
+  display: inline-block; font-size: 13px; font-weight: 600; padding: 2px 9px; border-radius: 6px;
+  border: 1px solid var(--line); color: var(--ink-2); white-space: nowrap;
+  background: color-mix(in oklab, var(--panel) 70%, transparent);
+}
+.badge.warn { color: var(--lv-fail); border-color: color-mix(in oklab, var(--lv-fail) 55%, var(--line)); }
+.badge.test { color: #fff; background: var(--test); border-color: var(--test); }
+.badge.past { color: var(--accent); border-color: color-mix(in oklab, var(--accent) 50%, var(--line)); }
+.badge.srv { color: var(--accent); border-color: color-mix(in oklab, var(--accent) 50%, var(--line)); font-size: 12px; }
+.badge.snap { color: #fff; background: #7B5CD6; border-color: #7B5CD6; }
+/* 층 메뉴 — 유리판이 제목 밑에서 살짝 커지며 내려오고, 줄이 하나씩 따라 들어온다 */
+#lmenu { position: absolute; left: -10px; top: calc(100% + 8px); z-index: 30; width: 360px; padding: 6px;
+  border-radius: 14px; border: 1px solid var(--line); text-shadow: none;
+  background: color-mix(in oklab, var(--panel) 90%, transparent);
+  backdrop-filter: blur(18px) saturate(140%); -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: 0 24px 60px rgba(0,0,0,.38), 0 2px 8px rgba(0,0,0,.18);
+  transform-origin: 28px -10px; opacity: 0; transform: translateY(-8px) scale(.965); visibility: hidden;
+  transition: opacity .18s var(--ease), transform .26s var(--ease), visibility 0s .26s; }
+#lmenu.open { opacity: 1; transform: none; visibility: visible; transition: opacity .18s var(--ease), transform .26s var(--ease); }
+#lmenu .g { display: flex; align-items: baseline; gap: 8px; padding: 9px 12px 4px;
+  font: 700 11px var(--sans); letter-spacing: .14em; color: var(--ink-3); }
+#lmenu .g + .it { margin-top: 0; }
+/* 자료 스위치(격자 500m | AWS) — 실측 머리 오른쪽. 1시간 · 누적 줄과 오른쪽 '강수 누적' 카드가 같이 바뀐다 */
+#lmenu .g .src { margin-left: auto; display: inline-flex; align-items: center; letter-spacing: 0; font: 600 11.5px var(--sans);
+  border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+#lmenu .g .src b { padding: 3px 9px; color: var(--ink-3); cursor: pointer; font-weight: 600; }
+#lmenu .g .src b:hover { color: var(--ink); }
+#lmenu .g .src b.on { background: color-mix(in oklab, var(--accent) 24%, transparent); color: var(--ink); }
+#lmenu .g .src kbd { font: 600 10px var(--mono); color: var(--ink-3); padding: 0 7px; border-left: 1px solid var(--line); }
+/* 실시간 감시(R) — 자료 스위치 옆. 켜면 AWS 누적 · 1시간이 1분마다(끄면 정시마다), 초록 점이 숨 쉰다 */
+#lmenu .g .live { display: inline-flex; align-items: center; gap: 6px; margin-left: 6px; letter-spacing: 0; cursor: pointer;
+  font: 600 11.5px var(--sans); color: var(--ink-3); border: 1px solid var(--line); border-radius: 7px; padding: 0 0 0 8px; }
+#lmenu .g .live:hover { color: var(--ink); }
+#lmenu .g .live i { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); opacity: .6; }
+#lmenu .g .live.on { color: var(--ink); border-color: color-mix(in oklab, var(--lv-ok) 55%, var(--line));
+  background: color-mix(in oklab, var(--lv-ok) 14%, transparent); }
+#lmenu .g .live.on i { background: var(--lv-ok); opacity: 1; animation: pulse 2.4s infinite; }
+#lmenu .g .live kbd { font: 600 10px var(--mono); color: var(--ink-3); padding: 3px 7px; border-left: 1px solid var(--line); }
+.badge.live { color: var(--lv-ok); border-color: color-mix(in oklab, var(--lv-ok) 55%, var(--line)); cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px; }
+.badge.live i { width: 7px; height: 7px; border-radius: 50%; background: var(--lv-ok); animation: pulse 2.4s infinite; }
+/* 줄 안 작은 단추 — 1시간의 5km 실황, 단기의 오늘 · 내일 */
+#lmenu .it .chips { display: flex; gap: 5px; margin-top: 5px; }
+#lmenu .it .chip { font: 600 11.5px var(--sans); padding: 2px 8px; border: 1px solid var(--line); border-radius: 6px;
+  color: var(--ink-2); cursor: pointer; }
+#lmenu .it .chip:hover { color: var(--ink); border-color: color-mix(in oklab, var(--accent) 55%, var(--line)); }
+#lmenu .it .chip.on { color: var(--ink); border-color: var(--accent); background: color-mix(in oklab, var(--accent) 20%, transparent); }
+#lmenu .it .chip kbd { font: 600 10px var(--mono); color: var(--ink-3); margin-left: 3px; }
+#lmenu .it { position: relative; display: grid; grid-template-columns: 1fr auto 22px; align-items: center; gap: 12px;
+  width: 100%; padding: 8px 12px; border: 0; border-radius: 10px; background: transparent; color: var(--ink);
+  text-align: left; cursor: pointer; font: inherit;
+  opacity: 0; transform: translateY(-4px); transition: background .15s, opacity .26s var(--ease), transform .32s var(--ease); }
+#lmenu.open .it { opacity: 1; transform: none; transition-delay: 0s, calc(var(--i) * 24ms), calc(var(--i) * 24ms); }
+#lmenu .it b { display: block; font-size: 15.5px; font-weight: 650; }
+#lmenu .it small { display: block; font: 500 12px var(--sans); color: var(--ink-3); margin-top: 1px; }
+#lmenu .it .t { font: 600 12.5px var(--mono); color: var(--ink-2); }
+#lmenu .it kbd { justify-self: end; font: 600 11px var(--mono); color: var(--ink-3); border: 1px solid var(--line);
+  border-radius: 5px; padding: 0 5px; }
+#lmenu .it:hover, #lmenu .it.kb { background: color-mix(in oklab, var(--accent) 11%, transparent); }
+#lmenu .it.on { background: color-mix(in oklab, var(--accent) 17%, transparent); }
+#lmenu .it.on::before { content: ""; position: absolute; left: 3px; top: 9px; bottom: 9px; width: 3px; border-radius: 3px;
+  background: var(--accent); }
+#lmenu .it.none b, #lmenu .it.none .t { color: var(--ink-3); }
+#lmenu .it.late .t { color: var(--lv-fail); }
+#lmenu .foot { display: flex; gap: 6px; margin-top: 6px; padding: 8px 6px 2px; border-top: 1px solid var(--line); }
+#lmenu .foot button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 0;
+  border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--ink-2); cursor: pointer;
+  font: 600 12.5px var(--sans); }
+#lmenu .foot button:hover { color: var(--ink); border-color: color-mix(in oklab, var(--accent) 55%, var(--line)); }
+#lmenu .foot kbd { font: 600 10.5px var(--mono); color: var(--ink-3); }
+/* 오른쪽 위 도구(패널 · 도움말 · 설정) — 지도 위 작은 유리 아이콘. 패널이 열리면 그 왼쪽으로.
+   설정 › 화면 '오른쪽 위 도구': 마우스를 움직이면(기본) / 항상 / 숨김(제목 메뉴 아래에도 같은 셋이 있다) */
+#tools { position: absolute; top: 14px; right: 18px; z-index: 6; display: flex; gap: 6px;
+  transition: right .55s var(--ease), opacity .35s; }
+body.tl-on #tools { right: calc((var(--tlw, 640px) + 4px) / var(--k, 1)); }
+#tools .ib { display: inline-grid; place-items: center; width: 40px; height: 38px; padding: 0; cursor: pointer;
+  color: var(--ink-2); border: 1px solid var(--line); border-radius: 11px;
+  background: color-mix(in oklab, var(--panel) 80%, transparent);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 6px 20px rgba(0,0,0,.2); }
+#tools .ib:hover { color: var(--ink); border-color: color-mix(in oklab, var(--accent) 55%, var(--line)); }
+#tools .ib.on { color: var(--ink); background: color-mix(in oklab, var(--accent) 22%, var(--panel)); }
+#tools .ib svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7;
+  stroke-linecap: round; stroke-linejoin: round; }
+#tools .ib svg .f { fill: currentColor; stroke: none; }
+body.tools-hide #tools { display: none; }
+body.tools-auto #tools { opacity: 0; pointer-events: none; }
+body.tools-auto.moving #tools { opacity: 1; pointer-events: auto; }
+@media (max-width: 1400px) {
+  #ttl { font-size: 24px; } #ltime { font-size: 15px; } #lsrc { font-size: 11.5px; }
+}
+/* 설정 › 데모 */
+.demo-list a { display: block; padding: 8px 10px; border-radius: 8px; color: var(--ink); text-decoration: none; }
+.demo-list a:hover { background: color-mix(in oklab, var(--accent) 12%, transparent); }
+.demo-list a.on { box-shadow: inset 3px 0 0 var(--accent); background: color-mix(in oklab, var(--accent) 8%, transparent); }
+.demo-list a.t.on { box-shadow: inset 3px 0 0 var(--test); }
+.demo-list a b { display: block; font-size: 14.5px; }
+.demo-list a small { color: var(--ink-3); font: 500 12px var(--sans); }
+.demo-list .dh { font: 700 11px var(--sans); color: var(--ink-3); letter-spacing: .1em; padding: 10px 10px 2px; }
+/* 시연 — 지금 저장 · 줄마다 지우기 */
+.snapsave { display: grid; grid-template-columns: 1fr auto; gap: 6px 8px; padding: 6px 10px 10px; }
+.snapsave input { min-width: 0; font: 500 13px var(--sans); color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; padding: 6px 9px; }
+.snapsave input:focus { outline: none; border-color: var(--accent); }
+.snapsave button { font: 600 13px var(--sans); color: var(--on-accent); background: var(--accent); border: 0; border-radius: 7px; padding: 6px 14px; cursor: pointer; white-space: nowrap; }
+.snapsave button:disabled { opacity: .6; cursor: progress; }
+.snapsave small { grid-column: 1 / -1; color: var(--ink-3); font: 500 11.5px var(--sans); line-height: 1.5; }
+.snaprow { display: flex; align-items: stretch; gap: 2px; }
+.snaprow a { flex: 1; min-width: 0; }
+.snaprow .sw { font-style: normal; color: #C9A227; }
+.snapdel { flex: none; width: 30px; display: grid; place-items: center; background: transparent; border: 0; border-radius: 8px; color: var(--ink-3); cursor: pointer; }
+.snapdel svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.snapdel:hover { color: #E5484D; background: color-mix(in oklab, #E5484D 12%, transparent); }
+.crit { display: grid; grid-template-columns: calc(110px * var(--k, 1)) 1fr 1fr calc(70px * var(--k, 1)); align-items: center;
+  gap: 10px; height: calc(30px * var(--k, 1)); padding: 0 6px; border-radius: 6px; cursor: pointer; }
+.crit:hover, .crit.hov { background: color-mix(in oklab, var(--accent) 13%, transparent); }
+.crit.h { height: auto; cursor: default; font: 600 calc(11px * var(--k, 1)) var(--mono); color: var(--ink-3); padding-bottom: 3px; }
+.crit .g { position: relative; height: 62%; border-radius: 4px; background: color-mix(in oklab, var(--ink) 6%, transparent); }
+.crit .g i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--rain-4); transition: width .5s var(--ease); }
+.crit .g s { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ink-3); text-decoration: none; }
+.crit .g span { position: absolute; left: 6px; top: 50%; transform: translateY(-50%); font: 700 calc(12px * var(--k, 1)) var(--mono);
+  color: var(--ink); text-shadow: 0 0 3px var(--halo); }
+.crit .lv { justify-self: end; font: 700 calc(12px * var(--k, 1)) var(--sans); padding: 1px 8px; border-radius: 5px; }
+.crit .lv.warn { background: var(--lv-warn); color: #fff; }
+.crit .lv.watch { background: var(--lv-watch); color: #1A1400; }
+.crit .lv.none { color: var(--ink-3); }
+.case-note { font-size: calc(12px * var(--k, 1)); color: var(--ink-3); padding: 6px 8px 0; line-height: 1.4; }
+
+/* ── 지도 ── */
+#stage { position: relative; flex: 1; min-height: 0; background: var(--sea); overflow: hidden; }
+/* 지도 세 겹(땅·격자·선)을 한 덩어리로 움직인다 — 타임라인이 나오면 왼쪽으로 비켜선다 */
+#mapwrap { position: absolute; inset: 0; transform-origin: 0 0; transition: transform .55s var(--ease); }
+#mapwrap > svg, #mapwrap > canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+#cv, #ghost { transition: opacity .3s; }
+#ghost { pointer-events: none; opacity: 0; }
+#stage.late #cv { opacity: .4; }
+#over { pointer-events: none; }
+/* 경계 — 선 밑에 반대색 테두리(halo)를 깐다. ⚠️ 시군 경계색이 강수 청색과 명도가 비슷해 단기·누적처럼 넓게
+   칠해지면 묻혔다. 비 없는 땅 위에서는 테두리가 바탕과 같은 색이라 예전 모양 그대로다 */
+/* 경계 — 강수 칸 위에서도 또렷이(10-25 굵게 · 밝게). 밑에 어두운 테두리(bh)를 깔고 위에 밝은 선 */
+#over .bh { fill: none; stroke: var(--bd-halo); stroke-width: 4; stroke-linejoin: round; }
+#over .bh.z { stroke-width: 5.5; }
+#over .sg { fill: none; stroke: var(--bd); stroke-width: 1.6; stroke-linejoin: round; }
+#over .cs { fill: none; stroke: var(--coast); stroke-width: 1.5; stroke-linejoin: round; }
+#over .zn { fill: none; stroke: var(--zone); stroke-width: 2.6; stroke-dasharray: 9 6; stroke-linecap: round; }
+#over .sb { fill: none; stroke: var(--zone); stroke-width: 1.5; stroke-dasharray: 3 5; opacity: .8; }
+#over #hl { fill: color-mix(in oklab, var(--accent) 12%, transparent); stroke: var(--accent); stroke-width: 3;
+  opacity: 0; transition: opacity .2s; }
+#over #hl.on { opacity: 1; }
+#over text { paint-order: stroke; stroke: var(--halo); stroke-linejoin: round; }
+#over .nm { font-weight: 700; fill: var(--ink); text-anchor: middle; dominant-baseline: central; }
+#over .nm.nb { fill: var(--nb-ink); font-weight: 600; }
+#over .mx { font-family: var(--mono); font-weight: 700; fill: var(--ink); }
+#over .mxw { font-weight: 500; fill: var(--ink-2); }
+#over .pin { fill: var(--ink); stroke: var(--halo); }
+#over .lead { stroke: var(--ink-2); stroke-width: 1; }
+#under .ld { fill: var(--land); }
+#under .ld.nb { fill: var(--land-nb); }
+
+/* 범례 — 상자는 색 띠에만 두른다(README '예측 분포 범례'). 글자는 지도 위에 그대로. */
+#legend { position: absolute; left: 22px; bottom: 22px; display: flex; flex-direction: column; gap: 8px;
+  font-family: var(--mono); color: var(--ink); text-shadow: 0 0 3px var(--halo), 0 0 6px var(--halo); }
+#legend .lt { font: 600 15px var(--sans); display: flex; align-items: center; gap: 10px; }
+#legend .band { display: flex; flex-direction: column-reverse; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; width: 30px;
+  height: 182px; cursor: pointer; }
+/* 칸 높이는 띠를 칸 수로 나눈다 — 청색 7칸은 182px, 기상청 23칸은 눈금이 붙지 않게 230px(buildLegend) */
+#legend .band i { display: block; flex: 1 1 0; }
+#legend .band:hover { border-color: var(--accent); }
+#legend .note { font: 500 12px var(--sans); color: var(--ink-2); max-width: 190px; line-height: 1.35; }
+#legend .rows { display: flex; gap: 10px; align-items: stretch; margin-bottom: 8px; }
+/* 눈금 숫자는 칸의 **아래 끝**(그 값부터 이 색)에 맞춘다 */
+#legend .ticks { position: relative; width: 44px; font-size: 15px; font-weight: 600; }
+#legend .ticks span { position: absolute; left: 0; transform: translateY(50%); line-height: 1; }
+#legend .sw { display: flex; align-items: center; gap: 8px; font: 500 13px var(--sans); color: var(--ink-2); }
+#legend .sw b { width: 30px; height: 16px; border: 1px solid var(--line); border-radius: 3px; display: inline-block; }
+#legend .sw b.h { background: repeating-linear-gradient(135deg, transparent 0 3px, var(--hatch) 3px 4.5px); }
+#legend button { font: 600 13px var(--sans); color: var(--ink-2); background: var(--panel); border: 1px solid var(--line);
+  border-radius: 5px; padding: 2px 8px; cursor: pointer; text-shadow: none; }
+#legend button.on { color: var(--ink); border-color: var(--accent); }
+
+/* ── 재생 막대 — 지난 실측 → 지금 → 예측을 한 줄로 ── */
+#play { position: absolute; left: var(--playx, 50%); bottom: 18px; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 12px; padding: 8px 14px 8px 8px;
+  background: color-mix(in oklab, var(--panel) 90%, transparent); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0,0,0,.28); transition: left .55s var(--ease); }
+#play .pp { width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel-2);
+  color: var(--ink); font-size: 16px; cursor: pointer; flex: none; }
+#play .pp:hover { border-color: var(--accent); }
+#play svg { display: block; cursor: pointer; touch-action: none; }
+#play .lab { min-width: 150px; font-family: var(--mono); line-height: 1.15; }
+#play .lab b { display: block; font-size: 20px; font-weight: 600; }
+#play .lab small { font: 600 12px var(--sans); color: var(--ink-3); letter-spacing: .04em; }
+#play .lab small.fc { color: var(--accent); }
+.trk-past { fill: color-mix(in oklab, var(--ink) 9%, transparent); }
+.trk-fc { fill: url(#fc-hatch); }
+.trk-tick { stroke: var(--ink-3); stroke-width: 1; }
+.trk-hour { font: 500 11px var(--mono); fill: var(--ink-3); text-anchor: middle; }
+.trk-now { stroke: var(--ink-2); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.trk-nowl { font: 700 11px var(--sans); fill: var(--ink-2); text-anchor: middle; }
+.trk-head { stroke: var(--accent); stroke-width: 2.5; }
+.trk-knob { fill: var(--accent); stroke: var(--halo); stroke-width: 2.5; }
+
+/* ── 강수 타임라인 — 오른쪽 사이드바. 화면 높이를 다 쓴다 ── */
+#tl { position: absolute; top: 0; right: 0; bottom: 0; width: var(--tlw, 640px);
+  display: flex; flex-direction: column;
+  background: color-mix(in oklab, var(--panel) 90%, transparent);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border-left: 1px solid var(--line); box-shadow: -18px 0 50px rgba(0,0,0,.30);
+  transform: translateX(105%); transition: transform .55s var(--ease); }
+body.tl-on.panel-tl #tl { transform: none; }
+#tl .hd { display: flex; align-items: baseline; gap: 12px; padding: calc(14px * var(--k, 1)) calc(18px * var(--k, 1)) calc(4px * var(--k, 1)); }
+#tl .hd b { font-size: calc(21px * var(--k, 1)); font-weight: 700; }
+#tl .hd span { font-size: calc(13px * var(--k, 1)); color: var(--ink-2); }
+#tl .hd .sp { flex: 1; }
+#tl .hd button { font: 600 calc(13px * var(--k, 1)) var(--sans); color: var(--ink-2); background: transparent;
+  border: 1px solid var(--line); border-radius: 6px; padding: 2px 9px; cursor: pointer; }
+#tl .hd button.on { color: var(--ink); border-color: var(--accent); }
+#tl .bd { position: relative; flex: 1; min-height: 0; }
+#tl svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.tl-row { cursor: pointer; }
+.tl-bg { fill: transparent; }
+.tl-row:hover .tl-bg, .tl-row.hov .tl-bg { fill: color-mix(in oklab, var(--accent) 10%, transparent); }
+.tl-row.top .tl-bg { fill: color-mix(in oklab, var(--accent) 16%, transparent); }
+.tl-sep { stroke: var(--line-soft); }
+.tl-name { font-weight: 700; fill: var(--ink); dominant-baseline: central; }
+.tl-name.tot { fill: var(--accent); }
+.tl-area { fill: color-mix(in oklab, var(--rain-4) 28%, transparent); }
+.tl-line { fill: none; stroke: var(--rain-5); stroke-width: 1.8; stroke-linejoin: round; }
+.tl-farea { fill: color-mix(in oklab, var(--rain-4) 12%, transparent); }
+.tl-fline { fill: none; stroke: var(--rain-5); stroke-width: 1.6; stroke-dasharray: 5 4; opacity: .85; }
+.tl-peak { font-family: var(--mono); font-weight: 600; fill: var(--ink-2); text-anchor: middle; }
+.tl-val { font-family: var(--mono); font-weight: 700; fill: var(--ink); text-anchor: end; dominant-baseline: central; }
+.tl-val.zero { fill: var(--ink-3); font-weight: 500; }
+.tl-fczone { fill: color-mix(in oklab, var(--accent) 5%, transparent); }
+.tl-hour { font-family: var(--mono); fill: var(--ink-3); text-anchor: middle; }
+.tl-now { stroke: var(--ink-2); stroke-width: 1.2; stroke-dasharray: 3 4; }
+.tl-nowl { font-weight: 700; fill: var(--ink-2); text-anchor: middle; }
+.tl-zl { font-weight: 600; fill: var(--ink-3); letter-spacing: .06em; }
+/* 재생 위치는 미끄러지듯 옮겨 간다 — 지도가 겹쳐 넘어가는 시간(.3s)과 맞춘다 */
+.tl-head { stroke: var(--accent); stroke-width: 2.2; transition: transform .3s var(--ease); }
+.tl-dot { stroke: var(--halo); stroke-width: 2; transition: cx .3s var(--ease), cy .3s var(--ease), fill .3s; }
+.trk-head, .trk-knob { transition: transform .3s var(--ease); }
+#tl-svg.noanim *, #trk.noanim * { transition: none !important; }
+.tl-empty { fill: var(--ink-3); text-anchor: middle; }
+
+/* ── 오른쪽 카드 — 종합 화면(강수 모니터링)의 판을 작게. 지도 오른쪽 바다 위에 떠 있다 ──
+   딱 맞춘 격자 대신 카드가 지도 위에 겹쳐 뜨고, 뒤로는 지도가 그라데이션으로 가라앉는다.
+   줄에 마우스를 올리면 지도의 그 시군까지 빛줄이 그어진다(#links). */
+#scrim { position: absolute; top: 0; right: 0; bottom: 0; width: calc(var(--tlw, 640px) + 180px); pointer-events: none;
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--sea) 50%, transparent) 32%,
+              color-mix(in oklab, var(--sea) 80%, transparent));
+  opacity: 0; transition: opacity .6s var(--ease); }
+body.tl-on.panel-cards #scrim { opacity: 1; }
+#rail { position: absolute; top: 16px; right: 16px; bottom: 16px; width: calc(var(--tlw, 640px) - 20px);
+  display: flex; flex-direction: column; gap: 14px; pointer-events: none; }
+.card { pointer-events: auto; position: relative; display: flex; flex-direction: column; min-height: 0;
+  background: color-mix(in oklab, var(--panel) 80%, transparent);
+  backdrop-filter: blur(14px) saturate(1.15); -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  border: 1px solid color-mix(in oklab, var(--line) 85%, transparent); border-radius: 16px;
+  box-shadow: 0 20px 50px rgba(0,0,0,.34), inset 0 1px 0 color-mix(in oklab, var(--ink) 6%, transparent);
+  transform: translateX(calc(100% + 48px)); opacity: 0;
+  transition: transform .6s var(--ease), opacity .45s; }
+.card::before { content: ""; position: absolute; left: 22px; right: 22px; top: -1px; height: 2px; border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent); opacity: .6; }
+body.tl-on.panel-cards .card { transform: none; opacity: 1; }
+.card:nth-child(2) { transition-delay: .08s; }
+.card:nth-child(3) { transition-delay: .16s; }
+#c-acc { flex: 1 1 auto; }
+#c-now, #c-fc { flex: none; }
+.ch { display: flex; align-items: center; gap: 10px; padding: calc(12px * var(--k, 1)) calc(16px * var(--k, 1)) calc(6px * var(--k, 1)); }
+.ch h3 { margin: 0; font-size: calc(16px * var(--k, 1)); font-weight: 700; white-space: nowrap; }
+.ch .sub { font-size: calc(12px * var(--k, 1)); color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* 강수 누적 — 머리(제목·기준·단추·시군·출처·시각)가 한 줄을 다 쓰니 설명은 그 아래 한 줄로 */
+#c-acc .ch { flex-wrap: wrap; row-gap: 1px; }
+#c-acc .ch .sub { order: 10; flex: 1 0 100%; padding-left: calc(16px * var(--k, 1)); }
+/* 누적 구간 고르기 — 설명 글자를 누르면 */
+#acc-sub.pick { cursor: pointer; }
+#acc-sub.pick::after { content: " ▾"; color: var(--ink-3); }
+#acc-sub.pick:hover { color: var(--ink); }
+.rng-pop { position: absolute; z-index: 20; min-width: 180px; padding: 6px; border-radius: 12px; zoom: var(--k, 1);
+  border: 1px solid var(--line); background: color-mix(in oklab, var(--panel) 94%, transparent);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 18px 44px rgba(0,0,0,.32);
+  transform-origin: 20px -6px; opacity: 0; transform: translateY(-6px) scale(.97);
+  transition: opacity .16s var(--ease), transform .22s var(--ease); }
+.rng-pop.open { opacity: 1; transform: none; }
+.rng-pop .g { font: 700 11px var(--sans); letter-spacing: .12em; color: var(--ink-3); padding: 6px 10px 4px; }
+.rng-pop button { display: block; width: 100%; text-align: left; padding: 7px 10px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--ink); font: 600 14px var(--sans); cursor: pointer; }
+.rng-pop button:hover { background: color-mix(in oklab, var(--accent) 11%, transparent); }
+.rng-pop button.on { background: color-mix(in oklab, var(--accent) 18%, transparent); box-shadow: inset 3px 0 0 var(--accent); }
+.rng-pop .note { font: 500 12px var(--sans); color: var(--ink-3); padding: 6px 10px 4px; max-width: 230px; line-height: 1.4; }
+.rng-pop .sep { height: 1px; margin: 4px 6px; background: var(--line); }
+/* 누적 눈금 메뉴 — 이름 밑에 그 자의 눈금 */
+#lg-pop button small { font-weight: 500; color: var(--ink-3); margin-left: 6px; }
+#lg-pop button small.st { display: block; margin: 2px 0 0; font: 500 11.5px var(--mono); }
+/* 날짜 지정 — 그날 0시부터(오늘부터 7일 앞까지) */
+.rng-pop .dt { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 10px; border-radius: 8px;
+  font: 600 14px var(--sans); color: var(--ink); }
+.rng-pop .dt.on { background: color-mix(in oklab, var(--accent) 18%, transparent); box-shadow: inset 3px 0 0 var(--accent); }
+.rng-pop .dt select, #prefs .dp select { font: 600 13px var(--sans); color: var(--ink); background: var(--panel-2, transparent);
+  border: 1px solid var(--line); border-radius: 6px; padding: 2px 4px; color-scheme: dark light; }
+.rng-pop .dt button.go, #prefs .dp button { flex: none; width: auto; display: inline-block; padding: 3px 10px; border-radius: 7px; font-size: 13px;
+  border: 1px solid var(--accent); background: color-mix(in oklab, var(--accent) 22%, transparent); color: var(--ink); cursor: pointer; }
+#prefs .dp { display: inline-flex; gap: 6px; align-items: center; }
+.rng-pop .dt small { flex-basis: 100%; font: 500 11.5px var(--sans); color: var(--ink-3); }
+/* 강수 누적 머리 고정을 끄면 — 머리(제목 · 설명 · 단추)와 아래 범례는 마우스를 올렸을 때만 그림 위에 떠오르고 평소에는 시군 줄만.
+   머리가 자리를 비우므로 줄이 위로 올라간다(줄 수는 다시 센다). 범례는 자리를 남긴 채 감춘다(올릴 때 줄이 흔들리지 않게) */
+#c-acc.hdr-auto .ch { position: absolute; top: 0; left: 0; right: 0; z-index: 4; border-radius: 16px 16px 0 0;
+  background: color-mix(in oklab, var(--panel) 94%, transparent); opacity: 0; pointer-events: none; transition: opacity .2s var(--ease); }
+#c-acc.hdr-auto:hover .ch { opacity: 1; pointer-events: auto; }
+#c-acc.hdr-auto #acc-b { padding-top: calc(10px * var(--k, 1)); }
+#c-acc.hdr-auto:not(:hover) .acc-lg { visibility: hidden; }
+/* 위 카드 패널 가득 — 지금 오는 비 · 예측 상위를 감추고 위 카드가 패널을 다 쓴다(머리 단추 · 다시 누르면 돌아온다) */
+#rail.accfull #c-now, #rail.accfull #c-fc { display: none; }
+/* 아래를 '초단기예측 이미지 재생'으로(Q) — 지금 오는 비 · 예측 상위 대신. 패널 가득이면 그것도 감춘다 */
+#c-qpf { flex: none; display: none; }
+#rail.qpf #c-now, #rail.qpf #c-fc { display: none; }
+#rail.qpf:not(.accfull) #c-qpf { display: flex; }
+#c-qpf .ch .src.sync { color: var(--lv-ok); }
+/* 평소에는 그림만 — 제목 줄과 재생 막대는 마우스를 올렸을 때만 그림 위에 떠오른다(자리를 차지하지 않는다).
+   그림 시각 · 발표 시각(왼쪽 위)은 늘 보인다 — 그림이 몇 시 것인지 모르면 볼 수 없다 */
+#c-qpf .ch { position: absolute; top: 0; left: 0; right: 0; z-index: 3; border-radius: 15px 15px 0 0;
+  background: color-mix(in oklab, var(--panel) 90%, transparent); opacity: 0; pointer-events: none;
+  transition: opacity .2s var(--ease); }
+#c-qpf:hover .ch { opacity: 1; pointer-events: auto; }
+#c-qpf .qpf-bar { opacity: 0; pointer-events: none; transition: opacity .2s var(--ease); }
+#c-qpf:hover .qpf-bar { opacity: 1; pointer-events: auto; }
+#c-qpf .qpf-clock { transition: top .2s var(--ease); }
+#c-qpf:hover .qpf-clock { top: calc(46px * var(--k, 1)); }
+/* 그림 — 서버가 경남 광역(950×800)으로 잘라 둔 기상청 그림을 판에 맞춰 통째로. 두 겹을 번갈아 띄운다(종합 화면과 같다) */
+.qpf-box { position: relative; width: 100%; aspect-ratio: 950 / 800; max-height: calc(50vh - 20px); margin: 0 auto;
+  border-radius: 15px; overflow: hidden; background: #f0f0f0; }
+.qpf-lay { position: absolute; inset: 0; background: #f0f0f0 no-repeat center / contain; will-change: opacity; }
+/* 확대 · 옮기기 — 두 겹을 한 판(qpf-view)에 담아 같이 움직인다. 시각 · 범례 · 막대는 판 밖이라 그대로 */
+.qpf-view { position: absolute; inset: 0; transform-origin: 0 0; cursor: grab; touch-action: none; }
+.qpf-view.drag { cursor: grabbing; }
+.qpf-box.dim .qpf-lay { filter: grayscale(.6) opacity(.55); }
+.qpf-clock { position: absolute; top: 8px; left: 8px; display: flex; align-items: baseline; gap: 6px; padding: 3px 9px;
+  border-radius: 8px; background: color-mix(in oklab, var(--panel) 86%, transparent); border: 1px solid var(--line); zoom: var(--k, 1); }
+.qpf-clock b { font: 600 18px var(--mono); color: var(--ink); }
+.qpf-clock i { font: 600 11.5px var(--mono); font-style: normal; color: var(--ink-2); }
+.qpf-clock i.fc { padding-left: 7px; border-left: 1px solid var(--line); }
+.qpf-clock i:empty { display: none; }
+.qpf-note { position: absolute; left: 8px; right: 8px; top: 50%; transform: translateY(-50%); text-align: center; zoom: var(--k, 1);
+  font: 600 13.5px var(--sans); color: var(--ink); padding: 8px 12px; border-radius: 10px;
+  background: color-mix(in oklab, var(--panel) 88%, transparent); border: 1px solid var(--line); }
+.qpf-note:empty { display: none; }
+.qpf-bar { position: absolute; left: 8px; right: 8px; bottom: 8px; display: flex; align-items: center; gap: 8px; padding: 4px 8px;
+  border-radius: 10px; background: color-mix(in oklab, var(--panel) 86%, transparent); border: 1px solid var(--line); zoom: var(--k, 1); }
+.qpf-bar button { width: 30px; height: 26px; border: 0; border-radius: 7px; cursor: pointer; color: var(--ink);
+  background: color-mix(in oklab, var(--accent) 22%, transparent); font: 600 13px var(--sans); }
+.qpf-bar button:disabled { opacity: .45; cursor: default; }
+.qpf-bar input { flex: 1; accent-color: var(--accent); }
+/* 줄 세우기 '시군당 n곳' — 시군이 바뀌는 줄 위에 가는 선 */
+#acc-b .ar.g0 { box-shadow: inset 0 1px 0 color-mix(in oklab, var(--line) 90%, transparent); }
+.ch .sp { flex: 1; }
+/* 카드 머리 작은 범례(시우량 · 6시간 합) — 지도 범례(누적 자동 눈금)와 다른 자라는 것을 카드에 적는다 */
+.mlg { display: inline-flex; align-items: stretch; flex: none; gap: 1px; border-radius: 5px; overflow: hidden; }
+.mlg b { font: 600 calc(10.5px * var(--k, 1)) var(--sans); color: var(--ink-3); padding-right: calc(5px * var(--k, 1)); align-self: center; }
+.mlg i { font: 600 calc(9.5px * var(--k, 1)) var(--mono); font-style: normal; text-align: center;
+  min-width: calc(19px * var(--k, 1)); padding: 1px calc(3px * var(--k, 1)); }
+/* 초단기예측 이미지 범례 — 그림의 범례는 잘라 낼 때 빠진다. 기상청 원본 그림에서 그대로 뽑아 둔 색(/api/qpf/legend)으로
+   늘 보이게(종합 화면 예측 분포 재생과 같다). 센 값이 위. 오른쪽 — 띠가 가장자리에 붙고 눈금은 띠 왼쪽(시각은 왼쪽 위).
+   마우스를 올리면 제목 줄이 그림 위에 생기므로 시각 · 범례가 그만큼 내려간다 */
+.qpf-scale { position: absolute; right: 8px; top: 8px; bottom: 52px; zoom: var(--k, 1); display: flex; flex-direction: column;
+  padding: 5px 6px 6px; border-radius: 9px; background: color-mix(in oklab, var(--panel) 86%, transparent); border: 1px solid var(--line);
+  transition: top .2s var(--ease); }
+#c-qpf:hover .qpf-scale { top: 50px; }
+.qpf-scale .u { font: 600 10px var(--sans); color: var(--ink-2); text-align: center; padding-bottom: 3px; }
+.qpf-scale .sc { flex: 1; min-height: 0; display: grid; grid-template-columns: auto 11px; column-gap: 4px; }
+.qpf-scale .bar, .qpf-scale .tk { display: flex; flex-direction: column; }
+.qpf-scale .bar i { flex: 1; }
+.qpf-scale .tk span { flex: 1; position: relative; min-width: 22px; font: 600 9.5px var(--mono); color: var(--ink-2); }
+.qpf-scale .tk span b { position: absolute; bottom: -6px; right: 0; font-weight: 600; }
+.qpf-scale .none { font: 500 11px var(--sans); color: var(--ink-3); max-width: 90px; }
+.ch .bt { font: 600 calc(12px * var(--k, 1)) var(--mono); color: var(--ink-2); border: 1px solid var(--line); border-radius: 6px; padding: 1px 7px; white-space: nowrap; }
+.ch .src { font: 600 calc(11px * var(--k, 1)) var(--sans); color: var(--accent); white-space: nowrap; }
+.ch .src.fell { color: var(--lv-fail); }
+.ch .src .gsw { display: inline-flex; gap: 3px; align-items: center; }
+.ch .src .gsw b { cursor: pointer; font-weight: 600; color: var(--accent); padding: 1px 5px; border-radius: 5px; }
+.ch .src .gsw b:hover { background: color-mix(in oklab, var(--accent) 18%, transparent); }
+.ch .src .gsw.lock b { cursor: default; }
+.ch .src .gsw.lock b:hover { background: none; }
+.ch .live { width: 7px; height: 7px; border-radius: 50%; background: var(--lv-ok); flex: none; animation: pulse 2.4s infinite; }
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--lv-ok) 55%, transparent); }
+  70% { box-shadow: 0 0 0 8px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+.cb { position: relative; flex: 1; min-height: 0; overflow: hidden; padding: 0 calc(10px * var(--k, 1)) calc(10px * var(--k, 1)); }
+.empty-note { color: var(--ink-3); font-size: calc(13px * var(--k, 1)); padding: 10px 8px; }
+/* 누적 줄 — 순위·다우지점 │ 누적 막대 + 예상 빗금(값 글자) │ 선 그래프.
+   ⚠️ 예전에는 맨 오른쪽에 합(실측 + 예상) 칸이 있었다 — 막대 값 글자와 같은 말을 한 번 더 해서 뺐다(10-24) */
+.ar { display: grid; grid-template-columns: calc(118px * var(--k, 1)) 1fr calc(150px * var(--k, 1));
+  align-items: center; gap: calc(10px * var(--k, 1)); height: var(--rh, 30px); padding: 0 6px; border-radius: 8px; cursor: pointer; }
+.ar:hover, .ar.hov, .mr:hover, .mr.hov, .fr:hover, .fr.hov { background: color-mix(in oklab, var(--accent) 13%, transparent); }
+.nm2 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 700; font-size: calc(15px * var(--k, 1)); }
+.nm2 small { font-size: calc(11px * var(--k, 1)); color: var(--ink-3); font-weight: 600; margin-right: 4px; }
+.nm2 .rk { display: inline-grid; place-items: center; width: calc(18px * var(--k, 1)); height: calc(18px * var(--k, 1));
+  margin-right: 6px; border-radius: 50%; vertical-align: 1px;
+  font: 700 calc(11px * var(--k, 1)) var(--mono); color: var(--on-accent); background: var(--accent); }
+.abar { position: relative; height: 58%; border-radius: 5px; background: color-mix(in oklab, var(--ink) 6%, transparent); }
+.abar .o { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px 0 0 5px;
+  background: var(--acc-past); transition: width .6s var(--ease); }
+/* 실측 중 최근 1시간 — 실측 막대의 끝 부분을 또렷한 색으로(누적에 더하는 것이 아니라 그 안의 몫) */
+.abar .h { position: absolute; top: 0; bottom: 0;
+  background: repeating-linear-gradient(45deg, var(--acc-h1a) 0 3px, var(--acc-h1b) 3px 6px); }
+.abar .o.all { border-radius: 5px; }
+/* 색조 — 막대를 그 값의 지도 범례 색으로(막대를 누르면 한 색 ↔ 색조, 서버 설정 acc_tone). 기상청 AWS 줄 청록 구분은 이때 쓰지 않는다 */
+#acc-b.tone .abar[style] .o { background: var(--tc); }
+#acc-b.tone .abar[style] .h { background: repeating-linear-gradient(45deg, color-mix(in oklab, var(--tc) 55%, white) 0 3px, var(--tc) 3px 6px); }
+#acc-b.tone .abar:not([style]) .o { background: color-mix(in oklab, var(--ink) 18%, transparent); }
+.acc-lg .tn { width: calc(34px * var(--k, 1)) !important; }
+/* 기상청 AWS 지점 줄 — 막대를 청록으로(경남 AWS 는 그대로 파랑). 같은 시군에 둘이 섞여도 어느 관측망인지 바로 */
+.ar.kma .abar .o { background: var(--acc-kma); }
+.ar.kma .abar .h { background: repeating-linear-gradient(45deg, var(--acc-kma-h1a) 0 3px, var(--acc-kma-h1b) 3px 6px); }
+.abar .h.end { border-radius: 0 5px 5px 0; } .abar .h.all { border-radius: 5px 0 0 5px; } .abar .h.end.all { border-radius: 5px; }
+/* 막대 범례 — 카드 맨 아래 한 줄 */
+.acc-lg { display: flex; gap: calc(14px * var(--k, 1)); padding: 4px 8px 0; font-size: calc(11.5px * var(--k, 1)); color: var(--ink-3); }
+.acc-lg i { display: inline-block; width: calc(14px * var(--k, 1)); height: calc(8px * var(--k, 1)); border-radius: 2px; margin-right: 5px; vertical-align: 0; }
+.acc-lg .p { background: var(--acc-past); }
+.acc-lg .pk { background: var(--acc-kma); }
+.acc-lg .h { background: repeating-linear-gradient(45deg, var(--acc-h1a) 0 3px, var(--acc-h1b) 3px 6px); }
+.acc-lg .f { background: repeating-linear-gradient(135deg, color-mix(in oklab, var(--rain-4) 42%, transparent) 0 3px,
+                                                     color-mix(in oklab, var(--rain-4) 22%, transparent) 3px 6px); }
+/* 예상(앞으로 6시간) — 재난상황보고서 [종합] 판처럼 실측 막대에 이어 붙는 **연한** 결. 실측보다 한눈에 옅게 */
+.abar .f { position: absolute; top: 0; bottom: 0; border-radius: 0 5px 5px 0;
+  background: repeating-linear-gradient(135deg, color-mix(in oklab, var(--rain-4) 42%, transparent) 0 3px,
+                                                color-mix(in oklab, var(--rain-4) 22%, transparent) 3px 6px);
+  transition: left .6s var(--ease), width .6s var(--ease); }
+.abar .v { position: absolute; top: 50%; transform: translateY(-50%); white-space: nowrap; transition: left .6s var(--ease);
+  font: 700 calc(13px * var(--k, 1)) var(--mono); color: var(--ink); text-shadow: 0 0 3px var(--halo), 0 0 6px var(--halo); }
+.abar .v i { font-style: normal; color: var(--rain-5); margin-left: 5px; }
+.ar svg { width: 100%; height: 82%; overflow: visible; }
+/* 선 그래프 봉우리 — 가장 많이 온 시각의 값. 카드에서 봉우리가 큰 몇 줄만(다 적으면 숫자 밭이 된다) */
+.sp-pk { fill: var(--ink); stroke: var(--halo); stroke-width: 3px; paint-order: stroke; font: 700 calc(10.5px * var(--k, 1)) var(--mono); }
+.sp-pd { fill: var(--rain-6); stroke: var(--halo); stroke-width: 1.5px; }
+/* 선 그래프 마우스 — 그 줄의 짚은 칸(점) + 커서 위 쪽지 */
+.sp-hd { fill: var(--ink); stroke: var(--accent); stroke-width: 1.5px; opacity: 0; pointer-events: none; }
+.sp-hd.on { opacity: 1; }
+#sptip { position: fixed; z-index: 41; pointer-events: none; white-space: nowrap; padding: calc(5px * var(--k, 1)) calc(9px * var(--k, 1));
+  border-radius: 8px; font: 500 calc(13px * var(--k, 1))/1.4 var(--sans); color: var(--ink-2);
+  background: color-mix(in oklab, var(--panel) 96%, transparent); border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+#sptip b { color: var(--ink); font-weight: 700; }
+#sptip b.v { font-family: var(--mono); color: var(--accent); }
+#sptip i { font-style: normal; font-size: .85em; color: var(--rain-5); }
+#sptip small { display: block; font-size: calc(10.5px * var(--k, 1)); color: var(--ink-3); }
+/* 평균 시우량 — 가는 점선 + 작은 글자(봉우리보다 한 단계 흐리게) */
+.sp-avg { stroke: var(--ink-2); stroke-width: 1.1px; stroke-dasharray: 3 2.5; opacity: .85; }
+.sp-av { fill: var(--ink-2); stroke: var(--halo); stroke-width: 3px; paint-order: stroke; font: 500 calc(10px * var(--k, 1)) var(--mono); }
+.acc-lg .av { height: 0 !important; border-top: 1.5px dashed var(--ink-2); vertical-align: 3px !important; border-radius: 0 !important; }
+.abar .v.dead { color: var(--ink-3); font-weight: 500; }
+/* 맨 오른쪽 — 최근 1시간 칩. 시우량 자(지도 1시간 · 지금 오는 비와 같은 색)로 칠한다. 0 이면 흐리게(10-24, 합 칸을 뺀 자리) */
+#acc-b.h1c .ar { grid-template-columns: calc(118px * var(--k, 1)) 1fr calc(150px * var(--k, 1)) calc(62px * var(--k, 1)); }
+.h1v { justify-self: end; min-width: 100%; text-align: right; white-space: nowrap; border-radius: 2px;
+  padding: calc(1px * var(--k, 1)) calc(4px * var(--k, 1)) calc(1px * var(--k, 1)) calc(6px * var(--k, 1));
+  font: 600 calc(13.5px * var(--k, 1)) var(--mono); color: var(--ink-2); border-left: 3px solid var(--c, transparent); }
+/* ⚠️ 칸을 시우량 색으로 칠했더니(초록 · 노랑 바탕 위 글자) 안 읽혔다(10-24) — 바탕 없이 글자만. 왼쪽 막대만 시우량 색,
+   많이 올수록 글자가 밝고 굵다: 5㎜ 아래 흐리게 · 5~10 또렷하게 · 10~20 밝은 하늘 · 20 넘으면 흰 글자 + 빛 */
+.h1v.l1 { color: var(--ink); font-weight: 700; }
+.h1v.l2 { color: var(--h1-hi); font-weight: 800; }
+.h1v.l3 { color: var(--h1-top); font-weight: 800; font-size: calc(15px * var(--k, 1));
+  text-shadow: 0 0 8px color-mix(in oklab, var(--h1-hi) 55%, transparent); }
+.h1v small { font: 600 calc(9.5px * var(--k, 1)) var(--sans); opacity: .7; margin-right: 3px; }
+.h1v.z { color: var(--ink-3); font-weight: 500; border-left-color: transparent; }
+.acc-lg .c1 { background: linear-gradient(90deg, var(--map-r3), var(--map-r5), var(--map-r7)); }
+.sp-a { fill: color-mix(in oklab, var(--rain-4) 26%, transparent); }
+.sp-l { fill: none; stroke: var(--rain-5); stroke-width: 1.5; stroke-linejoin: round; }
+.sp-fa { fill: color-mix(in oklab, var(--rain-4) 10%, transparent); }
+.sp-fl { fill: none; stroke: var(--rain-5); stroke-width: 1.4; stroke-dasharray: 3 3; opacity: .85; }
+.sp-now { stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 2 2; }
+.sp-head { stroke: var(--accent); stroke-width: 2; transition: transform .3s var(--ease); }
+/* 지금 오는 비 — 15분 │ 60분 */
+.mn { display: grid; grid-template-columns: 1fr 1fr; gap: calc(16px * var(--k, 1)); }
+.mn h4 { margin: 0 0 4px; padding: 0 4px; display: flex; justify-content: space-between;
+  font: 700 calc(12px * var(--k, 1)) var(--sans); color: var(--ink-3); letter-spacing: .08em; }
+.mr { position: relative; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px;
+  height: calc(27px * var(--k, 1)); padding: 0 6px; border-radius: 6px; cursor: pointer; }
+.mr .nm2 { font-size: calc(14px * var(--k, 1)); z-index: 1; text-shadow: 0 0 3px var(--halo), 0 0 6px var(--halo); }
+.mr b { font: 700 calc(15px * var(--k, 1)) var(--mono); z-index: 1; }
+/* ⚠️ 센 비의 밝은 단계(--rain-6·7) 위에서 흰 글자가 묻혔다 — 막대를 옅게, 글자에 테두리 */
+.mr .bg { position: absolute; left: 0; top: 16%; bottom: 16%; border-radius: 4px; opacity: .38; transition: width .6s var(--ease); }
+/* 예측 상위 — 시군 │ +1~+6h 칸(지도 색) │ 합 */
+.fr, .fh { display: grid; grid-template-columns: calc(124px * var(--k, 1)) 1fr calc(54px * var(--k, 1)); align-items: center;
+  gap: 10px; padding: 0 6px; }
+.fr { height: calc(30px * var(--k, 1)); border-radius: 6px; cursor: pointer; }
+.fh { font: 600 calc(11px * var(--k, 1)) var(--mono); color: var(--ink-3); padding-bottom: 3px; }
+.fr .nm2 { font-size: calc(14px * var(--k, 1)); }
+.fr .nm2 small { margin: 0 0 0 4px; }
+.fr .nm2 small.pre { margin: 0 4px 0 0; }
+.cells { display: grid; grid-template-columns: repeat(var(--n, 6), 1fr); gap: 3px; }
+.fr .cells i.na { background: repeating-linear-gradient(135deg, transparent 0 3px, color-mix(in oklab, var(--ink) 8%, transparent) 3px 5px); }
+.fh .cells s { text-decoration: none; opacity: .45; }
+.fh .cells span { text-align: center; }
+.fh .cells span { border-radius: 4px; transition: background .2s, color .2s; }
+.fh .cells span.on { color: var(--on-accent); background: var(--accent); font-weight: 700; }
+.fr .cells { height: 72%; }
+.fr .cells i { display: grid; place-items: center; border-radius: 4px; font: 600 calc(12px * var(--k, 1)) var(--mono);
+  font-style: normal; background: color-mix(in oklab, var(--ink) 5%, transparent); color: var(--ink-3); transition: box-shadow .3s; }
+.fr .cells i { transition: opacity .2s, box-shadow .2s; }
+.fr .cells i.on { position: relative; z-index: 1; box-shadow: 0 0 0 2px var(--halo), 0 0 0 4px var(--accent); }
+.fr .cells.has-on i:not(.on) { opacity: .45; }
+/* 누적 줄 선 그래프 위 마우스 자리 — 예상 구간이면 예측 상위의 그 시각 열을 짚는다 */
+.sp-hov { stroke: var(--ink-2); stroke-width: 1.2; stroke-dasharray: 3 2; opacity: 0; }
+#acc-b.hovt .sp-hov { opacity: .9; }
+.fr .sum { text-align: right; font: 700 calc(15px * var(--k, 1)) var(--mono); }
+/* 줄 ↔ 지도 연결선 */
+#links { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+#links path { fill: none; stroke: var(--accent); stroke-width: 2.2; stroke-linecap: round;
+  filter: drop-shadow(0 0 5px color-mix(in oklab, var(--accent) 70%, transparent));
+  stroke-dasharray: var(--len); stroke-dashoffset: var(--len); animation: draw .5s var(--ease) forwards; }
+#links circle { fill: var(--accent); stroke: var(--halo); stroke-width: 2.5; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+/* 지도 위 순위 표식 — 누적 상위 셋 */
+#over .rk circle { fill: var(--accent); stroke: var(--halo); stroke-width: 2.5; }
+#over .rk text { fill: var(--on-accent); stroke: none; font-family: var(--mono); font-weight: 700;
+  text-anchor: middle; dominant-baseline: central; }
+
+#tip { position: absolute; pointer-events: none; font: 500 14px var(--sans); padding: 6px 10px; border-radius: 6px;
+  background: color-mix(in oklab, var(--panel) 94%, transparent); border: 1px solid var(--line); color: var(--ink);
+  white-space: nowrap; box-shadow: 0 4px 14px rgba(0,0,0,.25); z-index: 5; }
+#tip b { font-family: var(--mono); font-size: 16px; }
+#tip .d { color: var(--ink-3); font-family: var(--mono); font-size: 12px; margin-top: 2px; }
+
+#empty { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); text-align: center;
+  font-size: 20px; font-weight: 600; color: var(--ink-2); background: color-mix(in oklab, var(--panel) 90%, transparent);
+  border: 1px solid var(--line); border-radius: 10px; padding: 16px 26px; }
+#empty small { display: block; font-size: 14px; font-weight: 400; color: var(--ink-3); margin-top: 6px; }
+#empty.fail { color: var(--lv-fail); }
+
+/* 테스트 모드 — 실황으로 착각하지 않게. 판을 **무채색 점선**으로 두르고 위 가운데에 띠를 단다.
+   ⚠️ 지도 한가운데 큰 글자를 얹었더니 옅게 해도 비구름처럼 보였다.
+   ⚠️ 보라 테두리는 특보(중대경보 보라)와 헷갈렸다 — 색을 빼고 선 모양으로만 알린다. */
+#stage.test { outline: 5px dashed var(--test); outline-offset: -5px; }
+#testrib { position: absolute; left: var(--playx, 50%); top: 0; transform: translateX(-50%); pointer-events: none; z-index: 3;
+  padding: 5px 18px 6px; border-radius: 0 0 10px 10px; white-space: nowrap;
+  font: 800 18px var(--sans); letter-spacing: .12em; color: var(--ink);
+  background: repeating-linear-gradient(135deg, color-mix(in oklab, var(--test) 34%, var(--panel)) 0 10px,
+              color-mix(in oklab, var(--test) 18%, var(--panel)) 10px 20px);
+  border: 1px solid var(--test); border-top: 0; }
+#testrib small { font: 600 13px var(--sans); letter-spacing: 0; color: var(--ink-2); margin-left: 10px; }
+
+/* ── 레이어 — 왼쪽 위. 지도 위에 겹칠 것을 고른다(지금은 기상특보, 차츰 늘린다) ── */
+/* 아이콘 하나(레이어) + 그 밑에 켜진 레이어만 작은 아이콘. 메뉴·범례는 아이콘 오른쪽으로 잠깐 펼친다 —
+   ⚠️ 예전엔 '레이어 · 특보' 단추와 특보 범례 상자가 지도 북서쪽(함양·거창)을 늘 덮고 있었다 */
+#layers { position: relative; z-index: 4; display: flex; flex-direction: column; gap: 6px; align-items: center; }
+#ly-act { display: flex; flex-direction: column; gap: 6px; align-items: center; }
+#ly-act:empty { display: none; }
+.ly-ic { position: relative; display: grid; place-items: center; width: 42px; height: 42px; padding: 0; cursor: pointer;
+  color: var(--ink); border-radius: 11px; border: 1px solid var(--line);
+  background: color-mix(in oklab, var(--panel) 84%, transparent);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+.ly-ic svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+.ly-ic.sm { width: 34px; height: 34px; border-radius: 9px; }
+.ly-ic.sm svg { width: 17px; height: 17px; }
+.ly-ic:hover, .ly-ic[aria-expanded="true"] { border-color: color-mix(in oklab, var(--accent) 60%, var(--line)); }
+.ly-ic[aria-expanded="true"] { background: color-mix(in oklab, var(--accent) 20%, var(--panel)); }
+.ly-ic .bd { position: absolute; right: -5px; top: -5px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px;
+  font: 700 10.5px/16px var(--sans); color: #fff; background: var(--ink-3); border: 1.5px solid var(--panel); }
+/* 기준 근접 — 위키 기준에 70%↑ 가까워졌거나 닿은 곳이 있을 때만 나타난다. 붉게 숨 쉰다 */
+.ly-ic.risk { width: 46px; height: 46px; color: #fff; background: #c8321f; border-color: #ff8a73;
+  animation: riskpulse 1.6s ease-in-out 4; }      /* 처음 몇 번만 — 계속 움직이면 정신사납다 */
+.ly-ic.risk svg { width: 24px; height: 24px; stroke-width: 2; }
+.ly-ic.risk svg circle[r=".6"] { fill: currentColor; stroke: currentColor; }
+.ly-ic.risk.ct { background: #b7860f; border-color: #f0cf6a; }                 /* 통제 — 노랑(주의) */
+.ly-ic.risk.ev.mid { background: #d4561f; border-color: #ff9d6e; }             /* 대피 — 사전대피만이면 주황빨강, 긴급대피가 있으면 진한 빨강 */
+.ly-ic.risk[aria-expanded="true"] { filter: brightness(1.15); }
+.ly-ic.risk .bd { background: #fff; color: #5a1a0e; border-color: currentColor; }
+@keyframes riskpulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,120,70,.65), 0 8px 24px rgba(0,0,0,.25); }
+  50% { box-shadow: 0 0 0 9px rgba(255,120,70,0), 0 8px 24px rgba(0,0,0,.25); } }
+/* 스크롤바 — 가늘고 테마 색, 평소엔 숨겼다가 마우스를 올리면 나타난다(큼직한 기본 흰 막대가 판을 가리던 것) */
+.rpop, #ly-alerts, #prefs .panes, #aiw .bd, #help .bd, #showdlg .rows, #showdlg .cat { scrollbar-width: thin; scrollbar-color: transparent transparent; transition: scrollbar-color .2s; }
+.rpop:hover, #ly-alerts:hover, #prefs .panes:hover, #aiw .bd:hover, #help .bd:hover, #showdlg .rows:hover, #showdlg .cat:hover { scrollbar-color: color-mix(in oklab, var(--ink-3) 70%, transparent) transparent; }
+.rpop::-webkit-scrollbar, #ly-alerts::-webkit-scrollbar, #prefs .panes::-webkit-scrollbar, #aiw .bd::-webkit-scrollbar, #help .bd::-webkit-scrollbar, #showdlg .rows::-webkit-scrollbar, #showdlg .cat::-webkit-scrollbar { width: 8px; }
+.rpop::-webkit-scrollbar-track, #ly-alerts::-webkit-scrollbar-track, #prefs .panes::-webkit-scrollbar-track, #aiw .bd::-webkit-scrollbar-track, #help .bd::-webkit-scrollbar-track { background: transparent; }
+.rpop::-webkit-scrollbar-thumb, #ly-alerts::-webkit-scrollbar-thumb, #prefs .panes::-webkit-scrollbar-thumb, #aiw .bd::-webkit-scrollbar-thumb, #help .bd::-webkit-scrollbar-thumb, #showdlg .rows::-webkit-scrollbar-thumb, #showdlg .cat::-webkit-scrollbar-thumb { background: transparent; border-radius: 6px; }
+.rpop:hover::-webkit-scrollbar-thumb, #ly-alerts:hover::-webkit-scrollbar-thumb, #prefs .panes:hover::-webkit-scrollbar-thumb, #aiw .bd:hover::-webkit-scrollbar-thumb, #help .bd:hover::-webkit-scrollbar-thumb, #showdlg .rows:hover::-webkit-scrollbar-thumb, #showdlg .cat:hover::-webkit-scrollbar-thumb { background: color-mix(in oklab, var(--ink-3) 70%, transparent); }
+.rpop { z-index: 8; width: 340px; max-height: min(66vh, 540px); overflow-y: auto; overscroll-behavior: contain; padding: 10px 12px 12px;
+  background: var(--panel); backdrop-filter: none; border-color: #c8321f; }
+.rpop.ct { border-color: #b7860f; }
+.rpop.fc { border-color: color-mix(in oklab, var(--accent) 60%, var(--line)); width: 360px; }
+.rpop.fc .rh b { color: var(--ink); }
+.rpop.fc h6 { margin: 10px 0 4px; font-size: 12px; letter-spacing: .06em; color: var(--ink-3); }
+.rpop.fc .fl { display: grid; grid-template-columns: auto 1fr; gap: 1px 8px; font-size: 12.5px; color: var(--ink-2); padding: 1px 0; }
+.rpop.fc .fl b { color: var(--ink); font-weight: 650; white-space: nowrap; }
+.rpop.fc .fl em { font-style: normal; color: var(--ink-3); font-size: 11.5px; }
+.rpop.fc .fn { color: var(--ink-3); font-size: 11.5px; padding: 6px 0 0; line-height: 1.5; }
+.rpop.fc .fe { color: var(--ink-3); font-size: 12.5px; padding: 2px 0; }
+.rpop .rh { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.rpop .rh b { font-size: 15px; color: #ff7a63; }
+.rpop.ct .rh b { color: #f0cf6a; }
+.rpop .rh span { font-size: 11.5px; color: var(--ink-3); }
+.rpop .rh i { margin-left: auto; font-style: normal; cursor: pointer; color: var(--ink-3); font-size: 16px; }
+.rpop .rm { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ink-2); padding: 2px 0 8px; cursor: pointer; }
+.rpop .rm input { margin: 0; width: 15px; height: 15px; accent-color: #c8321f; cursor: pointer; }
+.rpop .rm small { color: var(--ink-3); font-size: 11.5px; }
+.rpop .rg { border-top: 1px solid var(--line); padding: 7px 0 4px; }
+.rpop .rg > .s { display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 700; font-size: 14px; }
+.rpop .rg > .s small { font: 600 11px var(--sans); color: var(--ink-3); }
+.rpop .rg > .s:hover { color: var(--accent); }
+.rpop .rg .it { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; font-size: 12.5px; padding: 2px 0 2px 4px; color: var(--ink-2); }
+.rpop .rg .it b { color: var(--ink); font-weight: 600; }
+.rpop .rg .it em { grid-column: 2; font-style: normal; font-size: 11.5px; color: var(--ink-3); }
+.rpop .rg .it .gp { grid-column: 2; font: 600 11.5px var(--mono); color: var(--ink-2); }
+.rpop.fc .sg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; margin: 2px 0 4px; }
+.rpop.fc .sg .c { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 12.5px; color: var(--ink); font-weight: 650; min-width: 0; }
+.rpop.fc .sg .cw { position: relative; display: inline-flex; }
+.rpop.fc .sg .cw select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.rpop.fc .sg .cw:hover .stg { filter: brightness(1.12); }
+.rpop.fc .sg .ro { display: inline-flex; }
+.stg.std { outline: 1px dashed color-mix(in oklab, var(--ink) 45%, transparent); outline-offset: 1px; }
+.rpop.fc .ad { display: grid; grid-template-columns: auto 1fr; gap: 1px 8px; font-size: 12px; color: var(--ink-2); padding: 3px 0; border-top: 1px solid var(--line-soft); }
+.stg { display: inline-block; font: 700 11.5px var(--sans); padding: 1px 8px; border-radius: 5px; color: #14181f; white-space: nowrap; }
+.stg.c0 { background: #8fd68a; }                                   /* 평시 — 연두 */
+.stg.c1 { background: #6ec3ee; }                                   /* 준비(관심) — 하늘 = 위기경보 관심 Blue */
+.stg.c2 { background: #f0cf3a; }                                   /* 비상 1단계 — 주의 Yellow */
+.stg.c3 { background: #f2933a; }                                   /* 비상 2단계 — 경계 Orange */
+.stg.c4 { background: #e5483a; color: #fff; }                      /* 비상 3단계 — 심각 Red */
+.stg.c34 { background: linear-gradient(100deg, #f2933a 0 50%, #e5483a 50% 100%); color: #fff; }   /* 비상 2·3단계 — 경계 · 심각 */
+.rpop .rg .act { font: 500 12px var(--sans); color: var(--ink-2); padding: 1px 0 3px 4px; }
+.rpop .tg { font: 700 10.5px var(--sans); border-radius: 4px; padding: 1px 6px; color: #fff; align-self: start; margin-top: 2px; white-space: nowrap; }
+.rpop .tg.s3 { background: #c8321f; } .rpop .tg.s2 { background: #d4561f; } .rpop .tg.s1 { background: #b7860f; }   /* 긴급대피 · 사전대피 · 통제 */
+.rpop .tg.near { background: transparent; box-shadow: inset 0 0 0 1.5px currentColor; }                         /* 근접은 속 빈 딱지 */
+.rpop .tg.near.s3 { color: #ff7a63; } .rpop .tg.near.s2 { color: #ff9d6e; } .rpop .tg.near.s1 { color: #f0cf6a; }
+.rpop .nt { font-size: 11.5px; color: var(--ink-3); margin-top: 8px; line-height: 1.5; }
+/* 지도의 시군 이름 — 앞에 표식 · 색(긴급대피 빨강 > 사전대피 주황 > 통제 노랑). 근접만이면 조금 옅게. 새로 생긴 곳은 한동안 깜박인다 */
+#over .nm.wa.s3 { fill: #ff7a63; } #over .nm.wa.s2 { fill: #ff9d6e; } #over .nm.wa.s1 { fill: #f0cf6a; }
+#over .nm.wa.near { opacity: .8; }
+#over .nm.wa.bl { animation: nmblink .7s steps(2, jump-none) 6; }
+@keyframes nmblink { 0% { opacity: 1; } 50% { opacity: .15; } 100% { opacity: 1; } }
+/* 펼친 메뉴·범례 — 아이콘 오른쪽. 위치(top)는 누른 아이콘에 맞춘다 */
+#layers .ly-pop { position: absolute; left: calc(100% + 10px); top: 0; }
+.ly-pop { min-width: 260px; padding: 8px; border-radius: 12px;
+  background: color-mix(in oklab, var(--panel) 94%, transparent); border: 1px solid var(--line);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 16px 40px rgba(0,0,0,.35); }
+.ly-it { display: grid; grid-template-columns: 22px 1fr auto auto; align-items: center; gap: 10px; padding: 8px 10px;
+  border-radius: 8px; cursor: pointer; }
+.ly-it kbd { font: 600 11px var(--mono); color: var(--ink-3); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; }
+/* ⓘ — 올리거나 누르면 설명(#pop). 목록·범례는 짧게 두고 긴 말은 여기에 */
+.inf { display: inline-grid; place-items: center; width: 17px; height: 17px; flex: none; border-radius: 50%; cursor: help;
+  font: italic 700 11px Georgia, serif; color: var(--ink-2); border: 1.3px solid var(--ink-3); user-select: none; }
+.inf:hover, .inf.pin { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
+#pop { position: fixed; z-index: 40; zoom: var(--k, 1); max-width: 340px; padding: 10px 13px; border-radius: 10px;
+  font: 500 13px/1.55 var(--sans); color: var(--ink-2); background: color-mix(in oklab, var(--panel) 97%, transparent);
+  border: 1px solid var(--line); box-shadow: 0 14px 36px rgba(0,0,0,.4); pointer-events: none; }
+#pop b { color: var(--ink); }
+#pop.pin { pointer-events: auto; border-color: color-mix(in oklab, var(--accent) 55%, var(--line)); }
+.ly-it:hover { background: color-mix(in oklab, var(--accent) 10%, transparent); }
+.ly-it input { appearance: none; width: 20px; height: 20px; border-radius: 6px; margin: 0; cursor: pointer;
+  border: 1.5px solid var(--ink-3); display: grid; place-items: center; }
+.ly-it input:checked { background: var(--accent); border-color: var(--accent); }
+.ly-it input:checked::after { content: "✓"; color: var(--on-accent); font: 800 13px var(--sans); }
+.ly-it b { font-size: 15px; }
+.ly-it small { display: block; font-size: 12px; color: var(--ink-3); margin-top: 1px; }
+.ly-it.off { opacity: .45; cursor: default; }
+.ly-it.sub { margin-left: 26px; padding-top: 4px; }
+/* 특보 범례 — 켜면 레이어 단추 밑에 붙는다 */
+#ly-alerts { width: 188px; min-width: 0; padding: 8px 9px 9px; overflow-y: auto; overscroll-behavior: contain;
+  background: var(--panel); backdrop-filter: none; -webkit-backdrop-filter: none; }   /* 불투명 — 끌어 올리면 뒤 아이콘이 비치지 않게 */
+#layers #ly-alerts { left: 0; }            /* 아이콘 오른쪽이 아니라 아이콘들 밑에 — 지도 왼쪽 빈자리(위치 top 은 renderLyIcons) */
+#ly-alerts .hd3 { display: flex; align-items: center; gap: 6px; font: 600 11px var(--mono); color: var(--ink-3); margin: -3px 0 5px; }
+#ly-alerts .hd3 .alp { margin-left: auto; display: inline-flex; align-items: center; gap: 3px; font: 600 11px var(--sans); color: var(--lv-pre); cursor: pointer; white-space: nowrap; }
+#ly-alerts .hd3 .alp input { margin: 0; width: 12px; height: 12px; accent-color: var(--lv-pre); cursor: pointer; }
+/* 앞 칸(선 견본 · 바다 · 예비 딱지)을 뺐다 — 좁은 줄이라 글자에 자리를 다 준다(10-24). 바다 · 예정은 이름 뒤 작은 글자 */
+#ly-alerts .al { display: block; padding: 5px 1px; font-size: 13px; }
+#ly-alerts .al .tg { font: 600 10.5px var(--sans); color: var(--ink-3); margin-left: 5px; }
+#ly-alerts .al + .al { border-top: 1px solid color-mix(in oklab, var(--line) 60%, transparent); }
+#ly-alerts .al b { display: block; white-space: normal; font-size: 13.5px; line-height: 1.3; }
+#ly-alerts .al .where { display: block; font-size: 11.5px; line-height: 1.35; overflow-wrap: anywhere; }
+#ly-alerts .al .where i { font-style: normal; font-weight: 600; color: var(--ink); }
+#ly-alerts .al .where .rg { white-space: nowrap; }       /* '하동북부'가 줄 끝에서 갈리지 않게 */
+#ly-alerts .al .where sup { font-size: .76em; line-height: 0; vertical-align: .5em; margin-left: 1px; color: var(--ink-3); font-weight: 600; }
+#ly-alerts .hd2 { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; cursor: move; user-select: none; }
+#ly-alerts .hd2 .fd { cursor: pointer; }
+#ly-alerts .hd2 .fd { margin-left: auto; font-style: normal; color: var(--ink-3); }
+#ly-stn .hd2 { cursor: pointer; }
+#ly-alerts .hd2 .inf { align-self: center; }
+#ly-alerts.fold { width: auto; padding-bottom: 8px; }
+#ly-alerts.fold .hd2 { margin-bottom: 0; }
+#ly-alerts.fold .al, #ly-alerts.fold .al-none { display: none; }
+#ly-alerts .hd2 b { font-size: 14px; }
+#ly-alerts .hd2 span { font: 600 12px var(--mono); color: var(--ink-3); }
+.al { display: grid; grid-template-columns: 30px auto 1fr; align-items: center; gap: 9px; padding: 4px 2px;
+  font-size: 14px; border-radius: 6px; cursor: default; }
+.al.hov { background: color-mix(in oklab, var(--accent) 10%, transparent); }
+.al b { white-space: nowrap; }
+.al .where { color: var(--ink-2); font-size: 13px; line-height: 1.3; }
+.al svg { width: 30px; height: 12px; overflow: visible; }
+.al .tag { font: 700 11px var(--sans); color: var(--ink-3); border: 1px solid var(--line); border-radius: 4px;
+  padding: 0 4px; justify-self: start; }
+.al-none { color: var(--ink-3); font-size: 13px; padding: 4px 2px; }
+/* 지도 위 특보 — 면은 칠하지 않는다(강수 청색과 섞인다). 시군 안쪽에 선 + 이름 밑 딱지.
+   선 모양도 다르게: 주의보 점선 · 경보 실선 · 중대경보 겹실선 — 흑백·색약에서도 갈린다 */
+#over .wl { fill: none; stroke-linejoin: round; }
+#over .wl.watch { stroke: var(--lv-watch); }
+#over .wl.warn { stroke: var(--lv-warn); }
+#over .wl.severe { stroke: var(--lv-severe); }
+#over .wl.gap { stroke: var(--halo); }
+#over .wb rect { stroke: var(--halo); stroke-width: 1.5; }
+#over .wb.watch rect { fill: var(--lv-watch); }
+#over .wb.warn rect { fill: var(--lv-warn); }
+#over .wb.severe rect { fill: var(--lv-severe); }
+#over .wb text { stroke: none; font-weight: 700; dominant-baseline: central; }
+#over .wb.watch text { fill: #1A1400; }
+#over .wb.warn text, #over .wb.severe text { fill: #FFFFFF; }
+#over .wsea { font-weight: 700; font-style: italic; }
+/* 관측소 — 면(격자)은 분석값, 점(관측소)은 실측. **마름모**로 그려 격자 최대 표식(동그라미)과 가른다.
+   속은 지도와 같은 색 단계 — 둘레 칸과 색이 같으면 격자와 관측이 맞는 것, 다르면 어긋난 것이다. */
+#over .st path { stroke: var(--ink); stroke-width: 1.5; stroke-linejoin: round; paint-order: stroke; }
+#over .st.z path { fill: var(--land); stroke: var(--ink-2); }
+#over .st.none path { fill: none; stroke: var(--ink-3); stroke-dasharray: 2 2; }
+#over .st.miss path { fill: none; stroke: var(--ink-3); }
+#over .st.miss line { stroke: var(--ink-2); stroke-width: 1.6; stroke-linecap: round; }
+/* 비활성화한 AWS — 계산에서 뺐다. 회색 속 · 빨간 빗금(오른쪽 클릭 → 다시 켜기) */
+#over .st.off path { fill: color-mix(in oklab, var(--ink-3) 30%, transparent); stroke: var(--lv-fail); stroke-width: 1.4; }
+#over .st.off line { stroke: var(--lv-fail); stroke-width: 1.8; stroke-linecap: round; }
+#stn-pop { z-index: 40; }
+#prefs .pf-on { font: 600 12.5px var(--sans); color: var(--ink); background: transparent; border: 1px solid var(--line);
+  border-radius: 7px; padding: 3px 10px; cursor: pointer; margin-left: auto; }
+#prefs .pf-on:hover { background: color-mix(in oklab, var(--accent) 16%, transparent); }
+#prefs .offnm small { color: var(--ink-3); margin-left: 6px; }
+/* 하천 · 댐 · 보(레이어 D) — 수위는 눈금 막대, 댐은 둑, 보는 가로 막대. 색은 수위 단계(--rv-*) */
+:root { --rv-0: #3E9BD9; --rv-1: #D9B93B; --rv-2: #EE8B2B; --rv-3: #E4402D; --rv-4: #9A52E0; --rv-dam: #6C86A3; }
+#over .rv .bx { fill: color-mix(in oklab, var(--panel) 80%, transparent); stroke: var(--ink); stroke-width: 1.4; stroke-linejoin: round; }
+#over .rv .fl { stroke: none; }
+#over .rv.nt { opacity: .55; }
+#over .rv.nt .bx { stroke: var(--ink-3); stroke-dasharray: 2 2; }
+#over .rv.up .bx { stroke-dasharray: 3 2; }
+#over .rv .wv { fill: none; stroke: var(--ink); stroke-width: 1.3; stroke-linecap: round; opacity: .85; }
+#over .rv.dim { opacity: .22; }
+#over .rvp { fill: none; stroke-width: 2; transform-box: fill-box; transform-origin: center; animation: rvpulse 1.9s ease-out infinite; pointer-events: none; }
+@keyframes rvpulse { 0% { transform: scale(.7); opacity: .95; } 100% { transform: scale(2.3); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { #over .rvp { animation: none; opacity: .6; } }
+#over .rvl text { font-family: var(--sans); font-weight: 700; fill: var(--ink); stroke: var(--panel); paint-order: stroke; stroke-linejoin: round; dominant-baseline: central; }
+#ly-river { width: auto; min-width: 280px; max-width: 360px; padding: 10px 12px 12px; }
+#ly-river .hd2 { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; cursor: pointer; }
+#ly-river .hd2 b { font-size: 15px; }
+#ly-river .hd2 span { font: 600 12px var(--mono); color: var(--ink-3); margin-left: auto; }
+#ly-river .hd2 .k { font: 600 12px var(--sans); color: var(--ink-3); margin-left: 0; }
+#ly-river .keys2 { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; color: var(--ink-2); }
+#ly-river .dt { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px; flex: none; }
+#ly-river .sec { font: 700 11.5px var(--sans); color: var(--ink-3); letter-spacing: .06em; margin: 10px 0 3px; }
+#ly-river .rr { display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 2px 0; }
+#ly-river .rr b { font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
+#ly-river .rr span { font: 600 12px var(--mono); color: var(--ink-2); white-space: nowrap; }
+#ly-river .rr em { font-style: normal; font-size: 12px; color: var(--ink-3); margin-left: auto; white-space: nowrap; }
+#ly-river .nt { font-size: 12.5px; color: var(--ink-3); margin-top: 6px; line-height: 1.4; }
+#ly-river .nt.w { color: var(--lv-fail); }
+#tip .spk { display: block; margin-top: 4px; }
+#tip .spk polyline { fill: none; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+#over .st text { font-family: var(--mono); font-weight: 600; fill: var(--ink); dominant-baseline: central; }
+#over .st .n { font-family: var(--sans); font-weight: 700; }
+/* 기상청 색(알록달록) — 값 글자가 색 칸처럼 읽혔다. 바탕 상자 위에 쓴다(drawStations) */
+#over .st rect.pill { fill: var(--panel); fill-opacity: .9; stroke: var(--line); stroke-width: 1; }
+#over .st.dim { opacity: .3; }
+/* 고른 시군 — 밖을 바다색으로 가라앉히고(스포트라이트) 밝은 겹선을 두른다.
+   ⚠️ 강조색(파랑) 선 하나는 청색 강수 면에 묻혀 안 보였다 */
+#over #selmask { fill: var(--sea); opacity: .5; fill-rule: evenodd; }
+#over #selh { fill: none; stroke: var(--halo); stroke-width: 7; stroke-linejoin: round; opacity: .85; }
+#over #sel { fill: none; stroke: var(--ink); stroke-width: 2.8; stroke-linejoin: round; }
+#over #hot circle { fill: none; stroke: var(--accent); stroke-width: 2.5; }
+/* 시군 확대(설정 '시군 누르면 확대') — 읍면동 경계(안쪽 선만)·이름. 확대해 들어가며 선이 서서히 나온다 */
+#over #emd { opacity: 0; transition: opacity .5s; }
+#stage.zoomed #over #emd { opacity: 1; }
+#over #emd path { fill: none; stroke: var(--ink-2); stroke-width: 1.1; stroke-linejoin: round; opacity: .55; }
+#over .en { font-weight: 600; fill: var(--ink-2); text-anchor: middle; dominant-baseline: central; }
+#over .en .pc { fill: var(--lv-warn); font-weight: 700; }
+#stg path { pointer-events: none; stroke: none; }
+/* 날아가는 동안 — 선은 viewBox 로 같이 커지되 굵기는 그대로, 글자·점은 잠깐 감췄다가 다 오면 새로 그린다 */
+#stage.zooming #mapwrap path { vector-effect: non-scaling-stroke; }
+#over :is(#names, #labels, #stns, #rivr, #wbadge, #ranks, #hot, #emdn) { transition: opacity .25s; }
+#stage.zooming #over :is(#names, #labels, #stns, #rivr, #wbadge, #ranks, #hot, #emdn) { opacity: 0; transition: opacity .1s; }
+/* 지도 위 순위 원(1~3위)은 경남 전체 지도일 때만 — 시군을 골라 확대하면 천천히 사라지고, 경남 전체로 돌아오면 다시 나온다(10-24) */
+#stage:is(.zooming, .zoomed) #over #ranks { opacity: 0; transition: opacity .6s var(--ease); }
+#over #hot circle.c { fill: var(--accent); stroke: var(--halo); stroke-width: 2; }
+#toast { position: absolute; left: 50%; top: calc(16px * var(--k, 1)); transform: translate(-50%, -8px); z-index: 30;
+  padding: 8px 14px; border-radius: 8px; background: var(--ink); color: var(--halo); opacity: 0; pointer-events: none;
+  font: 600 calc(14px * var(--k, 1)) var(--sans); box-shadow: 0 6px 24px rgba(0,0,0,.25); transition: opacity .2s, transform .2s; }
+#toast.on { opacity: .94; transform: translate(-50%, 0); }
+#ly-stn { width: 340px; padding: 10px 12px 12px; }
+#ly-stn .hd2 { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+#ly-stn .hd2 b { font-size: 15px; }
+#ly-stn .hd2 span { font: 600 12px var(--mono); color: var(--ink-3); margin-left: auto; }
+#ly-stn .hd2 .k { font: 600 12px var(--sans); color: var(--ink-3); margin-left: 0; }
+#ly-stn { width: auto; min-width: 250px; }
+#ly-stn .keys2 { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--ink-2); }
+#ly-stn .keys2 svg { width: 14px; height: 14px; vertical-align: -2px; margin-right: 5px; overflow: visible; }
+#ly-stn .nt { font-size: 12.5px; color: var(--ink-3); margin-top: 6px; line-height: 1.4; }
+#ly-stn .nt.w { color: var(--lv-fail); }
+/* 누적 카드 머리 — '강수 누적'을 누르면 기준이 바뀐다(AWS 관측소 ↔ 격자) */
+#acc-h { cursor: pointer; display: inline-flex; align-items: center; gap: 8px; user-select: none; }
+#acc-h .bs { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 1px; }
+#acc-h .bs b { font: 700 calc(11px * var(--k, 1)) var(--sans); color: var(--ink-3); padding: 1px 8px; border-radius: 999px;
+  transition: background .25s, color .25s; }
+#acc-h .bs b.on { color: var(--on-accent); background: var(--accent); }
+/* AWS = 관측소 좌표(겨눔 표), 격자 = 칸 — 글자 대신 그림 */
+#acc-h .bs b { display: inline-grid; place-items: center; padding: 2px 7px; }
+#acc-h .bs b svg { width: calc(13px * var(--k, 1)); height: calc(13px * var(--k, 1)); fill: none; stroke: currentColor;
+  stroke-width: 1.6; stroke-linecap: round; }
+#acc-h .bs b svg .f { fill: currentColor; stroke: none; }
+#acc-h:hover .bs { border-color: var(--accent); }
+/* 단기 오늘·내일 — 위 카드가 그날 예보 합이 된다. 기준(AWS|격자)·예상 단추는 뜻이 없어 감춘다 */
+#acc-h.day { cursor: default; } #acc-h.day .bs { display: none; }
+.abar .o.dayb { background: linear-gradient(90deg, var(--rain-3), var(--rain-4)); border-radius: 5px; }
+.acc-lg .d { background: linear-gradient(90deg, var(--rain-3), var(--rain-4)); }
+/* 예상 켜고 끄기 — 실선(실측)에 점선(예상)이 이어지는 그림. 켜면 강조색 */
+.fctg { display: inline-grid; place-items: center; width: calc(22px * var(--k, 1)); height: calc(20px * var(--k, 1)); padding: 0;
+  border: 1px solid var(--line); border-radius: 999px; background: none; color: var(--ink-3); cursor: pointer; }
+.fctg svg { width: 72%; height: 72%; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.fctg svg .d { stroke-dasharray: 1.6 2.2; }
+.fctg + .fctg { margin-left: -4px; }
+.fctg.on { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
+.fctg:hover { border-color: var(--accent); }
+.fctg[hidden] { display: none; }
+.selchip { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap;
+  font: 700 calc(12px * var(--k, 1)) var(--sans); color: var(--ink); padding: 2px 9px; border-radius: 999px;
+  background: color-mix(in oklab, var(--accent) 22%, transparent); border: 1px solid color-mix(in oklab, var(--accent) 60%, var(--line)); }
+.selchip:hover { background: color-mix(in oklab, var(--accent) 34%, transparent); }
+.ar.det { cursor: default; }
+.cb.scroll { overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--ink-3) transparent; }
+/* 도움말(?) — 용어·자료 출처 */
+#help { position: fixed; inset: 0; z-index: 21; display: flex; align-items: center; justify-content: center;
+  background: rgba(4, 8, 14, .55); }
+#help .box { zoom: var(--k, 1); width: 880px; max-width: calc(100vw - 32px); max-height: calc(100vh / var(--k, 1) - 48px);
+  display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 14px; box-shadow: 0 24px 80px rgba(0,0,0,.45); }
+#help .top { display: flex; align-items: center; gap: 10px; padding: 16px 22px 10px; border-bottom: 1px solid var(--line); }
+#help .top b { font-size: 18px; }
+#help .top .sp { flex: 1; }
+#help .top button { background: transparent; border: 0; color: var(--ink-2); font-size: 20px; cursor: pointer; }
+#help nav { display: flex; gap: 6px; padding: 10px 22px 0; flex-wrap: wrap; }
+#help nav button { font: 600 13px var(--sans); color: var(--ink-2); background: transparent; border: 1px solid var(--line);
+  border-radius: 999px; padding: 4px 12px; cursor: pointer; }
+#help nav button.on { color: var(--ink); border-color: var(--accent); background: color-mix(in oklab, var(--accent) 18%, transparent); }
+#help .bd { overflow: auto; padding: 12px 22px 20px; font-size: 14px; line-height: 1.55; color: var(--ink); }
+/* 백과 — 문명(Civilopedia)식 용어 사전. 색은 모두 테마 변수 */
+#help .enc .eq { position: sticky; top: -12px; z-index: 1; display: flex; align-items: center; gap: 10px; padding: 8px 0; background: var(--panel); }
+#help .enc .eq input { flex: 1; min-width: 0; font: 500 14px var(--sans); color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; color-scheme: dark light; }
+#help .enc .eq input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 22%, transparent); }
+#help .enc .eq span { font: 600 12px var(--mono); color: var(--ink-3); }
+#help .enc .ec { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 10px; }
+#help .enc .ec button { font: 600 12.5px var(--sans); color: var(--ink-2); background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 3px 11px; cursor: pointer; }
+#help .enc .ec button.on { color: var(--ink); border-color: var(--accent); background: color-mix(in oklab, var(--accent) 18%, transparent); }
+#help .enc .ent { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px 9px; margin-bottom: 8px; }
+#help .enc .ent:hover { border-color: color-mix(in oklab, var(--accent) 45%, var(--line)); }
+#help .enc .ent header { display: flex; align-items: center; gap: 8px; }
+#help .enc .ent header b { font-size: 14.5px; color: var(--ink); }
+#help .enc .ent .cat { font: 700 10.5px var(--sans); font-style: normal; padding: 1px 8px; border-radius: 999px; color: #14181f; letter-spacing: .02em; }
+#help .enc .ent .c-0 { background: #6ec3ee; }
+#help .enc .ent .c-1 { background: #f0cf3a; }
+#help .enc .ent .c-2 { background: #f2933a; }
+#help .enc .ent .c-3 { background: #3E9BD9; color: #fff; }
+#help .enc .ent .c-4 { background: #6C86A3; color: #fff; }
+#help .enc .ent .c-5 { background: #9A52E0; color: #fff; }
+#help .enc .ent p { margin: 5px 0 4px; font-size: 13.5px; line-height: 1.6; color: var(--ink-2); }
+#help .enc .ent p b { color: var(--ink); }
+#help .enc .ent small { font-size: 11.5px; color: var(--ink-3); }
+#help .enc .none { padding: 24px 0; text-align: center; color: var(--ink-3); }
+#help h4 { margin: 14px 0 6px; font-size: 13px; color: var(--ink-3); letter-spacing: .1em; }
+#help table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+#help th, #help td { text-align: left; vertical-align: top; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+#help th { font-size: 12px; color: var(--ink-3); font-weight: 600; white-space: nowrap; }
+#help td b { white-space: nowrap; }
+#help code { font: 12.5px var(--mono); color: var(--ink-2); background: color-mix(in oklab, var(--ink) 7%, transparent);
+  padding: 0 4px; border-radius: 4px; }
+#help .k { color: var(--ink-3); font-size: 12.5px; }
+#help dl { display: grid; grid-template-columns: 150px 1fr; gap: 6px 14px; margin: 0; }
+#help dt { font-weight: 700; }
+#help dd { margin: 0; color: var(--ink-2); }
+#help .lede { background: color-mix(in oklab, var(--accent) 10%, transparent); border: 1px solid color-mix(in oklab, var(--accent) 35%, var(--line));
+  border-radius: 10px; padding: 10px 14px; margin: 6px 0 4px; }
+#dbg { position: absolute; left: 10px; top: 8px; font: 12px var(--mono); color: var(--ink-3); }
+
+/* ── 설정(Ctrl+,) ── */
+#prefs { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center;
+  background: rgba(4, 8, 14, .55); }
+#prefs .box { width: 860px; max-width: calc(100vw - 32px); background: var(--panel); border: 1px solid var(--line);
+  border-radius: 14px; box-shadow: 0 24px 80px rgba(0,0,0,.45); padding: 18px 22px 20px; }
+#prefs .top { display: flex; align-items: center; margin-bottom: 8px; }
+#prefs .top b { font-size: 18px; }
+#prefs .top .sp { flex: 1; }
+#prefs .top button { background: transparent; border: 0; color: var(--ink-2); font-size: 20px; cursor: pointer; }
+/* AI 상황판단 팝업(I) — 고른 시군(없으면 경남 전체)의 보고 · 예상 질문 · 더 묻기. 지도는 그대로 보이게 오른쪽에 뜬다 */
+#aiw { position: fixed; top: 64px; right: 24px; bottom: 24px; width: min(640px, calc(100vw - 48px)); z-index: 30;
+  display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: 0 18px 60px rgb(0 0 0 / .45); opacity: 0; transform: translateY(8px) scale(.985); pointer-events: none;
+  transition: opacity .18s, transform .18s; }
+#aiw.open { opacity: 1; transform: none; pointer-events: auto; }
+#aiw .hd { display: flex; align-items: center; gap: 10px; padding: 14px 18px 10px; border-bottom: 1px solid var(--line); }
+#aiw .hd b { font-size: 17px; }
+#aiw .hd .sc { font-size: 13px; color: var(--accent); background: color-mix(in oklab, var(--accent) 14%, transparent); border-radius: 999px; padding: 2px 10px; }
+#aiw .hd .tm { color: var(--ink-3); font-size: 12.5px; flex: 1; }
+#aiw .hd button { background: transparent; border: 0; color: var(--ink-2); cursor: pointer; font-size: 13px; }
+#aiw .hd .x { font-size: 18px; }
+#aiw .md { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 18px 6px; border-bottom: 1px solid var(--line); }
+#aiw .md button { font: 600 13px var(--sans); color: var(--ink-2); background: transparent; border: 1px solid transparent;
+  border-radius: 8px; padding: 5px 11px; cursor: pointer; }
+#aiw .md button:hover { color: var(--ink); border-color: var(--line); }
+#aiw .md button.on { color: var(--on-accent); background: var(--accent); }
+#aiw .bd { flex: 1; overflow: auto; padding: 6px 18px 12px; }
+#aiw .sec { margin: 12px 0 4px; }
+#aiw .flash { margin: 10px 0 2px; padding: 9px 12px; border: 1px solid var(--line); border-left: 4px solid var(--ink-3); border-radius: 8px; font-size: 14px; line-height: 1.5; }
+#aiw .flash b { margin-right: 6px; font-size: 12px; letter-spacing: .08em; color: var(--ink-3); }
+#aiw .flash.t1 { border-left-color: var(--lv-pre); }
+#aiw .flash.t2 { border-left-color: var(--lv-watch); }
+#aiw .flash.t3 { border-left-color: var(--lv-warn); }
+#aiw .hl { margin: 14px 0 0; font-size: 12px; letter-spacing: .08em; color: var(--ink-3); }
+#aiw .sec h5 { margin: 0 0 6px; font-size: 13px; letter-spacing: .06em; color: var(--ink-3); }
+#aiw .sec.todo h5 { color: var(--accent); }
+#aiw .sec ul { margin: 0; padding-left: 18px; }
+#aiw .sec li { margin: 4px 0; font-size: 14px; line-height: 1.55; color: var(--ink); }
+#aiw .sec.todo ol { margin: 0; padding-left: 20px; } #aiw .sec.todo li { font-weight: 500; }
+#aiw .sec.ref li { font-size: 12.5px; color: var(--ink-2); }
+#aiw .wk { color: var(--accent); font-size: .92em; white-space: nowrap; }
+#aiw .q { margin: 16px 0 4px; padding: 8px 12px; border-radius: 10px; background: color-mix(in oklab, var(--accent) 12%, transparent); font-weight: 600; font-size: 14px; }
+#aiw .ans { border-left: 0; padding: 0 0 4px; }
+#aiw .ans pre { white-space: pre-wrap; font: 14px/1.6 var(--sans); margin: 6px 0; }
+#aiw .src { font-size: 11.5px; color: var(--ink-3); }
+#aiw .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 18px 6px; border-top: 1px solid var(--line); }
+#aiw .chips button { font: 500 13px var(--sans); color: var(--ink); background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: 999px; padding: 5px 12px; cursor: pointer; }
+#aiw .chips button:hover { border-color: var(--accent); color: var(--accent); }
+#aiw form { display: flex; gap: 8px; padding: 6px 18px 14px; }
+#aiw form input { flex: 1; min-width: 0; font: 14px var(--sans); color: var(--ink); background: var(--panel-2);
+  border: 1px solid var(--line); border-radius: 9px; padding: 8px 11px; }
+#aiw form input:focus { outline: none; border-color: var(--accent); }
+#aiw form button { font: 600 14px var(--sans); color: var(--on-accent); background: var(--accent); border: 0; border-radius: 9px; padding: 0 16px; cursor: pointer; }
+#aiw .ld { color: var(--ink-3); font-size: 14px; padding: 18px 0; }
+#aiw .ft { font-size: 11.5px; color: var(--ink-3); padding: 0 18px 10px; }
+/* 이 상자는 zoom: var(--k) 를 받는다 — 높이 · 너비 한도를 k 로 나눠야 확대해도 화면 안에 들어와 아래 칸이 잘리지 않는다 */
+#prefs .box { max-height: calc((100vh - 32px) / var(--k, 1)); min-height: min(640px / var(--k, 1), calc((100vh - 32px) / var(--k, 1))); max-width: calc((100vw - 32px) / var(--k, 1));
+  display: flex; flex-direction: column; }
+#prefs .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: 0 0 8px; flex: none; }
+#prefs .tabs button { background: transparent; border: 0; border-bottom: 2px solid transparent; color: var(--ink-3);
+  font: 600 14px var(--sans); padding: 8px 16px; cursor: pointer; margin-bottom: -1px; white-space: nowrap; }
+#prefs .tabs button.on { color: var(--ink); border-bottom-color: var(--accent); }
+#prefs .panes { overflow-y: auto; min-height: 0; flex: 1; }
+#prefs .pane[hidden] { display: none; }
+#prefs .pane h4 { border-top: 1px solid var(--line); padding-top: 14px; }
+#prefs .pane h4:first-child { border-top: 0; padding-top: 0; margin-top: 4px; }
+#prefs h4 { margin: 16px 0 6px; font-size: 12px; color: var(--ink-3); letter-spacing: .12em; }
+#prefs .row { display: flex; align-items: center; gap: 12px; padding: 6px 0; }
+#prefs .row .k { width: 92px; color: var(--ink-2); flex: none; }
+#prefs .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+#prefs .seg button { font: 600 13px var(--sans); color: var(--ink-2); background: transparent; border: 0;
+  border-right: 1px solid var(--line); padding: 6px 12px; cursor: pointer; }
+#prefs .seg button:last-child { border-right: 0; }
+#prefs .seg button.on { color: var(--ink); background: color-mix(in oklab, var(--accent) 24%, transparent); }
+#prefs .grid2 { display: grid; grid-template-columns: 1fr 1fr; column-gap: 24px; }
+#prefs .grid2 .row.wide { grid-column: 1 / -1; }
+#prefs .grid2 .row { min-width: 0; flex-wrap: wrap; }
+#prefs .grid2 .row .k { width: 110px; }
+#prefs .seg-sel { font: 600 13px var(--sans); color: var(--ink); background: var(--panel-2, transparent); border: 1px solid var(--line);
+  border-radius: 7px; padding: 6px 10px; color-scheme: dark light; cursor: pointer; }
+#prefs .note { font-size: 12px; color: var(--ink-3); }
+#prefs .keys { margin-top: 14px; font-size: 12px; color: var(--ink-3); }
+#prefs .keys kbd { font: 600 11px var(--mono); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; color: var(--ink-2); }
+/* 업데이트 탭 — 종합 화면 설정 › 업데이트와 같은 것(이 PC 받기 · 서버 갱신) */
+#prefs .upd .row { align-items: flex-start; }
+#prefs .upd .uv { min-width: 0; flex: 1; line-height: 1.5; }
+#prefs .upd .usub { margin: 12px 0 2px; font-weight: 700; color: var(--ink-2); }
+#prefs .upd code { font: 600 12.5px var(--mono); color: var(--ink); }
+#prefs .upd .hint { font-size: 12px; color: var(--ink-3); }
+#prefs .upd .warnx { color: var(--lv-fail); font-weight: 700; }
+#prefs .upd pre { white-space: pre-wrap; margin: 4px 0; max-height: 180px; overflow: auto; }
+#prefs .ubtn { font: 600 12.5px var(--sans); color: var(--ink); background: transparent; border: 1px solid var(--line);
+  border-radius: 7px; padding: 4px 12px; cursor: pointer; margin-right: 6px; }
+#prefs .ubtn:hover:not(:disabled) { background: color-mix(in oklab, var(--accent) 16%, transparent); }
+#prefs .ubtn.pri { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 24%, transparent); }
+#prefs .ubtn:disabled { opacity: .45; cursor: default; }
+
+/* ── 지도 위치(카메라, C) — 끄는 동안만 판 위에 손잡이 막을 깐다(시군 누르기 · 툴팁이 끼지 않게) ── */
+#camgrab { position: absolute; inset: 0; cursor: grab; touch-action: none; outline: 3px dashed color-mix(in oklab, var(--accent) 70%, transparent); outline-offset: -6px; }
+#camgrab.drag { cursor: grabbing; }
+#cambar { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); z-index: 7; zoom: var(--k, 1);
+  display: flex; align-items: center; gap: 12px; padding: 7px 8px 7px 16px; border-radius: 12px; white-space: nowrap;
+  border: 1px solid color-mix(in oklab, var(--accent) 60%, var(--line)); background: color-mix(in oklab, var(--panel) 94%, transparent);
+  box-shadow: 0 12px 34px rgba(0,0,0,.32); font: 500 13px var(--sans); color: var(--ink-2); }
+#cambar b { color: var(--ink); font-size: 14px; }
+#cambar button { font: 600 13px var(--sans); color: var(--ink); background: transparent; border: 1px solid var(--line);
+  border-radius: 8px; padding: 5px 12px; cursor: pointer; }
+#cambar button.pri { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 24%, transparent); }
+body.cam-edit #tools { opacity: 1; pointer-events: auto; }
+#stage.panning #mapwrap path { vector-effect: non-scaling-stroke; }
+
+/* ── 바다 위젯 — 지도 남쪽 바다 위 반투명 판. 특보(바다 풍랑 등) · 예측 상위 · 지금 오는 비(W) ──
+   ⚠️ 판(#rail)과 같은 calc(× --k) 크기다 — zoom 을 주면 안의 카드 줄(.mr · .fr)이 두 번 커진다 */
+#sw { position: absolute; z-index: 4; width: calc(430px * var(--k, 1)); padding: calc(6px * var(--k, 1)) calc(10px * var(--k, 1)) calc(10px * var(--k, 1));
+  border-radius: calc(14px * var(--k, 1)); border: 1px solid color-mix(in oklab, var(--line) 85%, transparent);
+  background: color-mix(in oklab, var(--panel) 72%, transparent); backdrop-filter: blur(10px) saturate(1.1); -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 10px 34px rgba(0,0,0,.26); transition: opacity .3s var(--ease); }
+#sw.drag { transition: none; opacity: .85; }
+body.cam-edit #sw { pointer-events: none; opacity: .5; }
+/* 시군을 골라 확대하면 바다 자리가 땅이 된다 — 순위 원처럼 천천히 사라졌다가 경남 전체로 돌아오면 다시 */
+#stage:is(.zooming, .zoomed) #sw { opacity: 0; pointer-events: none; transition: opacity .6s var(--ease); }
+#sw .sw-h { display: flex; align-items: center; gap: 8px; cursor: move; user-select: none; padding-bottom: calc(6px * var(--k, 1)); }
+#sw .sw-h .sp { flex: 1; }
+#sw .sw-tabs { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+#sw .sw-tabs button { font: 600 calc(12.5px * var(--k, 1)) var(--sans); color: var(--ink-3); background: transparent; border: 0; white-space: nowrap;
+  border-right: 1px solid var(--line); padding: calc(4px * var(--k, 1)) calc(9px * var(--k, 1)); cursor: pointer; }
+#sw .sw-tabs button:last-child { border-right: 0; }
+#sw .sw-tabs button.on { color: var(--ink); background: color-mix(in oklab, var(--accent) 24%, transparent); }
+#sw .bt { font: 600 calc(12px * var(--k, 1)) var(--mono); color: var(--ink-3); white-space: nowrap; }
+#sw .sw-rot.on { color: var(--accent); }
+#sw .sw-prog { position: absolute; left: 12px; right: 12px; top: calc(36px * var(--k, 1)); height: 2px; border-radius: 1px; overflow: hidden;
+  background: color-mix(in oklab, var(--ink) 12%, transparent); }
+#sw .sw-prog::after { content: ""; position: absolute; inset: 0; background: var(--accent); transform-origin: left; transform: scaleX(0); }
+#sw .sw-prog.run::after { animation: sdfill var(--d, 20s) linear forwards; }
+#sw .sw-b { overflow: hidden; }
+/* 지금 오는 비 — 막대 대신 장소 + 시우량 칩, 테두리가 시우량 색(10-24) */
+#sw .nwh { font: 600 calc(11px * var(--k, 1)) var(--sans); color: var(--ink-3); padding: 0 2px calc(5px * var(--k, 1)); }
+#sw .nwg { display: grid; grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr)); gap: calc(4px * var(--k, 1)) calc(6px * var(--k, 1)); }
+#sw .nw { display: flex; align-items: center; justify-content: space-between; gap: 6px; height: calc(23px * var(--k, 1)); padding: 0 calc(7px * var(--k, 1));
+  border: 1.5px solid var(--c, var(--line)); border-radius: 6px; cursor: pointer; }
+#sw .nw.det { cursor: default; }
+#sw .nw:hover, #sw .nw.hov { background: color-mix(in oklab, var(--accent) 12%, transparent); }
+#sw .nw .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: calc(13px * var(--k, 1)); }
+#sw .nw .nm small { color: var(--ink-3); margin-right: 4px; font-size: calc(11px * var(--k, 1)); }
+#sw .nw b { flex: none; font: 700 calc(13.5px * var(--k, 1)) var(--mono); }
+/* 시군 평균 — 넓은 판은 경남 모양 타일 지도(6×4), 테두리 · 옅은 바탕이 지도 범례 색. 비 없는 시군은 흐리게(10-24) */
+#sw .avm { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); grid-template-rows: repeat(4, calc(var(--rh) * var(--k, 1)));
+  gap: calc(5px * var(--k, 1)); }
+#sw .av { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 0; border-radius: 8px; cursor: pointer;
+  border: 1.5px solid var(--c); background: color-mix(in oklab, var(--c) 16%, transparent); transition: background .2s, box-shadow .2s; }
+#sw .av .nm { font: 600 calc(12px * var(--k, 1)) var(--sans); color: var(--ink-2); line-height: 1.15; }
+#sw .av b { font: 700 calc(17px * var(--k, 1)) var(--mono); line-height: 1.1; }
+#sw .av small { font: 500 calc(10px * var(--k, 1)) var(--mono); color: var(--ink-3); line-height: 1.2; white-space: nowrap; }
+#sw .av.top { border-width: 2.5px; }
+#sw :is(.av, .nw).dry { border-color: color-mix(in oklab, var(--line) 60%, transparent); background: transparent; }
+#sw :is(.av, .nw).dry b { color: var(--ink-3); font-weight: 600; }
+#sw .av:hover, #sw .av.hov { box-shadow: 0 0 0 2px var(--accent); }
+#sw .avm.sm .av { flex-direction: row; gap: calc(5px * var(--k, 1)); }
+#sw .avm.sm .av small { display: none; }
+#sw .avm.sm .av b { font-size: calc(13.5px * var(--k, 1)); }
+#sw .avs { grid-column: 5 / 7; grid-row: 3 / 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  border-radius: 10px; border: 1px dashed color-mix(in oklab, var(--c) 60%, var(--line)); }
+#sw .avs span { font: 600 calc(11.5px * var(--k, 1)) var(--sans); color: var(--ink-3); }
+#sw .avs b { font: 700 calc(26px * var(--k, 1)) var(--mono); line-height: 1.05; }
+#sw .avs b i { font: 600 calc(12px * var(--k, 1)) var(--sans); font-style: normal; color: var(--ink-3); margin-left: 2px; }
+#sw .avs small { font: 500 calc(10.5px * var(--k, 1)) var(--sans); color: var(--ink-3); }
+#sw .avm.sm .avs b { font-size: calc(19px * var(--k, 1)); }
+#sw .avm.sm .avs small { display: none; }
+#sw .sw-lg { min-height: calc(14px * var(--k, 1)); align-items: center; gap: 8px; }
+#sw .sw-lg :is(.cap, .gm) { line-height: calc(14px * var(--k, 1)); max-height: calc(14px * var(--k, 1)); }   /* 범례 줄과 같은 14px — 세 탭이 같은 크기 */
+#sw .sw-lg .cap { margin-right: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font: 600 calc(11px * var(--k, 1)) var(--sans); color: var(--ink-3); }
+#sw .sw-lg .gm { flex: none; font: 600 calc(11px * var(--k, 1)) var(--sans); color: var(--ink-3); }
+#sw .sw-lg .gm b { color: var(--ink); font: 700 calc(13px * var(--k, 1)) var(--mono); }
+#sw .nw.hov { background: color-mix(in oklab, var(--accent) 12%, transparent); }
+#sw .nwg.avl .nw { height: calc(var(--nh) * var(--k, 1)); }
+#sw .nwg.avl .nw b { font-size: calc(14.5px * var(--k, 1)); }
+#sw :is(.sw-x, .sw-sh) { background: transparent; border: 0; color: var(--ink-3); font-size: calc(14px * var(--k, 1)); cursor: pointer; padding: 0 2px; }
+#sw :is(.sw-x, .sw-sh, .sw-rot):hover { color: var(--ink); }
+#sw .sw-rot { background: transparent; border: 0; color: var(--ink-3); font-size: calc(14px * var(--k, 1)); cursor: pointer; padding: 0 2px; }
+#sw .sw-lg:empty { display: none; }
+#sw .sw-lg { display: flex; justify-content: flex-end; padding-bottom: 4px; }
+#sw .sw-none { color: var(--ink-3); font-size: calc(13px * var(--k, 1)); padding: 4px 2px; }
+#sw .sw-tabs i { font-style: normal; }
+/* 세로로 길쭉한 판(tall) — 빈자리가 좁고 길면(거제 동쪽 바다 · 지도 위쪽 등) 이 꼴로. 특보는 이름 밑에 구역,
+   지금 오는 비는 칩 한 칸, 예측 상위는 칸을 좁힌다 */
+#sw.tall { width: calc(262px * var(--k, 1)); }
+#sw.tall .sw-tabs i { display: none; }
+#sw.tall .sw-tabs button { padding: calc(4px * var(--k, 1)) calc(6px * var(--k, 1)); font-size: calc(11.5px * var(--k, 1)); }
+#sw.tall .sw-h { gap: 5px; }
+#sw.tall .bt { font-size: calc(11px * var(--k, 1)); }
+#sw .sw-tabs { flex: none; }                 /* 탭 글자가 잘리지 않게 — 줄어드는 것은 시각 글자 */
+#sw .sw-h .bt { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#sw.tall .mn { grid-template-columns: 1fr; gap: calc(6px * var(--k, 1)); }
+#sw.tall .fr, #sw.tall .fh { grid-template-columns: calc(62px * var(--k, 1)) 1fr calc(30px * var(--k, 1)); gap: 5px; padding: 0 2px; }
+#sw.tall .fr .cells i { font-size: calc(10.5px * var(--k, 1)); }
+#sw.tall .fr .sum { font-size: calc(13px * var(--k, 1)); }
+/* 세로 판의 시군당 2곳 — 시군을 읍면동 위에 작게 얹는다(62px 칸에 '거제 둔덕면'이 한 줄로는 잘린다) */
+#sw.tall .fr .nm2:has(.pre) { display: flex; flex-direction: column; justify-content: center; line-height: 1.05; font-size: calc(12.5px * var(--k, 1)); }
+#sw.tall .fr .nm2 small.pre { margin: 0; font-size: calc(9.5px * var(--k, 1)); }
+#sw.tall .fh { font-size: calc(10px * var(--k, 1)); }
+
+/* ── 화면 재생(P) — 아래 가운데 쪽 점(아이패드 화면 넘김 점처럼). 지금 화면은 길쭉한 알약에 남은 시간이 찬다.
+   점에 올리면 위에 이름 · 앞/멈춤/다음 · 고치기 · 끝 ── */
+#showdots { position: absolute; left: var(--playx, 50%); bottom: 10px; transform: translateX(-50%); z-index: 6; zoom: var(--k, 1);
+  display: flex; flex-direction: column; align-items: center; gap: 6px; }
+#showdots .sd-dots { display: flex; gap: 8px; align-items: center; padding: 6px 11px; border-radius: 999px;
+  background: color-mix(in oklab, var(--panel) 72%, transparent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+#showdots .sd-dots i { position: relative; display: block; width: 8px; height: 8px; border-radius: 4px; cursor: pointer; overflow: hidden;
+  background: color-mix(in oklab, var(--ink) 30%, transparent); transition: width .35s var(--ease), background .3s; }
+#showdots .sd-dots i:hover { background: color-mix(in oklab, var(--ink) 60%, transparent); }
+#showdots .sd-dots i.on { width: 30px; background: color-mix(in oklab, var(--ink) 28%, transparent); }
+#showdots .sd-dots i.on::after { content: ""; position: absolute; inset: 0; background: var(--ink); transform-origin: left; transform: scaleX(0);
+  animation: sdfill var(--dur, 30s) linear forwards; }
+#showdots.paused .sd-dots i.on::after { animation-play-state: paused; }
+@keyframes sdfill { to { transform: scaleX(1); } }
+#showdots .sd-ctl { display: flex; align-items: center; gap: 4px; padding: 4px 6px 4px 12px; border-radius: 10px; white-space: nowrap;
+  background: color-mix(in oklab, var(--panel) 92%, transparent); border: 1px solid var(--line); font: 500 12.5px var(--sans); color: var(--ink-2);
+  opacity: 0; transform: translateY(4px); pointer-events: none; transition: opacity .2s, transform .2s var(--ease); }
+#showdots:hover .sd-ctl, #showdots.paused .sd-ctl { opacity: 1; transform: none; pointer-events: auto; }
+#showdots .sd-ctl b { color: var(--ink); margin-right: 4px; }
+#showdots .sd-ctl span { margin-right: 6px; }
+#showdots .sd-ctl button { font: 600 13px var(--sans); color: var(--ink); background: transparent; border: 1px solid transparent; border-radius: 7px;
+  min-width: 26px; height: 24px; cursor: pointer; }
+#showdots .sd-ctl button:hover { border-color: var(--line); background: color-mix(in oklab, var(--accent) 14%, transparent); }
+body.show-on #play { bottom: 46px; }      /* 점 자리를 비운다 */
+
+/* ── 화면 재생 목록 — 왼쪽에서 고르고(누르거나 끌어 넣기) 오른쪽에서 차례(끌기) · 시간 · 값을 정한다 ── */
+#showdlg { position: fixed; inset: 0; z-index: 22; display: flex; align-items: center; justify-content: center; background: rgba(4, 8, 14, .55); }
+#showdlg .box { width: 900px; max-width: calc(100vw - 32px); max-height: calc(100vh - 32px); display: flex; flex-direction: column; zoom: var(--k, 1);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 24px 80px rgba(0,0,0,.45); padding: 16px 20px 18px; }
+#showdlg .top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+#showdlg .top > b { font-size: 18px; }
+#showdlg .top .sp { flex: 1; }
+#showdlg .top .x { background: transparent; border: 0; color: var(--ink-2); font-size: 20px; cursor: pointer; }
+#showdlg .lists { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; border-radius: 10px; margin-bottom: 12px;
+  background: color-mix(in oklab, var(--accent) 6%, transparent); border: 1px solid var(--line); }
+#showdlg .lists label { font-size: 12px; color: var(--ink-3); }
+#showdlg select, #showdlg input[type=text] { font: 600 13px var(--sans); color: var(--ink); background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: 7px; padding: 4px 8px; }
+#showdlg input[type=text] { width: 180px; }
+#showdlg .btn { font: 600 13px var(--sans); color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: 8px; padding: 5px 12px; cursor: pointer; }
+#showdlg .btn:hover { background: color-mix(in oklab, var(--accent) 14%, transparent); }
+#showdlg .btn.pri { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 26%, transparent); }
+#showdlg .btn:disabled { opacity: .4; cursor: default; }
+#showdlg .msg { font-size: 12px; color: var(--ink-3); }
+#showdlg .cols { display: grid; grid-template-columns: 260px 1fr; gap: 16px; min-height: 0; flex: 1; }
+#showdlg .cat { overflow-y: auto; padding-right: 4px; }
+#showdlg .cat h5 { margin: 10px 0 4px; font-size: 11px; letter-spacing: .12em; color: var(--ink-3); }
+#showdlg .cat h5:first-child { margin-top: 0; }
+#showdlg .cat button { display: block; width: 100%; text-align: left; margin: 3px 0; padding: 7px 10px; border-radius: 8px; cursor: grab;
+  font: 600 13.5px var(--sans); color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); }
+#showdlg .cat button:hover { border-color: var(--accent); }
+#showdlg .cat button small { display: block; font-weight: 500; font-size: 11.5px; color: var(--ink-3); }
+#showdlg .seq { display: flex; flex-direction: column; min-height: 0; border: 1px dashed var(--line); border-radius: 10px; padding: 8px; }
+#showdlg .seq.over { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 6%, transparent); }
+#showdlg .seq .hd { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-3); padding: 0 4px 6px; }
+#showdlg .rows { overflow-y: auto; min-height: 120px; flex: 1; }
+#showdlg .row { display: grid; grid-template-columns: 18px 22px 1fr auto auto auto; align-items: center; gap: 8px; padding: 6px 6px; margin: 3px 0;
+  border-radius: 8px; background: var(--panel-2); border: 1px solid var(--line); }
+#showdlg .row.drag { opacity: .4; }
+#showdlg .row.ins { box-shadow: 0 -3px 0 var(--accent); }
+#showdlg .row.ins-after { box-shadow: 0 3px 0 var(--accent); }
+#showdlg .row .h { cursor: grab; color: var(--ink-3); text-align: center; user-select: none; }
+#showdlg .row .no { font: 600 12px var(--mono); color: var(--ink-3); text-align: right; }
+#showdlg .row .nm { font-weight: 600; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+#showdlg .row .nm select { font-size: 12.5px; padding: 2px 4px; }
+#showdlg .row .nm .scl { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; color: var(--ink-2); margin-left: 4px; cursor: pointer; }
+#showdlg .row .nm select:disabled { opacity: .4; }
+#showdlg .row .ib2 { background: transparent; border: 0; color: var(--ink-3); cursor: pointer; font-size: 14px; padding: 0 4px; }
+#showdlg .row .ib2:hover { color: var(--ink); }
+#showdlg .empty { color: var(--ink-3); font-size: 13px; padding: 30px 10px; text-align: center; }
+#showdlg .foot { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+#showdlg .foot .sp { flex: 1; }
+
+[hidden] { display: none !important; }
+
+/* 4K 벽면(배율 100%)에서도 머리글·범례가 1080p 와 같은 크기로 읽히게 통째로 키운다.
+   --k = min(가로/1920, 세로/1080), 1 아래로는 줄이지 않는다(layout 에서 정한다).
+   지도 위 글자는 칸 크기를 따라 이미 커지므로 여기 넣지 않는다. */
+#lefttop, #tools, #legend, #play, #empty, #testrib, #prefs .box { zoom: var(--k, 1); }
+#tip { font-size: calc(14px * var(--k, 1)); }
+#tip b { font-size: calc(16px * var(--k, 1)); }
+#tip .d { font-size: calc(12px * var(--k, 1)); }

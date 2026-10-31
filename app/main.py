@@ -983,6 +983,20 @@ async def root_to_map(request: Request):
     return RedirectResponse("/map.html" + (f"?{q}" if q else ""), status_code=307)
 
 
+_MAP_PAGE: dict = {"v": None, "html": ""}
+
+
+@app.get("/map.html", include_in_schema=False)
+async def map_page():
+    """지도 화면 — 쪼갠 js · css 파일 주소의 {{V}} 에 파일 수정 시각으로 만든 버전 값을 넣어 내보낸다.
+    (옛 파일이 브라우저에 남아 새 map.html 과 섞이지 않게. map.html 자체는 아래 미들웨어가 늘 새로 받게 한다)"""
+    files = [STATIC / "map.html", *(STATIC / "js").glob("*.js"), *(STATIC / "css").glob("*.css")]
+    v = format(max(f.stat().st_mtime_ns for f in files), "x")[-10:]
+    if _MAP_PAGE["v"] != v:
+        _MAP_PAGE.update(v=v, html=(STATIC / "map.html").read_text("utf-8").replace("{{V}}", v))
+    return HTMLResponse(_MAP_PAGE["html"])
+
+
 if STATIC.exists():
     app.mount("/", StaticFiles(directory=STATIC, html=True), name="static")
 
