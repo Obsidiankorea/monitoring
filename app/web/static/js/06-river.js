@@ -91,14 +91,27 @@ function rvTrend(d, unit, eps) {
   if (Math.abs(d) < eps) return ` · 1시간 변화 없음`;
   return ` · 1시간 ${d > 0 ? "▲ +" : "▼ "}${d}${unit}`;
 }
+/* 단계 띠 — 제원의 기준 수위로 칸을 나누고 지금 수위를 ▼ 로. 몇 칸 남았는지가 글자보다 빨리 읽힌다 */
+function rvBar(s) {
+  const top = rvTop(s);
+  if (!top || s.v == null) return "";
+  const max = Math.max(top * 1.04, s.v), pc = v => (Math.max(0, v) / max * 100).toFixed(1);
+  const cuts = (s.thr || []).map((t, i) => [t, i]).filter(x => x[0]);
+  let last = -99;                                                        // shortcut: 기준 값이 8% 안에 붙으면 앞 글자를 뺀다, 툴팁이 넓어지면 다 적는다
+  const labs = cuts.filter(([t]) => { const ok = t / max * 100 - last >= 8; if (ok) last = t / max * 100; return ok; });
+  const segs = [[0, 0], ...cuts.map(([t, i]) => [t, i + 1])].map(([a, c], i, all) =>
+    `<i style="flex:${(all[i + 1]?.[0] ?? max) - a};background:${RV_C[c]}"></i>`).join("");
+  return `<div class="rvb"><u style="left:${pc(s.v)}%"></u><div class="b">${segs}</div>${labs.map(([t]) => `<span style="left:${pc(t)}%">${t}</span>`).join("")}</div>`;
+}
 function riverTip(s) {
   const old = s.stale ? " · ⚠ 오래된 값" : "", at = `${rvHm(s.t)} 기준${old}`;
   if (s.kind === "wl") {
     const st = s.stage ?? -1, nm = st < 0 ? "기준 수위 없음" : RV_N[st];
-    const thr = (s.thr || []).map((t, i) => (t ? `${["관심", "주의보", "경보", "심각"][i]} ${t}` : "")).filter(Boolean).join(" · ");
+    const thr = (s.thr || []).some(Boolean);
     const nx = st >= 0 && s.next ? ` · ${RV_N[Math.min(4, st + 1)]}수위까지 ${s.gap} m` : "";
     return `<b>${escH(s.name)} ${s.v == null ? "값 없음" : s.v.toFixed(2) + " m"}</b> · ${nm}${nx}`
-      + `<div class="d">${thr ? `기준 수위(m) ${thr}` : "홍수통제소 제원에 기준 수위가 없는 지점"}${s.q != null ? ` · 유량 ${s.q} ㎥/s` : ""}${rvTrend(s.d1h, " m", 0.02)}</div>`
+      + rvBar(s)
+      + `<div class="d">${thr ? "" : "홍수통제소 제원에 기준 수위가 없는 지점 · "}${s.q != null ? `유량 ${s.q} ㎥/s` : ""}${rvTrend(s.d1h, " m", 0.02)}</div>`
       + `<div class="d">${s.sigun ? s.sigun + " · " : ""}${escH(s.agency)} · ${at}</div>${rvSpark(s.hist, st >= 0 ? RV_C[st] : "var(--ink-3)")}`;
   }
   const lim = s.lim != null && s.v != null ? ` (${s.kind === "dam" ? "홍수기 제한수위" : "관리수위"} ${s.lim} − ${(s.lim - s.v).toFixed(1)} m)` : "";

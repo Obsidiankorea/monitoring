@@ -90,6 +90,8 @@ def overview(base: str) -> dict:
         fc = {r["sigun"]: r for r in ai._get(base, "/api/forecast", hours=6).get("sigun", [])}
         al = ai._get(base, "/api/alerts").get("data") or {}
         groups = al.get("groups", [])
+        now = datetime.strptime(tm, "%Y%m%d%H%M") if tm else datetime.now()
+        short = ai.short_of(base)
         rows = []
         for sg in ai.SIGUN_FULL:
             r1, r3, r24 = (a1.get(sg) or {}), (a3.get(sg) or {}), (a24.get(sg) or {})
@@ -102,10 +104,11 @@ def overview(base: str) -> dict:
                          "alerts": [x["name"] for x in groups if sg in x.get("siguns", [])],
                          "relay": v1 >= 20 or v24 >= 100, "cbs": (v1 >= 50 and v3 >= 90) or v1 >= 72,
                          "risk": dict(Counter(ai.FAMILY_OF.get(s["유형"], "야외·기타") for s in sites)),
-                         "under": Counter(s["유형"] for s in sites)})
+                         "under": Counter(s["유형"] for s in sites),
+                         "outlook": ai.outlook(ai.alert_times(groups, sg), [p for p in al.get("pending", []) if p.get("sigun") == sg],
+                                               short.get(sg, {}), v3, f.get("sum"), f.get("peak"), now)})
         lv = lambda r: 2 if "호우경보" in r["alerts"] else 1 if "호우주의보" in r["alerts"] else 0  # noqa: E731
         rows.sort(key=lambda r: (-lv(r), -r["r3"], -r["r24"]))
-        now = datetime.strptime(tm, "%Y%m%d%H%M") if tm else datetime.now()
         return {"tm": tm, "night": now.hour >= 21 or now.hour < 6, "groups": groups, "pending": al.get("pending", []),
                 "stage": ai._stage(groups), "rows": rows, "computed": bool(al.get("computed"))}
     return _cached(("ov", base), build)
@@ -308,7 +311,8 @@ def report(base: str, sigun: str | None = None, mode: str = "all") -> dict:
         nxt.append("호우경보 3개 시군 이상 → 도 비상 2단계" if st == "비상 1단계" else "호우주의보 4개 시군 이상 → 도 비상 1단계")
     nxt.append(_ante_note(sits))
     return {"scope": "경남", "title": "경남 전체", "tm": o["tm"], "flash": _flash_all(o, sits, own),
-            "sections": [{"h": "상황", "items": sit}, {"h": "중요한 점", "items": imp}, {"h": "할 일", "items": tasks},
+            "sections": [{"h": "상황", "items": sit}, {"h": "전망 — 특보 · 단기예보 · 초단기", "items": _outlook(rows)},
+                         {"h": "중요한 점", "items": imp}, {"h": "할 일", "items": tasks},
                          {"h": "살펴볼 곳", "items": look or ["특별히 살펴볼 읍면동 없음"]}, {"h": "다음 확인", "items": nxt},
                          {"h": "참고 — 위키 · 책자", "items": _refs(BASE_REFS + ["상황판단회의"])}],
             "questions": [{"id": k, "label": v} for k, v in Q_ALL]}
@@ -372,6 +376,7 @@ def _report_sigun(base: str, sigun: str) -> dict:
         sit.append(f"도 비상단계 기준: {s['stage']['stage']} ({s['stage']['why']})")
     sd = ai.sigun_stage(sigun, s["alerts"], [p["name"] for p in s["pending"]], ai.overrides().get(sigun))
     sit.append("시군 비상단계: " + (ai.stage_text(sigun, sd) if sd else "이 시군의 매뉴얼은 위키에 아직 없다 — 도 기준만 본다"))
+    sit.append(ai.outlook_text(s["outlook"]))
     sit.append("우려지역(위키): " + " · ".join(f"{FAM_SHORT[k]} {v}" for k, v in sorted(s["risk_total"].items(), key=lambda x: -x[1])))
     sit.append(ai.river_text(s.get("river")))
     relay = [r for r in s["emd"] if r["relay"]]
@@ -632,11 +637,18 @@ def _analogs(o: dict, siguns: list[str]) -> list[str]:
     return out
 
 
+def _outlook(rows: list[dict], n: int = 6) -> list[str]:
+    """시군별 전망 — 우려가 큰 곳부터. 특보 · 단기예보 · 초단기를 묶고, 새 발표를 무겁게 본 것."""
+    wet = sorted((r for r in rows if r.get("outlook", {}).get("parts")), key=lambda r: -r["outlook"]["score"])
+    return [f"{r['sigun']}: {ai.outlook_text(r['outlook'])}" for r in wet[:n]] or ["특보 · 단기예보 · 초단기 모두 큰 비 없음"]
+
+
 def _calm(o: dict, rows: list[dict], hit: bool = False) -> bool:
     """비가 없고 올 우려도 없다 — 호우특보 · 상황전파(시간당 20㎜ · 일 100㎜) · 재난문자 기준 · 대피 기준 해당 없음,
-    앞으로 6시간 시군 합 30㎜ 미만 · 시간당 20㎜ 미만. 이때는 자료를 펼치지 않고 '언제부터 필요한가'만 보인다."""
+    앞으로 6시간 시군 합 30㎜ 미만 · 시간당 20㎜ 미만 · 전망(단기예보 · 예비특보) 약함. 이때는 자료를 펼치지 않고 '언제부터 필요한가'만 보인다."""
     return not (hit or any(g["name"].startswith("호우") for g in o["groups"])
-                or any(r["relay"] or r["cbs"] or (r["fc_sum"] or 0) >= 30 or (r["fc_peak"] or 0) >= 20 for r in rows))
+                or any(r["relay"] or r["cbs"] or (r["fc_sum"] or 0) >= 30 or (r["fc_peak"] or 0) >= 20
+                       or r.get("outlook", {}).get("score", 0) >= .5 for r in rows))     # 단기예보 60㎜↑ · 예비특보도 '올 우려'
 
 
 def _quiet(o: dict, sigun: str | None, rows: list[dict], title: str, when: list[str], refs: list[str]) -> dict:
@@ -644,7 +656,7 @@ def _quiet(o: dict, sigun: str | None, rows: list[dict], title: str, when: list[
     top = max(rows, key=lambda r: r["fc_sum"] or 0, default=None)
     now_ = "호우특보 없음 · 기준에 닿은 곳 없음 · " + (f"앞으로 6시간 가장 많은 곳 {top['sigun']} {top['fc_sum']:g}㎜" if top and top["fc_sum"] else "앞으로 6시간 비 예보 거의 없음")
     return {**_hdr(o, sigun, f"{title} — 지금은 해당 없음"),
-            "sections": [{"h": "지금", "items": [now_]}, {"h": "이렇게 되면 필요하다", "items": when},
+            "sections": [{"h": "지금", "items": [now_] + [x for x in _outlook(rows, 2) if "큰 비 없음" not in x]}, {"h": "이렇게 되면 필요하다", "items": when},
                          {"h": "참고 — 위키 · 책자", "items": _refs(refs)}]}
 
 
@@ -716,6 +728,7 @@ def _m_meeting(base, sigun):
           + (" (산출 · 가상)" if o["computed"] else "")]
     wx += [f"{r['sigun']} — 시간당 최대 {r['r1']:g}㎜{'(' + r['emd1'] + ')' if r['r1'] else ''} · 3시간 {r['r3']:g}㎜ · 24시간 {r['r24']:g}㎜"
            + (f" · 앞으로 6시간 {r['fc_sum']:g}㎜" if r["fc_sum"] else "") for r in sorted(rows, key=lambda x: -x["r24"])[:6]]
+    wx += _outlook(rows, 4)
     if o["night"]:
         wx.append("야간 · 취약시간대(21~06시) — 일몰 전 사전대피 원칙을 이미 넘겼다")
     hit = _hits(sits, ("긴급대피", "사전대피"), ("met",))

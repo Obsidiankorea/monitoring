@@ -106,6 +106,9 @@ def normalize(raw: bytes | str, now: datetime) -> dict:
         sig = None if sea else sigun_of(reg)
         if sig and sig not in g["siguns"]:
             g["siguns"].append(sig)
+        if sig:                            # 시군마다 가장 최근 발표 — AI 가 발표가 얼마나 새것인지 본다(ai.outlook)
+            g.setdefault("at", {})
+            g["at"][sig] = max(g["at"].get(sig, ""), p[I_TM_FC])
 
     def lv_of(name: str) -> str:
         if "중대경보" in name:
@@ -124,7 +127,7 @@ def normalize(raw: bytes | str, now: datetime) -> dict:
             # 해상은 시군 개념이 없어 개소로 셀 수밖에 없다
             "count": len(g["regions"]) if g["sea"] else len(g["siguns"]),
             "unit": "개소" if g["sea"] else "개시군",
-            "regions": g["regions"], "siguns": g["siguns"],
+            "regions": g["regions"], "siguns": g["siguns"], "at": g.get("at", {}),
         })
 
     order = {"severe": 0, "warn": 1, "watch": 2}

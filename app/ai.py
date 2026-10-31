@@ -446,6 +446,94 @@ def sigun_stages(data: dict, over: dict | None = None) -> dict:
     return {"do": _stage(groups), "sigun": out}
 
 
+# ── 전망 — 특보 · 단기예보 · 초단기를 묶어 '비가 올 우려'를 본다. 사람(예보관)이 낸 특보는 무겁게, 새 발표일수록 무겁게.
+# ⚠️ 위키 기준 대조(ladders) · 비상단계에는 끼어들지 않는다 — 전망 문구 · 보고 펼침에만 쓴다. 기준이 가중치로 흔들리면 안 된다.
+AL_SEV = {"호우경보": 1.0, "태풍경보": 1.0, "호우주의보": .7, "태풍주의보": .7}
+AL_3H = {"호우주의보": 60, "호우경보": 90}                  # 기상특보 발표기준 3시간 값
+HALF_H, W_FLOOR = 3.0, 0.5                                 # 3시간마다 절반. 발효 중인 특보는 절반 아래로 내리지 않는다
+LV_HIGH, LV_WARN = .7, .3
+
+
+def _fc_dt(t, now: datetime) -> datetime | None:
+    """발표 시각 — YYYYMMDDHHMM · YYYYMMDDHH · 옛 스냅숏의 HH:MM."""
+    t = str(t or "")
+    try:
+        if ":" in t:
+            d = now.replace(hour=int(t[:2]), minute=int(t[3:5]), second=0, microsecond=0)
+            return d - timedelta(days=1) if d > now else d
+        return datetime.strptime(t[:12].ljust(12, "0"), "%Y%m%d%H%M") if t else None
+    except ValueError:
+        return None
+
+
+def weight(age_h: float | None, backed: bool) -> float:
+    """새 발표일수록 무겁다. 지금 실황 · 초단기가 같은 말을 하면(backed) 시간이 지나도 깎지 않는다. 시각을 모르면 깎지 않는다."""
+    if backed or age_h is None:
+        return 1.0
+    return max(W_FLOOR, round(.5 ** (max(age_h, 0) / HALF_H), 2))
+
+
+def outlook(alerts: list[dict], pending: list[dict], short: dict, r3, fc_sum, fc_peak, now: datetime) -> dict:
+    """alerts [{name, at}] · pending(예비특보) · short {today: {max, tmfc}, tomorrow: …} · 실황 3시간 · 초단기 6시간 합 · 최대 시우량."""
+    seen = (r3 or 0) + (fc_sum or 0)                       # shortcut: 지난 3시간 + 앞 6시간을 특보 3시간 값과 견준다(느슨한 쪽), 시간별로 보려면 fc_hours 로
+    parts = []
+
+    def add(src, name, at, sev, backed):
+        d = _fc_dt(at, now)
+        age = round((now - d).total_seconds() / 3600, 1) if d else None
+        parts.append({"src": src, "name": name, "at": d.strftime("%H:%M") if d else None, "age_h": age,
+                      "sev": sev, "backed": backed, "w": weight(age, backed)})
+
+    for a in alerts:
+        if a["name"] in AL_SEV:
+            need = AL_3H.get(a["name"])                     # 태풍은 3시간 값이 없어 깎지 않는다
+            add("특보", a["name"], a.get("at"), AL_SEV[a["name"]], need is None or seen >= .7 * need)
+    for p in pending:
+        if p.get("name") in ("호우", "태풍"):
+            add("예비특보", f"{p['name']} 예비특보", p.get("tmfc"), .5, seen >= 42)
+    for key, lab in (("today", "오늘"), ("tomorrow", "내일")):
+        v = (short.get(key) or {}).get("max")
+        if v is not None and v >= 30:
+            add("단기예보", f"{lab} 최대 {v:g}㎜", short[key].get("tmfc"), .8 if v >= 100 else .6 if v >= 60 else .4,
+                key == "today" and seen >= .5 * v)
+    if (fc_sum or 0) >= 30 or (fc_peak or 0) >= 20:
+        big = (fc_sum or 0) >= 60 or (fc_peak or 0) >= 30
+        parts.append({"src": "초단기", "name": f"앞으로 6시간 {fc_sum or 0:g}㎜", "at": None, "age_h": None,
+                      "sev": .8 if big else .5, "backed": True, "w": 1.0})
+    parts.sort(key=lambda x: -x["w"] * x["sev"])
+    score = round(parts[0]["w"] * parts[0]["sev"], 2) if parts else 0
+    return {"level": "높음" if score >= LV_HIGH else "주의" if score >= LV_WARN else "낮음", "score": score, "parts": parts}
+
+
+def outlook_text(o: dict) -> str:
+    def one(x):
+        if x["at"] is None:
+            return x["name"]
+        how = ("실황 · 초단기가 뒷받침" if x["backed"] else f"{x['age_h']:g}시간 전, 가중 {x['w']:g}" if x["name"].startswith("내일")   # 내일 비는 지금 비로 맞춰 볼 수 없다
+               else f"{x['age_h']:g}시간 전 · 실황 · 초단기가 아직 못 따라옴, 가중 {x['w']:g}")
+        return f"{x['name']} {x['at']} 발표({how})"
+    return f"전망 {o['level']}" + (" — " + " · ".join(one(x) for x in o["parts"][:3]) if o["parts"] else " — 특보 · 단기예보 · 초단기 모두 큰 비 없음")
+
+
+def alert_times(groups: list[dict], sigun: str) -> list[dict]:
+    return [{"name": g["name"], "at": (g.get("at") or {}).get(sigun) or g.get("tmfc")}
+            for g in groups if sigun in g.get("siguns", []) and not g.get("sea")]
+
+
+def short_of(base: str) -> dict:
+    """시군별 단기예보 — {시군: {today: {max, tmfc}, tomorrow: …}}. 격자가 없으면 빈 것."""
+    out: dict[str, dict] = {}
+    for key in ("today", "tomorrow"):
+        try:
+            j = _get(base, "/api/grid/sigun", layer=f"shrt_{key}")
+        except Exception:                                  # noqa: BLE001 — 단기예보가 없어도 상황판단은 돈다
+            continue
+        for r in j.get("rows", []):
+            if r.get("kind") == "gn" and r.get("max") is not None:
+                out.setdefault(r["sigun"], {})[key] = {"max": r["max"], "tmfc": j.get("tmfc")}
+    return out
+
+
 def situation(sigun: str, base: str = "http://127.0.0.1:8000") -> dict:
     """시군 하나 — 읍면동별 지금 수치 · 우려지역(유형별) · 3대 유형 단계 대조 · 지구 대피기준까지 % ·
     상황전파 기준 · 특보 · 비상단계 · 재난문자 기준. 판정하지 않는다(st 는 '그 조건에 닿았나'일 뿐)."""
@@ -506,10 +594,13 @@ def situation(sigun: str, base: str = "http://127.0.0.1:8000") -> dict:
         row["hot"] = max((order[c["st"]] for v in row["ladders"].values() for c in v), default=0)
         emds.append(row)
     emds.sort(key=lambda r: (-r["hot"], -(r["max_pct"] or -1), -(r["rain"]["3h"] or 0)))
+    ol = outlook(alert_times(groups, sigun), pend, short_of(base).get(sigun, {}),
+                 max((r["rain"]["3h"] or 0 for r in emds), default=0), max((r["fc6h"] or 0 for r in emds), default=0),
+                 max((r["fc_peak"] or 0 for r in emds), default=0), now)
     return {
         "sigun": sigun, "tm": tm, "night": night, "rain_src": src, "fc_tmfc": fc.get("tmfc"),
         "ante": {k: an.get(k) for k in ("ok", "have", "want", "missing", "from", "to")},
-        "alerts": mine, "pending": pend, "stage": _stage(groups), "river": rv,
+        "alerts": mine, "pending": pend, "stage": _stage(groups), "river": rv, "outlook": ol,
         "risk_total": dict(Counter(FAMILY_OF.get(s["유형"], "야외·기타") for s in sites["sites"])),
         "emd": emds,
         "rules": {"cbs": "1시간 50㎜ + 3시간 90㎜ 동시, 또는 1시간 72㎜(기상청 긴급재난문자)",
@@ -519,6 +610,7 @@ def situation(sigun: str, base: str = "http://127.0.0.1:8000") -> dict:
                    f"초단기 예보 시우량은 {RN1_CAP:g}㎜ 에서 막혀 온다 — 50·55㎜/h 예보 조건은 '모름'",
                    "선행 5일 강우 · 토양함수 · 침수심 · 제방 만수위 · 교량 수위 · 댐 방류 예보 · 예측정보(산림청 산사태 예보)는 여기 없다 — 따로 확인(하천 수위는 홍수통제소 원시값을 연결했다)",
                    "기준 N% · 남은 ㎜ · 닿는 시각은 가장 먼 조건 기준이다 — 닿는 시각은 예보 시우량을 지금 누적에 더한 것이라 창에서 빠지는 옛 비는 빼지 않아 실제보다 이를 수 있다",
+                   "전망(높음 · 주의 · 낮음)은 특보 · 단기예보 · 초단기를 묶은 참고다 — 새 발표일수록 무겁고, 지금 비가 같은 말을 하면 시간이 지나도 깎지 않는다. 위키 기준 대조 · 비상단계는 바꾸지 않는다",
                    "목록에 없다고 위험이 없는 것이 아니다", "대피명령은 시장·군수·구청장 권한(재난안전법 제40조)",
                    sites["source_basis"]],
         "wiki": [f"[[{SIGUN_FULL.get(sigun, sigun)}]] (산사태 위험지역)", "[[통제·대피 기준]]", "[[시군 상황관리반 행동매뉴얼]]",
@@ -555,6 +647,8 @@ def brief(s: dict, top: int = 4) -> str:
     t = s.get("tm") or ""
     out = [f"■ {s['sigun']} — {t[4:6]}.{t[6:8]}. {t[8:10]}:{t[10:12]} 실황 기준{' · 취약시간대(21~06시)' if s['night'] else ''}"]
     out.append("특보: " + (", ".join(s["alerts"]) or "없음") + (f" · 예비 {', '.join(p['name'] for p in s['pending'])}" if s["pending"] else ""))
+    if s.get("outlook"):
+        out.append(outlook_text(s["outlook"]))
     if s["stage"]:
         out.append(f"도 비상단계 기준: {s['stage']['stage']} ({s['stage']['why']})")
     out.append("우려지역(위키): " + " · ".join(f"{k} {v}" for k, v in sorted(s["risk_total"].items(), key=lambda x: -x[1])))

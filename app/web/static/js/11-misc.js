@@ -267,10 +267,15 @@ async function fcLoad() {
     own.sort((a, b) => rank(a[0]) - rank(b[0]));
     const act = own.filter(([, v]) => v.stage !== v.order[0] || v.set);
     st = `<h6>비상단계</h6><div class="fl"><b>도</b><span>${d ? `${escH(d.stage)} <em>${escH(d.why)}</em>` : "해당 없음 <em>호우주의보 시군 없음</em>"}</span></div>`
-      + `<div class="sg">` + own.map(([n, v]) => `<div class="c"><span>${escH(n)}</span><span class="cw">${stgChip(v)}${sel(n, v)}</span></div>`).join("") + `</div>`
-      + (act.length ? act.map(([n, v]) => `<div class="ad"><b>${escH(n)}</b><span>${v.set ? `수동 입력 · 특보 기준 ${escH(v.auto)}: ` : ""}${escH(v.why)}<br><em>${escH(v.do)}</em></span></div>`).join("") : "")
-      + `<div class="fn" id="stg-msg">칩을 누르면 바꾼다(✎). 도 단계 = 특보가 난 시군 수 · 시군 단계 = 그 시에 발효된 특보 종류. 두 기준은 별개다. 비상 2·3단계 등 실제 발령은 상황판단회의 · 본부장 판단이라 사람이 바꿀 수 있고 24시간 뒤 저절로 돌아온다.
-        거제 · 통영은 자기 매뉴얼(2026.10.), 나머지 시군은 거제 기준을 준용(점선 둘레 칩 — 그 시군 매뉴얼이 위키에 들어오면 바꾼다).</div>`;
+      + `<div class="sgl">${[["c0", "평시"], ["c1", "준비"], ["c2", "비상 1"], ["c3", "비상 2"], ["c4", "비상 3"]].map(([c, l]) => `<span><i class="stg ${c}"></i>${l}</span>`).join("")}</div>`
+      + `<div class="sg">` + own.map(([n, v]) => `<div class="c stg ${STG_C[v.stage] || "c0"}${v.std ? " std" : ""}" title="${escH(v.stage)} — ${escH(v.set ? `수동 입력 · 특보 기준 ${v.auto}: ${v.why}` : v.why)}">${escH(n)}${v.set ? " ✎" : ""}${sel(n, v)}</div>`).join("") + `</div>`
+      + Object.entries(act.reduce((m, [n, v]) => {                    // 같은 단계 · 같은 까닭은 한 줄로 묶는다
+        const t = `${escH(v.stage)}${v.set ? ` · 수동 입력(특보 기준 ${escH(v.auto)})` : ""}: ${escH(v.why)}<br><em>${escH(v.do)}</em>`;
+        (m[t] ||= []).push(n);
+        return m;
+      }, {})).map(([t, ns]) => `<div class="ad"><b>${ns.map(escH).join(" · ")}</b><span>${t}</span></div>`).join("")
+      + `<div class="fn" id="stg-msg">칸을 누르면 바꾼다(✎). 도 단계 = 특보가 난 시군 수 · 시군 단계 = 그 시에 발효된 특보 종류. 두 기준은 별개다. 비상 2·3단계 등 실제 발령은 상황판단회의 · 본부장 판단이라 사람이 바꿀 수 있고 24시간 뒤 저절로 돌아온다.
+        거제 · 통영은 자기 매뉴얼(2026.10.), 나머지 시군은 거제 기준을 준용(점선 둘레 — 그 시군 매뉴얼이 위키에 들어오면 바꾼다).</div>`;
   }
   const day = (r, lab) => r.status === "fulfilled"
     ? `<h6>${lab} 24시까지 강수량 <em>${escH(fcHm(r.value.tmfc))}</em></h6>` + fcTop(r.value) + (r.value.capped > 0 ? `<div class="fn">30㎜ 이상 든 칸 ${r.value.capped} — 합계는 하한</div>` : "")
