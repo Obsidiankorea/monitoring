@@ -32,7 +32,7 @@ from fastapi import Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import aiwatch, lawwatch, clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, serverupdate, sites, snaps, update
+from . import aiwatch, apikeys, lawwatch, clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, serverupdate, sites, snaps, update
 from .collectors import alerts, bangjae_rain, forecast, grid_rain, qpf, rain, shortfc
 from .config import CACHE, INTERVALS, POLL_DEFAULT
 
@@ -472,6 +472,26 @@ async def api_law_run():
     if not config.KEYS.get("LAW_OC"):
         raise HTTPException(400, "LAW_OC 없음 — config/api_keys.txt")
     return await lawwatch.run()
+
+
+@app.get("/api/keys")
+async def api_keys():
+    """설정 › API 키 — 어떤 키가 설정돼 있나(값은 주지 않는다: 설정됨 · 끝 네 글자만)."""
+    return {"keys": apikeys.status(), "demo": config.DEMO}
+
+
+@app.put("/api/keys")
+async def api_keys_put(body: dict):
+    """{name, value} — 키 하나를 config/api_keys.txt 에 쓰고 바로 반영. value 가 비면 지운다. 시연 서버는 바꾸지 않는다."""
+    if config.DEMO:
+        raise HTTPException(403, "시연 서버에서는 키를 바꾸지 않는다")
+    try:
+        apikeys.save(str(body.get("name") or ""), str(body.get("value") or ""))
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    except OSError as e:
+        raise HTTPException(500, f"파일에 쓰지 못했다 — {e}") from e
+    return {"keys": apikeys.status(), "demo": config.DEMO}
 
 
 @app.get("/api/ai/sigunstage")

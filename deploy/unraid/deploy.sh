@@ -45,7 +45,7 @@ docker rm -f "$NAME" >/dev/null 2>&1 || true
 docker run -d --name "$NAME" --restart unless-stopped --memory 2g -p "$PORT:8000" \
   -e TZ=Asia/Seoul "${AI[@]}" \
   -v "$D/state:/state" \
-  -v "$D/config/api_keys.txt:/app/config/api_keys.txt:ro" \
+  -v "$D/config/api_keys.txt:/app/config/api_keys.txt" \
   -l net.unraid.docker.webui="http://[IP]:[PORT:8000]/" \
   "$NAME:$V" >/dev/null
 

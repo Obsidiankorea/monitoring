@@ -9,7 +9,8 @@ import logging
 
 import httpx
 
-from .config import HTTP_RETRY, HTTP_TIMEOUT, KMA_HOST, ORG_API_KEY, VERIFY_SSL
+from . import config
+from .config import HTTP_RETRY, HTTP_TIMEOUT, KMA_HOST, VERIFY_SSL
 
 log = logging.getLogger("kma")
 
@@ -32,10 +33,10 @@ async def fetch_text(path: str, params: dict, *, encoding: str = "euc-kr") -> st
 
 
 async def fetch_bytes(path: str, params: dict) -> bytes:
-    if not ORG_API_KEY:
+    if not config.ORG_API_KEY:                     # 화면에서 바꾼 키가 바로 쓰이게 부를 때마다 읽는다
         raise KmaError("ORG_API_KEY 없음 — config/api_keys.txt 를 확인하세요")
 
-    q = {**params, "authKey": ORG_API_KEY}
+    q = {**params, "authKey": config.ORG_API_KEY}
     last: Exception | None = None
 
     for attempt in range(HTTP_RETRY + 1):

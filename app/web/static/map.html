@@ -5275,7 +5275,7 @@ function prefTabs() {
   let cur = null;
   // 머리글 아홉 개를 네 탭으로 — 탭이 많아 글자가 꺾이던 것을 묶는다(머리글은 탭 안의 소제목으로 남는다)
   const GROUP = { "재생": "화면", "오른쪽 패널": "화면", "화면": "화면", "관측소": "자료", "API 절약": "자료",
-                  "AI 알림": "AI", "AI 위키": "AI", "업데이트": "시스템", "데모": "시스템" };
+                  "AI 알림": "AI", "AI 위키": "AI", "API 키": "시스템", "업데이트": "시스템", "데모": "시스템" };
   for (const el of [...box.children]) {
     if (el === top) continue;
     if (el.tagName === "H4") {
@@ -5397,6 +5397,10 @@ function openPrefs() {
     <div class="row"><span class="k">특보도</span><span class="seg"><button id="pf-sv-al0" type="button">그대로 1분</button><button id="pf-sv-al1" type="button">같이 늦춤</button></span></div>
     <div class="row"><span class="k"></span><span class="note">특보는 발표 리듬이 없고 늦으면 안 되므로 기본은 늦추지 않는다.</span></div>
     <div class="row"><span class="note" id="pf-sv-st">읽는 중…</span></div>
+    <h4>API 키</h4>
+    <div class="row"><span class="note">서버의 <code>config/api_keys.txt</code> 에 쓰고 바로 쓴다(재시작 불필요) — 저장소(git)에는 올라가지 않는다. 값은 다시 보여 주지 않고 끝 네 글자만 보인다.
+      비우고 저장하면 그 키를 지운다. 시연 서버에서는 바꾸지 못한다.</span></div>
+    <div id="pf-keys"><div class="row"><span class="note">읽는 중…</span></div></div>
     <h4>업데이트</h4>
     <div class="row"><span class="note">종합 화면 설정 › 업데이트와 같다 — 지도 창만 띄워 둔 화면에서도 여기서 받는다. 배포처는 GitHub 하나.
       이 PC 는 <b>지금 받기</b>(git pull — 이 PC 에서 손댄 파일이 있으면 받지 않는다), 서버(언레이드)는 <b>서버 갱신</b>(1분 안에 서버가 다시 빌드해 띄운다).
@@ -5418,6 +5422,7 @@ function openPrefs() {
   </div>`;
   prefTabs();
   loadWiki();
+  loadKeys();
   loadAlert();
   loadSaver();
   $("prefs").hidden = false;
@@ -5717,6 +5722,33 @@ $("prefs").addEventListener("click", async ev => {
     if (AIW.open) aiLoad();
   } catch (e) { wikiPaint(null, `<span class="warnx">저장하지 않았다 — ${escH(e.message)}</span>`); }
   b.disabled = false;
+});
+/* API 키 — 서버 config/api_keys.txt 를 고친다. 값은 받아 오지 않고 설정 여부 · 끝 네 글자만 */
+function keysPaint(j, msg = "") {
+  const box = $("pf-keys");
+  if (!box) return;
+  box.innerHTML = (j?.keys || []).map(k => `<div class="row" data-key="${k.name}"><span class="k" style="width:190px" title="${escH(k.use)}">${escH(k.label)}</span>
+      <span class="note" style="width:84px">${k.set ? `설정됨${k.tail ? ` ···${escH(k.tail)}` : ""}` : "없음"}</span>
+      <input type="password" autocomplete="off" spellcheck="false" placeholder="새 값" style="flex:1;min-width:0;font:inherit"${j.demo ? " disabled" : ""}>
+      <button type="button" data-ks="save"${j.demo ? " disabled" : ""}>저장</button>${k.set ? `<button type="button" data-ks="del"${j.demo ? " disabled" : ""}>지우기</button>` : ""}</div>`).join("")
+    + (msg ? `<div class="row"><span class="note">${msg}</span></div>` : "");
+}
+async function loadKeys() {
+  try { keysPaint(await getJson("/api/keys")); } catch (e) { keysPaint(null, `<span class="warnx">못 읽었다 — ${escH(e.message)}</span>`); }
+}
+$("prefs").addEventListener("click", async ev => {
+  const b = ev.target.closest?.("button[data-ks]");
+  if (!b) return;
+  const row = b.closest("[data-key]"), name = row.dataset.key, del = b.dataset.ks === "del";
+  const value = del ? "" : row.querySelector("input").value.trim();
+  if (!del && !value) { keysPaint(await getJson("/api/keys"), "새 값을 넣고 저장한다(지우려면 '지우기')."); return; }
+  b.disabled = true;
+  try {
+    const res = await fetch("/api/keys", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ name, value }) });
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.detail || res.status);
+    keysPaint(j, del ? "지웠다." : "저장했다 — 바로 쓰인다.");
+  } catch (e) { b.disabled = false; keysPaint(await getJson("/api/keys").catch(() => null), `<span class="warnx">저장하지 않았다 — ${escH(e.message)}</span>`); }
 });
 $("prefs").addEventListener("click", ev => { const b = ev.target.closest?.("button[data-upd]"); if (b && !b.disabled) updAct(b.dataset.upd); });
 
