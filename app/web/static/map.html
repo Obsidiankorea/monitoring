@@ -728,6 +728,13 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 .ly-ic.risk .bd { background: #fff; color: #5a1a0e; border-color: currentColor; }
 @keyframes riskpulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,120,70,.65), 0 8px 24px rgba(0,0,0,.25); }
   50% { box-shadow: 0 0 0 9px rgba(255,120,70,0), 0 8px 24px rgba(0,0,0,.25); } }
+/* 스크롤바 — 가늘고 테마 색, 평소엔 숨겼다가 마우스를 올리면 나타난다(큼직한 기본 흰 막대가 판을 가리던 것) */
+.rpop, #ly-alerts, #prefs .panes, #aiw .bd, #help .bd, #showdlg .rows, #showdlg .cat { scrollbar-width: thin; scrollbar-color: transparent transparent; transition: scrollbar-color .2s; }
+.rpop:hover, #ly-alerts:hover, #prefs .panes:hover, #aiw .bd:hover, #help .bd:hover, #showdlg .rows:hover, #showdlg .cat:hover { scrollbar-color: color-mix(in oklab, var(--ink-3) 70%, transparent) transparent; }
+.rpop::-webkit-scrollbar, #ly-alerts::-webkit-scrollbar, #prefs .panes::-webkit-scrollbar, #aiw .bd::-webkit-scrollbar, #help .bd::-webkit-scrollbar, #showdlg .rows::-webkit-scrollbar, #showdlg .cat::-webkit-scrollbar { width: 8px; }
+.rpop::-webkit-scrollbar-track, #ly-alerts::-webkit-scrollbar-track, #prefs .panes::-webkit-scrollbar-track, #aiw .bd::-webkit-scrollbar-track, #help .bd::-webkit-scrollbar-track { background: transparent; }
+.rpop::-webkit-scrollbar-thumb, #ly-alerts::-webkit-scrollbar-thumb, #prefs .panes::-webkit-scrollbar-thumb, #aiw .bd::-webkit-scrollbar-thumb, #help .bd::-webkit-scrollbar-thumb, #showdlg .rows::-webkit-scrollbar-thumb, #showdlg .cat::-webkit-scrollbar-thumb { background: transparent; border-radius: 6px; }
+.rpop:hover::-webkit-scrollbar-thumb, #ly-alerts:hover::-webkit-scrollbar-thumb, #prefs .panes:hover::-webkit-scrollbar-thumb, #aiw .bd:hover::-webkit-scrollbar-thumb, #help .bd:hover::-webkit-scrollbar-thumb, #showdlg .rows:hover::-webkit-scrollbar-thumb, #showdlg .cat:hover::-webkit-scrollbar-thumb { background: color-mix(in oklab, var(--ink-3) 70%, transparent); }
 .rpop { z-index: 8; width: 340px; max-height: min(66vh, 540px); overflow-y: auto; overscroll-behavior: contain; padding: 10px 12px 12px;
   background: var(--panel); backdrop-filter: none; border-color: #c8321f; }
 .rpop.ct { border-color: #b7860f; }
@@ -755,6 +762,14 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 .rpop .rg .it b { color: var(--ink); font-weight: 600; }
 .rpop .rg .it em { grid-column: 2; font-style: normal; font-size: 11.5px; color: var(--ink-3); }
 .rpop .rg .it .gp { grid-column: 2; font: 600 11.5px var(--mono); color: var(--ink-2); }
+.rpop.fc .sg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; margin: 2px 0 4px; }
+.rpop.fc .sg .c { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 12.5px; color: var(--ink); font-weight: 650; min-width: 0; }
+.rpop.fc .sg .cw { position: relative; display: inline-flex; }
+.rpop.fc .sg .cw select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.rpop.fc .sg .cw:hover .stg { filter: brightness(1.12); }
+.rpop.fc .sg .ro { display: inline-flex; }
+.stg.std { outline: 1px dashed color-mix(in oklab, var(--ink) 45%, transparent); outline-offset: 1px; }
+.rpop.fc .ad { display: grid; grid-template-columns: auto 1fr; gap: 1px 8px; font-size: 12px; color: var(--ink-2); padding: 3px 0; border-top: 1px solid var(--line-soft); }
 .stg { display: inline-block; font: 700 11.5px var(--sans); padding: 1px 8px; border-radius: 5px; color: #14181f; white-space: nowrap; }
 .stg.c0 { background: #8fd68a; }                                   /* 평시 — 연두 */
 .stg.c1 { background: #6ec3ee; }                                   /* 준비(관심) — 하늘 = 위기경보 관심 Blue */
@@ -978,6 +993,29 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
   border-radius: 999px; padding: 4px 12px; cursor: pointer; }
 #help nav button.on { color: var(--ink); border-color: var(--accent); background: color-mix(in oklab, var(--accent) 18%, transparent); }
 #help .bd { overflow: auto; padding: 12px 22px 20px; font-size: 14px; line-height: 1.55; color: var(--ink); }
+/* 백과 — 문명(Civilopedia)식 용어 사전. 색은 모두 테마 변수 */
+#help .enc .eq { position: sticky; top: -12px; z-index: 1; display: flex; align-items: center; gap: 10px; padding: 8px 0; background: var(--panel); }
+#help .enc .eq input { flex: 1; min-width: 0; font: 500 14px var(--sans); color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; color-scheme: dark light; }
+#help .enc .eq input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 22%, transparent); }
+#help .enc .eq span { font: 600 12px var(--mono); color: var(--ink-3); }
+#help .enc .ec { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 10px; }
+#help .enc .ec button { font: 600 12.5px var(--sans); color: var(--ink-2); background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 3px 11px; cursor: pointer; }
+#help .enc .ec button.on { color: var(--ink); border-color: var(--accent); background: color-mix(in oklab, var(--accent) 18%, transparent); }
+#help .enc .ent { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px 9px; margin-bottom: 8px; }
+#help .enc .ent:hover { border-color: color-mix(in oklab, var(--accent) 45%, var(--line)); }
+#help .enc .ent header { display: flex; align-items: center; gap: 8px; }
+#help .enc .ent header b { font-size: 14.5px; color: var(--ink); }
+#help .enc .ent .cat { font: 700 10.5px var(--sans); font-style: normal; padding: 1px 8px; border-radius: 999px; color: #14181f; letter-spacing: .02em; }
+#help .enc .ent .c-0 { background: #6ec3ee; }
+#help .enc .ent .c-1 { background: #f0cf3a; }
+#help .enc .ent .c-2 { background: #f2933a; }
+#help .enc .ent .c-3 { background: #3E9BD9; color: #fff; }
+#help .enc .ent .c-4 { background: #6C86A3; color: #fff; }
+#help .enc .ent .c-5 { background: #9A52E0; color: #fff; }
+#help .enc .ent p { margin: 5px 0 4px; font-size: 13.5px; line-height: 1.6; color: var(--ink-2); }
+#help .enc .ent p b { color: var(--ink); }
+#help .enc .ent small { font-size: 11.5px; color: var(--ink-3); }
+#help .enc .none { padding: 24px 0; text-align: center; color: var(--ink-3); }
 #help h4 { margin: 14px 0 6px; font-size: 13px; color: var(--ink-3); letter-spacing: .1em; }
 #help table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 #help th, #help td { text-align: left; vertical-align: top; padding: 7px 8px; border-bottom: 1px solid var(--line); }
@@ -5275,7 +5313,59 @@ function toggleBasis() {
 /* ── 도움말(?) — 용어 · 자료 출처 · 그 자료를 기상청 어디서 쓰나 ───────────────────
    ✔ 는 날씨누리 지도(weather.go.kr/wnuri-map)가 받아 가는 파일로 직접 확인한 것(2026.10.3).
    확인하지 못한 쓰임은 적지 않는다. */
-let HELP_TAB = "src";
+let HELP_TAB = "enc";
+/* ── 용어 백과(도움말 › 백과) — 기상 · 단계 · 통제·대피 · 하천·댐 용어를 한곳에. 검색 · 분류.
+   ⚠️ 숫자는 위키(재난업무 LLM 위키)에 있는 것만 — 출처를 항목마다 적는다. '홍수통제소 제원'은 HRFCO OpenAPI 안내(hrfco.go.kr/web/openapiPage/reference.do). */
+const ENC_CATS = ["기상", "단계", "통제·대피", "하천", "댐·보", "알림"];
+const ENC = [
+  // ── 기상
+  { c: "기상", t: "호우주의보 · 호우경보", k: "특보 3시간 12시간", d: "<b>주의보</b> 3시간 누적 60㎜ 이상 또는 12시간 누적 110㎜ 이상 예상. <b>경보</b> 3시간 누적 90㎜ 이상 또는 12시간 누적 180㎜ 이상 예상. 도 비상단계는 이 특보가 몇 개 시군에 났는가로, 시군 비상단계는 그 시에 난 특보 종류로 정한다.", s: "위키 · 기상특보 발표기준" },
+  { c: "기상", t: "태풍정보 → 예비특보 → 태풍특보", k: "태풍주의보 태풍경보", d: "태풍정보 다음에 태풍예비특보, 그다음 태풍특보(주의보 · 경보)가 나온다. 영향이 급격히 강해지면 주의보 없이 바로 경보가 나올 수 있다. <b>주의보</b>는 강풍 · 풍랑 · 호우 · 폭풍해일이 주의보 기준에 도달할 것으로 예상될 때, <b>경보</b>는 강풍 · 풍랑 · 폭풍해일이 경보 기준에 도달하거나 총강우량 200㎜ 이상이 예상될 때.", s: "위키 · 기상특보 발표기준 · 태풍 정보와 분류" },
+  { c: "기상", t: "강풍 · 풍랑 특보", k: "바람 파고", d: "<b>강풍(육상)</b> 주의보 풍속 14m/s 또는 순간 20m/s 이상(산지 17 · 25), 경보 풍속 21m/s 또는 순간 26m/s 이상(산지 24 · 30). <b>풍랑(해상)</b> 주의보 풍속 14m/s 이상 3시간 지속 또는 유의파고 3m 이상, 경보 풍속 21m/s 이상 3시간 지속 또는 유의파고 5m 이상.", s: "위키 · 기상특보 발표기준" },
+  { c: "기상", t: "폭풍해일 특보", k: "검조소 해수면", d: "천문조 · 폭풍 · 저기압이 겹쳐 해수면이 오르는 현상. 발효 기준은 검조소별 해수면 높이(cm) — 통영 320/370(통영 · 고성 · 사천) · 거제 231/281 · 마산 240/290(창원) · 여수 420/440(하동 · 남해), 앞이 주의보 뒤가 경보. 내륙 시군은 기준값이 없다.", s: "위키 · 재난경보와 폭풍해일 기준" },
+  { c: "기상", t: "시간당 강우량(시우량)", k: "집중호우 mm/h", d: "집중호우는 1시간 30㎜ 이상. 10~20 세게 내리는 비 · 20~30 장대비(작은 하천 넘침) · 30~50 산사태 쉽게 발생, 위험지역 대피 준비 · 50~80 지하공간에 빗물 유입, 침수 · 80 이상 대규모 재난 우려. 호우 긴급재난문자는 50㎜/h + 90㎜/3h 또는 72㎜/h.", s: "위키 · 시간당 강우량과 피해 양상 · 재난문자 송출기준" },
+  { c: "기상", t: "선행강우", k: "선행 5일 토양", d: "장마로 오래 내렸거나 태풍으로 이미 많이 온 곳에 다시 오면 피해가 커진다. 위키 산사태 기준에는 선행 5일 120㎜ 이상이 한 조건으로 있다(그리고 산림청 산사태 위험 증가 예보).", s: "위키 · 시간당 강우량과 피해 양상 · 통제·대피 기준" },
+  // ── 단계
+  { c: "단계", t: "위기경보 4단계", k: "관심 주의 경계 심각 블루 옐로 오렌지 레드", d: "<b>관심(Blue) · 주의(Yellow) · 경계(Orange) · 심각(Red)</b>. 도 비상단계와 짝: 상시대비/초기대응 = 관심, 비상 1단계 = 주의, 비상 2단계 = 경계, 비상 3단계 = 심각. 지도의 시군 음영과 칩 색이 이 색을 따른다.", s: "위키 · 위기경보와 비상단계" },
+  { c: "단계", t: "도 비상단계(특보가 난 시군 수)", k: "지대본 초기대응 1단계 2단계 3단계", d: "경남 재난안전대책본부 비상단계는 <b>특보가 난 시군 수</b>로 정한다. 호우: 주의보 3개 시군 이하 = 초기대응 · 주의보 4개 시군 이상 또는 경보 2개 시군 이하 = 비상 1단계 · 경보 3개 시군 이상 = 비상 2단계 · 광역적 경보 · 광역적 피해 · 본부장 판단 = 비상 3단계. 최종 결정은 상황판단회의.", s: "위키 · 위기경보와 비상단계" },
+  { c: "단계", t: "시군 비상단계(특보 종류)", k: "거제 통영 준용", d: "시군은 <b>그 시에 발효된 특보 종류</b>로 정한다. 거제시 매뉴얼: 평시 · 준비(관심: 강풍주의보 · 호우 예비특보) · 비상 1단계(호우주의보 · 태풍 예비특보) · 비상 2단계(호우경보 · 태풍주의보) · 비상 3단계(태풍경보). 통영시: 평시 · 비상 1단계(호우 · 대설주의보) · 비상 2·3단계. 나머지 시군은 매뉴얼이 위키에 들어오기 전까지 거제 기준을 준용한다. 비상 2 · 3단계 등 실제 발령은 상황판단회의 · 본부장 판단이라 사람이 바꿀 수 있다(24시간 뒤 저절로 돌아온다).", s: "위키 · 거제시 · 통영시 단계별 업무 · 시군 행동매뉴얼 비교" },
+  { c: "단계", t: "상황판단회의", k: "회의 소집", d: "단계 결정 · 조정, 위험 예보 협의, 대피 판단을 하는 회의. 단계와 인원을 기상 상황 · 재난 여건을 보아 조정할 수 있다. 위기상황이 생기면 자체 위기평가회의에서 재난경보 발령도 검토한다.", s: "위키 · 상황판단회의 · 위기경보와 비상단계" },
+  // ── 통제·대피
+  { c: "통제·대피", t: "통제 · 사전대피 · 긴급대피", k: "대피 기준 인명피해우려지역", d: "인명피해 우려지역을 <b>산사태 · 하천 · 지하공간</b> 세 유형으로 나눠 통제 → 사전대피 → 긴급대피 기준을 둔다. 그 유형 우려지역에만 적용. 사전대피는 예보, 긴급대피는 실황이 원칙. 지도 오른쪽 위 주민대피 · 긴급통제 아이콘이 이 기준에 닿았거나 70% 이상 가까운 곳이다.", s: "위키 · 통제·대피 기준" },
+  { c: "통제·대피", t: "산사태 기준", k: "산사태 100 200 170 270", d: "<b>통제</b> 일/누적 100㎜ + 20㎜/h 예보. <b>사전대피</b> 일/누적 200㎜ + 50㎜/h 예보. <b>긴급대피</b> 50㎜/h + 일 170㎜ 또는 누적 270㎜(실황). 산림청 예측(실황)정보 주의보 이상도 조건에 있다.", s: "위키 · 통제·대피 기준" },
+  { c: "통제·대피", t: "하천 기준", k: "하천 홍수주의보 만수위 교량", d: "<b>통제</b> 홍수주의보 수준 하천수위 상승 또는 홍수주의보 발령 · 30㎜/h 이상 3시간 이상 지속 예보. <b>긴급대피</b> 누적 200㎜ + 30㎜/h 실제 강우 · 제방 만수위 90% / 교량 수위 90% 도달 예상 · 도시 저지대 침수심 5㎝ 넘고 10㎝ 이상 높아질 우려 · 홍수경보 · 주의보, 호우경보 · 태풍경보 발령 · 호우 중 댐 방류 예보. 이 화면의 하천 수위는 '홍수주의보 · 경보 수준' 두 줄만 연결했다(만수위 · 교량수위 · 방류 예보는 자료 없음).", s: "위키 · 통제·대피 기준" },
+  { c: "통제·대피", t: "지하공간(지하차도) 기준", k: "지하차도 침수", d: "<b>통제</b> 15분 강우량 30㎜ 이상 + 동일 강우 1시간 이상 지속 예보 · (지하차도) 호우특보 발령 · 침수심 5㎝ 이상. <b>긴급대피</b> 15분 30㎜ 이상 + 시간당 55㎜ 이상 실제 강우.", s: "위키 · 통제·대피 기준" },
+  { c: "통제·대피", t: "대피명령", k: "사전대피 권고 해제", d: "대피명령은 시장 · 군수 · 구청장 권한(재난안전법 제40조). 위기징후(태풍 예비특보 · 특보, 댐 수위 상승, 시간당 강수량 증가)를 잡으면 상황판단회의에서 결정한다. 사전대피 권고 · 대피명령도 민방위경보시설로 알린다.", s: "위키 · 대피명령 길라잡이 · 재난경보와 폭풍해일 기준" },
+  // ── 하천
+  { c: "하천", t: "관심 · 주의보 · 경보 · 심각 수위", k: "기준수위 홍수 예경보 수위 단계", d: "홍수통제소가 지점마다 정해 둔 <b>기준 수위</b>(제원의 관심수위 · 주의보수위 · 경보수위 · 심각수위, 단위 m). 홍수특보는 수계별 주요 지점의 홍수 예 · 경보 기준수위로 발령한다. 이 화면은 지금 수위가 어느 기준에 닿았나를 정상 · 관심 · 주의보 · 경보 · 심각으로 읽어 막대 색으로 보인다. 실제 홍수특보 발령과 다를 수 있다.", s: "위키 · 산사태·홍수 행동요령 · 홍수통제소 제원" },
+  { c: "하천", t: "수위(관측소 수위, m)", k: "수위 눈금 영점표고", d: "하천 관측소 눈금에서 읽은 물 높이. 기준 수위도 같은 눈금이라 견줄 수 있다. 저수지 수위계는 해발 높이(El.m)라 하천 기준과 견주지 않는다. 값은 T/M 원시값(보정 전)이라 확정치와 다를 수 있다.", s: "홍수통제소 제원 · 안내" },
+  { c: "하천", t: "유량", k: "㎥/s 유량", d: "초당 흐르는 물의 양(㎥/s). 수위와 함께 홍수 규모를 본다. 관측소에 따라 없는 곳이 있다.", s: "홍수통제소 안내" },
+  { c: "하천", t: "계획홍수위 · 제방 만수위", k: "제방 계획홍수 만수위 90%", d: "<b>계획홍수위</b>는 하천 제방 등을 설계하는 기준 수위(제원 항목). 위키 하천 기준의 '제방 만수위 90% · 교량 수위 90% 도달 예상'은 이 화면에 자료가 없다. 판례: 계획홍수량 · 계획홍수위를 넘는 대홍수로 제방이 무너진 사안은 설치 · 관리상 하자를 부정했고, 제방이 계획홍수위보다 낮은 사안은 하자를 인정했다.", s: "위키 · 통제·대피 기준 · 판례 05 · 06" },
+  { c: "하천", t: "홍수예보 발령", k: "홍수예보 홍수특보 fldfct", d: "홍수통제소가 낸 홍수예보(발표 일시 · 지점 · 하천 · 종류 · 수위 도달 예상 시각). 범례의 '홍수예보 발령'에 최근 24시간 중 경남에 걸린 것만 나온다. 홍수통제소장의 홍수주의보 · 경보와 홍수정보(심각)는 재난문자 대상이다.", s: "홍수통제소 안내 · 위키 · 재난문자 송출기준" },
+  { c: "하천", t: "홍수 업무 시스템", k: "홍수정보시스템 RAWRIS 관제", d: "비상근무 때 쓰는 시스템: 홍수정보시스템(낙동강홍수통제소 — 합천 적포교 · 밀양 남포동 등, 영산강홍수통제소 — 하동 읍내리 등) · RAWRIS 농촌용수종합정보시스템(저수지) · 홍수상황통합관제시스템과 댐-하천 디지털트윈 물관리 플랫폼(홍수특보 · 댐방류 · CCTV).", s: "위키 · 비상근무 활용 시스템" },
+  // ── 댐·보
+  { c: "댐·보", t: "댐 수위 · 홍수기 제한수위", k: "제한수위 EL 댐 수위", d: "댐 수위는 해발 높이(El.m)로 잰다. <b>제한수위</b>는 제원의 홍수 대비 상한 수위 — 현재 수위가 이보다 낮을수록 홍수를 담을 여유가 크다(툴팁의 '제한수위 − 현재'가 그 여유, m). 계획홍수위도 제원에 있다(설계 기준 수위).", s: "홍수통제소 제원 · 안내" },
+  { c: "댐·보", t: "유입량 · 총방류량", k: "방류 유입 ㎥/s", d: "<b>유입량</b>은 댐으로 들어오는 물(㎥/s), <b>총방류량</b>은 나가는 물의 합(㎥/s). 방류가 유입보다 많으면 수위가 내려간다. 이 지도는 방류가 1시간 전보다 10㎥/s 이상 · 20% 이상 늘면 주황으로 번쩍인다. 방류가 얼마면 위험인지는 위키에 숫자가 없어 단계를 만들지 않았다.", s: "홍수통제소 안내 · 화면 규칙" },
+  { c: "댐·보", t: "댐 방류 사전예고제", k: "방류 예고 24시간 협의체", d: "댐 · 저수지 · 보 관리자가 방류 정보를 <b>최소 24시간 전</b> 사전예고한다(1~2일 전 통보 + 긴급재난문자). 방류 시기 · 방류량 · 하류 수위 상승 정도를 포함. 하류 지자체 대응: 재해취약지역 침수 예찰, 시설 점검, 사전방류, 방류량 조절, 예 · 경보와 주민대피, 민방위경보 활용. 댐 · 보 하류와 산사태 취약지역 주민 · 지자체가 협의체(홍수관리 소통회의)를 구성한다. 호우 중 댐 방류 예보는 하천 긴급대피 조건이다.", s: "위키 · 행동요령 카드 목록 · 통제·대피 기준" },
+  { c: "댐·보", t: "댐 방류 협의 · 예비방류 · 사전방류", k: "수자원공사 농어촌공사", d: "<b>한국수자원공사 낙동강유역본부</b>는 댐 방류 현황 전파 · 예비방류 · 수위정보 제공, <b>한국농어촌공사 경남지역본부</b>는 댐 · 저수지 현황 · 저수지 사전방류 · 양배수장 점검 · 비상전력을 맡는다. 자연재난과장은 댐 · 저수지 예비방류 협조를 요청한다. 거제 구천지구는 '호우 시 댐 방류 협의 시'가 사전통제 조건에 들어 있다(구천댐 · 연초댐이 지도에 표시된다).", s: "위키 · 비상단계별 협업부서 임무 · 현장조치 행동매뉴얼 · 시군별 통제·대피계획" },
+  { c: "댐·보", t: "보(洑)", k: "상류수위 하류수위 관리수위", d: "하천을 가로질러 물을 가두는 시설. 상류수위 · 하류수위 · 유입 · 총방류를 준다. <b>관리수위</b>는 보를 운영하는 기준 수위(제원). 낙동강 본류의 상주 · 낙단 · 구미 · 칠곡 · 강정고령 · 달성 · 합천창녕 · 창녕함안보가 경남으로 흘러드는 물의 길목이라 점선 둘레로 표시한다.", s: "홍수통제소 제원" },
+  { c: "댐·보", t: "낙동강 위쪽 댐 · 보(점선 둘레)", k: "상류 안동 임하 영주", d: "경북 · 대구의 낙동강 본류권 댐(안동 · 임하 · 영주 · 군위 · 김천부항 · 영천 · 운문 …)과 보. 이 물은 경남으로 흘러온다 — 위쪽 방류가 늘면 하류 시군이 대비할 시간이 생긴다. 위쪽 수위는 텔레그램으로 알리지 않고, 방류 늘어남만 알린다.", s: "화면 규칙" },
+  // ── 알림
+  { c: "알림", t: "재난문자(위급 · 긴급 · 안전안내)", k: "CBS 재난문자 송출", d: "<b>위급</b> 대규모 재난 · 인명피해 우려(최대볼륨). <b>긴급</b> 테러 · 방사성물질 · 대피명령 · 호우(기상청장 직접) · 홍수정보 심각(홍수통제소장 직접) · 산사태 경보. <b>안전안내</b> 사전대피 권고 · 대피명령 해제 · 그 밖의 주의보 · 경보. 댐 방류는 수문방류 개시 · 계획 변경(증가) · 기간 중 · 비상방류가 대상.", s: "위키 · 재난문자 송출기준" },
+  { c: "알림", t: "민방위 재난경보", k: "재난경계경보 재난위험경보 사이렌", d: "지자체장이 사이렌 · 음성방송으로 알리는 경보(민방위기본법 제33조). <b>재난경계경보</b> 홍수 예 · 경보가 발령됐거나 중대한 재난 발생이 예상될 때(음성방송). <b>재난위험경보</b> 지진해일경보 또는 주민대피 등이 필요한 긴박한 때(음성방송 + 사이렌). 발령권자는 시장 · 군수 · 구청장(시군 재난안전대책본부장).", s: "위키 · 재난경보와 폭풍해일 기준" },
+  { c: "알림", t: "산사태 예보", k: "산사태 주의보 경보 산림청", d: "산사태 예보(주의보 · 경보)는 산사태예측정보와 기상을 고려한 자체 상황판단회의 결과로 시장 · 군수 · 구청장이 발령한다. 산사태정보시스템(sansatai.forest.go.kr)이나 스마트산림재난 앱으로 확인. 산사태 경보 발령 시는 긴급재난문자 대상이다. 이 화면의 '산림청 예보' 조건은 자료 연결 전이라 모름이다.", s: "위키 · 산사태·홍수 행동요령 · 재난문자 송출기준" },
+];
+let ENC_Q = "", ENC_C = "";
+function encHtml() {
+  const q = ENC_Q.trim().toLowerCase();
+  const rows = ENC.filter(e => (!ENC_C || e.c === ENC_C) && (!q || (e.t + " " + e.k + " " + e.d.replace(/<[^>]+>/g, "")).toLowerCase().includes(q)));
+  const chips = ["", ...ENC_CATS].map(c => `<button type="button" data-ec="${c}" class="${c === ENC_C ? "on" : ""}">${c || "전체"}</button>`).join("");
+  return `<div class="enc"><div class="eq"><input id="enc-q" type="search" placeholder="용어 찾기 — 호우주의보 · 방류 · 관심수위 · 긴급재난문자 …" value="${escH(ENC_Q)}" autocomplete="off"><span>${rows.length} / ${ENC.length}</span></div>`
+    + `<div class="ec">${chips}</div><div id="enc-list">`
+    + (rows.map(e => `<article class="ent"><header><b>${escH(e.t)}</b><i class="cat c-${ENC_CATS.indexOf(e.c)}">${e.c}</i></header><p>${e.d}</p><small>${escH(e.s)}</small></article>`).join("")
+       || `<div class="none">맞는 용어가 없다 — 다른 말로 찾아 본다.</div>`)
+    + `</div><p class="k">숫자는 위키(재난업무 LLM 위키)에 있는 것만 적었다. 위키에 없는 것(방류가 얼마면 위험한지 등)은 만들지 않았다. '홍수통제소' 항목은 홍수통제소 OpenAPI 안내를 따랐다.</p></div>`;
+}
 function helpHtml(tab) {
   const src = `
     <div class="lede"><b>면(격자)은 그림, 점(관측소)은 정답.</b> 500m 격자는 관측소에서 잰 값으로 관측소 사이를 메운
@@ -5398,12 +5488,12 @@ function helpHtml(tab) {
       AWS 로 재생하면 지난 시간은 AWS 1시간 면(정시마다), 지금 뒤는 초단기</dd>
     <dt>주소로 고정</dt><dd><code>?layer=obs60</code> · <code>?ov=alerts,stations</code> · <code>?sig=창원</code> · <code>?basis=grid</code> · <code>?pal=kma</code> · <code>?case=geoje-20260816</code> — 벽면 화면을 한 상태로 둘 때</dd>
     <dt>설정 · 도움말</dt><dd><code>Ctrl</code>+<code>,</code> 설정 · <code>?</code> 이 창</dd></dl>`;
-  return tab === "terms" ? terms : tab === "how" ? how : src;
+  return tab === "enc" ? encHtml() : tab === "terms" ? terms : tab === "how" ? how : src;
 }
 function openHelp(tab = HELP_TAB) {
   HELP_TAB = tab;
   stopPlay();
-  const tabs = [["src", "자료 출처"], ["terms", "용어"], ["how", "조작"]];
+  const tabs = [["enc", "백과"], ["src", "자료 출처"], ["terms", "용어"], ["how", "조작"]];
   $("help").innerHTML = `<div class="box" role="dialog" aria-label="도움말">
     <div class="top"><b>도움말 — 경남 지도</b><span class="sp"></span><button id="hp-x" title="닫기 (Esc)">✕</button></div>
     <nav>${tabs.map(([k, l]) => `<button data-t="${k}" class="${k === tab ? "on" : ""}">${l}</button>`).join("")}</nav>
@@ -5411,6 +5501,17 @@ function openHelp(tab = HELP_TAB) {
   $("help").hidden = false;
   $("hp-x").onclick = closeHelp;
   for (const b of $("help").querySelectorAll("nav button")) b.onclick = () => openHelp(b.dataset.t);
+  if (tab === "enc") encWire();
+}
+/* 백과 — 검색 · 분류는 목록만 다시 그린다(입력 칸을 새로 만들지 않아 글자를 치는 중에도 안 끊긴다) */
+function encWire() {
+  const bd = $("help").querySelector(".bd"), refresh = () => {
+    const keep = $("enc-q").selectionStart;
+    bd.innerHTML = encHtml(); encWire();
+    const q = $("enc-q"); q.focus(); q.setSelectionRange(keep, keep);
+  };
+  $("enc-q").oninput = ev => { ENC_Q = ev.target.value; refresh(); };
+  for (const b of bd.querySelectorAll("[data-ec]")) b.onclick = () => { ENC_C = b.dataset.ec; refresh(); };
 }
 function closeHelp() { $("help").hidden = true; }
 $("help").addEventListener("click", ev => { if (ev.target.id === "help") closeHelp(); });
@@ -6401,7 +6502,7 @@ function wEmdPct() {                                       // "시군|읍면동"
 const STG_C = { "평시": "c0", "평시 및 초기대응": "c0", "준비(관심)": "c1", "비상 1단계": "c2", "비상 2단계": "c3", "비상 3단계": "c4", "비상 2·3단계": "c34" };
 const STG_RGB = { c0: "143,214,138", c1: "110,195,238", c2: "240,207,58", c3: "242,147,58", c4: "229,72,58", c34: "235,110,58" };   // 지도 음영 — 위기경보 관심 Blue · 주의 Yellow · 경계 Orange · 심각 Red
 const wStg = n => WATCH?.stages?.[n] || null;               // 시군 비상단계(매뉴얼이 위키에 있는 시군만) {stage, auto, why, set, do, ...}
-const stgChip = d => d ? `<span class="stg ${STG_C[d.stage] || "c0"}" title="${escH(d.set ? `수동 입력 — 특보 기준 ${d.auto}: ${d.why}` : d.why)}">${escH(d.stage)}${d.set ? " ✎" : ""}</span>` : "";
+const stgChip = d => d ? `<span class="stg ${STG_C[d.stage] || "c0"}${d.std ? " std" : ""}" title="${escH((d.set ? `수동 입력 — 특보 기준 ${d.auto}: ${d.why}` : d.why) + (d.std ? " · 거제시 매뉴얼 준용(이 시군 매뉴얼은 위키에 아직 없다)" : ""))}">${escH(d.stage)}${d.set ? " ✎" : ""}</span>` : "";
 function wSigun() {                                        // 시군 → { g: 'e'|'c', s: 가장 센 단계(1~3), near: 충족 없이 근접만 }
   const out = {};
   for (const i of WATCH?.items || []) {
@@ -6483,12 +6584,16 @@ async function fcLoad() {
   let st = "";                                              // 비상단계 — 도(특보 난 시군 수) · 시군 매뉴얼이 위키에 있는 시군(그 시에 발효된 특보 종류)
   if (ss.status === "fulfilled") {
     const d = ss.value.do, own = Object.entries(ss.value.sigun || {}).filter(([, v]) => v), ro = !!window.GN_SNAP;
-    const sel = (n, v) => ro ? "" : `<select data-stg="${escH(n)}" title="실제 발령은 상황판단회의가 정한다 — 바꾸면 24시간 뒤 저절로 특보 기준으로 돌아간다"><option value="">특보 기준대로 — ${escH(v.auto)}</option>`
+    const sel = (n, v) => ro ? "" : `<select data-stg="${escH(n)}" aria-label="${escH(n)} 비상단계 바꾸기" title="실제 발령은 상황판단회의가 정한다 — 바꾸면 24시간 뒤 저절로 특보 기준으로 돌아간다"><option value="">특보 기준대로 — ${escH(v.auto)}</option>`
       + v.order.map(o => `<option value="${escH(o)}"${v.set && v.stage === o ? " selected" : ""}>${escH(o)}</option>`).join("") + `</select>`;
+    const ord = ORDER_GN(), rank = n => ord.indexOf(n);
+    own.sort((a, b) => rank(a[0]) - rank(b[0]));
+    const act = own.filter(([, v]) => v.stage !== v.order[0] || v.set);
     st = `<h6>비상단계</h6><div class="fl"><b>도</b><span>${d ? `${escH(d.stage)} <em>${escH(d.why)}</em>` : "해당 없음 <em>호우주의보 시군 없음</em>"}</span></div>`
-      + own.map(([n, v]) => `<div class="fl"><b>${escH(n)}</b><span>${stgChip(v)} <em>${v.set ? `수동 입력 · 특보 기준 ${escH(v.auto)}: ` : ""}${escH(v.why)}${v.draft ? " · 매뉴얼 확정 확인 전" : ""}</em>`
-        + `<br><em>${escH(v.do)}</em> ${sel(n, v)}</span></div>`).join("")
-      + `<div class="fn" id="stg-msg">도 단계 = 특보가 난 시군 수 · 시군 단계 = 그 시에 발효된 특보 종류(시군 행동매뉴얼 2026.10.). 두 기준은 별개다. 비상 2·3단계 등 실제 발령은 상황판단회의 · 본부장 판단이라 사람이 바꿀 수 있다(✎). 시군 매뉴얼이 위키에 있는 시군(거제 · 통영)만 나온다.</div>`;
+      + `<div class="sg">` + own.map(([n, v]) => `<div class="c"><span>${escH(n)}</span><span class="cw">${stgChip(v)}${sel(n, v)}</span></div>`).join("") + `</div>`
+      + (act.length ? act.map(([n, v]) => `<div class="ad"><b>${escH(n)}</b><span>${v.set ? `수동 입력 · 특보 기준 ${escH(v.auto)}: ` : ""}${escH(v.why)}<br><em>${escH(v.do)}</em></span></div>`).join("") : "")
+      + `<div class="fn" id="stg-msg">칩을 누르면 바꾼다(✎). 도 단계 = 특보가 난 시군 수 · 시군 단계 = 그 시에 발효된 특보 종류. 두 기준은 별개다. 비상 2·3단계 등 실제 발령은 상황판단회의 · 본부장 판단이라 사람이 바꿀 수 있고 24시간 뒤 저절로 돌아온다.
+        거제 · 통영은 자기 매뉴얼(2026.10.), 나머지 시군은 거제 기준을 준용(점선 둘레 칩 — 그 시군 매뉴얼이 위키에 들어오면 바꾼다).</div>`;
   }
   const day = (r, lab) => r.status === "fulfilled"
     ? `<h6>${lab} 24시까지 강수량 <em>${escH(fcHm(r.value.tmfc))}</em></h6>` + fcTop(r.value) + (r.value.capped > 0 ? `<div class="fn">30㎜ 이상 든 칸 ${r.value.capped} — 합계는 하한</div>` : "")

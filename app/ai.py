@@ -357,9 +357,9 @@ SIGUN_STAGE = {
                        ("비상 2단계", {"호우경보", "태풍주의보"}, set()),
                        ("비상 1단계", {"호우주의보"}, {"태풍"}),
                        ("준비(관심)", {"강풍주의보"}, {"호우"})]},
-    "통영": {"src": "통영시 단계별 업무 p.30", "draft": True, "base": "평시 및 초기대응",
-             "order": ["평시 및 초기대응", "비상 1단계", "비상 2·3단계"],
-             "do": {"평시 및 초기대응": "기상 모니터링, (필요시) 상황판단회의",
+    "통영": {"src": "통영시 단계별 업무 p.30", "draft": True, "base": "평시",
+             "order": ["평시", "비상 1단계", "비상 2·3단계"],
+             "do": {"평시": "기상 모니터링, (필요시) 상황판단회의(매뉴얼 '평시 및 초기대응')",
                     "비상 1단계": "상황판단회의, 지대본 비상근무, 현장 안전관리, (필요시) 위험지역 통제·대피",
                     "비상 2·3단계": "지대본 비상근무 격상, 현장 안전관리 지속, 위험지역 통제·대피, 피해 수습·이재민 지원, 응급복구"},
              "rules": [("비상 2·3단계", {"호우경보", "대설경보", "태풍주의보", "태풍경보"}, set()),
@@ -367,10 +367,22 @@ SIGUN_STAGE = {
 }
 
 
+# 시군 매뉴얼이 위키에 아직 없는 시군 — 거제시 매뉴얼의 5단계(평시 · 준비(관심) · 비상 1~3단계)와 특보 기준을 준용한다. 근무 편성 같은 시군 고유 숫자는 쓰지 않는다.
+# 이 시군 자신의 매뉴얼이 위키에 들어오면 SIGUN_STAGE 에 한 줄을 더해 바꾼다.
+_STD = {"src": "거제시 매뉴얼 준용(이 시군 매뉴얼은 위키에 아직 없다)", "draft": True, "std": True, "base": SIGUN_STAGE["거제"]["base"],
+        "order": SIGUN_STAGE["거제"]["order"], "rules": SIGUN_STAGE["거제"]["rules"],
+        "do": {s: "이 시군 매뉴얼의 해당 단계 업무에 따른다(위키에 아직 없음)" for s in SIGUN_STAGE["거제"]["order"]}}
+
+
+def _manual(sigun: str) -> dict | None:
+    """그 시군의 단계 표 — 자기 매뉴얼이 위키에 있으면 그것, 경남 시군이면 거제 기준 준용, 아니면 None."""
+    return SIGUN_STAGE.get(sigun) or (_STD if sigun in SIGUN_FULL else None)
+
+
 def sigun_stage(sigun: str, alerts: list[str], pending: list[str], over: dict | None = None) -> dict | None:
     """시군 하나의 비상단계 — alerts 는 그 시에 발효된 육상 특보 이름, pending 은 예비특보 종류(호우 · 태풍 …),
     over 는 사람이 바꾼 값 {stage, at}. stage = 지금 단계(바꾼 값이 있으면 그것), auto = 특보 기준."""
-    m = SIGUN_STAGE.get(sigun)
+    m = _manual(sigun)
     if not m:
         return None
     a, p = set(alerts), set(pending)
@@ -383,15 +395,16 @@ def sigun_stage(sigun: str, alerts: list[str], pending: list[str], over: dict | 
     ok = bool(over) and over.get("stage") in m["order"]
     now = over["stage"] if ok else auto
     return {"stage": now, "auto": auto, "why": why, "set": ok, "set_at": over.get("at") if ok else None,
-            "do": m["do"].get(now, ""), "order": m["order"], "src": m["src"], "draft": m["draft"]}
+            "do": m["do"].get(now, ""), "order": m["order"], "src": m["src"], "draft": m["draft"], "std": bool(m.get("std"))}
 
 
 def stage_text(sigun: str, d: dict) -> str:
     """'거제시 매뉴얼 기준 비상 1단계 (호우주의보) — 도 단계와 별개'. 사람이 바꿨으면 특보 기준을 옆에 남긴다."""
     full = SIGUN_FULL.get(sigun, sigun)
-    head = (f"{full} 매뉴얼 {d['stage']} (수동 입력 · 특보 기준 {d['auto']}: {d['why']})" if d["set"]
-            else f"{full} 매뉴얼 기준 {d['stage']} ({d['why']})")
-    return head + " — 도 단계와 별개" + (" · 매뉴얼 확정본 확인 전(참고본)" if d["draft"] else "")
+    who = f"{full} 기준(거제시 매뉴얼 준용)" if d.get("std") else f"{full} 매뉴얼 기준"
+    head = (f"{full} {d['stage']} (수동 입력 · 특보 기준 {d['auto']}: {d['why']})" if d["set"]
+            else f"{who} {d['stage']} ({d['why']})")
+    return head + " — 도 단계와 별개" + (" · 이 시군 매뉴얼은 위키에 아직 없다" if d.get("std") else " · 매뉴얼 확정본 확인 전(참고본)" if d["draft"] else "")
 
 
 def overrides() -> dict:
@@ -402,14 +415,14 @@ def overrides() -> dict:
     except Exception:                                      # noqa: BLE001
         return {}
     cut = (datetime.now() - timedelta(hours=OVER_TTL_H)).strftime("%Y%m%d%H%M")
-    return {k: v for k, v in raw.items() if k in SIGUN_STAGE and isinstance(v, dict) and (v.get("at") or "") >= cut}
+    return {k: v for k, v in raw.items() if k in SIGUN_FULL and isinstance(v, dict) and (v.get("at") or "") >= cut}
 
 
 def set_override(sigun: str, stage: str | None) -> dict:
     """사람이 시군 단계를 바꾼다(stage=None 이면 특보 기준으로 되돌림). 매뉴얼의 단계 이름만 받는다."""
-    m = SIGUN_STAGE.get(sigun)
+    m = _manual(sigun)
     if not m:
-        raise ValueError(f"{sigun}: 시군 매뉴얼이 위키에 없다")
+        raise ValueError(f"{sigun}: 경남 시군이 아니다")
     if stage is not None and stage not in m["order"]:
         raise ValueError(f"{stage}: {sigun} 매뉴얼에 없는 단계 — {', '.join(m['order'])}")
     from . import db
@@ -423,11 +436,11 @@ def set_override(sigun: str, stage: str | None) -> dict:
 
 
 def sigun_stages(data: dict, over: dict | None = None) -> dict:
-    """특보 스냅숏(data: groups · pending) → 도 비상단계 + 매뉴얼이 있는 시군별 비상단계(사람이 바꾼 값 포함)."""
+    """특보 스냅숏(data: groups · pending) → 도 비상단계 + 시군별 비상단계(매뉴얼이 없는 시군은 거제 기준 준용, 사람이 바꾼 값 포함)."""
     groups, pend = data.get("groups", []), data.get("pending", [])
     over = over or {}
     out = {}
-    for sg in SIGUN_STAGE:
+    for sg in SIGUN_FULL:
         al = [g["name"] for g in groups if sg in g.get("siguns", []) and not g.get("sea")]
         out[sg] = sigun_stage(sg, al, [x["name"] for x in pend if x.get("sigun") == sg], over.get(sg))
     return {"do": _stage(groups), "sigun": out}

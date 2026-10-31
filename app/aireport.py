@@ -267,12 +267,12 @@ def report(base: str, sigun: str | None = None, mode: str = "all") -> dict:
     if o["stage"]:
         sit.append(f"도 비상단계 기준: {o['stage']['stage']} ({o['stage']['why']}) — 최종은 상황판단회의")
     over = ai.overrides()
-    own = {sg: d for sg in ai.SIGUN_STAGE
+    own = {sg: d for sg in ai.SIGUN_FULL
            if (d := ai.sigun_stage(sg, next((r["alerts"] for r in rows if r["sigun"] == sg), []),
                                    [x["name"] for x in o["pending"] if x.get("sigun") == sg], over.get(sg)))}
-    sit.append("시군 비상단계(시군 매뉴얼이 위키에 있는 시군만): "
-               + " · ".join(f"{ai.SIGUN_FULL[sg]} {d['stage']}" + (f"(수동 입력 · 특보 기준 {d['auto']})" if d["set"] else f"({d['why']})")
-                            for sg, d in own.items()) + " — 도 단계와 별개")
+    sit.append("시군 비상단계(거제 · 통영은 자기 매뉴얼, 나머지는 거제 기준 준용 — 평시가 아닌 시군만): "
+               + (" · ".join(f"{ai.SIGUN_FULL[sg]} {d['stage']}" + (f"(수동 입력 · 특보 기준 {d['auto']})" if d["set"] else f"({d['why']})")
+                             for sg, d in own.items() if d["stage"] != ai._manual(sg)["base"]) or "모든 시군 평시") + " — 도 단계와 별개")
     wet = [r for r in rows if r["fc_sum"]]
     top_fc = max(wet, key=lambda r: r["fc_sum"]) if wet else None
     rs = river.summary()
@@ -343,7 +343,7 @@ def _flash_all(o: dict, sits: list[dict], own: dict) -> dict:
     if o["stage"]:
         parts.append(f"도 비상단계 {o['stage']['stage']}({o['stage']['why']})")
     up = [f"{ai.SIGUN_FULL[sg]} {d['stage']}" + ("(수동 입력)" if d["set"] else "") for sg, d in own.items()
-          if d["stage"] != ai.SIGUN_STAGE[sg]["base"]]
+          if d["stage"] != ai._manual(sg)["base"]]
     if up:
         parts.append("시군 비상단계 " + ", ".join(up))
     tone, hit = 0, []

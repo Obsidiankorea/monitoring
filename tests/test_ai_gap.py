@@ -103,8 +103,13 @@ def test_sigun_stage_tongyeong_and_missing_manual():
     t = ai.sigun_stage("통영", ["호우주의보"], [])
     assert t["stage"] == "비상 1단계" and t["draft"] is True and t["why"] == "호우주의보"
     assert ai.sigun_stage("통영", ["호우경보"], [])["stage"] == "비상 2·3단계"
-    assert ai.sigun_stage("통영", [], [])["stage"] == "평시 및 초기대응"
-    assert ai.sigun_stage("함양", ["호우경보"], []) is None          # 매뉴얼이 위키에 없으면 만들어 내지 않는다
+    assert ai.sigun_stage("통영", [], [])["stage"] == "평시"
+    assert ai.sigun_stage("부산", ["호우경보"], []) is None          # 경남 시군이 아니면 만들지 않는다
+    h = ai.sigun_stage("함양", ["호우경보"], [])                       # 매뉴얼이 위키에 없는 시군 — 거제 기준 준용(5단계)
+    assert h["stage"] == "비상 2단계" and h["std"] is True and h["draft"] is True and h["order"][1] == "준비(관심)"
+    assert ai.sigun_stage("합천", ["태풍경보"], [])["stage"] == "비상 3단계" and ai.sigun_stage("합천", [], [])["stage"] == "평시"
+    assert "거제시 매뉴얼 준용" in ai.stage_text("함양", h) and "도 단계와 별개" in ai.stage_text("함양", h)
+    assert ai.sigun_stage("거제", ["호우경보"], [])["std"] is False
 
 
 def test_stage_text_marks_draft_and_independence_from_do():
@@ -119,6 +124,7 @@ def test_sigun_stages_from_alert_snapshot():
             "pending": [{"name": "태풍", "sigun": "통영"}]}
     r = ai.sigun_stages(data)
     assert r["sigun"]["거제"]["stage"] == "비상 1단계" and r["sigun"]["통영"]["stage"] == "비상 1단계"
+    assert len(r["sigun"]) == 18 and r["sigun"]["함양"]["stage"] == "평시"
     assert r["do"]["stage"] == "초기대응"                              # 호우주의보 2개 시군 — 도 기준은 별개
 
 
@@ -134,7 +140,7 @@ def test_sigun_stage_human_override_keeps_the_alert_basis():
 def test_sigun_stage_fixed_by_alert_when_no_override():
     assert ai.sigun_stage("거제", ["태풍경보"], [])["stage"] == "비상 3단계"     # 태풍경보는 비상 3단계로 고정
     d = ai.sigun_stage("통영", ["호우경보"], [])
-    assert d["order"] == ["평시 및 초기대응", "비상 1단계", "비상 2·3단계"] and d["set"] is False
+    assert d["order"] == ["평시", "비상 1단계", "비상 2·3단계"] and d["set"] is False
 
 
 def test_override_set_validates_names_and_expires(monkeypatch):
@@ -145,8 +151,13 @@ def test_override_set_validates_names_and_expires(monkeypatch):
     ai.set_override("거제", "비상 2단계")
     assert ai.overrides()["거제"]["stage"] == "비상 2단계"
     import pytest
+    ai.set_override("함양", "비상 1단계")                               # 매뉴얼이 없는 시군도 거제 기준 단계로 바꿀 수 있다
+    assert ai.overrides()["함양"]["stage"] == "비상 1단계"
+    ai.set_override("함양", None)
     with pytest.raises(ValueError):
-        ai.set_override("함양", "비상 1단계")                           # 매뉴얼이 없는 시군
+        ai.set_override("부산", "비상 1단계")                           # 경남 시군이 아님
+    with pytest.raises(ValueError):
+        ai.set_override("함양", "비상 9단계")                           # 단계 이름이 없음
     with pytest.raises(ValueError):
         ai.set_override("통영", "비상 3단계")                           # 통영 매뉴얼에는 '비상 2·3단계'뿐
     ai.set_override("거제", None)

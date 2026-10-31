@@ -14,9 +14,8 @@ def test_flash_sigun_names_rain_state_and_strongest_rule(monkeypatch):
     monkeypatch.setattr(ai, "overrides", lambda: {})
     f = aireport._flash_sigun(_sit(["호우주의보"], [_gap_c("통제", "near", 80), _gap_c("사전대피", "near", 75)]), "함양군")
     assert f["tone"] == 1
-    assert "함양군 · 우려지역 기준: 사전대피 근접 · 통제 근접" in f["text"]
+    assert "함양군 비상단계 비상 1단계 · 우려지역 기준: 사전대피 근접 · 통제 근접" in f["text"]   # 매뉴얼이 없는 시군도 거제 기준을 준용
     assert "서하면 산사태 사전대피 — 기준 75%" in f["text"]       # 단계가 센 규칙이 '가장 센 기준'
-    assert "비상단계" not in f["text"]                            # 함양 매뉴얼은 위키에 없다 — 단계를 만들지 않는다
 
 
 def test_flash_sigun_calm(monkeypatch):

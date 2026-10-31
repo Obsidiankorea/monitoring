@@ -44,5 +44,5 @@ def test_snapshot_items_carry_the_gap_text(monkeypatch):
     assert by["호우경보 발령"]["gap"] == ""
     assert by["r"]["pct"] == 80 and by["호우경보 발령"]["pct"] is None
     snap = aiwatch.snapshot("http://x")
-    assert snap["stages"]["거제"]["stage"] == "비상 1단계" and snap["stages"]["통영"]["stage"] == "평시 및 초기대응"
-    assert "함양" not in snap["stages"]                                   # 시군 매뉴얼이 위키에 없는 시군
+    assert snap["stages"]["거제"]["stage"] == "비상 1단계" and snap["stages"]["통영"]["stage"] == "평시"
+    assert snap["stages"]["함양"]["std"] is True                          # 시군 매뉴얼이 위키에 없는 시군 — 거제 기준 준용
