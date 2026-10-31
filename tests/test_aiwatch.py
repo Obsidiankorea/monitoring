@@ -34,9 +34,13 @@ def test_snapshot_items_carry_the_gap_text(monkeypatch):
                     {"stage": "긴급대피", "rule": "호우경보 발령", "st": "met"}]}
     monkeypatch.setattr(aiwatch.aireport, "overview", lambda base: {
         "stage": None, "rows": [{"sigun": "함양", "relay": True, "cbs": False, "alerts": [], "fc_sum": 0, "fc_peak": 0}]})
-    monkeypatch.setattr(aiwatch.aireport, "situation", lambda sg, base: {"emd": [{"emd": "서하면", "ladders": lad}]})
+    monkeypatch.setattr(aiwatch.aireport, "situation", lambda sg, base: {
+        "alerts": [], "emd": [{"emd": "서하면", "ladders": lad, "relay": False, "cbs": False}]})
     monkeypatch.setitem(aiwatch._SNAP, "v", None)
     items = aiwatch.snapshot("http://x")["items"]
     by = {i["rule"]: i for i in items}
     assert by["r"]["gap"] == "기준 80% · 남은 20㎜(일/누적) · 예보대로면 15시경 닿음"
     assert by["호우경보 발령"]["gap"] == ""
+    assert by["r"]["pct"] == 80 and by["호우경보 발령"]["pct"] is None
+    snap = aiwatch.snapshot("http://x")
+    assert snap["levels"]["함양"]["lv"] == 5 and "긴급대피" in snap["levels"]["함양"]["act"]

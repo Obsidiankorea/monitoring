@@ -47,19 +47,22 @@ async def send(text: str) -> None:
             raise RuntimeError(f"텔레그램 {r.status_code}")
 
 
-_GAP: dict[str, str] = {}      # 열쇠 → 기준 N% · 남은 ㎜ · 닿는 시각 글(화면 목록에만 쓴다. 알림 문자는 그대로)
+_GAP: dict[str, dict] = {}      # 열쇠 → {t: 기준 N% · 남은 ㎜ · 닿는 시각 글, pct} (화면 목록 · 읍면동 배지에만. 알림 문자는 그대로)
+_LV: dict[str, dict] = {}       # 시군 → 참고 레벨(ai.sigun_level) — 이번에 훑은 시군
 
 
 def _scan(base: str) -> dict[str, tuple[str, tuple]]:
     """지금 알릴 만한 것 — {열쇠: (상태, (시군, 읍면동, 유형, 단계, 기준))}. 비상단계는 시군 자리에 '도'."""
     o = aireport.overview(base)
     out: dict[str, tuple[str, str]] = {}
+    _LV.clear()
     if o["stage"]:
         out[f"stage|{o['stage']['stage']}"] = ("met", ("도", o["stage"]["stage"], "비상단계", "", o["stage"]["why"]))
     focus = [r["sigun"] for r in o["rows"]
              if r["relay"] or r["cbs"] or r["alerts"] or (r["fc_sum"] or 0) >= 30 or (r["fc_peak"] or 0) >= 20][:8]
     for sg in focus:
         s = aireport.situation(sg, base)
+        _LV[sg] = ai.level_of(s)
         for e in s["emd"]:
             for fam, cs in e["ladders"].items():
                 for c in cs:
@@ -68,7 +71,7 @@ def _scan(base: str) -> dict[str, tuple[str, tuple]]:
                         continue
                     k = f"{sg}|{e['emd']}|{fam}|{c['stage']}|{c['rule']}"
                     out[k] = (c["st"], (sg, e["emd"], fam, c["stage"], c["rule"]))
-                    _GAP[k] = ai.gap_text(c)
+                    _GAP[k] = {"t": ai.gap_text(c), "pct": (c.get("gap") or {}).get("pct")}
     return out
 
 
@@ -82,7 +85,8 @@ def snapshot(base: str) -> dict:
     if _SNAP["v"] is not None and now_t - _SNAP["t"] < SNAP_TTL:
         return _SNAP["v"]
     found = _scan(base)
-    items = [{"sigun": x[0], "emd": x[1], "fam": x[2], "stage": x[3], "rule": x[4], "st": st, "gap": _GAP.get(k, "")}
+    items = [{"sigun": x[0], "emd": x[1], "fam": x[2], "stage": x[3], "rule": x[4], "st": st,
+              "gap": _GAP.get(k, {}).get("t", ""), "pct": _GAP.get(k, {}).get("pct")}
              for k, (st, x) in found.items()]
     stage = next((i for i in items if i["fam"] == "비상단계"), None)
     items = [i for i in items if i["fam"] != "비상단계"]
@@ -93,7 +97,7 @@ def snapshot(base: str) -> dict:
         d[i["st"]] += 1
         d["top"] = max(d["top"], STAGE_RANK.get(i["stage"], 0) * 10 + RANK[i["st"]])
     out = {"at": datetime.now().strftime("%m.%d %H:%M"), "n": len(items), "stage": stage["emd"] if stage else None,
-           "sigun": sg, "items": items}
+           "sigun": sg, "items": items, "levels": {k: v for k, v in _LV.items() if v["lv"] >= 2}}
     _SNAP.update(t=now_t, v=out)
     return out
 

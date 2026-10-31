@@ -297,11 +297,40 @@ def report(base: str, sigun: str | None = None, mode: str = "all") -> dict:
     if st != "비상 2단계":
         nxt.append("호우경보 3개 시군 이상 → 도 비상 2단계" if st == "비상 1단계" else "호우주의보 4개 시군 이상 → 도 비상 1단계")
     nxt.append(_ante_note(sits))
-    return {"scope": "경남", "title": "경남 전체", "tm": o["tm"],
+    return {"scope": "경남", "title": "경남 전체", "tm": o["tm"], "flash": _flash_all(o, rows, sits),
             "sections": [{"h": "상황", "items": sit}, {"h": "중요한 점", "items": imp}, {"h": "할 일", "items": tasks},
                          {"h": "살펴볼 곳", "items": look or ["특별히 살펴볼 읍면동 없음"]}, {"h": "다음 확인", "items": nxt},
                          {"h": "참고 — 위키 · 책자", "items": _refs(BASE_REFS + ["상황판단회의"])}],
             "questions": [{"id": k, "label": v} for k, v in Q_ALL]}
+
+
+def _flash_sigun(s: dict, full: str) -> dict:
+    """속보 한 줄 — 시군 하나. 레벨 · 행동 · 근거 · 가장 가까운 기준 한 개."""
+    lv = ai.level_of(s)
+    txt = f"{_when(s['tm'])} 실황 · {full} 레벨 {lv['lv']} {lv['name']} — {lv['act']}"
+    if lv["lv"] > 1:
+        txt += f" (근거: {lv['why']})"
+    rank = {"긴급대피": 3, "사전대피": 2, "통제": 1}
+    best = max(((rank[c["stage"]], c["st"] == "met", r["emd"], fam, c) for r in s["emd"] for fam, cs in r["ladders"].items()
+                for c in cs if c["st"] in ("met", "near") and c.get("gap")), key=lambda x: x[:2], default=None)
+    if best:
+        _, _, emd, fam, c = best
+        txt += f". 가장 센 기준: {emd} {fam} {c['stage']} — {ai.gap_text(c)}"
+    return {"lv": lv["lv"], "text": txt}
+
+
+def _flash_all(o: dict, rows: list[dict], sits: list[dict]) -> dict:
+    """속보 한 줄 — 경남 전체. 우려지역 판정(ladders)은 훑은 시군만 있어서 나머지는 특보 · 상황전파 기준만으로 본다."""
+    by = {s["sigun"]: ai.level_of(s) for s in sits}
+    lvs = [(r["sigun"], by.get(r["sigun"]) or ai.sigun_level(r["alerts"], [], r["relay"], r["cbs"])) for r in rows]
+    top = max((x["lv"] for _, x in lvs), default=1)
+    where = [sg for sg, x in lvs if x["lv"] == top]
+    n2 = sum(1 for _, x in lvs if x["lv"] >= 2)
+    if top == 1:
+        return {"lv": 1, "text": f"{_when(o['tm'])} 실황 · 경남 전체 평상 — 호우특보 · 기준 근접 없음"}
+    x = next(v for sg, v in lvs if sg == where[0])
+    return {"lv": top, "text": f"{_when(o['tm'])} 실황 · 경남 최고 레벨 {top} {x['name']}({_few(where, 5)}) — {x['act']}"
+                               f" (근거: {x['why']}) · 레벨 2 이상 {n2}개 시군"}
 
 
 def _report_sigun(base: str, sigun: str) -> dict:
@@ -337,7 +366,7 @@ def _report_sigun(base: str, sigun: str) -> dict:
     if s["night"]:
         nxt.append("취약시간대 — 시간당 30㎜ 이상 예보가 나오면 산사태 사전대피 조건")
     nxt.append(_ante_note([s]))
-    return {"scope": sigun, "title": full, "tm": s["tm"],
+    return {"scope": sigun, "title": full, "tm": s["tm"], "flash": _flash_sigun(s, full),
             "sections": [{"h": "상황", "items": sit}, {"h": "중요한 점", "items": imp}, {"h": "할 일", "items": tasks},
                          {"h": "살펴볼 곳", "items": look or ["우려지역이 있는 읍면동에 비 없음"]}, {"h": "다음 확인", "items": nxt},
                          {"h": "참고 — 위키 · 책자", "items": _refs([full] + BASE_REFS + ["시군별 통제·대피계획"])}],

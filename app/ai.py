@@ -168,6 +168,40 @@ def gap_text(c: dict) -> str:
     return s
 
 
+# 시군 '참고 레벨' — 위키 행동 단계(통제 · 사전대피 · 긴급대피)를 한 줄로 줄 세운 것. 공식 경보 단계(관심~심각)나 비상단계가 아니다.
+# 근접(70%↑)은 앞선 신호라 한 단계 아래로 친다. 대피 결정은 권한자 몫이라 문구는 '검토'까지만.
+LEVELS = {1: ("평상", "변화 없음 — 평시 감시"),
+          2: ("상황전파", "상황전파 · 모니터링 강화"),
+          3: ("통제", "우려지역 통제 · 순찰 검토"),
+          4: ("사전대피", "사전대피 검토 · 대피 준비"),
+          5: ("긴급대피", "긴급대피 기준 충족 — 대피명령 검토(권한자)")}
+
+
+def sigun_level(alerts: list[str], cs: list[dict], relay: bool = False, cbs: bool = False) -> dict:
+    """시군 하나의 참고 레벨 1~5 — cs 는 그 시군 읍면동 판정들([{stage, st}]). 가장 센 근거가 레벨을 정한다."""
+    def has(stage: str, st: str) -> bool:
+        return any(c["stage"] == stage and c["st"] == st for c in cs)
+    cands = [(5, "긴급대피 기준 충족", has("긴급대피", "met")),
+             (4, "사전대피 기준 충족", has("사전대피", "met")),
+             (4, "긴급대피 기준 근접", has("긴급대피", "near")),
+             (3, "통제 기준 충족", has("통제", "met")),
+             (3, "사전대피 기준 근접", has("사전대피", "near")),
+             (3, "호우경보", "호우경보" in alerts),
+             (3, "재난문자 기준(실황)", bool(cbs)),
+             (2, "호우주의보", "호우주의보" in alerts),
+             (2, "상황전파 기준(20㎜/h · 일 100㎜)", bool(relay)),
+             (2, "통제 기준 근접", has("통제", "near"))]
+    hit = [(lv, w) for lv, w, ok in cands if ok]
+    lv = max((x[0] for x in hit), default=1)
+    return {"lv": lv, "name": LEVELS[lv][0], "act": LEVELS[lv][1], "why": " · ".join(w for x, w in hit if x == lv)}
+
+
+def level_of(s: dict) -> dict:
+    """situation() 결과 하나 → 그 시군의 참고 레벨."""
+    cs = [c for r in s["emd"] for v in r["ladders"].values() for c in v]
+    return sigun_level(s["alerts"], cs, any(r["relay"] for r in s["emd"]), any(r["cbs"] for r in s["emd"]))
+
+
 def ladders(r: dict, night: bool, alerts: list[str]) -> dict:
     """읍면동 하나 — [[통제·대피 기준]] 3대 유형 단계별 조건 대조(위키 표의 숫자 그대로).
     st 는 '그 조건에 닿았나', gap 은 '기준에서 얼마나 먼가'(비율 · 남은 양 · 닿는 시각)."""

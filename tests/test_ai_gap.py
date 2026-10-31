@@ -75,3 +75,37 @@ def test_ladder_rules_without_numbers_have_no_gap():
 def test_night_rule_gap_only_at_night():
     assert _rule(ai.ladders(_row(), False, []), "산사태", "사전대피", "취약시간대")["gap"] is None
     assert _rule(ai.ladders(_row(), True, []), "산사태", "사전대피", "취약시간대")["gap"]["pct"] == 83
+
+
+def _c(stage, st):
+    return {"stage": stage, "st": st}
+
+
+def test_level_1_when_nothing_reached():
+    L = ai.sigun_level([], [_c("긴급대피", "no"), _c("통제", "unknown")])
+    assert L["lv"] == 1 and L["name"] == "평상"
+
+
+def test_level_ladder_follows_wiki_stages():
+    assert ai.sigun_level([], [_c("통제", "near")])["lv"] == 2
+    assert ai.sigun_level([], [], relay=True)["lv"] == 2
+    assert ai.sigun_level(["호우주의보"], [])["lv"] == 2
+    assert ai.sigun_level([], [_c("통제", "met")])["lv"] == 3
+    assert ai.sigun_level([], [_c("사전대피", "near")])["lv"] == 3
+    assert ai.sigun_level(["호우경보"], [])["lv"] == 3
+    assert ai.sigun_level([], [_c("사전대피", "met")])["lv"] == 4
+    assert ai.sigun_level([], [_c("긴급대피", "near")])["lv"] == 4
+    assert ai.sigun_level([], [_c("긴급대피", "met")])["lv"] == 5
+
+
+def test_level_near_is_one_step_below_met_and_highest_wins():
+    L = ai.sigun_level(["호우주의보"], [_c("통제", "met"), _c("사전대피", "near")], relay=True)
+    assert L["lv"] == 3 and "통제 기준 충족" in L["why"] and "사전대피 기준 근접" in L["why"]
+    assert "호우주의보" not in L["why"]                        # 더 낮은 근거는 적지 않는다
+    assert "대피명령 검토(권한자)" in ai.sigun_level([], [_c("긴급대피", "met")])["act"]
+
+
+def test_level_of_reads_situation_shape():
+    s = {"alerts": ["호우주의보"], "emd": [{"relay": False, "cbs": False, "ladders": {"산사태": [_c("사전대피", "met")]}},
+                                          {"relay": True, "cbs": False, "ladders": {}}]}
+    assert ai.level_of(s)["lv"] == 4
