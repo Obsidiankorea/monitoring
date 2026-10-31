@@ -1020,7 +1020,9 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 #aiw form button { font: 600 14px var(--sans); color: var(--on-accent); background: var(--accent); border: 0; border-radius: 9px; padding: 0 16px; cursor: pointer; }
 #aiw .ld { color: var(--ink-3); font-size: 14px; padding: 18px 0; }
 #aiw .ft { font-size: 11.5px; color: var(--ink-3); padding: 0 18px 10px; }
-#prefs .box { max-height: calc(100vh - 32px); min-height: min(640px, calc(100vh - 32px)); display: flex; flex-direction: column; }
+/* 이 상자는 zoom: var(--k) 를 받는다 — 높이 · 너비 한도를 k 로 나눠야 확대해도 화면 안에 들어와 아래 칸이 잘리지 않는다 */
+#prefs .box { max-height: calc((100vh - 32px) / var(--k, 1)); min-height: min(640px / var(--k, 1), calc((100vh - 32px) / var(--k, 1))); max-width: calc((100vw - 32px) / var(--k, 1));
+  display: flex; flex-direction: column; }
 #prefs .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: 0 0 8px; flex: none; }
 #prefs .tabs button { background: transparent; border: 0; border-bottom: 2px solid transparent; color: var(--ink-3);
   font: 600 14px var(--sans); padding: 8px 16px; cursor: pointer; margin-bottom: -1px; white-space: nowrap; }
@@ -1037,6 +1039,12 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
   border-right: 1px solid var(--line); padding: 6px 12px; cursor: pointer; }
 #prefs .seg button:last-child { border-right: 0; }
 #prefs .seg button.on { color: var(--ink); background: color-mix(in oklab, var(--accent) 24%, transparent); }
+#prefs .grid2 { display: grid; grid-template-columns: 1fr 1fr; column-gap: 24px; }
+#prefs .grid2 .row.wide { grid-column: 1 / -1; }
+#prefs .grid2 .row { min-width: 0; flex-wrap: wrap; }
+#prefs .grid2 .row .k { width: 110px; }
+#prefs .seg-sel { font: 600 13px var(--sans); color: var(--ink); background: var(--panel-2, transparent); border: 1px solid var(--line);
+  border-radius: 7px; padding: 6px 10px; color-scheme: dark light; cursor: pointer; }
 #prefs .note { font-size: 12px; color: var(--ink-3); }
 #prefs .keys { margin-top: 14px; font-size: 12px; color: var(--ink-3); }
 #prefs .keys kbd { font: 600 11px var(--mono); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; color: var(--ink-2); }
@@ -5304,36 +5312,44 @@ function openPrefs() {
     loadQcfg().then(() => { openPrefs.busy = false; if (QCFG_AHEAD !== null && !$("prefs").hidden) openPrefs(); });
   }
   stopPlay();
-  const seg = (key, opts) => `<span class="seg">${opts.map(([v, l]) =>
-    `<button data-k="${key}" data-v="${v}" class="${String(SET[key]) === String(v) ? "on" : ""}">${l}</button>`).join("")}</span>`;
+  // 고를 것이 4개 이상이면 한 칸짜리 드롭다운 — 가로 칸을 덜 차지한다
+  const seg = (key, opts) => opts.length >= 4
+    ? `<select class="seg-sel" data-k="${key}">${opts.map(([v, l]) =>
+      `<option value="${v}"${String(SET[key]) === String(v) ? " selected" : ""}>${l}</option>`).join("")}</select>`
+    : `<span class="seg">${opts.map(([v, l]) =>
+      `<button data-k="${key}" data-v="${v}" class="${String(SET[key]) === String(v) ? "on" : ""}">${l}</button>`).join("")}</span>`;
   const th = document.documentElement.dataset.theme;
   $("prefs").innerHTML = `<div class="box" role="dialog" aria-label="설정">
     <div class="top"><b>설정 — 경남 지도</b><span class="sp"></span><button id="pf-x" title="닫기 (Esc)">✕</button></div>
     <h4>재생</h4>
+    <div class="grid2">
     <div class="row"><span class="k">실측 간격</span>${seg("flow_step", [[10, "10분"], [20, "20분"], [30, "30분"], [60, "1시간"]])}</div>
-    <div class="row"><span class="k"></span><span class="note">예측(초단기)은 1시간 간격뿐이다 — 10분 대상시각을 주면 가까운 정시 격자가 온다.
+    <div class="row wide"><span class="k"></span><span class="note">예측(초단기)은 1시간 간격뿐이다 — 10분 대상시각을 주면 가까운 정시 격자가 온다.
       자료가 AWS 면 실측도 정시마다(경남 AWS 가 정시 자료다) — 이 간격은 격자에만 걸린다.</span></div>
     <div class="row"><span class="k">지난 시간</span>${seg("flow_hours", [[1, "1시간"], [3, "3시간"], [6, "6시간"], [12, "12시간"]])}</div>
     <div class="row"><span class="k">AWS 실시간</span>${seg("aws_live", [[false, "끔 — 정시마다"], [true, "감시 — 1분마다"]])}</div>
-    <div class="row"><span class="k"></span><span class="note">감시를 켜면 AWS 누적 · 1시간이 마지막 정시 뒤 매분자료까지 1분마다 따라간다(1시간은
+    <div class="row wide"><span class="k"></span><span class="note">감시를 켜면 AWS 누적 · 1시간이 마지막 정시 뒤 매분자료까지 1분마다 따라간다(1시간은
       그 분의 직전 60분, 기상청 AWS). 켠 동안만 매분자료를 1분마다 받는다. 층 메뉴 실측 머리의 '실시간' · R 키와 같다.</span></div>
     <div class="row"><span class="k">지도 빠르기</span>${seg("play_ms", [[3000, "아주 느리게"], [2000, "느리게"], [1200, "보통"], [600, "빠르게"], [400, "아주 빠르게"]])}</div>
     <div class="row"><span class="k">초단기예측 이미지</span>${seg("qpf_ms", [[1500, "아주 느리게"], [1000, "느리게"], [600, "보통"], [400, "빠르게"], [250, "아주 빠르게"]])}</div>
-    <div class="row"><span class="k">이미지 길이</span><span class="seg">${[180, 240, 300, 360].map(v =>
-      `<button data-ahead="${v}" class="${QCFG_AHEAD === v ? "on" : ""}">${v / 60}시간</button>`).join("")}</span></div>
-    <div class="row"><span class="k"></span><span class="note">한 장 머무는 시간 — 지도 3 · 2 · 1.2 · 0.6 · 0.4초, 초단기예측 이미지(오른쪽 아래, Q) 1.5 · 1 · 0.6 · 0.4 · 0.25초.
+    <div class="row"><span class="k">이미지 길이</span><select class="seg-sel" id="pf-ahead">${[180, 240, 300, 360].map(v =>
+      `<option value="${v}"${QCFG_AHEAD === v ? " selected" : ""}>${v / 60}시간</option>`).join("")}</select></div>
+    <div class="row wide"><span class="k"></span><span class="note">한 장 머무는 시간 — 지도 3 · 2 · 1.2 · 0.6 · 0.4초, 초단기예측 이미지(오른쪽 아래, Q) 1.5 · 1 · 0.6 · 0.4 · 0.25초.
       지도를 재생하는 동안은 이미지가 지도와 같은 시각으로 가므로 지도 빠르기를 따른다.
       이미지 길이는 수집 설정(종합 화면 '최대 선행시간'과 같다) — 다음 발표분부터 그만큼 받는다(6시간이면 3시간의 두 배를 부른다).</span></div>
+    </div>
     <h4>오른쪽 패널</h4>
+    <div class="grid2">
     <div class="row"><span class="k">표시</span>${seg("tl_on", [[true, "켬"], [false, "끔"]])}</div>
     <div class="row"><span class="k">방식</span>${seg("panel", [["cards", "카드 — 종합 화면 판"], ["timeline", "타임라인 — 시군 선"]])}</div>
-    <div class="row"><span class="k">누적 구간</span><span class="seg">${RNG_OPTS.map((o, i) =>
-      `<button data-rng="${i}" class="${rngOn(o) ? "on" : ""}">${o[2].replace("지난 ", "")}</button>`).join("")}</span></div>
-    <div class="row"><span class="k">날짜 지정</span><span class="dp">${datePick("pf-date")}<button type="button" data-a="date">부터</button></span>
+    <div class="row"><span class="k">누적 구간</span><select class="seg-sel" id="pf-rng">${RNG_OPTS.map((o, i) =>
+      `<option value="${i}"${rngOn(o) ? " selected" : ""}>${o[2].replace("지난 ", "")}</option>`).join("")}</select></div>
+    <div class="row wide"><span class="k">날짜 지정</span><span class="dp">${datePick("pf-date")}<button type="button" data-a="date">부터</button></span>
       ${SET.acc_from === "date" ? `<span class="note">지금 ${accSpan().label}</span>` : ""}</div>
-    <div class="row"><span class="k"></span><span class="note">AWS · 격자 누적을 그날 그 시각부터 — 오늘부터 ${ACC_DATE_DAYS}일 앞까지(예: 어제 18시부터 지금까지).
+    <div class="row wide"><span class="k"></span><span class="note">AWS · 격자 누적을 그날 그 시각부터 — 오늘부터 ${ACC_DATE_DAYS}일 앞까지(예: 어제 18시부터 지금까지).
       지도 누적 층 · 강수 누적 카드가 같이 바뀐다. 격자는 빠진 정각을 10분마다 4장씩 메운다(그동안 합은 하한).</span></div>
     <div class="row"><span class="k">타임라인 값</span>${seg("tl_stat", [["max", "시군 최대"], ["mean", "시군 평균"]])}</div>
+    </div>
     <h4>화면</h4>
     <div class="row"><span class="k">테마</span><span class="seg">
       <button data-th="dark" class="${th === "dark" ? "on" : ""}">어둡게</button>
@@ -5342,9 +5358,11 @@ function openPrefs() {
     <div class="row"><span class="k">예비특보</span>${seg("al_pre", [[true, "보이기"], [false, "숨기기"]])}<span class="note">왼쪽 특보 줄 — 머리 밑 '예비' 체크와 같다</span></div>
     <div class="row"><span class="k">바다 격자</span>${seg("sea_grid", [["full", "그대로"], ["dim", "흐리게"], ["off", "끔"]])}</div>
     <div class="row"><span class="k"></span><span class="note">경남 · 부산 · 울산 땅 밖(바다 · 그 너머) 칸을 옅게 — 땅 · 바다가 갈리게. 흐리게는 다가오는 비 띠가 보일 만큼(35%).</span></div>
+    <div class="grid2">
     <div class="row"><span class="k">바다 위젯</span>${seg("sea_w", [["off", "끔"], ["fc", "예측 상위"], ["now", "지금 오는 비"], ["avg", "시군 평균"]])}</div>
     <div class="row"><span class="k">위젯 돌리기</span>${seg("sea_rot", [[0, "끔"], [10, "10초"], [15, "15초"], [20, "20초"], [30, "30초"], [60, "1분"]])}</div>
     <div class="row"><span class="k">위젯 예측</span>${seg("sea_per", [[1, "시군당 1곳"], [2, "시군당 2곳"]])}</div>
+    </div>
     <div class="row"><span class="k"></span><span class="note">지도 위 반투명 판(W) — 경남 땅을 가장 적게 덮는 빈자리를 스스로 찾는다(좁고 길면 세로로 길쭉하게).
       머리를 끌어 옮기면 마지막으로 놓은 자리가 이 화면의 기본 자리(두 번 누르면 다시 자동), ⇔ · ⇕ 로 꼴을 바꾼다.
       예측 상위 · 지금 오는 비는 오른쪽 패널(카드)과 같은 자료. 특보는 왼쪽 특보 줄에.
@@ -5404,9 +5422,8 @@ function openPrefs() {
   loadSaver();
   $("prefs").hidden = false;
   $("pf-x").onclick = closePrefs;
-  for (const b of $("prefs").querySelectorAll("button[data-k]")) b.onclick = () => {
-    const k = b.dataset.k;
-    let v = b.dataset.v;
+  const pickSet = (k, v) => {
+    // v 는 문자열(단추 data-v · 드롭다운 value)
     v = (k === "tl_on" || k === "sel_zoom" || k === "aws_live" || k === "al_pre" || k === "gn_off") ? v === "true" : (k === "tl_stat" || k === "panel" || k === "sea_w" || k === "sea_grid") ? v : +v;
     if (k === "aws_live") { setLive(v).then(openPrefs); return; }
     if (k === "gn_off") { setGnOff(v).then(openPrefs); return; }
@@ -5427,6 +5444,8 @@ function openPrefs() {
     if (k === "al_pre") renderAlertLegend();
     openPrefs();
   };
+  for (const b of $("prefs").querySelectorAll("button[data-k]")) b.onclick = () => pickSet(b.dataset.k, b.dataset.v);
+  for (const s of $("prefs").querySelectorAll("select.seg-sel")) s.onchange = () => pickSet(s.dataset.k, s.value);
   for (const b of $("prefs").querySelectorAll("button[data-show]")) b.onclick = () => {
     closePrefs();
     if (b.dataset.show === "open") openShowDlg(SHOW.on ? SHOW.name : undefined); else SHOW.on ? stopShow() : showQuick();
@@ -5438,14 +5457,14 @@ function openPrefs() {
   };
   for (const b of $("prefs").querySelectorAll("button[data-th]")) b.onclick = () => { setTheme(b.dataset.th); openPrefs(); };
   for (const b of $("prefs").querySelectorAll("button[data-tools]")) b.onclick = () => { setTools(b.dataset.tools); openPrefs(); };
-  for (const b of $("prefs").querySelectorAll("button[data-rng]")) b.onclick = () => { const [f, h] = RNG_OPTS[+b.dataset.rng]; setRange(f, h); openPrefs(); };
+  for (const b of $("prefs").querySelectorAll("#pf-rng")) b.onchange = () => { const [f, h] = RNG_OPTS[+b.value]; setRange(f, h); openPrefs(); };
   // 초단기예측 이미지 길이 — 수집 설정(서버 qpf.ahead). 다음 발표분부터 그만큼 받는다
   for (const b of $("prefs").querySelectorAll("button.pf-on")) b.onclick = async () => {
     await putOff(b.dataset.id === "*" ? [] : offList().filter(x => x.id !== b.dataset.id));
     openPrefs();
   };
-  for (const b of $("prefs").querySelectorAll("button[data-ahead]")) b.onclick = async () => {
-    const v = +b.dataset.ahead;
+  for (const b of $("prefs").querySelectorAll("#pf-ahead")) b.onchange = async () => {
+    const v = +b.value;
     try {
       const r = await fetch("/api/settings/qpf", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ahead: v }) });
       if (r.ok) QCFG_AHEAD = (await r.json()).qpf.ahead;
