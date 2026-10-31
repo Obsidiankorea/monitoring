@@ -18,7 +18,7 @@ import os
 import re
 import sys
 from collections import Counter, defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
 
@@ -168,38 +168,15 @@ def gap_text(c: dict) -> str:
     return s
 
 
-# 시군 '참고 레벨' — 위키 행동 단계(통제 · 사전대피 · 긴급대피)를 한 줄로 줄 세운 것. 공식 경보 단계(관심~심각)나 비상단계가 아니다.
-# 근접(70%↑)은 앞선 신호라 한 단계 아래로 친다. 대피 결정은 권한자 몫이라 문구는 '검토'까지만.
-LEVELS = {1: ("평상", "평시 감시"),
-          2: ("상황전파", "상황전파 · 모니터링 강화"),
-          3: ("통제", "우려지역 통제 · 순찰 검토"),
-          4: ("사전대피", "사전대피 검토 · 대피 준비"),
-          5: ("긴급대피", "긴급대피 기준 충족 — 대피명령 검토(권한자)")}
-
-
-def sigun_level(alerts: list[str], cs: list[dict], relay: bool = False, cbs: bool = False) -> dict:
-    """시군 하나의 참고 레벨 1~5 — cs 는 그 시군 읍면동 판정들([{stage, st}]). 가장 센 근거가 레벨을 정한다."""
-    def has(stage: str, st: str) -> bool:
-        return any(c["stage"] == stage and c["st"] == st for c in cs)
-    cands = [(5, "긴급대피 기준 충족", has("긴급대피", "met")),
-             (4, "사전대피 기준 충족", has("사전대피", "met")),
-             (4, "긴급대피 기준 근접", has("긴급대피", "near")),
-             (3, "통제 기준 충족", has("통제", "met")),
-             (3, "사전대피 기준 근접", has("사전대피", "near")),
-             (3, "호우경보", "호우경보" in alerts),
-             (3, "재난문자 기준(실황)", bool(cbs)),
-             (2, "호우주의보", "호우주의보" in alerts),
-             (2, "상황전파 기준(20㎜/h · 일 100㎜)", bool(relay)),
-             (2, "통제 기준 근접", has("통제", "near"))]
-    hit = [(lv, w) for lv, w, ok in cands if ok]
-    lv = max((x[0] for x in hit), default=1)
-    return {"lv": lv, "name": LEVELS[lv][0], "act": LEVELS[lv][1], "why": " · ".join(w for x, w in hit if x == lv)}
-
-
-def level_of(s: dict) -> dict:
-    """situation() 결과 하나 → 그 시군의 참고 레벨."""
-    cs = [c for r in s["emd"] for v in r["ladders"].values() for c in v]
-    return sigun_level(s["alerts"], cs, any(r["relay"] for r in s["emd"]), any(r["cbs"] for r in s["emd"]))
+def rain_state(cs: list[dict]) -> tuple[int, str]:
+    """우려지역 강우 기준 상태 — 위키 [[통제·대피 기준]]의 단계 이름 그대로 '사전대피 충족 · 통제 근접'(센 것부터).
+    cs 는 읍면동 판정들([{stage, st}]). 톤: 0 없음 · 1 근접만 · 2 통제 충족 · 3 사전대피/긴급대피 충족."""
+    rank = {"긴급대피": 3, "사전대피": 2, "통제": 1}
+    seen = {(c["stage"], c["st"]) for c in cs if c["st"] in ("met", "near")}
+    seen -= {(g, "near") for g, st in seen if st == "met"}        # 충족한 단계는 근접을 따로 적지 않는다
+    items = sorted(seen, key=lambda x: (x[1] != "met", -rank[x[0]]))
+    tone = 3 if any(st == "met" and rank[g] >= 2 for g, st in seen) else 2 if ("통제", "met") in seen else 1 if seen else 0
+    return tone, " · ".join(f"{g} {'충족' if st == 'met' else '근접'}" for g, st in items)
 
 
 def ladders(r: dict, night: bool, alerts: list[str]) -> dict:
@@ -332,6 +309,101 @@ def _stage(groups: list[dict]) -> dict | None:
     if n_a >= 1:
         return {"stage": "초기대응", "why": f"호우주의보 {n_a}개 시군(3개 이하)"}
     return None
+
+
+# 시군 자체 비상단계 — 위키 [[거제시 단계별 업무]] · [[통영시 단계별 업무]](시군 현장조치 행동매뉴얼 2026.10.)의 진입 기준 · 근무 · 대응.
+# 도(_stage)는 '특보가 난 시군 수'지만 시군은 '그 시에 발효된 특보 종류'로 정한다 — 두 기준은 별개로 돈다.
+# 이름은 매뉴얼 그대로(order). 매뉴얼이 위키에 있는 시군만 — 없는 시군은 None(만들어 내지 않는다).
+# 규칙은 센 단계부터 (단계, 육상 특보 이름, 예비특보 종류). 이 계산은 특보로 정해지는 부분(기준)일 뿐이다 —
+# 실제 발령은 상황판단회의 · 본부장 판단이라, 사람이 바꾼 값(over)이 있으면 그것이 지금 단계이고 기준은 옆에 남긴다.
+# 풍랑 · 앞바다 특보는 시군에 붙지 않아 판단하지 않는다. '광역적 재난' · '본부장 판단'도 계산하지 않는다.
+OVER_TTL_H = 24          # 사람이 바꾼 값은 이만큼 뒤 저절로 풀린다(지난 호우의 단계가 화면에 남는 것을 막는다)
+SIGUN_STAGE = {
+    "거제": {"src": "거제시 단계별 업무 p.28", "draft": False, "base": "평시",
+             "order": ["평시", "준비(관심)", "비상 1단계", "비상 2단계", "비상 3단계"],
+             "do": {"평시": "주간 재난대응과 풍수해재난팀 상시 대기, 야간 상황관리팀 1명",
+                    "준비(관심)": "상황관리팀 1명 + 풍수해재난팀 2명(관내 비상대기)",
+                    "비상 1단계": "재대본 운영 — 풍수해재난팀 3명 · 상황관리팀 1명 · 실무반 18명, 면·동 근무 1~2명",
+                    "비상 2단계": "풍수해재난팀 6명 · 상황관리팀 2명 · 실무반 23명, 전 직원 1/4 근무",
+                    "비상 3단계": "비상 2단계와 같은 편성, 전 직원 1/2 근무"},
+             "rules": [("비상 3단계", {"태풍경보"}, set()),
+                       ("비상 2단계", {"호우경보", "태풍주의보"}, set()),
+                       ("비상 1단계", {"호우주의보"}, {"태풍"}),
+                       ("준비(관심)", {"강풍주의보"}, {"호우"})]},
+    "통영": {"src": "통영시 단계별 업무 p.30", "draft": True, "base": "평시 및 초기대응",
+             "order": ["평시 및 초기대응", "비상 1단계", "비상 2·3단계"],
+             "do": {"평시 및 초기대응": "기상 모니터링, (필요시) 상황판단회의",
+                    "비상 1단계": "상황판단회의, 지대본 비상근무, 현장 안전관리, (필요시) 위험지역 통제·대피",
+                    "비상 2·3단계": "지대본 비상근무 격상, 현장 안전관리 지속, 위험지역 통제·대피, 피해 수습·이재민 지원, 응급복구"},
+             "rules": [("비상 2·3단계", {"호우경보", "대설경보", "태풍주의보", "태풍경보"}, set()),
+                       ("비상 1단계", {"호우주의보", "대설주의보"}, {"태풍"})]},
+}
+
+
+def sigun_stage(sigun: str, alerts: list[str], pending: list[str], over: dict | None = None) -> dict | None:
+    """시군 하나의 비상단계 — alerts 는 그 시에 발효된 육상 특보 이름, pending 은 예비특보 종류(호우 · 태풍 …),
+    over 는 사람이 바꾼 값 {stage, at}. stage = 지금 단계(바꾼 값이 있으면 그것), auto = 특보 기준."""
+    m = SIGUN_STAGE.get(sigun)
+    if not m:
+        return None
+    a, p = set(alerts), set(pending)
+    auto, why = m["base"], "해당 특보 없음"
+    for stage, wa, wp in m["rules"]:
+        hit = sorted(a & wa) + [f"{x} 예비특보" for x in sorted(p & wp)]
+        if hit:
+            auto, why = stage, " · ".join(hit)
+            break
+    ok = bool(over) and over.get("stage") in m["order"]
+    now = over["stage"] if ok else auto
+    return {"stage": now, "auto": auto, "why": why, "set": ok, "set_at": over.get("at") if ok else None,
+            "do": m["do"].get(now, ""), "order": m["order"], "src": m["src"], "draft": m["draft"]}
+
+
+def stage_text(sigun: str, d: dict) -> str:
+    """'거제시 매뉴얼 기준 비상 1단계 (호우주의보) — 도 단계와 별개'. 사람이 바꿨으면 특보 기준을 옆에 남긴다."""
+    full = SIGUN_FULL.get(sigun, sigun)
+    head = (f"{full} 매뉴얼 {d['stage']} (수동 입력 · 특보 기준 {d['auto']}: {d['why']})" if d["set"]
+            else f"{full} 매뉴얼 기준 {d['stage']} ({d['why']})")
+    return head + " — 도 단계와 별개" + (" · 매뉴얼 확정본 확인 전(참고본)" if d["draft"] else "")
+
+
+def overrides() -> dict:
+    """사람이 바꾼 시군 단계 {시군: {stage, at}} — 24시간 지난 것은 뺀다. DB 가 없으면 빈 값(특보 기준만)."""
+    try:
+        from . import db
+        raw = db.get_setting("sigun_stage_over", {}) or {}
+    except Exception:                                      # noqa: BLE001
+        return {}
+    cut = (datetime.now() - timedelta(hours=OVER_TTL_H)).strftime("%Y%m%d%H%M")
+    return {k: v for k, v in raw.items() if k in SIGUN_STAGE and isinstance(v, dict) and (v.get("at") or "") >= cut}
+
+
+def set_override(sigun: str, stage: str | None) -> dict:
+    """사람이 시군 단계를 바꾼다(stage=None 이면 특보 기준으로 되돌림). 매뉴얼의 단계 이름만 받는다."""
+    m = SIGUN_STAGE.get(sigun)
+    if not m:
+        raise ValueError(f"{sigun}: 시군 매뉴얼이 위키에 없다")
+    if stage is not None and stage not in m["order"]:
+        raise ValueError(f"{stage}: {sigun} 매뉴얼에 없는 단계 — {', '.join(m['order'])}")
+    from . import db
+    cur = overrides()
+    if stage is None:
+        cur.pop(sigun, None)
+    else:
+        cur[sigun] = {"stage": stage, "at": datetime.now().strftime("%Y%m%d%H%M")}
+    db.put_setting("sigun_stage_over", cur)
+    return cur
+
+
+def sigun_stages(data: dict, over: dict | None = None) -> dict:
+    """특보 스냅숏(data: groups · pending) → 도 비상단계 + 매뉴얼이 있는 시군별 비상단계(사람이 바꾼 값 포함)."""
+    groups, pend = data.get("groups", []), data.get("pending", [])
+    over = over or {}
+    out = {}
+    for sg in SIGUN_STAGE:
+        al = [g["name"] for g in groups if sg in g.get("siguns", []) and not g.get("sea")]
+        out[sg] = sigun_stage(sg, al, [x["name"] for x in pend if x.get("sigun") == sg], over.get(sg))
+    return {"do": _stage(groups), "sigun": out}
 
 
 def situation(sigun: str, base: str = "http://127.0.0.1:8000") -> dict:

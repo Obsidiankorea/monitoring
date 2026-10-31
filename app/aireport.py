@@ -266,6 +266,13 @@ def report(base: str, sigun: str | None = None, mode: str = "all") -> dict:
                + (f" · 그 밖에 {', '.join(others)}" if others else ""))
     if o["stage"]:
         sit.append(f"도 비상단계 기준: {o['stage']['stage']} ({o['stage']['why']}) — 최종은 상황판단회의")
+    over = ai.overrides()
+    own = {sg: d for sg in ai.SIGUN_STAGE
+           if (d := ai.sigun_stage(sg, next((r["alerts"] for r in rows if r["sigun"] == sg), []),
+                                   [x["name"] for x in o["pending"] if x.get("sigun") == sg], over.get(sg)))}
+    sit.append("시군 비상단계(시군 매뉴얼이 위키에 있는 시군만): "
+               + " · ".join(f"{ai.SIGUN_FULL[sg]} {d['stage']}" + (f"(수동 입력 · 특보 기준 {d['auto']})" if d["set"] else f"({d['why']})")
+                            for sg, d in own.items()) + " — 도 단계와 별개")
     wet = [r for r in rows if r["fc_sum"]]
     top_fc = max(wet, key=lambda r: r["fc_sum"]) if wet else None
     sit.append("앞으로 6시간: " + (f"가장 많은 곳 {top_fc['sigun']} {top_fc['fc_emd']} {top_fc['fc_sum']:g}㎜(최대 시간당 {top_fc['fc_peak']:g}㎜)"
@@ -297,7 +304,7 @@ def report(base: str, sigun: str | None = None, mode: str = "all") -> dict:
     if st != "비상 2단계":
         nxt.append("호우경보 3개 시군 이상 → 도 비상 2단계" if st == "비상 1단계" else "호우주의보 4개 시군 이상 → 도 비상 1단계")
     nxt.append(_ante_note(sits))
-    return {"scope": "경남", "title": "경남 전체", "tm": o["tm"], "flash": _flash_all(o, rows, sits),
+    return {"scope": "경남", "title": "경남 전체", "tm": o["tm"], "flash": _flash_all(o, sits, own),
             "sections": [{"h": "상황", "items": sit}, {"h": "중요한 점", "items": imp}, {"h": "할 일", "items": tasks},
                          {"h": "살펴볼 곳", "items": look or ["특별히 살펴볼 읍면동 없음"]}, {"h": "다음 확인", "items": nxt},
                          {"h": "참고 — 위키 · 책자", "items": _refs(BASE_REFS + ["상황판단회의"])}],
@@ -305,32 +312,44 @@ def report(base: str, sigun: str | None = None, mode: str = "all") -> dict:
 
 
 def _flash_sigun(s: dict, full: str) -> dict:
-    """속보 한 줄 — 시군 하나. 레벨 · 행동 · 근거 · 가장 가까운 기준 한 개."""
-    lv = ai.level_of(s)
-    txt = f"{_when(s['tm'])} 실황 · {full} 레벨 {lv['lv']} {lv['name']} — {lv['act']}"
-    if lv["lv"] > 1:
-        txt += f" (근거: {lv['why']})"
+    """속보 한 줄 — 시군 하나. 시군 비상단계(매뉴얼이 있으면) · 우려지역 강우 기준 상태 · 가장 센 기준 한 개.
+    톤(tone)은 화면 줄 색 — 0 없음 · 1 근접만 · 2 통제 충족 · 3 사전대피/긴급대피 충족."""
+    cs = [c for r in s["emd"] for v in r["ladders"].values() for c in v]
+    tone, rain = ai.rain_state(cs)
+    sd = ai.sigun_stage(s["sigun"], s["alerts"], [p["name"] for p in s["pending"]], ai.overrides().get(s["sigun"]))
+    txt = f"{_when(s['tm'])} 실황 · {full}"
+    if sd:
+        txt += f" 비상단계 {sd['stage']}" + (f"(수동 입력 · 특보 기준 {sd['auto']})" if sd["set"] else "")
+    txt += f" · 우려지역 기준: {rain or '닿은 곳 없음'}"
     rank = {"긴급대피": 3, "사전대피": 2, "통제": 1}
-    best = max(((rank[c["stage"]], c["st"] == "met", r["emd"], fam, c) for r in s["emd"] for fam, cs in r["ladders"].items()
-                for c in cs if c["st"] in ("met", "near") and c.get("gap")), key=lambda x: x[:2], default=None)
+    best = max(((rank[c["stage"]], c["st"] == "met", r["emd"], fam, c) for r in s["emd"] for fam, cs2 in r["ladders"].items()
+                for c in cs2 if c["st"] in ("met", "near") and c.get("gap")), key=lambda x: x[:2], default=None)
     if best:
         _, _, emd, fam, c = best
         txt += f". 가장 센 기준: {emd} {fam} {c['stage']} — {ai.gap_text(c)}"
-    return {"lv": lv["lv"], "text": txt}
+    return {"tone": tone, "text": txt}
 
 
-def _flash_all(o: dict, rows: list[dict], sits: list[dict]) -> dict:
-    """속보 한 줄 — 경남 전체. 우려지역 판정(ladders)은 훑은 시군만 있어서 나머지는 특보 · 상황전파 기준만으로 본다."""
-    by = {s["sigun"]: ai.level_of(s) for s in sits}
-    lvs = [(r["sigun"], by.get(r["sigun"]) or ai.sigun_level(r["alerts"], [], r["relay"], r["cbs"])) for r in rows]
-    top = max((x["lv"] for _, x in lvs), default=1)
-    where = [sg for sg, x in lvs if x["lv"] == top]
-    n2 = sum(1 for _, x in lvs if x["lv"] >= 2)
-    if top == 1:
-        return {"lv": 1, "text": f"{_when(o['tm'])} 실황 · 경남 전체 평상 — 호우특보 · 기준 근접 없음"}
-    x = next(v for sg, v in lvs if sg == where[0])
-    return {"lv": top, "text": f"{_when(o['tm'])} 실황 · 경남 최고 레벨 {top} {x['name']}({_few(where, 5)}) — {x['act']}"
-                               f" (근거: {x['why']}) · 레벨 2 이상 {n2}개 시군"}
+def _flash_all(o: dict, sits: list[dict], own: dict) -> dict:
+    """속보 한 줄 — 경남 전체. 도 비상단계 · 시군 비상단계(평시가 아닌 것) · 우려지역 기준에 닿은 시군(훑은 시군만)."""
+    parts = [f"{_when(o['tm'])} 실황"]
+    if o["stage"]:
+        parts.append(f"도 비상단계 {o['stage']['stage']}({o['stage']['why']})")
+    up = [f"{ai.SIGUN_FULL[sg]} {d['stage']}" + ("(수동 입력)" if d["set"] else "") for sg, d in own.items()
+          if d["stage"] != ai.SIGUN_STAGE[sg]["base"]]
+    if up:
+        parts.append("시군 비상단계 " + ", ".join(up))
+    tone, hit = 0, []
+    for s in sits:
+        t, txt = ai.rain_state([c for r in s["emd"] for v in r["ladders"].values() for c in v])
+        if t:
+            hit.append(f"{s['sigun']} {txt}")
+        tone = max(tone, t)
+    if hit:
+        parts.append("우려지역 기준: " + _few(hit, 4))
+    if len(parts) == 1:
+        parts.append("경남 전체 평시 — 호우특보 · 우려지역 기준 근접 없음")
+    return {"tone": tone, "text": " · ".join(parts)}
 
 
 def _report_sigun(base: str, sigun: str) -> dict:
@@ -340,6 +359,8 @@ def _report_sigun(base: str, sigun: str) -> dict:
     sit.append("특보: " + (", ".join(s["alerts"]) or "없음") + (f" · 예비 {', '.join(p['name'] for p in s['pending'])}" if s["pending"] else ""))
     if s["stage"]:
         sit.append(f"도 비상단계 기준: {s['stage']['stage']} ({s['stage']['why']})")
+    sd = ai.sigun_stage(sigun, s["alerts"], [p["name"] for p in s["pending"]], ai.overrides().get(sigun))
+    sit.append("시군 비상단계: " + (ai.stage_text(sigun, sd) if sd else "이 시군의 매뉴얼은 위키에 아직 없다 — 도 기준만 본다"))
     sit.append("우려지역(위키): " + " · ".join(f"{FAM_SHORT[k]} {v}" for k, v in sorted(s["risk_total"].items(), key=lambda x: -x[1])))
     relay = [r for r in s["emd"] if r["relay"]]
     imp = []

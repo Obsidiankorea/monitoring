@@ -33,7 +33,8 @@ def test_snapshot_items_carry_the_gap_text(monkeypatch):
     lad = {"산사태": [{"stage": "사전대피", "rule": "r", "st": "near", "gap": gap},
                     {"stage": "긴급대피", "rule": "호우경보 발령", "st": "met"}]}
     monkeypatch.setattr(aiwatch.aireport, "overview", lambda base: {
-        "stage": None, "rows": [{"sigun": "함양", "relay": True, "cbs": False, "alerts": [], "fc_sum": 0, "fc_peak": 0}]})
+        "stage": None, "groups": [{"name": "호우주의보", "siguns": ["거제"], "sea": False}], "pending": [],
+        "rows": [{"sigun": "함양", "relay": True, "cbs": False, "alerts": [], "fc_sum": 0, "fc_peak": 0}]})
     monkeypatch.setattr(aiwatch.aireport, "situation", lambda sg, base: {
         "alerts": [], "emd": [{"emd": "서하면", "ladders": lad, "relay": False, "cbs": False}]})
     monkeypatch.setitem(aiwatch._SNAP, "v", None)
@@ -43,4 +44,5 @@ def test_snapshot_items_carry_the_gap_text(monkeypatch):
     assert by["호우경보 발령"]["gap"] == ""
     assert by["r"]["pct"] == 80 and by["호우경보 발령"]["pct"] is None
     snap = aiwatch.snapshot("http://x")
-    assert snap["levels"]["함양"]["lv"] == 5 and "긴급대피" in snap["levels"]["함양"]["act"]
+    assert snap["stages"]["거제"]["stage"] == "비상 1단계" and snap["stages"]["통영"]["stage"] == "평시 및 초기대응"
+    assert "함양" not in snap["stages"]                                   # 시군 매뉴얼이 위키에 없는 시군

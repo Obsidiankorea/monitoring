@@ -458,6 +458,29 @@ async def api_grid_emdwin():
         raise HTTPException(404, str(e)) from e
 
 
+@app.get("/api/ai/sigunstage")
+async def api_ai_sigunstage():
+    """도 비상단계 + 시군 매뉴얼이 위키에 있는 시군(거제 · 통영)의 비상단계 — 지금 특보 기준에 사람이 바꾼 값을 얹어서."""
+    from . import ai
+    return ai.sigun_stages(queries.alerts().get("data") or {}, ai.overrides())
+
+
+@app.put("/api/ai/sigunstage")
+async def api_ai_sigunstage_put(body: dict):
+    """사람이 시군 단계를 바꾼다 — {sigun, stage}. stage 가 없거나 null 이면 특보 기준으로 되돌린다.
+    실제 발령은 상황판단회의 · 본부장 판단이라 특보 기준과 다를 수 있다. 24시간 뒤 저절로 풀린다. 시연 서버는 바꾸지 않는다."""
+    from . import aireport, ai
+    if config.DEMO:
+        raise HTTPException(403, "시연 서버에서는 단계를 바꾸지 않는다")
+    try:
+        ai.set_override(str(body.get("sigun") or ""), body.get("stage") or None)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    aireport.reset_cache()
+    aiwatch._SNAP["v"] = None                                # 근접 목록 캐시(2분)도 비운다
+    return ai.sigun_stages(queries.alerts().get("data") or {}, ai.overrides())
+
+
 @app.get("/api/ai/watch")
 async def api_ai_watch():
     """지금 위키 기준(통제 · 사전대피 · 긴급대피)에 가까워졌거나(70%↑) 닿은 곳 — 지도 표식 · 왼쪽 위험 아이콘용.
