@@ -75,7 +75,7 @@ def _load_keys() -> dict[str, str]:
             if v.startswith("여기에"):   # api_keys.example.txt 의 자리표시자 — 키 없음으로 본다
                 continue
             out[k.strip()] = v
-    for k in ("ORG_API_KEY", "LAW_OC", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
+    for k in ("ORG_API_KEY", "LAW_OC", "DATA_GO_KR_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
               "DISABLE_SSL_VERIFICATION", "BANGJAE_ID", "BANGJAE_PW",
               "BANGJAE_BASE"):
         if os.environ.get(k):
