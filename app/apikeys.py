@@ -13,6 +13,7 @@ from . import config
 EDITABLE = [
     ("ORG_API_KEY", "기상청 API허브(기관용)", "특보 · 격자 · 관측 수집 전부"),
     ("LAW_OC", "법제처 국가법령정보(OC)", "법령 · 행정규칙 · 자치법규 변경 감시 — 서버 공인 IP 등록 필요"),
+    ("HRFCO_KEY", "홍수통제소(HRFCO)", "하천 수위 · 댐 · 보 · 홍수예보 — 지도 레이어 '하천·댐'"),
     ("DATA_GO_KR_KEY", "공공데이터포털", "산림청 산사태 예보(승인 뒤)"),
     ("TELEGRAM_BOT_TOKEN", "텔레그램 봇 토큰", "AI 알림 · 법령 알림"),
     ("TELEGRAM_CHAT_ID", "텔레그램 채팅 번호", "알림 받을 곳"),

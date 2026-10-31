@@ -23,7 +23,7 @@ if __name__ == "__main__" and ("--snap" in sys.argv or "--demo" in sys.argv):
     if "--port" not in sys.argv:
         os.environ.setdefault("PORT", "8001")
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -32,7 +32,7 @@ from fastapi import Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import aiwatch, apikeys, lawwatch, clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, serverupdate, sites, snaps, update
+from . import aiwatch, apikeys, lawwatch, river, clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, serverupdate, sites, snaps, update
 from .collectors import alerts, bangjae_rain, forecast, grid_rain, qpf, rain, shortfc
 from .config import CACHE, INTERVALS, POLL_DEFAULT
 
@@ -148,6 +148,9 @@ async def lifespan(app: FastAPI):
     sched.add_job(aiwatch.run, "interval", seconds=300, id="aiwatch", max_instances=1, coalesce=True)
     # 법령 변경 감시 — 하루 한 번(LAW_OC 가 있는 서버에서만). 위키는 고치지 않고 제안 파일만 남긴다(app/lawwatch.py)
     sched.add_job(lawwatch.run, "cron", hour=9, minute=10, id="lawwatch", max_instances=1, coalesce=True)
+    # 하천 수위 · 댐 · 보 — 10분마다(HRFCO_KEY 가 있는 서버에서만, app/river.py). 켠 지 20초 뒤 첫 수집
+    sched.add_job(river.run, "interval", minutes=10, id="river", max_instances=1, coalesce=True,
+                  next_run_time=datetime.now() + timedelta(seconds=20))
     # 하루 한 번 묵은 자료 치우기 — 안 하면 DB 와 이미지 캐시가 계속 자란다
     sched.add_job(_nightly, "cron", hour=4, minute=20, id="maint",
                   max_instances=1, coalesce=True)
@@ -474,6 +477,14 @@ async def api_law_run():
     return await lawwatch.run()
 
 
+@app.get("/api/river")
+async def api_river():
+    """지도 레이어 '하천·댐' — 경남 수위 · 댐 · 보 최신값(10분)과 홍수예보 발령. 키가 없으면 on=false."""
+    if river.status()["on"] and not config.DEMO and not river._LIVE["at"]:
+        await river.run()                                     # 첫 요청이 스케줄러보다 먼저 오면 그 자리에서 한 번 받는다
+    return river.status()
+
+
 @app.get("/api/keys")
 async def api_keys():
     """설정 › API 키 — 어떤 키가 설정돼 있나(값은 주지 않는다: 설정됨 · 끝 네 글자만)."""
@@ -491,6 +502,8 @@ async def api_keys_put(body: dict):
         raise HTTPException(400, str(e)) from e
     except OSError as e:
         raise HTTPException(500, f"파일에 쓰지 못했다 — {e}") from e
+    if body.get("name") == "HRFCO_KEY":                       # 키를 넣자마자 한 번 받아 지도에 바로 뜨게
+        asyncio.create_task(river.run())
     return {"keys": apikeys.status(), "demo": config.DEMO}
 
 

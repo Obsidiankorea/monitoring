@@ -864,6 +864,35 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
   border-radius: 7px; padding: 3px 10px; cursor: pointer; margin-left: auto; }
 #prefs .pf-on:hover { background: color-mix(in oklab, var(--accent) 16%, transparent); }
 #prefs .offnm small { color: var(--ink-3); margin-left: 6px; }
+/* 하천 · 댐 · 보(레이어 D) — 수위는 눈금 막대, 댐은 둑, 보는 가로 막대. 색은 수위 단계(--rv-*) */
+:root { --rv-0: #3E9BD9; --rv-1: #D9B93B; --rv-2: #EE8B2B; --rv-3: #E4402D; --rv-4: #9A52E0; --rv-dam: #6C86A3; }
+#over .rv .bx { fill: color-mix(in oklab, var(--panel) 80%, transparent); stroke: var(--ink); stroke-width: 1.4; stroke-linejoin: round; }
+#over .rv .fl { stroke: none; }
+#over .rv.nt { opacity: .55; }
+#over .rv.nt .bx { stroke: var(--ink-3); stroke-dasharray: 2 2; }
+#over .rv.up .bx { stroke-dasharray: 3 2; }
+#over .rv .wv { fill: none; stroke: var(--ink); stroke-width: 1.3; stroke-linecap: round; opacity: .85; }
+#over .rv.dim { opacity: .22; }
+#over .rvp { fill: none; stroke-width: 2; transform-box: fill-box; transform-origin: center; animation: rvpulse 1.9s ease-out infinite; pointer-events: none; }
+@keyframes rvpulse { 0% { transform: scale(.7); opacity: .95; } 100% { transform: scale(2.3); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { #over .rvp { animation: none; opacity: .6; } }
+#over .rvl text { font-family: var(--sans); font-weight: 700; fill: var(--ink); stroke: var(--panel); paint-order: stroke; stroke-linejoin: round; dominant-baseline: central; }
+#ly-river { width: auto; min-width: 280px; max-width: 360px; padding: 10px 12px 12px; }
+#ly-river .hd2 { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; cursor: pointer; }
+#ly-river .hd2 b { font-size: 15px; }
+#ly-river .hd2 span { font: 600 12px var(--mono); color: var(--ink-3); margin-left: auto; }
+#ly-river .hd2 .k { font: 600 12px var(--sans); color: var(--ink-3); margin-left: 0; }
+#ly-river .keys2 { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; color: var(--ink-2); }
+#ly-river .dt { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px; flex: none; }
+#ly-river .sec { font: 700 11.5px var(--sans); color: var(--ink-3); letter-spacing: .06em; margin: 10px 0 3px; }
+#ly-river .rr { display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 2px 0; }
+#ly-river .rr b { font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
+#ly-river .rr span { font: 600 12px var(--mono); color: var(--ink-2); white-space: nowrap; }
+#ly-river .rr em { font-style: normal; font-size: 12px; color: var(--ink-3); margin-left: auto; white-space: nowrap; }
+#ly-river .nt { font-size: 12.5px; color: var(--ink-3); margin-top: 6px; line-height: 1.4; }
+#ly-river .nt.w { color: var(--lv-fail); }
+#tip .spk { display: block; margin-top: 4px; }
+#tip .spk polyline { fill: none; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
 #over .st text { font-family: var(--mono); font-weight: 600; fill: var(--ink); dominant-baseline: central; }
 #over .st .n { font-family: var(--sans); font-weight: 700; }
 /* 기상청 색(알록달록) — 값 글자가 색 칸처럼 읽혔다. 바탕 상자 위에 쓴다(drawStations) */
@@ -884,8 +913,8 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 #stg path { pointer-events: none; stroke: none; }
 /* 날아가는 동안 — 선은 viewBox 로 같이 커지되 굵기는 그대로, 글자·점은 잠깐 감췄다가 다 오면 새로 그린다 */
 #stage.zooming #mapwrap path { vector-effect: non-scaling-stroke; }
-#over :is(#names, #labels, #stns, #wbadge, #ranks, #hot, #emdn) { transition: opacity .25s; }
-#stage.zooming #over :is(#names, #labels, #stns, #wbadge, #ranks, #hot, #emdn) { opacity: 0; transition: opacity .1s; }
+#over :is(#names, #labels, #stns, #rivr, #wbadge, #ranks, #hot, #emdn) { transition: opacity .25s; }
+#stage.zooming #over :is(#names, #labels, #stns, #rivr, #wbadge, #ranks, #hot, #emdn) { opacity: 0; transition: opacity .1s; }
 /* 지도 위 순위 원(1~3위)은 경남 전체 지도일 때만 — 시군을 골라 확대하면 천천히 사라지고, 경남 전체로 돌아오면 다시 나온다(10-24) */
 #stage:is(.zooming, .zoomed) #over #ranks { opacity: 0; transition: opacity .6s var(--ease); }
 #over #hot circle.c { fill: var(--accent); stroke: var(--halo); stroke-width: 2; }
@@ -1345,6 +1374,7 @@ body.show-on #play { bottom: 46px; }      /* 점 자리를 비운다 */
       <div class="ly-pop" id="ly-menu" hidden></div>
       <div class="ly-pop" id="ly-alerts" hidden></div>
       <div class="ly-pop" id="ly-stn" hidden></div>
+      <div class="ly-pop" id="ly-river" hidden></div>
     </div>
   </div>
   <div id="showdots" hidden aria-label="화면 재생">
@@ -1754,7 +1784,7 @@ function buildBase() {
   $("over").innerHTML =
     `<path class="bh" d="${sg}${cs}"/><path class="bh z" d="${zn}${sb}"/><g id="stg"></g>`
     + `<path class="sg" d="${sg}"/><path class="cs" d="${cs}"/><path class="sb" d="${sb}"/><path class="zn" d="${zn}"/><g id="emd"></g>`
-    + `<path id="selmask"/><g id="walerts"></g><path id="hl"/><path id="selh"/><path id="sel"/><g id="emdn"></g><g id="stns"></g><g id="labels"></g><g id="names">${names}</g>`
+    + `<path id="selmask"/><g id="walerts"></g><path id="hl"/><path id="selh"/><path id="sel"/><g id="emdn"></g><g id="stns"></g><g id="rivr"></g><g id="labels"></g><g id="names">${names}</g>`
     + `<g id="wbadge"></g><g id="ranks"></g><g id="hot"></g>`;
   HL = null;
   drawAlerts();
@@ -4109,6 +4139,7 @@ const OVL = [
   { id: "alerts", label: "기상특보", short: "특보", key: "A" },
   { id: "stations", label: "관측소", short: "관측소", key: "S" },
   { id: "stnval", label: "지점 강수량 글자", short: "값", key: "V", parent: "stations" },
+  { id: "river", label: "하천 · 댐", short: "하천", key: "D" },
 ];
 /* ⓘ 에 올리거나 누르면 뜨는 설명 — 레이어 목록·범례는 짧게 두고 긴 말은 여기에 */
 const TIPS = new Map([
@@ -4119,6 +4150,8 @@ const TIPS = new Map([
     마름모 속은 지도와 같은 색 단계라 둘레와 색이 다르면 격자와 실측이 어긋난 곳이다.
     ◇ 0 · × 기상청 결측 · 점선 = 그 시각 값을 못 받음. 점에 마우스를 올리면 실측 · 그 칸 격자 · 차이.
     예측 층에서는 자리만. 경남 AWS(내부망) 지점은 이 층에 없다 — 시군을 누르면 오른쪽 패널에 목록으로 나온다(막대 파랑 경남 · 청록 기상청).`],
+  ["ov-river", `<b>하천 · 댐</b> — 경남 하천 수위 관측소(눈금 막대) · 댐 · 보를 홍수통제소 자료로. 막대 색은 수위 단계, 주의보부터는 번쩍인다.
+    낙동강 위쪽(경북 · 대구) 댐 · 보도 함께 — 경남으로 흘러드는 물이라 점선 둘레로. 점에 마우스를 올리면 수위 · 기준 수위 · 1시간 변화 · 방류. 10분마다 갱신.`],
   ["ov-stnval", `<b>지점 강수량 글자</b> — 관측소 옆에 값을 단다. 센 곳부터 빈자리에만, 상위 셋은 지점 이름도.
     시군을 골랐으면 그 시군 지점만. 켜면 지도가 붐빌 수 있어 기본은 끔 — 점 색만으로도 단계는 읽힌다.`],
 ]);
@@ -4127,6 +4160,7 @@ let OV = new Set();
 const OV_IC = {
   alerts: `<svg viewBox="0 0 24 24"><path d="M7 16.5a4.2 4.2 0 0 1-.5-8.3 5.6 5.6 0 0 1 10.8 1.3A3.5 3.5 0 0 1 17 16.5"/><path d="m12.6 12-2.4 3.6h2.8L11.4 20"/></svg>`,
   stations: `<svg viewBox="0 0 24 24"><path d="M12 4 20 12 12 20 4 12z"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/></svg>`,
+  river: `<svg viewBox="0 0 24 24"><path d="M3 8.5c2.2-2 3.8-2 6 0s3.8 2 6 0 3.8-2 6 0"/><path d="M3 13.5c2.2-2 3.8-2 6 0s3.8 2 6 0 3.8-2 6 0"/><path d="M3 18.5c2.2-2 3.8-2 6 0s3.8 2 6 0 3.8-2 6 0" opacity=".5"/></svg>`,
 };
 let LY_OPEN = null;                     // 펼친 범례(stations) — 창마다 기억
 try { LY_OPEN = localStorage.getItem("gn-map-lyopen") || null; } catch {}
@@ -4179,10 +4213,11 @@ function renderLyIcons() {
     const lv = (ALERTS?.land || []).reduce((a, g) => ((LVRANK[g.lv] || 0) > (LVRANK[a] || 0) ? g.lv : a), null);
     return lv ? `var(--lv-${lv})` : "";
   };
-  box.innerHTML = ["alerts", "stations"].filter(id => OV.has(id)).map(id => {
+  box.innerHTML = ["alerts", "stations", "river"].filter(id => OV.has(id)).map(id => {
     const o = OVL.find(x => x.id === id);
-    const n = id === "alerts" && ALERTS && !ALERTS.err ? ALERTS.land.length + ALERTS.sea.length : 0;
-    const col = id === "alerts" ? lvTop() : "";
+    const hiR = RIV?.rows ? RIV.rows.filter(s => s.kind === "wl" && (s.stage ?? -1) >= 1).length : 0;
+    const n = id === "alerts" && ALERTS && !ALERTS.err ? ALERTS.land.length + ALERTS.sea.length : id === "river" ? hiR : 0;
+    const col = id === "alerts" ? lvTop() : id === "river" && hiR ? RV_C[rvMax()] : "";
     return `<button class="ly-ic sm" data-d="${id}" aria-expanded="${id === "alerts" ? alShown() : LY_OPEN === id}" title="${o.label} — 눌러서 ${id === "alerts" ? "특보 줄 펼치기 · 접기" : "범례·설명"} (${o.key}: 끄기)"
       ${col ? `style="color:${col}"` : ""}>${OV_IC[id]}${n ? `<span class="bd" style="background:${col || "var(--ink-3)"}">${n}</span>` : ""}</button>`;
   }).join("");
@@ -4191,6 +4226,8 @@ function renderLyIcons() {
   // 관측소 범례는 누른 아이콘 오른쪽 그 높이에. 특보 줄은 아이콘들 밑에 — 범례 위까지(넘치면 굴린다)
   const ic = box.querySelector(`[data-d="stations"]`);
   if (ic) $("ly-stn").style.top = ic.offsetTop + "px";
+  const ir = box.querySelector(`[data-d="river"]`);
+  if (ir) $("ly-river").style.top = ir.offsetTop + "px";
   fitAlCol();
 }
 /* 특보 줄 자리 — 아이콘들 밑에서 범례 위까지(범례가 바뀌면 다시 — 기상청 색 누적은 범례가 길다) */
@@ -4218,6 +4255,7 @@ function renderLayers() {
   for (const c of $("ly-menu").querySelectorAll("input[data-ov]")) c.onchange = () => setOverlay(c.dataset.ov, c.checked);
   renderAlertLegend();
   renderStnLegend();
+  renderRiverLegend();
   renderLyIcons();
 }
 function setOverlay(id, on) {
@@ -4225,6 +4263,7 @@ function setOverlay(id, on) {
   saveSetting({ overlays: [...OV] });
   if (id === "alerts") { if (on) loadAlerts(); else { ALERTS = null; drawAlerts(); draw(); } if (V) { camGo(true); placeSw(); } }
   if (id === "stations") loadStations();
+  if (id === "river") { if (on) setLyOpen("river"); loadRiver(); }
   if (id === "stnval") drawStations();
   renderLayers();
 }
@@ -4832,6 +4871,7 @@ function stnFresh() {
   return !!STN && !STN.err && STN.layer === layerKey() && (STN.status === "forecast" || STN.tm === CUR?.tm);
 }
 function drawStations() {
+  drawRiver();                           // 하천 · 댐 · 보도 같은 때에 다시 그린다(크기 · 시군 선택 · 확대가 바뀔 때)
   const g = $("stns");
   if (!g) return;
   if (!OV.has("stations") || !V || !V.s || !stnFresh()) { g.innerHTML = ""; drawEmdNames(LABELBOX); return; }
@@ -4953,6 +4993,155 @@ function stationTip(s) {
   const who = s.org === "gn" ? `경남 AWS · ${s.sigun}${s.place ? ` · ${s.place}` : ""}` : `기상청 AWS ${s.stn} · ${s.sigun} ${site?.emd || ""}`;
   return `<b>${s.name} ${obs}</b>${gap} · ${who}`
     + `<div class="d">그 칸 ${kind === "aws" || kind === "aws60" ? "AWS 면" : "격자"} ${grid}${diff != null ? ` (면 − 관측 ${diff >= 0 ? "+" : ""}${diff.toFixed(1)})` : ""} · 해발 ${Math.round(s.ht || 0)}m${s.addr ? ` · ${s.addr}` : ""}${STN.src ? ` · ${STN.src}` : ""}</div>`;
+}
+
+/* ── 하천 · 댐 · 보 — 한강홍수통제소(HRFCO) 자료, 레이어 '하천 · 댐'(D) ────────────────────────────────
+   서버가 10분마다 받아 둔 것(/api/river)을 그린다. 경남 수위 관측소는 눈금 막대(물이 찬 만큼 · 단계 색), 댐은 둑, 보는 가로 막대.
+   점선 둘레 = 경남으로 흘러드는 낙동강 위쪽(경북 · 대구) 댐 · 보. 값은 T/M 원시값(보정 전) — 공식 판단은 홍수통제소 발표로. */
+let RIV = null, RIV_T = 0, RIV_R = 8, RIV_HIT = [];
+const RV_C = ["var(--rv-0)", "var(--rv-1)", "var(--rv-2)", "var(--rv-3)", "var(--rv-4)"];
+const RV_N = ["정상", "관심", "주의보", "경보", "심각"];
+async function loadRiver() {
+  clearTimeout(RIV_T);
+  if (!OV.has("river") || CASE) { RIV = null; drawRiver(); renderRiverLegend(); renderLyIcons(); return; }
+  try { RIV = await getJson("/api/river"); } catch (e) { RIV = { err: e.message }; }
+  drawRiver(); renderRiverLegend(); renderLyIcons();
+  RIV_T = setTimeout(loadRiver, 5 * 60 * 1000);
+}
+const rvTop = s => (s.thr || []).filter(Boolean).pop() || null;         // 가장 높은 기준 수위(눈금 막대의 꼭대기)
+const rvHm = t => (t ? `${t.slice(8, 10)}:${t.slice(10, 12)}` : "—");
+const rvMax = () => Math.max(-1, ...(RIV?.rows || []).filter(s => s.kind === "wl").map(s => s.stage ?? -1));
+function drawRiver() {
+  const g = $("rivr");
+  if (!g) return;
+  RIV_HIT = [];
+  if (!OV.has("river") || !V || !V.s || !RIV || !RIV.rows) { g.innerHTML = ""; return; }
+  const r = RIV_R = Math.max(5.5, Math.min(11, V.u * 1.2));
+  const fs = Math.max(10, Math.min(15, V.u * 2.5));
+  const marks = [], boxes = [], labs = [];
+  const rows = RIV.rows.filter(s => s.x != null).sort((a, b) => (a.stage ?? -1) - (b.stage ?? -1) || (a.kind === "wl" ? -1 : 1));
+  for (const s of rows) {
+    const x = V.toX(s.x), y = V.toY(s.y), st = s.stage ?? -1;
+    const dim = selOn() && s.sigun && !isSel(s.sigun) ? " dim" : "";
+    let rr = r;
+    if (s.kind === "wl") {
+      const top = rvTop(s), w = r * 0.6 * (st < 0 ? 0.8 : 1), h = r * 1.15 * (st < 0 ? 0.8 : 1);
+      const f = top && s.v > 0 ? Math.max(0.08, Math.min(1, s.v / top)) : 0;
+      const col = st >= 0 ? RV_C[st] : "var(--ink-3)";
+      if (st >= 2) marks.push(`<circle class="rvp" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(r * 0.95).toFixed(1)}" style="stroke:${col}"/>`);
+      marks.push(`<g class="rv${st < 0 ? " nt" : ""}${dim}"><rect class="bx" x="${(x - w).toFixed(1)}" y="${(y - h).toFixed(1)}" width="${(2 * w).toFixed(1)}" height="${(2 * h).toFixed(1)}" rx="${(w * 0.45).toFixed(1)}"/>`
+        + (f ? `<rect class="fl" x="${(x - w).toFixed(1)}" y="${(y + h - 2 * h * f).toFixed(1)}" width="${(2 * w).toFixed(1)}" height="${(2 * h * f).toFixed(1)}" rx="${(w * 0.45).toFixed(1)}" style="fill:${col}"/>` : "")
+        + `</g>`);
+      rr = h;
+      if (st >= 1) labs.push({ s, x, y, pr: 10 + st, t: `${s.name.replace(/^[가-힣]+[군시]\(/, "").replace(")", "")} ${s.v.toFixed(2)}m` });
+    } else if (s.kind === "dam") {
+      const w = r * 1.25, h = r * 0.95, hot = s.rise, col = hot ? "var(--rv-2)" : "var(--rv-dam)";
+      if (hot) marks.push(`<circle class="rvp" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(r * 1.1).toFixed(1)}" style="stroke:var(--rv-2)"/>`);
+      marks.push(`<g class="rv dam${s.up ? " up" : ""}${dim}"><path class="bx" d="M${(x - w).toFixed(1)},${(y + h).toFixed(1)}L${(x - w * 0.55).toFixed(1)},${(y - h).toFixed(1)}L${(x + w * 0.55).toFixed(1)},${(y - h).toFixed(1)}L${(x + w).toFixed(1)},${(y + h).toFixed(1)}Z" style="fill:${col}"/>`
+        + `<path class="wv" d="M${(x - w * 0.5).toFixed(1)},${y.toFixed(1)}q${(w * 0.25).toFixed(1)},${(-h * 0.5).toFixed(1)} ${(w * 0.5).toFixed(1)},0t${(w * 0.5).toFixed(1)},0"/></g>`);
+      rr = w;
+      labs.push({ s, x, y, pr: s.rise ? 20 : s.up ? 3 : 8, t: `${s.name}${s.out != null && s.out >= 1 ? ` 방류 ${Math.round(s.out)}` : ""}` });
+    } else {                                                   // 보 — 가로 막대
+      const w = r * 1.2, h = r * 0.42;
+      marks.push(`<g class="rv bo${s.up ? " up" : ""}${dim}"><rect class="bx" x="${(x - w).toFixed(1)}" y="${(y - h).toFixed(1)}" width="${(2 * w).toFixed(1)}" height="${(2 * h).toFixed(1)}" rx="${(h * 0.5).toFixed(1)}" style="fill:var(--rv-dam)"/>`
+        + `<path class="wv" d="M${(x - w * 0.9).toFixed(1)},${(y + h * 2).toFixed(1)}h${(w * 1.8).toFixed(1)}"/></g>`);
+      rr = w;
+      labs.push({ s, x, y, pr: 2, t: s.name });
+    }
+    RIV_HIT.push({ x, y, rr: Math.max(rr, 7), s });
+    boxes.push({ x0: x - rr, x1: x + rr, y0: y - rr, y1: y + rr });
+  }
+  // 이름 — 센 곳부터 빈자리에만(다른 점 · 시군 이름 · 앞 글자와 겹치지 않게). 많으면 열여섯까지
+  const placed = LABELBOX.concat(boxes), txt = [];
+  const hit = b => placed.some(p => b.x0 < p.x1 && b.x1 > p.x0 && b.y0 < p.y1 && b.y1 > p.y0);
+  for (const l of labs.sort((a, b) => b.pr - a.pr).slice(0, 16)) {
+    const w = l.t.length * fs * 0.95 + 4, h = fs * 1.25, gap = RIV_R + 3;
+    for (const [dx, dy] of [[gap, -h / 2], [-gap - w, -h / 2], [-w / 2, gap], [-w / 2, -gap - h]]) {
+      const b = { x0: l.x + dx, y0: l.y + dy, x1: l.x + dx + w, y1: l.y + dy + h };
+      if (b.x0 < 4 || b.y0 < 4 || b.x1 > V.W - 4 || b.y1 > V.H - 4 || hit(b)) continue;
+      placed.push(b);
+      txt.push(`<text x="${(b.x0 + 2).toFixed(1)}" y="${(b.y0 + h / 2).toFixed(1)}" style="font-size:${fs.toFixed(1)}px;stroke-width:${(fs * 0.2).toFixed(1)}px">${escH(l.t)}</text>`);
+      break;
+    }
+  }
+  g.innerHTML = marks.join("") + `<g class="rvl">${txt.join("")}</g>`;
+}
+function riverAt(mx, my) {
+  if (!OV.has("river") || !V || !RIV_HIT.length) return null;
+  let best = null, bd = Infinity;
+  for (const h of RIV_HIT) {
+    const dx = h.x - mx, dy = h.y - my, dd = dx * dx + dy * dy, lim = (h.rr * 1.5) ** 2;
+    if (dd <= lim && dd < bd) { bd = dd; best = h.s; }
+  }
+  return best;
+}
+/* 작은 꺾은선 — 최근 값(10분 간격, 최대 6시간). 세 점 이상일 때만 */
+function rvSpark(h, col) {
+  if (!h || h.length < 3) return "";
+  const lo = Math.min(...h), hi = Math.max(...h), sp = hi - lo || 1, W = 124, H = 26;
+  const pts = h.map((v, i) => `${(i / (h.length - 1) * W).toFixed(1)},${(H - 2 - (v - lo) / sp * (H - 4)).toFixed(1)}`).join(" ");
+  return `<svg class="spk" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}"><polyline points="${pts}" style="stroke:${col}"/></svg>`;
+}
+function rvTrend(d, unit, eps) {
+  if (d == null) return "";
+  if (Math.abs(d) < eps) return ` · 1시간 변화 없음`;
+  return ` · 1시간 ${d > 0 ? "▲ +" : "▼ "}${d}${unit}`;
+}
+function riverTip(s) {
+  const old = s.stale ? " · ⚠ 오래된 값" : "", at = `${rvHm(s.t)} 기준${old}`;
+  if (s.kind === "wl") {
+    const st = s.stage ?? -1, nm = st < 0 ? "기준 수위 없음" : RV_N[st];
+    const thr = (s.thr || []).map((t, i) => (t ? `${["관심", "주의보", "경보", "심각"][i]} ${t}` : "")).filter(Boolean).join(" · ");
+    const nx = st >= 0 && s.next ? ` · ${RV_N[Math.min(4, st + 1)]}수위까지 ${s.gap} m` : "";
+    return `<b>${escH(s.name)} ${s.v == null ? "값 없음" : s.v.toFixed(2) + " m"}</b> · ${nm}${nx}`
+      + `<div class="d">${thr ? `기준 수위(m) ${thr}` : "홍수통제소 제원에 기준 수위가 없는 지점"}${s.q != null ? ` · 유량 ${s.q} ㎥/s` : ""}${rvTrend(s.d1h, " m", 0.02)}</div>`
+      + `<div class="d">${s.sigun ? s.sigun + " · " : ""}${escH(s.agency)} · ${at}</div>${rvSpark(s.hist, st >= 0 ? RV_C[st] : "var(--ink-3)")}`;
+  }
+  const lim = s.lim != null && s.v != null ? ` (${s.kind === "dam" ? "홍수기 제한수위" : "관리수위"} ${s.lim} − ${(s.lim - s.v).toFixed(1)} m)` : "";
+  const out = s.out == null ? "방류 값 없음" : `방류 ${s.out} ㎥/s`;
+  const kind = s.kind === "dam" ? "댐" : "보";
+  return `<b>${escH(s.name)} ${out}</b>${s.rise ? " · ▲ 방류 늘어나는 중" : ""}`
+    + `<div class="d">${kind} 수위 EL ${s.v ?? "—"} m${lim}</div>`
+    + `<div class="d">유입 ${s.inf ?? "—"} ㎥/s${s.owl != null ? ` · 하류수위 ${s.owl} m` : ""}${rvTrend(s.d1h, " ㎥/s", 1)}</div>`
+    + `<div class="d">${s.up ? "낙동강 위쪽 — 경남으로 흘러든다" : s.sigun || ""} · ${escH(s.agency)} · ${at}</div>${rvSpark(s.hist, "var(--rv-dam)")}`;
+}
+function renderRiverLegend() {
+  const box = $("ly-river");
+  if (!box) return;
+  if (!OV.has("river")) { box.hidden = true; return; }
+  box.hidden = LY_OPEN !== "river";
+  if (box.hidden) return;
+  const dot = c => `<i class="dt" style="background:${c}"></i>`;
+  let body;
+  if (!RIV) body = `<div class="nt">읽는 중…</div>`;
+  else if (RIV.err) body = `<div class="nt w">불러오지 못했다 — ${escH(RIV.err)}</div>`;
+  else if (!RIV.on) body = `<div class="nt w">${RIV.demo ? "시연 서버는 하천 자료를 받지 않는다." : "키가 없다 — 설정 › 시스템 › API 키 › 홍수통제소(HRFCO)."}</div>`;
+  else if (!RIV.rows?.length) body = `<div class="nt">${RIV.at ? "받은 지점이 없다." : "첫 수집을 기다린다(켠 뒤 1분 안)."}</div>`;
+  else {
+    const wl = RIV.rows.filter(s => s.kind === "wl"), cnt = [0, 0, 0, 0, 0];
+    wl.forEach(s => { if ((s.stage ?? -1) >= 0) cnt[s.stage]++; });
+    const nthr = wl.filter(s => (s.stage ?? -1) < 0).length;
+    const chips = RV_N.map((n, i) => `<span>${dot(RV_C[i])}${n} ${cnt[i]}</span>`).join("");
+    const hi = wl.filter(s => (s.stage ?? -1) >= 1).sort((a, b) => b.stage - a.stage || (a.gap ?? 9) - (b.gap ?? 9));
+    const near = wl.filter(s => (s.stage ?? -1) === 0 && s.gap != null).sort((a, b) => a.gap - b.gap).slice(0, 3);
+    const rowW = (s, c) => `<div class="rr">${dot(c)}<b>${escH(s.name)}</b><span>${s.v.toFixed(2)} m</span><em>${s.gap != null ? `${RV_N[Math.min(4, s.stage + 1)]}까지 ${s.gap} m` : RV_N[s.stage]}</em></div>`;
+    const wlHtml = hi.length ? hi.slice(0, 6).map(s => rowW(s, RV_C[s.stage])).join("")
+      : `<div class="nt">관심 수위 이상 없음 — 가장 가까운 곳</div>` + near.map(s => rowW(s, RV_C[0])).join("");
+    const rel = RIV.rows.filter(s => s.kind !== "wl" && s.out != null).sort((a, b) => b.out - a.out).slice(0, 6);
+    const relHtml = rel.map(s => `<div class="rr">${dot(s.rise ? "var(--rv-2)" : "var(--rv-dam)")}<b>${escH(s.name)}</b><span>${s.out} ㎥/s</span><em>${s.rise ? "▲ 늘어남 · " : ""}유입 ${s.inf ?? "—"}${s.up ? " · 위쪽" : ""}</em></div>`).join("");
+    const fl = RIV.fld?.length ? RIV.fld.slice(0, 4).map(f => `<div class="rr">${dot("var(--rv-3)")}<b>${escH(f.obs || "")}</b><span>${escH(f.kind || "")}</span><em>${escH(f.river || "")} ${escH(f.at || "")}</em></div>`).join("")
+      : `<div class="nt">발령 없음(최근 24시간${RIV.nfld ? ` · 전국 ${RIV.nfld}건 중 경남 영향 없음` : ""})</div>`;
+    body = `<div class="keys2">${chips}</div>${nthr ? `<div class="nt">기준 수위 없는 지점 ${nthr}곳은 값만(흐린 막대)</div>` : ""}`
+      + `<div class="sec">수위 높은 곳</div>${wlHtml}<div class="sec">댐 · 보 방류</div>${relHtml || `<div class="nt">값 없음</div>`}<div class="sec">홍수예보 발령</div>${fl}`;
+  }
+  TIPS.set("river-now", `한강홍수통제소(HRFCO) 자료 — 전국 4대강 홍수통제소 원시값(보정 전)이라 확정치와 다를 수 있다. 공식 판단은 홍수통제소 발표로.<br>
+    <b>수위</b> 관측소 막대는 꼭대기가 제원의 가장 높은 기준 수위, 차오른 만큼이 지금 수위. 색은 단계(정상 · 관심 · 주의보 · 경보 · 심각), 주의보부터는 번쩍인다.
+    기준 수위가 제원에 없는 지점은 흐리게 값만.<br>
+    <b>댐 · 보</b>는 방류량(총방류)이 1시간 전보다 10 ㎥/s 이상 · 20% 이상 늘면 주황으로 번쩍인다. 방류가 얼마면 위험인지는 위키에 숫자가 없어 단계를 만들지 않았다 — 하류 시군은 댐 방류 협의 · 사전예고(위키 위험예보)를 따른다.<br>
+    점선 둘레 = 경남으로 흘러드는 낙동강 위쪽(경북 · 대구) 댐 · 보. 낙동강권역 자료는 11분 넘게 늦게 들어온다(지점마다 마지막 시각이 다르다). 10분마다 갱신.`);
+  const t = RIV?.at ? RIV.at.slice(11, 16) : "";
+  box.innerHTML = `<div class="hd2" title="눌러서 닫기"><b>하천 · 댐</b><span class="k">${RIV?.rows?.length ? `${RIV.rows.length}곳` : ""}</span><i class="inf" data-tip="river-now">i</i><span>${t}</span></div>` + body;
+  box.querySelector(".hd2").onclick = ev => { if (!ev.target.closest(".inf")) setLyOpen(null); };
 }
 
 /* ── 시군 고르기 — 지도에서 시군을 누르면 오른쪽 패널이 그 시군으로 ──────────────────
@@ -5197,7 +5386,12 @@ function helpHtml(tab) {
       시간 강수(60분 · 실황 · 초단기, 15분은 ×4)는 기상청 색 · 다양한 색조 모두 레이더와 같은 ㎜/h 경계.
       누적은 기상청 색이 열 칸 남짓, <b>다양한 색조</b>는 QPF 범례 색을 다 써(한 색에 서너 색조) 스무 칸 남짓 · 끝 눈금이 자료를 바짝 따른다.
       레이더 색의 노랑 · 빨강 · 보라는 특보 선 색과 겹친다. <code>?pal=kma</code> · <code>?pal=rich</code> 로 고정</dd>
-    <dt>레이어</dt><dd>왼쪽 위. 기상특보 <code>A</code> · 관측소 <code>S</code> · 지점 강수량 글자 <code>V</code>(관측소를 켰을 때, 기본은 끔 — 점 색만으로도 단계가 읽힌다)</dd>
+    <dt>레이어</dt><dd>왼쪽 위. 기상특보 <code>A</code> · 관측소 <code>S</code> · 지점 강수량 글자 <code>V</code>(관측소를 켰을 때, 기본은 끔 — 점 색만으로도 단계가 읽힌다) · 하천 · 댐 <code>D</code></dd>
+    <dt>하천 · 댐 <code>D</code></dt><dd>한강홍수통제소(HRFCO) 자료(전국 4대강 홍수통제소 원시값, 10분마다). <b>수위 관측소</b>는 눈금 막대 — 꼭대기가 가장 높은 기준 수위, 차오른 만큼이 지금 수위, 색은 단계(정상 · 관심 · 주의보 · 경보 · 심각, 홍수통제소 제원의 기준 수위). 주의보부터는 번쩍인다.
+      <b>댐</b>은 둑 모양 · <b>보</b>는 가로 막대 — 방류가 1시간 전보다 10 ㎥/s 이상(20% 이상) 늘면 주황으로 번쩍인다. 점선 둘레는 경남으로 흘러드는 낙동강 위쪽(경북 · 대구) 댐 · 보. 점에 마우스를 올리면 수위 · 기준 수위 · 다음 단계까지 · 1시간 변화 · 방류 · 최근 흐름.
+      아이콘의 숫자는 관심 수위 이상인 지점 수. 왼쪽 범례에는 수위 높은 곳 · 댐 · 보 방류 · 홍수예보 발령.
+      <br>⚠️ 값은 관측소 원시값(보정 전)이라 확정치와 다를 수 있다 — 안전 판단은 홍수통제소 공식 발표로. 방류가 얼마면 위험인지는 위키에 숫자가 없어 단계를 만들지 않았다(하류 시군은 댐 방류 협의 · 사전예고를 따른다).
+      키는 설정 › 시스템 › API 키 › 홍수통제소(HRFCO). 시연 서버(:8001)는 받지 않는다.</dd>
     <dt>층 · 재생</dt><dd><code>1</code>~<code>6</code> 층 · <code>B</code> 자료(격자 ↔ AWS) · <code>Space</code> 재생 · <code>←</code><code>→</code> 한 장씩 · <code>L</code> 패널 · <code>G</code> 위 카드 가득 · <code>R</code> AWS 실시간 감시 · <code>Q</code> 아래에 초단기예측 이미지 · <code>W</code> 바다 위젯 · <code>C</code> 지도 위치 · <code>P</code> 화면 재생 · <code>T</code> 테스트.
       AWS 로 재생하면 지난 시간은 AWS 1시간 면(정시마다), 지금 뒤는 초단기</dd>
     <dt>주소로 고정</dt><dd><code>?layer=obs60</code> · <code>?ov=alerts,stations</code> · <code>?sig=창원</code> · <code>?basis=grid</code> · <code>?pal=kma</code> · <code>?case=geoje-20260816</code> — 벽면 화면을 한 상태로 둘 때</dd>
@@ -6123,8 +6317,15 @@ $("stage").addEventListener("mousemove", ev => {
   const rc = $("stage").getBoundingClientRect(), x = ev.clientX - rc.left, y = ev.clientY - rc.top;
   const mx = (x - MT.tx) / MT.sc, my = (y - MT.ty) / MT.sc;
   const gx = V.fromX(mx), gy = V.fromY(my), v = valueAt(gx, gy), tip = $("tip");
-  const sp = stationAt(mx, my);
-  $("stage").style.cursor = sp || sigunAt(gx, gy) ? "pointer" : "";
+  const sp = stationAt(mx, my), rv = sp ? null : riverAt(mx, my);
+  $("stage").style.cursor = sp || rv || sigunAt(gx, gy) ? "pointer" : "";
+  if (rv) {                              // 하천 · 댐 · 보 위 — 수위 · 기준 수위 · 1시간 변화 · 방류
+    tip.innerHTML = riverTip(rv);
+    tip.hidden = false;
+    tip.style.left = Math.min(V.W - tip.offsetWidth - 6, x + 16) + "px";
+    tip.style.top = Math.max(6, y - tip.offsetHeight - 12) + "px";
+    return;
+  }
   if (sp) {                              // 관측소 위 — 실측과 그 칸 격자를 나란히
     highlight(sp.sigun);
     tip.innerHTML = stationTip(sp);
@@ -6638,6 +6839,7 @@ document.addEventListener("keydown", ev => {
   else if (ev.key === "a" || ev.key === "A") setOverlay("alerts", !OV.has("alerts"));
   else if (ev.key === "s" || ev.key === "S") setOverlay("stations", !OV.has("stations"));
   else if ((ev.key === "v" || ev.key === "V") && OV.has("stations")) setOverlay("stnval", !OV.has("stnval"));
+  else if (ev.key === "d" || ev.key === "D") setOverlay("river", !OV.has("river"));
   else if (ev.key === "b" || ev.key === "B") toggleBasis();
   else if (ev.key === "f" || ev.key === "F") toggleAccFc();
   else if (ev.key === "h" || ev.key === "H") toggleAccH1();
@@ -6711,6 +6913,7 @@ async function boot() {
   OV = new Set(Q.has("ov") ? Q.get("ov").split(",").filter(Boolean)
                : CASE ? ["alerts"] : (SET.overlays || []));
   renderLayers();
+  if (OV.has("river")) loadRiver();
   vsrtN = +SET.vsrt_n || 1; x4 = !!SET.x4;
   applyAccFull(); applyHdrPin();
   // 색 — ?pal=kma|blue 가 서버 설정보다 먼저(벽면 화면 고정용). 기상청 색은 서버가 뽑아 둔 범례를 받아 와야 쓴다

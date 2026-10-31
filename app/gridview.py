@@ -1253,7 +1253,7 @@ SETTING_DEFAULT = {"layer": "obs60", "x4": False, "vsrt_n": 1,
                    "shows": [],
                    # 지도 위에 겹칠 레이어(왼쪽 위 '레이어'에서 켠다). 차츰 늘린다.
                    "overlays": []}
-OVERLAYS = ("alerts", "stations", "stnval")   # stnval = 관측소 옆 값 글자(관측소에 딸림)
+OVERLAYS = ("alerts", "stations", "stnval", "river")   # stnval = 관측소 옆 값 글자(관측소에 딸림) · river = 하천 수위 · 댐 · 보
 _CHOICES = {"flow_step": (10, 20, 30, 60), "flow_hours": (1, 3, 6, 12),
             "play_ms": (400, 600, 1200, 2000, 3000), "tl_stat": ("max", "mean"),
             "qpf_ms": (250, 400, 600, 1000, 1500),
