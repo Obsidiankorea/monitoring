@@ -10,7 +10,7 @@
     {"name": "민방위기본법", "aliases": []},
     {"name": "소방기본법", "aliases": []},
     {"name": "산림보호법", "aliases": []},
-    {"name": "풍수해보험법", "aliases": []},
+    {"name": "풍수해ㆍ지진재해보험법", "aliases": ["풍수해보험법"]},
     {"name": "급경사지 재해예방에 관한 법률", "aliases": []},
     {"name": "도로법", "aliases": []}
   ]
