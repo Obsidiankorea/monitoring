@@ -77,6 +77,11 @@ def _tide(src: dict, now: datetime) -> dict:
     return {"at": f"{now:%Y-%m-%d %H:%M}", "err": None, "rows": [x for x in rows if x], "spring": SPRING}
 
 
+def _r5(v):
+    """예보는 5 ㎜ 단위 — 시연 표에 소수가 없게. 1 ㎜ 넘는 비는 0 으로 사라지지 않는다. 배열 · 숫자 모두."""
+    return np.where(v < 1, 0.0, np.maximum(np.round(v / 5), 1) * 5)
+
+
 def _forecast(db: sqlite3.Connection, cache: Path, now: datetime) -> dict:
     """앞으로 올 비 — 마지막 3시간 시우량(5km 칸 최대)에 FC_CURVE 를 곱해 예측 층에 얹는다. 원래 예보보다 낮추지는 않는다."""
     gridstore.ROOT = cache / "grid"
@@ -96,12 +101,12 @@ def _forecast(db: sqlite3.Connection, cache: Path, now: datetime) -> dict:
             f = field.get(k.split("_")[1][:10])
             if f is not None:
                 a = gridstore.load(layer, k)
-                gridstore.save(layer, k, np.where(np.isnan(a), a, np.maximum(a, f)))
+                gridstore.save(layer, k, np.where(np.isnan(a), a, _r5(np.maximum(a, f))))
                 n[layer] += 1
     b = gridstore.geo()["dfs"]["bbox"]
-    rows = [(float(np.nan_to_num(field[e[:10]][y - 1 - b["j0"], x - 1 - b["i0"]])), v, t, e, x, y)
+    rows = [(float(_r5(max(float(np.nan_to_num(field[e[:10]][y - 1 - b["j0"], x - 1 - b["i0"]])), v))), t, e, x, y)
             for t, e, x, y, v in db.execute("SELECT tmfc, tmef, x, y, val FROM fcst_short WHERE var='PCP'") if e[:10] in field]
-    db.executemany("UPDATE fcst_short SET val=MAX(?, ?) WHERE tmfc=? AND tmef=? AND x=? AND y=? AND var='PCP'", rows)
+    db.executemany("UPDATE fcst_short SET val=? WHERE tmfc=? AND tmef=? AND x=? AND y=? AND var='PCP'", rows)
     names = [s["name"] for s in gridstore.geo()["sigun"] if s["kind"] == "gn"]
     tmfcs = [r[0] for r in db.execute("SELECT DISTINCT tmfc FROM fcst_rn1")]
     old = {(t, e, s, m): v for t, e, s, m, v in db.execute("SELECT tmfc, tmef, sigun, emd, rn1 FROM fcst_rn1")}
@@ -112,7 +117,7 @@ def _forecast(db: sqlite3.Connection, cache: Path, now: datetime) -> dict:
         stats = gridstore.emd_stats(gridstore.to_hr(field[e[:10]]), names)
         for t in tmfcs:
             db.executemany("INSERT INTO fcst_rn1(tmfc, tmef, sigun, emd, rn1, fetched_at) VALUES(?,?,?,?,?,?)",
-                           [(t, e, r["sig"], r["name"], max(round(r["max"] or 0, 1), old.get((t, e, r["sig"], r["name"]), 0)), stamp) for r in stats])
+                           [(t, e, r["sig"], r["name"], float(_r5(max(r["max"] or 0, old.get((t, e, r["sig"], r["name"]), 0)))), stamp) for r in stats])
     return {**n, "fcst_short": len(rows), "peak": round(float(base.max() * max(FC_CURVE)), 1)}
 
 
