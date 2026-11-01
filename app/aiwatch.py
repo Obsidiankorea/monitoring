@@ -48,6 +48,7 @@ async def send(text: str) -> None:
 
 
 _GAP: dict[str, dict] = {}      # 열쇠 → {t: 기준 N% · 남은 ㎜ · 닿는 시각 글, pct} (화면 목록 · 읍면동 배지에만. 알림 문자는 그대로)
+_DO: dict = {"v": None}         # 도 비상단계(+사람이 바꾼 값)
 _STAGES: dict = {}              # 시군 비상단계(매뉴얼이 위키에 있는 시군) — 이번 훑을 때의 특보 기준(+사람이 바꾼 값)
 
 
@@ -57,6 +58,7 @@ def _scan(base: str) -> dict[str, tuple[str, tuple]]:
     out: dict[str, tuple[str, str]] = {}
     _STAGES.clear()
     _STAGES.update(ai.sigun_stages({"groups": o["groups"], "pending": o["pending"]}, ai.overrides())["sigun"])
+    _DO["v"] = o["stage"]
     if o["stage"]:
         out[f"stage|{o['stage']['stage']}"] = ("met", ("도", o["stage"]["stage"], "비상단계", "", o["stage"]["why"]))
     focus = [r["sigun"] for r in o["rows"]
@@ -97,7 +99,7 @@ def snapshot(base: str) -> dict:
         d[i["st"]] += 1
         d["top"] = max(d["top"], STAGE_RANK.get(i["stage"], 0) * 10 + RANK[i["st"]])
     out = {"at": datetime.now().strftime("%m.%d %H:%M"), "n": len(items), "stage": stage["emd"] if stage else None,
-           "sigun": sg, "items": items, "stages": dict(_STAGES)}
+           "sigun": sg, "items": items, "stages": dict(_STAGES), "do": _DO["v"]}
     _SNAP.update(t=now_t, v=out)
     return out
 
@@ -122,7 +124,7 @@ def _msg(new: list, tm: str) -> str:
         k = (fam, stg)
         d[k] = max(d.get(k, 0), 2 if st == "met" else 1)
     ranked = sorted(by.items(), key=lambda kv: -max(STAGE_RANK[k[1]] * 10 + v for k, v in kv[1].items()))
-    lines = [f"도 비상단계 기준 {x[1]} — {x[4]}" for x in stage]
+    lines = [f"도 비상단계 {x[1]} — {x[4]}" for x in stage]
     for (sg, emd), d in ranked[:MAX_LINES]:
         parts = [f"{fam} {stg} {'충족' if v == 2 else '근접'}" for (fam, stg), v in sorted(d.items(), key=lambda kv: -(STAGE_RANK[kv[0][1]] * 10 + kv[1]))]
         lines.append(f"{sg} {emd} — " + " · ".join(parts[:3]))

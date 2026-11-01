@@ -185,7 +185,16 @@ let WATCH = null, WATCH_OPEN = null;                       // 열린 팝업 e | 
 let WATCH_MAP = true;                                      // 지도의 시군명에 표식 · 색을 낼지(팝업의 '지도에 표시') — 이 브라우저에 기억
 try { WATCH_MAP = localStorage.getItem("gn-map-watchmap") !== "0"; } catch {}
 const WATCH_SEEN = { e: new Set(), c: new Set() }, WATCH_BL = new Map();   // 본 시군 · 깜박임 끝 시각
-const wItems = g => (WATCH?.items || []).filter(i => WG[g].stages.includes(i.stage));
+const wAll = g => (WATCH?.items || []).filter(i => WG[g].stages.includes(i.stage));
+const wItems = g => wAll(g).filter(i => selHas(i.sigun));    // 시군을 고르면 그 시군만 — 지도 표식(wSigun)은 그대로
+function watchBadges() {
+  for (const g of ["e", "c"]) {
+    const items = wItems(g), n = new Set(items.map(i => i.sigun)).size;
+    $("ly-risk-" + g).hidden = !n;
+    $("ly-risk-n-" + g).textContent = n;
+    if (g === "e") $("ly-risk-e").classList.toggle("mid", !items.some(i => i.stage === "긴급대피"));   // 긴급대피가 없으면(사전대피만) 한 단계 옅게
+  }
+}
 function wEmdPct() {                                       // "시군|읍면동" → 기준에 가장 가까운 조건의 비율(%) — 읍면동 이름 옆에 붙인다
   const m = new Map();
   for (const i of WATCH?.items || []) {
@@ -195,7 +204,7 @@ function wEmdPct() {                                       // "시군|읍면동"
   }
   return m;
 }
-const STG_C = { "평시": "c0", "평시 및 초기대응": "c0", "준비(관심)": "c1", "비상 1단계": "c2", "비상 2단계": "c3", "비상 3단계": "c4", "비상 2·3단계": "c34" };
+const STG_C = { "상시대비": "c0", "초기대응": "c1", "평시": "c0", "평시 및 초기대응": "c0", "준비(관심)": "c1", "비상 1단계": "c2", "비상 2단계": "c3", "비상 3단계": "c4", "비상 2·3단계": "c34" };
 const wStg = n => WATCH?.stages?.[n] || null;               // 시군 비상단계(매뉴얼이 위키에 있는 시군만) {stage, auto, why, set, do, ...}
 const stgChip = d => d ? `<span class="stg ${STG_C[d.stage] || "c0"}${d.std ? " std" : ""}" title="${escH((d.set ? `수동 입력 — 특보 기준 ${d.auto}: ${d.why}` : d.why) + (d.std ? " · 거제시 매뉴얼 준용(이 시군 매뉴얼은 위키에 아직 없다)" : ""))}">${escH(d.stage)}${d.set ? " ✎" : ""}</span>` : "";
 function wSigun() {                                        // 시군 → { g: 'e'|'c', s: 가장 센 단계(1~3), near: 충족 없이 근접만 }
@@ -227,11 +236,12 @@ function watchPaintList(g) {
   const row = i => `<div class="it"><span class="tg s${WS[i.stage]}${i.st === "met" ? "" : " near"}">${i.stage} ${i.st === "met" ? "충족" : "근접"}</span><b>${escH(i.emd)} — ${escH(i.fam)}</b><em>${escH(i.rule)}</em>${i.gap ? `<span class="gp">${escH(i.gap)}</span>` : ""}</div>`;
   pop.innerHTML = `<div class="rh"><b>${WG[g].ic} ${WG[g].title} ${names.length}개 시군</b><span>${WATCH.at} 기준 · ${items.length}건</span><i data-x title="닫기">✕</i></div>`
     + `<label class="rm"><input type="checkbox" data-map ${WATCH_MAP ? "checked" : ""}> 지도에 표시 <small>시군 이름에 ${WG.e.ic} · ${WG.c.ic} 와 색</small></label>`
+    + (WATCH.do ? `<div class="rm rdo">도 ${stgChip(WATCH.do)}</div>` : "")
     + names.map(n => `<div class="rg"><div class="s" data-s="${escH(n)}" title="이 시군을 고른다">${escH(n)}${stgChip(wStg(n))}<small>충족 ${by[n].filter(i => i.st === "met").length} · 근접 ${by[n].filter(i => i.st !== "met").length}</small></div>`
       + (wStg(n)?.do ? `<div class="act">${escH(wStg(n).do)}</div>` : "")
       + by[n].slice(0, 8).map(row).join("")
       + (by[n].length > 8 ? `<div class="it"><span></span><em>… 외 ${by[n].length - 8}건</em></div>` : "") + `</div>`).join("")
-    + `<div class="nt">${g === "e" ? "긴급대피 = 실황 기준(실제 내린 비) · 사전대피 = 예보 기준. 대피장소 · 근거는 AI 상황판단(I). " : "통제 = 출입 · 통행 제한 단계(대피보다 아래). "}근접 = 기준 수치의 70% 이상. 시군 이름 옆 비상단계는 그 시 매뉴얼(특보 종류 기준) — 도 단계와 별개이고, 실제 발령은 상황판단회의가 정한다. 남은 ㎜ · 닿는 시각은 가장 먼 조건 기준이며, 시각은 예보 시우량을 지금 누적에 더한 값이라 실제보다 이를 수 있다. 판단 · 명령은 권한자 몫 — 기준과의 대조일 뿐이다.</div>`;
+    + `<div class="nt">${g === "e" ? "긴급대피 = 실황 기준(실제 내린 비) · 사전대피 = 예보 기준. 대피장소 · 근거는 AI 상황판단(I). " : "통제 = 출입 · 통행 제한 단계(대피보다 아래). "}근접 = 기준 수치의 70% 이상. 시군 이름 옆 비상단계는 그 시 매뉴얼(특보 종류 기준) — 도 단계와 별개다. 도 · 시군 모두 기준에 닿으면 그 단계가 된 것으로 보고, 실제와 다르면 특보 아이콘에서 바꾼다. 남은 ㎜ · 닿는 시각은 가장 먼 조건 기준이며, 시각은 예보 시우량을 지금 누적에 더한 값이라 실제보다 이를 수 있다. 판단 · 명령은 권한자 몫 — 기준과의 대조일 뿐이다.</div>`;
 }
 function watchOpen(g) {                                     // g: 'e' | 'c' | null(닫기)
   if (g && !wItems(g).length) g = null;
@@ -249,7 +259,7 @@ function watchOpen(g) {                                     // g: 'e' | 'c' | nu
 let FC_SEQ = 0;
 const fcHm = t => t && t.length >= 10 ? `${+t.slice(4, 6)}.${+t.slice(6, 8)}. ${t.slice(8, 10)}시 발표` : "";
 function fcTop(r, n = 5) {
-  const rows = (r.rows || []).filter(x => x.kind === "gn" && x.max != null && x.max >= 0.1).sort((a, b) => b.max - a.max).slice(0, n);
+  const rows = (r.rows || []).filter(x => x.kind === "gn" && x.max != null && x.max >= 0.1 && selHas(x.sigun)).sort((a, b) => b.max - a.max).slice(0, n);
   if (!rows.length) return `<div class="fe">비 예보 거의 없음</div>`;
   return rows.map(x => `<div class="fl"><b>${escH(x.sigun)}</b><span>최대 ${x.max}㎜${x.where?.emd ? ` <em>${escH(x.where.emd)}</em>` : ""} <em>평균 ${x.mean}㎜</em></span></div>`).join("");
 }
@@ -261,7 +271,7 @@ async function fcLoad() {
   if (my !== FC_SEQ) return;
   let al = `<div class="fe">특보를 못 받았다${a.status === "rejected" ? " — " + escH(a.reason?.message || "") : ""}</div>`;
   if (a.status === "fulfilled") {
-    const d = a.value?.data || {}, gs = d.groups || [], pd = d.pending || [];
+    const d = a.value?.data || {}, gs = (d.groups || []).filter(g => !selOn() || (!g.sea && g.siguns?.some(isSel))), pd = (d.pending || []).filter(p => selHas(p.sigun));
     al = gs.length ? gs.map(g => `<div class="fl"><b>${escH(g.name)}</b><span>${escH(((g.sea ? g.regions : g.siguns?.length ? g.siguns : g.regions) || []).join(" · ") || "—")}${g.sea ? " <em>바다</em>" : ""}</span></div>`).join("")
                    : `<div class="fe">발효 중인 특보 없음</div>`;
     if (pd.length) al += `<h6>예비특보</h6>` + pd.slice(0, 8).map(p => `<div class="fl"><b>${escH(p.name)}</b><span>${escH(p.reg || p.sigun || "")} <em>${escH(p.when || "")}</em></span></div>`).join("");
@@ -269,13 +279,14 @@ async function fcLoad() {
   }
   let st = "";                                              // 비상단계 — 도(특보 난 시군 수) · 시군 매뉴얼이 위키에 있는 시군(그 시에 발효된 특보 종류)
   if (ss.status === "fulfilled") {
-    const d = ss.value.do, own = Object.entries(ss.value.sigun || {}).filter(([, v]) => v), ro = !!window.GN_SNAP;
-    const sel = (n, v) => ro ? "" : `<select data-stg="${escH(n)}" aria-label="${escH(n)} 비상단계 바꾸기" title="실제 발령은 상황판단회의가 정한다 — 바꾸면 24시간 뒤 저절로 특보 기준으로 돌아간다"><option value="">특보 기준대로 — ${escH(v.auto)}</option>`
+    const dOrd = ss.value.do_order, d = ss.value.do || { stage: dOrd[0], auto: dOrd[0], why: "호우특보 없음", set: false, order: dOrd };
+    const own = Object.entries(ss.value.sigun || {}).filter(([n, v]) => v && selHas(n));
+    const sel = (n, v) => `<select data-stg="${escH(n)}" aria-label="${escH(n)} 비상단계 바꾸기" title="실제 발령은 상황판단회의가 정한다 — 바꾸면 24시간 뒤 저절로 특보 기준으로 돌아간다"><option value="">특보 기준대로 — ${escH(v.auto)}</option>`
       + v.order.map(o => `<option value="${escH(o)}"${v.set && v.stage === o ? " selected" : ""}>${escH(o)}</option>`).join("") + `</select>`;
     const ord = ORDER_GN(), rank = n => ord.indexOf(n);
     own.sort((a, b) => rank(a[0]) - rank(b[0]));
     const act = own.filter(([, v]) => v.stage !== v.order[0] || v.set);
-    st = `<h6>비상단계</h6><div class="fl"><b>도</b><span>${d ? `${escH(d.stage)} <em>${escH(d.why)}</em>` : "해당 없음 <em>호우주의보 시군 없음</em>"}</span></div>`
+    st = `<h6>비상단계</h6><div class="sg do"><div class="c stg ${STG_C[d.stage] || "c0"}" title="${escH(d.stage)} — ${escH(d.set ? `수동 입력 · 특보 기준 ${d.auto}: ${d.why}` : d.why)}">도 ${escH(d.stage)}${d.set ? " ✎" : ""}${sel("도", d)}</div></div><div class="fl"><span><em>${escH(d.set ? `수동 입력 · 특보 기준 ${d.auto}` : d.why)}</em></span></div>`
       + `<div class="sgl">${[["c0", "평시"], ["c1", "준비"], ["c2", "비상 1"], ["c3", "비상 2"], ["c4", "비상 3"]].map(([c, l]) => `<span><i class="stg ${c}"></i>${l}</span>`).join("")}</div>`
       + `<div class="sg">` + own.map(([n, v]) => `<div class="c stg ${STG_C[v.stage] || "c0"}${v.std ? " std" : ""}" title="${escH(v.stage)} — ${escH(v.set ? `수동 입력 · 특보 기준 ${v.auto}: ${v.why}` : v.why)}">${escH(n)}${v.set ? " ✎" : ""}${sel(n, v)}</div>`).join("") + `</div>`
       + Object.entries(act.reduce((m, [n, v]) => {                    // 같은 단계 · 같은 까닭은 한 줄로 묶는다
@@ -283,7 +294,7 @@ async function fcLoad() {
         (m[t] ||= []).push(n);
         return m;
       }, {})).map(([t, ns]) => `<div class="ad"><b>${ns.map(escH).join(" · ")}</b><span>${t}</span></div>`).join("")
-      + `<div class="fn" id="stg-msg">칸을 누르면 바꾼다(✎). 도 단계 = 특보가 난 시군 수 · 시군 단계 = 그 시에 발효된 특보 종류. 두 기준은 별개다. 비상 2·3단계 등 실제 발령은 상황판단회의 · 본부장 판단이라 사람이 바꿀 수 있고 24시간 뒤 저절로 돌아온다.
+      + `<div class="fn" id="stg-msg">칸을 누르면 바꾼다(✎). 도 단계 = 특보가 난 시군 수 · 시군 단계 = 그 시에 발효된 특보 종류. 두 기준은 별개다. 기준에 닿으면 그 단계가 된 것으로 보고, 실제 발령이 다르면 바꾼다 — 24시간 뒤 저절로 돌아온다.
         거제 · 통영은 자기 매뉴얼(2026.10.), 나머지 시군은 거제 기준을 준용(점선 둘레 — 그 시군 매뉴얼이 위키에 들어오면 바꾼다).</div>`;
   }
   const day = (r, lab) => r.status === "fulfilled"
@@ -321,13 +332,11 @@ async function loadWatch() {
   try { WATCH = await getJson("/api/ai/watch"); } catch { return; }
   let fresh = null;
   for (const g of ["e", "c"]) {
-    const b = $("ly-risk-" + g), items = wItems(g), has = new Set(items.map(i => i.sigun));
-    b.hidden = !has.size;
-    $("ly-risk-n-" + g).textContent = has.size;
-    if (g === "e") b.classList.toggle("mid", !items.some(i => i.stage === "긴급대피"));   // 긴급대피가 없으면(사전대피만) 한 단계 옅게
+    const has = new Set(wAll(g).map(i => i.sigun));
     for (const n of has) if (!WATCH_SEEN[g].has(n)) { WATCH_SEEN[g].add(n); WATCH_BL.set(n, Date.now() + 25000); fresh ||= g; }
     for (const n of [...WATCH_SEEN[g]]) if (!has.has(n)) WATCH_SEEN[g].delete(n);       // 사라졌다 다시 생기면 새로
   }
+  watchBadges();
   paintWatch();
   if (fresh) { watchOpen(WATCH_OPEN === "e" ? "e" : fresh); setTimeout(paintWatch, 26000); }   // 새로 생겼으면 그 목록을 펼친다
   else if (WATCH_OPEN) watchOpen(wItems(WATCH_OPEN).length ? WATCH_OPEN : null);

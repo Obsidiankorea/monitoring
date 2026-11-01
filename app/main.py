@@ -544,11 +544,9 @@ async def api_ai_sigunstage():
 
 @app.put("/api/ai/sigunstage")
 async def api_ai_sigunstage_put(body: dict):
-    """사람이 시군 단계를 바꾼다 — {sigun, stage}. stage 가 없거나 null 이면 특보 기준으로 되돌린다.
-    실제 발령은 상황판단회의 · 본부장 판단이라 특보 기준과 다를 수 있다. 24시간 뒤 저절로 풀린다. 시연 서버는 바꾸지 않는다."""
+    """사람이 도 · 시군 단계를 바꾼다 — {sigun('도' 포함), stage}. stage 가 없거나 null 이면 특보 기준으로 되돌린다.
+    실제 발령은 상황판단회의 · 본부장 판단이라 특보 기준과 다를 수 있다. 24시간 뒤 저절로 풀린다. 시연 서버는 뜰 때마다 새로 뜨는 사본에 쓴다."""
     from . import aireport, ai
-    if config.DEMO:
-        raise HTTPException(403, "시연 서버에서는 단계를 바꾸지 않는다")
     try:
         ai.set_override(str(body.get("sigun") or ""), body.get("stage") or None)
     except ValueError as e:
@@ -556,6 +554,17 @@ async def api_ai_sigunstage_put(body: dict):
     aireport.reset_cache()
     aiwatch._SNAP["v"] = None                                # 근접 목록 캐시(2분)도 비운다
     return ai.sigun_stages(queries.alerts().get("data") or {}, ai.overrides())
+
+
+@app.put("/api/ai/task")
+async def api_ai_task(body: dict):
+    """할 일 체크 — {text, done}. 보고의 '조치 완료'에 남고 24시간 뒤 저절로 풀린다."""
+    from . import ai
+    text = str(body.get("text") or "").strip()
+    if not text or len(text) > 500:
+        raise HTTPException(400, "할 일 글이 없거나 너무 길다")
+    ai.set_task(text, bool(body.get("done")))
+    return {"ok": True}
 
 
 @app.get("/api/ai/watch")
@@ -588,6 +597,8 @@ async def api_ai_report(sigun: str | None = None, base: str | None = None, mode:
     from . import aireport, llm
     try:
         r = await asyncio.to_thread(aireport.report, _ai_base(base), sigun or None, mode)
+        from . import ai
+        ai.apply_tasks(r, sigun or None)
     except FileNotFoundError as e:
         raise HTTPException(503, f"LLM 위키를 못 찾았다(설정 › AI 위키): {e}")
     r["llm"] = llm.mode()

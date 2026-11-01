@@ -4,7 +4,8 @@
    단계는 해양조사원 고조정보 4단계(삼천포 · 부산항신항은 기준이 없어 값만). 대조기는 서버가 예측 조위로 계산한 값. */
 let TID = null, TID_T = 0, TID_HIT = [], TID_OPEN = null;
 const tdColOf = (s, n) => (n == null ? "var(--ink-3)" : RV_C[s.col[n]]);
-const tdHigh = () => (TID?.rows || []).filter(s => (s.stage || 0) >= 1);
+const tdIn = s => !selOn() || s.sigun.some(isSel);            // 고른 시군을 맡는 지점만
+const tdHigh = () => (TID?.rows || []).filter(s => (s.stage || 0) >= 1 && tdIn(s));
 const tdCol = () => { const h = tdHigh().sort((a, b) => b.col[b.stage] - a.col[a.stage])[0]; return h ? tdColOf(h, h.stage) : ""; };
 const tdHm = t => (t ? `${t.slice(8, 10)}:${t.slice(10, 12)}` : "—");
 const tdDay = t => `${+t.slice(4, 6)}.${+t.slice(6, 8)}`;
@@ -166,7 +167,7 @@ function renderTideLegend() {
   else if (!TID.rows?.length) body = `<div class="nt">첫 수집을 기다린다.</div>`;
   else {
     const sp = TID.spring;
-    body = TID.rows.map(s => `<div class="rr" data-c="${s.code}" title="눌러서 자세히"><div class="t1"><b>${escH(s.name)}</b><span>${Math.round(s.v)}<small> cm</small></span>`
+    body = (TID.rows.some(tdIn) ? "" : `<div class="nt">이 시군을 맡는 조위 지점이 없다.</div>`) + TID.rows.filter(tdIn).map(s => `<div class="rr" data-c="${s.code}" title="눌러서 자세히"><div class="t1"><b>${escH(s.name)}</b><span>${Math.round(s.v)}<small> cm</small></span>`
       + `${s.diff != null ? `<em>${s.diff >= 0 ? "+" : ""}${s.diff.toFixed(1)}</em>` : ""}${s.stage != null ? `<i style="background:${tdColOf(s, s.stage)}">${s.names[s.stage]}</i>` : ""}</div>${tdBar(s)}`
       + (s.next ? `<div class="t2"><span class="d" style="background:${tdColOf(s, s.next.stage)}"></span>만조 ${tdHm(s.next.t)} · ${Math.round(s.next.h)} cm<em>${tdLeft(s.next.t)}</em></div>` : "") + `</div>`).join("")
       + (sp ? `<div class="nt" style="margin-top:6px">대조기(계산): ${sp.now ? `지금 — ${tdIso(sp.to)}까지` : `다음 ${tdIso(sp.from)}~${tdIso(sp.to)}`}</div>` : "");

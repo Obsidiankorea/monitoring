@@ -46,7 +46,7 @@ const aiTxt = t => aiEsc(t).replace(/\[\[([^\]]+)\]\]/g, '<span class="wk">$1</s
 function aiSections(secs) {
   return secs.map(x => {
     const todo = x.h === "할 일", ref = x.h.startsWith("참고");
-    const list = x.items.map(i => `<li>${aiTxt(i)}</li>`).join("");
+    const list = x.items.map((i, n) => (x.keys ? `<li${x.done[n] ? ' class="dn"' : ""}><label><input type="checkbox" data-t="${aiEsc(i).replace(/"/g, "&quot;")}"${x.done[n] ? " checked" : ""}><span>${aiTxt(i)}</span></label></li>` : `<li>${aiTxt(i)}</li>`)).join("");
     return `<div class="sec${todo ? " todo" : ""}${ref ? " ref" : ""}"><h5>${aiEsc(x.h)}</h5>${todo ? `<ol>${list}</ol>` : `<ul>${list}</ul>`}</div>`;
   }).join("");
 }
@@ -90,6 +90,18 @@ async function aiAsk(body, label) {
   blk.querySelector(".ans").innerHTML = (a.text ? `<pre>${aiTxt(a.text)}</pre>` : aiSections(a.sections || []))
     + `<div class="src">${aiEsc(a.source || "")}</div>`;
 }
+$("aiw-bd").addEventListener("change", async ev => {          // 할 일 체크 → 서버에 남기고 보고를 다시 읽어 '조치 완료'에 반영
+  const b = ev.target.closest("input[data-t]"), bd = $("aiw-bd");
+  if (!b) return;
+  b.disabled = true;
+  try {
+    const r = await fetch("/api/ai/task", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: b.dataset.t, done: b.checked }) });
+    if (!r.ok) throw new Error(r.status);
+    const y = bd.scrollTop;
+    await aiLoad();
+    bd.scrollTop = y;
+  } catch { b.checked = !b.checked; b.disabled = false; }
+});
 function aiToggle(on = !AIW.open) {
   AIW.open = on;
   $("aiw").classList.toggle("open", on);
@@ -102,6 +114,9 @@ function setSel(list) {
   SELS = list.slice(0, SEL_MAX);
   if (AIW.open && AIW.scope !== (list[0] || null)) setTimeout(aiLoad, 0);   // 시군을 바꾸면 그 시군 보고로
   drawSel(); drawStations(); hot(null); link(null);
+  watchBadges(); renderAlertLegend(); renderRiverLegend(); renderTideLegend();   // 왼쪽 아이콘 · 목록도 고른 시군으로
+  if (WATCH_OPEN) watchOpen(WATCH_OPEN);
+  if (!$("ly-fc-pop").hidden) fcLoad();
   $("acc-sel").hidden = !selOn();
   $("acc-sel").textContent = selOn() ? `${selName()} ✕` : "";
   $("acc-sel").title = selOn() ? `${SELS.join("·")} — 경남 전체로 (Esc)` : "경남 전체로 (Esc)";

@@ -110,7 +110,7 @@ def overview(base: str) -> dict:
         lv = lambda r: 2 if "호우경보" in r["alerts"] else 1 if "호우주의보" in r["alerts"] else 0  # noqa: E731
         rows.sort(key=lambda r: (-lv(r), -r["r3"], -r["r24"]))
         return {"tm": tm, "night": now.hour >= 21 or now.hour < 6, "groups": groups, "pending": al.get("pending", []),
-                "stage": ai._stage(groups), "rows": rows, "computed": bool(al.get("computed"))}
+                "stage": ai.do_stage(groups), "rows": rows, "computed": bool(al.get("computed"))}
     return _cached(("ov", base), build)
 
 
@@ -198,8 +198,8 @@ def _sites_by(sigun: str) -> dict:
 
 def _tasks(stage, relay_where: str, s_list: list[dict], night: bool, cbs: list[str], sg_for_relay: str) -> list[str]:
     t = []
-    if stage:
-        t.append(f"도 {stage['stage']} 기준 — 근무 편성 확인, 상황판단회의로 단계 확정 ({'[[위기경보와 비상단계]] · [[상황판단회의]]'})")
+    if stage and stage["stage"] != ai.DO_ORDER[0]:           # 기준에 닿으면 그 단계가 된 것으로 본다 — 회의를 다시 시키지 않는다
+        t.append(f"도 {stage['stage']} 근무 중으로 본다 — 이 단계 근무 · 임무 유지, 실제와 다르면 왼쪽 특보 아이콘에서 단계 수정 ([[위기경보와 비상단계]])")
     if relay_where:
         t.append(f"{sg_for_relay}재난상황실에 유선 전파 — {relay_where}: 시간당 20㎜ 이상(또는 일 100㎜ 이상), "
                  "우려지역 통제·사전대피 여부 판단 요청, 통화 기록 남기기 ([[시군 상황관리반 행동매뉴얼]])")
@@ -269,7 +269,7 @@ def report(base: str, sigun: str | None = None, mode: str = "all") -> dict:
     sit.append("특보: " + (" · ".join(f"{n} {len(s)}개 시군({'·'.join(s)})" for n, s in hoou) or "호우특보 없음")
                + (f" · 그 밖에 {', '.join(others)}" if others else ""))
     if o["stage"]:
-        sit.append(f"도 비상단계 기준: {o['stage']['stage']} ({o['stage']['why']}) — 최종은 상황판단회의")
+        sit.append(ai.do_text(o["stage"]))
     over = ai.overrides()
     own = {sg: d for sg in ai.SIGUN_FULL
            if (d := ai.sigun_stage(sg, next((r["alerts"] for r in rows if r["sigun"] == sg), []),
@@ -374,7 +374,7 @@ def _report_sigun(base: str, sigun: str) -> dict:
     sit = [f"{_when(s['tm'])} 실황" + (" · 취약시간대(21~06시)" if s["night"] else "")]
     sit.append("특보: " + (", ".join(s["alerts"]) or "없음") + (f" · 예비 {', '.join(p['name'] for p in s['pending'])}" if s["pending"] else ""))
     if s["stage"]:
-        sit.append(f"도 비상단계 기준: {s['stage']['stage']} ({s['stage']['why']})")
+        sit.append(ai.do_text(s["stage"]))
     sd = ai.sigun_stage(sigun, s["alerts"], [p["name"] for p in s["pending"]], ai.overrides().get(sigun))
     sit.append("시군 비상단계: " + (ai.stage_text(sigun, sd) if sd else "이 시군의 매뉴얼은 위키에 아직 없다 — 도 기준만 본다"))
     sit.append(ai.outlook_text(s["outlook"]))
@@ -511,7 +511,7 @@ def ask_free(base: str, text: str, sigun: str | None = None) -> dict:
             "LLM 이 연결되지 않았다 — 위 예상 질문은 바로 답한다.",
             "켜는 법: GN_AI=claude-cli(Claude Code — PC 로그인 또는 config/claude/token.txt) 또는 "
             "GN_AI=openai(Hermes 등 OpenAI 호환 주소 · 키)."]}], "source": "없음"}
-    rep = report(base, sigun)
+    rep = ai.apply_tasks(report(base, sigun), sigun)
     ctx = "\n".join(f"[{s['h']}]\n" + "\n".join("- " + i for i in s["items"]) for s in rep["sections"])
     if sigun:
         ctx += "\n\n[읍면동 수치]\n" + ai.brief(situation(sigun, base), top=8)
@@ -929,7 +929,7 @@ def _m_brief(base, sigun):
     t = _when(o["tm"])
     head = [f"{t} 현재 · 특보 " + (" · ".join(f"{g['name']} {len(g['siguns'])}개 시군({'·'.join(g['siguns'])})" for g in o["groups"] if g["name"].startswith("호우")) or "없음")
             + (" (산출 · 가상)" if o["computed"] else ""),
-            "도 비상단계 기준: " + ((o["stage"] or {}).get("stage") or "상시대비")]
+            "도 비상단계: " + ((o["stage"] or {}).get("stage") or "상시대비")]
     rain = [f"{r['sigun']}: 시간당 {r['r1']:g} · 3시간 {r['r3']:g} · 24시간 {r['r24']:g}㎜ (다우 {r['emd3'] or r['emd1']})"
             for r in sorted(rows, key=lambda x: -x["r24"]) if r["r24"] or r["r1"]]
     hit = _hits(sits, ("긴급대피", "사전대피", "통제"), ("met",))

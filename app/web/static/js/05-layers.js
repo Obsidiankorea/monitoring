@@ -82,13 +82,13 @@ function setLyOpen(id) {
 function renderLyIcons() {
   const box = $("ly-act");
   const lvTop = () => {                   // 지금 가장 센 특보 — 아이콘 색
-    const lv = (ALERTS?.land || []).reduce((a, g) => ((LVRANK[g.lv] || 0) > (LVRANK[a] || 0) ? g.lv : a), null);
+    const lv = alLand().reduce((a, g) => ((LVRANK[g.lv] || 0) > (LVRANK[a] || 0) ? g.lv : a), null);
     return lv ? `var(--lv-${lv})` : "";
   };
   box.innerHTML = ["alerts", "stations", "river", "tide"].filter(id => OV.has(id)).map(id => {
     const o = OVL.find(x => x.id === id);
-    const hiR = RIV?.rows ? RIV.rows.filter(s => s.kind === "wl" && (s.stage ?? -1) >= 1).length : 0;
-    const n = id === "alerts" && ALERTS && !ALERTS.err ? ALERTS.land.length + ALERTS.sea.length : id === "river" ? hiR : id === "tide" ? tdHigh().length : 0;
+    const hiR = RIV?.rows ? RIV.rows.filter(s => s.kind === "wl" && (s.stage ?? -1) >= 1 && selHas(s.sigun)).length : 0;
+    const n = id === "alerts" && ALERTS && !ALERTS.err ? alLand().length + alSea().length : id === "river" ? hiR : id === "tide" ? tdHigh().length : 0;
     const col = id === "alerts" ? lvTop() : id === "river" && hiR ? RV_C[rvMax()] : id === "tide" ? tdCol() : "";
     return `<button class="ly-ic sm" data-d="${id}" aria-expanded="${id === "alerts" ? alShown() : LY_OPEN === id}" title="${o.label} — 눌러서 ${id === "alerts" ? "특보 줄 펼치기 · 접기" : "범례·설명"} (${o.key}: 끄기)"
       ${col ? `style="color:${col}"` : ""}>${OV_IC[id]}${n ? `<span class="bd" style="background:${col || "var(--ink-3)"}">${n}</span>` : ""}${id === "tide" ? tdSpringChip() : ""}</button>`;
@@ -638,6 +638,8 @@ function placeSw() {
   });
 }
 
+const alLand = () => (ALERTS?.land || []).filter(g => !selOn() || (g.regs || []).some(r => isSel(r[0])));
+const alSea = () => (selOn() ? [] : ALERTS?.sea || []);      // 바다 특보는 시군에 붙지 않는다
 function renderAlertLegend() {
   const box = $("ly-alerts");
   if (!OV.has("alerts")) { box.hidden = true; return; }
@@ -647,15 +649,15 @@ function renderAlertLegend() {
   if (ALERTS.err) { box.innerHTML = `<div class="hd2"><b>기상특보</b></div><div class="al-none">불러오지 못했다 — ${ALERTS.err}</div>`; return; }
   // 얇은 세로 줄 — 한 특보가 두 줄: 이름(색) / 어디(작게). 너무 길면 '외 N'
   const cut = (list, n) => list.slice(0, n).join(" · ") + (list.length > n ? ` 외 ${list.length - n}` : "");
-  const row = (tg, lv, name, where, ds = "") => `<div class="al${lv === "pre" ? " pre" : ""}"${ds ? ` data-s="${ds}"` : ""}>`
+  const row = (tg, lv, name, where, ds = "") => selOn() && !ds.split(",").some(isSel) ? "" : `<div class="al${lv === "pre" ? " pre" : ""}"${ds ? ` data-s="${ds}"` : ""}>`
     + `<b style="color:var(--lv-${lv})">${name}${tg ? `<span class="tg">${tg}</span>` : ""}</b>${where ? `<span class="where">${where}</span>` : ""}</div>`;
   const rows = [];
   // 같은 종류끼리 한 줄 — 어디는 관제순, 세부구역은 윗첨자(하동<sup>북부</sup>)
   const sigsOf = regs => ORDER_GN().filter(s => regs.some(r => r[0] === s)).join(",");
   const placeTxt = a => [regsHtml(a.land), cut([...new Set(a.sea)], 4)].filter(Boolean).join(" · ");
-  for (const g of ALERTS.land)
+  for (const g of alLand())
     rows.push(row("", g.lv, g.name, regsHtml(g.regs || []), sigsOf(g.regs || [])));
-  for (const g of ALERTS.sea)
+  for (const g of alSea())
     rows.push(row("바다", g.lv, g.name, cut((g.regions || []).map(seaShort), 4)));
   // 예비특보(태풍 · 호우 …) — 이름 · 발효 예상(날짜 · 시간대)이 같은 것끼리. 바다 구역은 줄인 이름
   // 예비특보 — 머리 밑 체크(서버 설정 al_pre, 화면 모두 같이)로 숨길 수 있다. 숨겨도 몇 종인지는 체크 옆에
@@ -676,7 +678,7 @@ function renderAlertLegend() {
     rows.push(row("예정", "pre", name, `${at ? `<i>${at} 발효</i><br>` : ""}${placeTxt(a)}`, sigsOf(a.land)));
   }
   const bt = ALERTS.base ? String(ALERTS.base).slice(11, 16) : "—";
-  const nKind = ALERTS.land.length + ALERTS.sea.length;
+  const nKind = alLand().length + alSea().length;
   // 평소엔 아이콘만(지도 북서쪽 함양·거창을 가리지 않게). 아이콘이나 머리를 누르면 닫힌다
   TIPS.set("al-now", (ALERTS.calc
       ? `<b>산출 특보</b> — 실제 발표가 아니다. 격자 3시간 · 12시간 합에 호우 기준(주의보 60 · 110 / 경보 90 · 180㎜)을
@@ -687,7 +689,7 @@ function renderAlertLegend() {
   box.innerHTML = `<div class="hd2" id="al-hd" title="끌어서 옮기기(이 화면에 기억, 두 번 누르면 제자리) · ✕ 접기 — 지도가 다시 넓어진다"><b>기상특보${ALERTS.calc ? " · 산출" : ""}</b><i class="inf" data-tip="al-now">i</i><i class="fd" title="접기">✕</i></div>`
     + `<div class="hd3"><span>${nKind ? `${nKind}종 · ` : ""}${test ? "테스트 · " : ""}${ALERTS.calc ? "" : "조회 "}${bt}</span>`
     + (ALERTS.calc ? "" : `<label class="alp" title="예비특보(태풍 · 호우 …) 보이기 — 끄면 발효 중 · 발효 예정만(화면 모두 같이)"><input type="checkbox" id="al-pre"${preOn ? " checked" : ""}>예비${nPre ? ` ${nPre}` : ""}</label>`) + `</div>`
-    + (rows.length ? rows.join("") : `<div class="al-none">${ALERTS.calc ? "호우 기준을 넘은 시군 없음" : "발효 중인 특보 없음"}</div>`);
+    + (rows.some(Boolean) ? rows.join("") : `<div class="al-none">${ALERTS.calc ? "호우 기준을 넘은 시군 없음" : "발효 중인 특보 없음"}</div>`);
   $("al-hd").querySelector(".fd").onclick = ev => { ev.stopPropagation(); setAlOpen(false); };
   if ($("al-pre")) $("al-pre").onchange = ev => { SET.al_pre = ev.target.checked; saveSetting({ al_pre: SET.al_pre }); renderAlertLegend(); };
   for (const r of box.querySelectorAll(".al[data-s]")) {
@@ -710,6 +712,7 @@ let STN = null, STN_SEQ = 0, STN_R = 6, LABELBOX = [];
 let SELS = [];
 const SEL_MAX = 18;
 const selOn = () => SELS.length > 0;
+const selHas = s => !selOn() || SELS.includes(s);           // 고른 시군이 없으면 다 — 왼쪽 아이콘 · 목록이 함께 걸러진다
 const isSel = s => SELS.includes(s);
 const selQ = () => SELS.join(",");                // API 에 넘길 때
 const selName = () => SELS.length > 3 ? `${SELS.slice(0, 2).join("·")} 외 ${SELS.length - 2}` : SELS.join("·");   // 화면에 적을 때

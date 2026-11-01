@@ -164,3 +164,25 @@ def test_override_set_validates_names_and_expires(monkeypatch):
     assert ai.overrides() == {}
     store["sigun_stage_over"] = {"거제": {"stage": "비상 3단계", "at": "202001010000"}}   # 24시간이 훨씬 지난 값
     assert ai.overrides() == {}
+
+
+def test_do_stage_is_automatic_and_can_be_overridden():
+    g = [{"name": "호우주의보", "siguns": ["진주", "통영", "사천", "남해"]}, {"name": "호우경보", "siguns": ["창원", "고성"]}]
+    d = ai.do_stage(g, {})
+    assert d["stage"] == d["auto"] == "비상 1단계" and d["set"] is False and "기준" not in ai.do_text(d)
+    m = ai.do_stage(g, {"도": {"stage": "비상 2단계", "at": "202610190000"}})
+    assert m["stage"] == "비상 2단계" and m["auto"] == "비상 1단계" and m["set"] is True and "수동 입력" in ai.do_text(m)
+    assert ai.do_stage([], {}) is None and ai.do_stage([], {"도": {"stage": "초기대응", "at": "x"}})["auto"] == "상시대비"
+    assert ai.do_stage(g, {"도": {"stage": "없는 단계", "at": "x"}})["set"] is False
+    assert ai.sigun_stages({"groups": g})["do_order"] == ai.DO_ORDER
+
+
+def test_apply_tasks_marks_done_and_adds_section():
+    t1, t2 = "진주 상대동 지하공간: 통제 상황 확인 ([[통제·대피 기준]])", "야간 확인"
+    assert ai.task_key(t1) == ai.task_key(t1.replace("[[", "").replace("]]", ""))
+    done = {ai.task_key(t1): {"text": t1, "at": "202610190015"}, "x": {"text": "창원 봉암동 확인", "at": "202610190001"}}
+    r = ai.apply_tasks({"sections": [{"h": "할 일", "items": [t1, t2]}, {"h": "참고", "items": []}]}, "진주", done)
+    assert r["sections"][0]["done"] == [True, False] and r["sections"][1] == {"h": "조치 완료", "items": ["00:15 " + t1]}
+    a = ai.apply_tasks({"sections": [{"h": "지금", "items": []}, {"h": "참고", "items": []}]}, None, done)
+    assert [s["h"] for s in a["sections"]] == ["지금", "조치 완료", "참고"] and a["sections"][1]["items"][0].startswith("00:01 창원")
+    assert ai.apply_tasks({"sections": [{"h": "할 일", "items": [t2]}]}, None, {})["sections"][0]["done"] == [False]

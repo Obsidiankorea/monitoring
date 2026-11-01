@@ -13,6 +13,7 @@
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -340,6 +341,27 @@ def _stage(groups: list[dict]) -> dict | None:
     return None
 
 
+# 도 단계 — 특보 기준에 닿으면 그 단계가 된 것으로 본다. 실제와 다르면 사람이 바꾼다(시군과 같은 저장소, 열쇠 '도').
+DO_ORDER = ["상시대비", "초기대응", "비상 1단계", "비상 2단계", "비상 3단계"]
+
+
+def do_stage(groups: list[dict], over: dict | None = None) -> dict | None:
+    """지금 도 단계 — stage = 지금(바꾼 값이 있으면 그것), auto = 특보 기준. 특보도 바꾼 값도 없으면 None."""
+    a = _stage(groups)
+    v = (overrides() if over is None else over).get("도")
+    ok = bool(v) and v.get("stage") in DO_ORDER
+    if not a and not ok:
+        return None
+    auto = a["stage"] if a else DO_ORDER[0]
+    return {"stage": v["stage"] if ok else auto, "why": a["why"] if a else "호우특보 없음", "auto": auto, "set": ok,
+            "set_at": v.get("at") if ok else None, "order": DO_ORDER}
+
+
+def do_text(d: dict) -> str:
+    """'도 비상단계: 비상 1단계 (호우주의보 4개 · 경보 2개 시군)'. 사람이 바꿨으면 특보 기준을 옆에 남긴다."""
+    return f"도 비상단계: {d['stage']} " + (f"(수동 입력 · 특보 기준 {d['auto']}: {d['why']})" if d["set"] else f"({d['why']})")
+
+
 # 시군 자체 비상단계 — 위키 [[거제시 단계별 업무]] · [[통영시 단계별 업무]](시군 현장조치 행동매뉴얼 2026.10.)의 진입 기준 · 근무 · 대응.
 # 도(_stage)는 '특보가 난 시군 수'지만 시군은 '그 시에 발효된 특보 종류'로 정한다 — 두 기준은 별개로 돈다.
 # 이름은 매뉴얼 그대로(order). 매뉴얼이 위키에 있는 시군만 — 없는 시군은 None(만들어 내지 않는다).
@@ -417,12 +439,12 @@ def overrides() -> dict:
     except Exception:                                      # noqa: BLE001
         return {}
     cut = (datetime.now() - timedelta(hours=OVER_TTL_H)).strftime("%Y%m%d%H%M")
-    return {k: v for k, v in raw.items() if k in SIGUN_FULL and isinstance(v, dict) and (v.get("at") or "") >= cut}
+    return {k: v for k, v in raw.items() if (k in SIGUN_FULL or k == "도") and isinstance(v, dict) and (v.get("at") or "") >= cut}
 
 
 def set_override(sigun: str, stage: str | None) -> dict:
-    """사람이 시군 단계를 바꾼다(stage=None 이면 특보 기준으로 되돌림). 매뉴얼의 단계 이름만 받는다."""
-    m = _manual(sigun)
+    """사람이 도 · 시군 단계를 바꾼다(sigun='도' 면 도, stage=None 이면 특보 기준으로 되돌림). 매뉴얼의 단계 이름만 받는다."""
+    m = {"order": DO_ORDER} if sigun == "도" else _manual(sigun)
     if not m:
         raise ValueError(f"{sigun}: 경남 시군이 아니다")
     if stage is not None and stage not in m["order"]:
@@ -445,7 +467,49 @@ def sigun_stages(data: dict, over: dict | None = None) -> dict:
     for sg in SIGUN_FULL:
         al = [g["name"] for g in groups if sg in g.get("siguns", []) and not g.get("sea")]
         out[sg] = sigun_stage(sg, al, [x["name"] for x in pend if x.get("sigun") == sg], over.get(sg))
-    return {"do": _stage(groups), "sigun": out}
+    return {"do": do_stage(groups, over), "do_order": DO_ORDER, "sigun": out}
+
+
+# 할 일 체크 — 사람이 한 일을 표시하면 보고의 '조치 완료'에 남는다. 단계 값처럼 24시간 뒤 저절로 풀린다.
+def task_key(text: str) -> str:
+    # shortcut: 문장 전체가 열쇠라 수치가 바뀐 할 일은 새 일로 본다, 할 일에 번호를 매기게 되면 그때 바꾼다
+    return hashlib.sha1(re.sub(r"\[\[|\]\]", "", text).encode("utf-8")).hexdigest()[:12]
+
+
+def tasks_done() -> dict:
+    """{열쇠: {text, at}} — 24시간 지난 것은 뺀다. DB 가 없으면 빈 값."""
+    try:
+        from . import db
+        raw = db.get_setting("task_done", {}) or {}
+    except Exception:                                      # noqa: BLE001
+        return {}
+    cut = (datetime.now() - timedelta(hours=OVER_TTL_H)).strftime("%Y%m%d%H%M")
+    return {k: v for k, v in raw.items() if isinstance(v, dict) and (v.get("at") or "") >= cut}
+
+
+def set_task(text: str, done: bool) -> None:
+    from . import db
+    cur = tasks_done()
+    if done:
+        cur[task_key(text)] = {"text": text, "at": datetime.now().strftime("%Y%m%d%H%M")}
+    else:
+        cur.pop(task_key(text), None)
+    db.put_setting("task_done", cur)
+
+
+def apply_tasks(rep: dict, sigun: str | None = None, done: dict | None = None) -> dict:
+    """보고에 체크 상태를 얹는다 — '할 일'에 열쇠 · 완료 표시, 그 뒤(없으면 참고 앞)에 '조치 완료' 칸. 시군 보고는 그 시군 · 도 일만."""
+    done = tasks_done() if done is None else done
+    secs = rep.get("sections") or []
+    todo = next((s for s in secs if s["h"] == "할 일"), None)
+    keys = [task_key(i) for i in todo["items"]] if todo else []
+    if todo:
+        todo |= {"keys": keys, "done": [k in done for k in keys]}
+    got = sorted((v for k, v in done.items() if k in keys or not sigun or sigun in v["text"]), key=lambda v: v["at"])
+    if got:
+        i = secs.index(todo) + 1 if todo else next((n for n, s in enumerate(secs) if s["h"].startswith("참고")), len(secs))
+        secs.insert(i, {"h": "조치 완료", "items": [f"{v['at'][8:10]}:{v['at'][10:12]} {v['text']}" for v in got]})
+    return rep
 
 
 # ── 전망 — 특보 · 단기예보 · 초단기를 묶어 '비가 올 우려'를 본다. 사람(예보관)이 낸 특보는 무겁게, 새 발표일수록 무겁게.
@@ -602,7 +666,7 @@ def situation(sigun: str, base: str = "http://127.0.0.1:8000") -> dict:
     return {
         "sigun": sigun, "tm": tm, "night": night, "rain_src": src, "fc_tmfc": fc.get("tmfc"),
         "ante": {k: an.get(k) for k in ("ok", "have", "want", "missing", "from", "to")},
-        "alerts": mine, "pending": pend, "stage": _stage(groups), "river": rv, "outlook": ol,
+        "alerts": mine, "pending": pend, "stage": do_stage(groups), "river": rv, "outlook": ol,
         "tide": tide.text(tide.of_sigun(sigun), max((r["fc6h"] or 0 for r in emds), default=0)),
         "risk_total": dict(Counter(FAMILY_OF.get(s["유형"], "야외·기타") for s in sites["sites"])),
         "emd": emds,
@@ -657,7 +721,7 @@ def brief(s: dict, top: int = 4) -> str:
     if s.get("tide"):
         out.append(s["tide"])
     if s["stage"]:
-        out.append(f"도 비상단계 기준: {s['stage']['stage']} ({s['stage']['why']})")
+        out.append(do_text(s["stage"]))
     out.append("우려지역(위키): " + " · ".join(f"{k} {v}" for k, v in sorted(s["risk_total"].items(), key=lambda x: -x[1])))
     relay = [r["emd"] for r in s["emd"] if r["relay"]]
     out.append("상황전파 기준(20㎜/h · 일 100㎜): " + (", ".join(relay) if relay else "없음"))

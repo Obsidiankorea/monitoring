@@ -1111,6 +1111,11 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 #aiw .sec ul { margin: 0; padding-left: 18px; }
 #aiw .sec li { margin: 4px 0; font-size: 14px; line-height: 1.55; color: var(--ink); }
 #aiw .sec.todo ol { margin: 0; padding-left: 20px; } #aiw .sec.todo li { font-weight: 500; }
+#aiw .sec.todo label { display: flex; gap: 7px; align-items: flex-start; cursor: pointer; }
+#aiw .sec.todo input { flex: none; width: 15px; height: 15px; margin: 3px 0 0; accent-color: var(--accent); }
+#aiw .sec.todo li.dn span { color: var(--ink-3); text-decoration: line-through; }
+.rpop.fc .sg.do { display: block; }
+.rm.rdo { display: flex; align-items: center; gap: 6px; }
 #aiw .sec.ref li { font-size: 12.5px; color: var(--ink-2); }
 #aiw .wk { color: var(--accent); font-size: .92em; white-space: nowrap; }
 #aiw .q { margin: 16px 0 4px; padding: 8px 12px; border-radius: 10px; background: color-mix(in oklab, var(--accent) 12%, transparent); font-weight: 600; font-size: 14px; }
