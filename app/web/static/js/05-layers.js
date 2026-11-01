@@ -7,6 +7,7 @@ const OVL = [
   { id: "stnval", label: "지점 강수량 글자", short: "값", key: "V", parent: "stations" },
   { id: "river", label: "하천 · 댐", short: "하천", key: "D" },
   { id: "tide", label: "조위", short: "조위", key: "O" },
+  { id: "temp", label: "기온", short: "기온", key: "E" },
 ];
 /* ⓘ 에 올리거나 누르면 뜨는 설명 — 레이어 목록·범례는 짧게 두고 긴 말은 여기에 */
 const TIPS = new Map([
@@ -19,6 +20,7 @@ const TIPS = new Map([
     예측 층에서는 자리만. 경남 AWS(내부망) 지점은 이 층에 없다 — 시군을 누르면 오른쪽 패널에 목록으로 나온다(막대 파랑 경남 · 청록 기상청).`],
   ["ov-river", `<b>하천 · 댐</b> — 경남 하천 수위 관측소(눈금 막대) · 댐 · 보를 홍수통제소 자료로. 막대 색은 수위 단계, 주의보부터는 번쩍인다.
     낙동강 위쪽(경북 · 대구) 댐 · 보도 함께 — 경남으로 흘러드는 물이라 점선 둘레로. 점에 마우스를 올리면 수위 · 기준 수위 · 1시간 변화 · 방류. 10분마다 갱신.`],
+  ["ov-temp", `<b>기온</b> — 시군 이름 밑에 그 시군 가장 더운 AWS 지점의 정시 기온. 33° 이상은 범례 색으로. 폭염 화면(M)은 시군 면과 오른쪽 패널까지 기온으로 바뀐다.`],
   ["ov-tide", `<b>조위</b> — 경남 해안 조위관측소의 바닷물 높이(해양조사원). 표식의 숫자는 지금 실측, 괄호는 예측과의 차이.
     마우스를 올리면 요약, 누르면 게이지 · 물결 팝업. 대조기 기간에는 아이콘 옆에 표시한다.`],
   ["ov-stnval", `<b>지점 강수량 글자</b> — 관측소 옆에 값을 단다. 센 곳부터 빈자리에만, 상위 셋은 지점 이름도.
@@ -138,6 +140,7 @@ function setOverlay(id, on) {
   if (id === "stations") loadStations();
   if (id === "river") { if (on) setLyOpen("river"); loadRiver(); }
   if (id === "tide") { if (on) setLyOpen("tide"); loadTide(); }
+  if (id === "temp") loadHeat();
   if (id === "stnval") drawStations();
   renderLayers();
 }

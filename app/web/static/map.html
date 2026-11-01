@@ -41,6 +41,7 @@
     <button type="button" id="cam-reset" title="경남 전체가 꼭 차게 (0)">처음대로</button><button type="button" id="cam-done" class="pri" title="Enter · Esc · C">다 됐다</button></div>
   <div id="scrim"></div>
   <div id="legend"></div>
+  <div id="ht-lg"></div>
   <div id="play" hidden></div>
   <svg id="links"></svg>
   <div id="rail" aria-label="강수 모니터링">
@@ -64,6 +65,19 @@
     <section class="card" id="c-fc">
       <div class="ch"><h3 id="fc-h">예측 상위</h3><span class="sub" id="fc-sub">초단기 · 앞으로 6시간</span><span class="sp"></span><span id="fc-lg"></span><span class="bt" id="fc-bt">—</span></div>
       <div class="cb" id="fc-b"></div>
+    </section>
+    <section class="card hc" id="c-ht">
+      <div class="ch"><h3>지금 기온</h3><span class="sub">시군 최고 지점 · AWS</span><span class="sp"></span>
+        <button id="ht-ex" class="ht-exb" aria-pressed="false" title="틀 미리 보기 — 한여름 예시 값으로 채운다(실제 값 아님)">예시</button><span class="bt" id="ht-bt">—</span></div>
+      <div class="cb" id="ht-b"></div>
+    </section>
+    <section class="card hc" id="c-hf">
+      <div class="ch"><h3>사흘 최고 체감</h3><span class="sub">시군 · ℃</span></div>
+      <div class="cb" id="ht-fb"></div>
+    </section>
+    <section class="card hc" id="c-ha">
+      <div class="ch"><h3>폭염특보</h3></div>
+      <div class="cb" id="ht-ab"></div>
     </section>
     <section class="card" id="c-qpf" aria-label="초단기예측 이미지 재생">
       <div class="ch"><h3>초단기예측 이미지 재생</h3><span class="sub">기상청 초단기강수예측 그림(B 융합) · 10분 간격</span><span class="sp"></span>
@@ -90,6 +104,9 @@
   <div id="testrib" hidden>테스트<small>합성 격자 · 합성 특보 · 합성 지점 — 실제가 아니다</small></div>
   <div id="lefttop">
     <div id="hud">
+      <button id="mode" type="button"></button>
+      <b id="ht-ttl">폭염 상황</b>
+      <div id="ht-sub"><span id="ht-time"></span><span id="ht-mark" hidden>예시 값 · 실제 아님</span></div>
       <div class="ttl-wrap">
         <button id="ttl" type="button" aria-haspopup="menu" aria-expanded="false" title="층 고르기 — 실측 · 예측 (숫자 1~6, 자료 B)">
           <span id="lname">경남 강수 지도</span>
@@ -176,6 +193,7 @@
 <script src="js/05-layers.js?v={{V}}"></script>
 <script src="js/06-river.js?v={{V}}"></script>
 <script src="js/06b-tide.js?v={{V}}"></script>
+<script src="js/06c-heat.js?v={{V}}"></script>
 <script src="js/07-select-ai.js?v={{V}}"></script>
 <script src="js/08-help.js?v={{V}}"></script>
 <script src="js/09-prefs.js?v={{V}}"></script>

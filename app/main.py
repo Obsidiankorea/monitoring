@@ -32,7 +32,7 @@ from fastapi import Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import aiwatch, apikeys, lawwatch, river, tide, clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, serverupdate, sites, snaps, update
+from . import aiwatch, apikeys, heat, lawwatch, river, tide, clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, serverupdate, sites, snaps, update
 from .collectors import alerts, bangjae_rain, forecast, grid_rain, qpf, rain, shortfc
 from .config import CACHE, INTERVALS, POLL_DEFAULT
 
@@ -477,6 +477,12 @@ async def api_law_run():
     if not config.KEYS.get("LAW_OC"):
         raise HTTPException(400, "LAW_OC 없음 — config/api_keys.txt")
     return await lawwatch.run()
+
+
+@app.get("/api/heat")
+async def api_heat():
+    """폭염 화면 — 시군별 관측 기온(app/heat.py)."""
+    return heat.status()
 
 
 @app.get("/api/tide")

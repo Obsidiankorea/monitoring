@@ -628,7 +628,7 @@ document.addEventListener("keydown", ev => {
   if (ev.key === "?") { $("help").hidden ? openHelp() : closeHelp(); return; }
   if (!$("prefs").hidden || !$("help").hidden || ev.ctrlKey || ev.metaKey || ev.altKey) return;
   const i = (CASE ? "12" : "123456").indexOf(ev.key);
-  if (i >= 0) { stopPlay(); pickLayer(keyKind(i)); }
+  if (i >= 0) { stopPlay(); if (HEAT) setHeat(false); pickLayer(keyKind(i)); }
   else if ((ev.key === "t" || ev.key === "T") && !CASE) setTest(!test);
   else if ((ev.key === "i" || ev.key === "I") && !CASE) aiToggle();
   else if (ev.key === "l" || ev.key === "L") setTL(!tlOn);
@@ -640,6 +640,8 @@ document.addEventListener("keydown", ev => {
   else if ((ev.key === "v" || ev.key === "V") && OV.has("stations")) setOverlay("stnval", !OV.has("stnval"));
   else if (ev.key === "d" || ev.key === "D") setOverlay("river", !OV.has("river"));
   else if (ev.key === "o" || ev.key === "O") setOverlay("tide", !OV.has("tide"));
+  else if (ev.key === "e" || ev.key === "E") setOverlay("temp", !OV.has("temp"));
+  else if ((ev.key === "m" || ev.key === "M") && !CASE) setHeat(!HEAT);
   else if (ev.key === "b" || ev.key === "B") toggleBasis();
   else if (ev.key === "f" || ev.key === "F") toggleAccFc();
   else if (ev.key === "h" || ev.key === "H") toggleAccH1();
@@ -732,6 +734,7 @@ async function boot() {
   GNB = gnBounds();
   layout();
   await show();
+  heatBoot();
   applyTL(false);                       // 범례가 그려진 뒤에 지도 비켜설 자리를 다시 잰다
   await loadFlow();
   setInterval(refreshMeta, 30000);
