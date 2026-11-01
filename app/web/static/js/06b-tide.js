@@ -102,7 +102,8 @@ function tidePopHtml(s) {
     <b>대조기</b> 보름 · 그믐 무렵 만조가 유난히 높아지는 며칠. 여기 날짜는 예측 조위로 계산해 공식 발표와 다를 수 있다.<br>
     <b>단계</b> ${s.scale === "고조정보" ? "해양조사원 고조정보 — 주의: 침수 가능성 있음 · 경계: 가능성 높음 · 위험: 매우 높음."
       : s.scale ? "위키의 폭풍해일 주의보 · 경보 값을 참고로 보인 것이다. 특보 판정이 아니다 — 특보는 기상청 발표로 확인한다."
-        : "이 지점은 위키에 기준이 없어 값만 보인다."}`);
+        : "이 지점은 기준이 없어 값만 보인다."}${s.facil?.length ? `<br>
+    <b>마산 구역</b> 해양조사원 자료가 마산 관측소에 묶어 둔 시설이다. 진해 용원은 그 구역에 들지만 실제로는 부산항신항 관측소가 더 가깝다 — 그쪽 표식도 함께 본다.` : ""}`);
   return `<div class="h"><b>${escH(s.name)} 조위</b><i class="inf" data-tip="td-info" aria-label="조위 설명">i</i><span>${tdHm(s.t)}${s.sigun.length ? ` · ${s.sigun.join(" · ")}` : ""}${s.stale ? " · ⚠ 오래된 값" : ""}</span><i class="x" data-x title="닫기">✕</i></div>`
     + tdGauge(s)
     + `<div class="tnow"><b>${tdCm(s.v)}</b><div>${[tdDiffText(s), tdNext(s)].filter(Boolean).join(" · ")}</div></div>`
@@ -110,7 +111,7 @@ function tidePopHtml(s) {
     + (s.next ? `<div class="tr"><span>다음 만조</span><span><b>${tdHm(s.next.t)} · ${tdCm(s.next.h)}</b>${tdTag(s, s.next)}</span></div>` : "")
     + (s.top ? `<div class="tr"><span>7일 안 최고 만조</span><span><b>${tdDay(s.top.t)} ${tdHm(s.top.t)} · ${tdCm(s.top.h)}</b>${tdTag(s, s.top)}</span></div>` : "")
     + (sp ? `<div class="tr"><span>대조기(계산)</span><b class="s">${sp.now ? `지금 — ${tdIso(sp.to)}까지` : `아님 · 다음 ${tdIso(sp.from)}~${tdIso(sp.to)}`}</b></div>` : "")
-    + (low ? `<div class="tr"><span>${s.wet?.length ? "7일 안 만조가 닿는 곳" : "먼저 잠기는 곳"}</span><b class="s">${s.wet?.length ? escH(s.wet.join(" · ")) : `${escH(low.name)} ${low.h}`}</b></div>` : "")
+    + (low ? `<div class="tr"><span>${s.wet?.length ? "7일 안 만조가 닿는 곳" : "먼저 잠기는 곳"}(해양조사원 마산 구역)</span><b class="s">${s.wet?.length ? escH(s.wet.join(" · ")) : `${escH(low.name)} ${low.h}`}</b></div>` : "")
     + (s.scale ? `<div class="nt">눈금: ${escH(s.scale)}${s.scale === "고조정보" ? "(2026년 8월 자료)" : ""}</div>` : "");
 }
 function tidePop(s, x, y) {
