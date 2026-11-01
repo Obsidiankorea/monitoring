@@ -987,8 +987,20 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 #acc-h:hover .bs { border-color: var(--accent); }
 /* 단기 오늘·내일 — 위 카드가 그날 예보 합이 된다. 기준(AWS|격자)·예상 단추는 뜻이 없어 감춘다 */
 #acc-h.day { cursor: default; } #acc-h.day .bs { display: none; }
-.abar .o.dayb { background: linear-gradient(90deg, var(--rain-3), var(--rain-4)); border-radius: 5px; }
-.acc-lg .d { background: linear-gradient(90deg, var(--rain-3), var(--rain-4)); }
+/* 예보 막대(단기 · 초단기) — 꽉 찬 실측과 달리 속 빈 점선 + 천천히 지나가는 빛. 머리를 접어도 '아직 안 온 비'로 읽히게.
+   ⚠️ 빗금은 최근 1시간 · 앞으로 6시간이 이미 쓴다 */
+.abar .o.fb { --fb: var(--rain-5); box-sizing: border-box; overflow: hidden; border: 1.2px dashed var(--fb); border-radius: 5px;
+  background: color-mix(in oklab, var(--fb) 12%, transparent); }
+#acc-b.tone .abar[style] .o.fb { --fb: var(--tc); background: color-mix(in oklab, var(--fb) 12%, transparent); }
+.abar .o.fb::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--fb) 42%, transparent), transparent);
+  animation: fb-sw 3.6s ease-in-out var(--sw, 0ms) infinite; }
+@keyframes fb-sw { to { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) { .abar .o.fb::after { animation: none; } }
+#acc-b.fore .nm2 .rk { box-sizing: border-box; color: var(--rain-5); background: none; border: 1px dashed var(--rain-5); }
+#acc-b.fday .sp-l { stroke-dasharray: 3 3; }
+#acc-b.fday .sp-a { fill: color-mix(in oklab, var(--rain-4) 10%, transparent); }
+.acc-lg .d { box-sizing: border-box; border: 1px dashed var(--rain-5); background: color-mix(in oklab, var(--rain-5) 12%, transparent); }
 /* 예상 켜고 끄기 — 실선(실측)에 점선(예상)이 이어지는 그림. 켜면 강조색 */
 .fctg { display: inline-grid; place-items: center; width: calc(22px * var(--k, 1)); height: calc(20px * var(--k, 1)); padding: 0;
   border: 1px solid var(--line); border-radius: 999px; background: none; color: var(--ink-3); cursor: pointer; }

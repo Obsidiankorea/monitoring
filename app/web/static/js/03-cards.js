@@ -171,9 +171,10 @@ function dayJson() {
 }
 /* 위 카드 — 그날 예보 합. 시군을 안 골랐으면 시군마다 합이 가장 큰 읍면동(지도 라벨과 같은 값),
    골랐으면 그 시군(들) 읍면동 전부. 선 그래프는 그 읍면동의 매시 값(단기 PCP 1시간) */
+// ⚠️ '단기 오늘'은 이미 내린 비로 읽혔다 — 앞으로 올 비라는 이름으로(오늘은 남은 시간만 담아 '더')
+const dayTitle = () => kind === "shrt_today" ? "오늘 더 올 비" : "내일 올 비";
 async function accDay() {
-  const dayW = kind === "shrt_today" ? "오늘" : "내일";
-  const base = { day: true, title: `단기 ${dayW}`, basis: "grid", fell: false, src: test ? "테스트" : "단기 5km", rows: [] };
+  const base = { day: true, title: dayTitle(), basis: "grid", fell: false, src: test ? "테스트" : "단기 5km", rows: [] };
   let j;
   try { j = await dayJson(); }
   catch (e) { return { ...base, bt: "—", sub: e.message }; }
@@ -196,14 +197,14 @@ async function accDay() {
   return { ...base, rows, sel: selOn() ? selName() : null, per: selOn() ? 1 : accPer(),
     bt: j.test ? "합성" : `${+j.tmfc.slice(8, 10)}시 발표`,
     sub: selOn() ? `${selName()} 읍면동 ${rows.length} · ${span}` : accPer() !== 1 ? `읍면동 ${perLabel()} · ${span}` : `시군 최대 읍면동 · ${span}`,
-    note: kind === "shrt_today" ? "오늘은 발표 뒤 남은 시간만 더한다" : "" };
+    note: `이미 내린 비가 아니라 예보 — ${kind === "shrt_today" ? "발표 뒤 24시까지 합" : "내일 하루 합"}` };
 }
 async function fcDay() {
   const day = kind === "shrt_today" ? "오늘" : "내일";
   let j;
   try { j = await dayJson(); }
-  catch (e) { return { mode: "day", title: `단기 ${day} 상위`, sub: e.message, labels: [], ft: [], rows: [], bt: "—", det: selOn() }; }
-  return { mode: "day", det: selOn(), title: `단기 ${day} 상위`,
+  catch (e) { return { mode: "day", title: `${dayTitle()} 상위`, sub: e.message, labels: [], ft: [], rows: [], bt: "—", det: selOn() }; }
+  return { mode: "day", det: selOn(), title: `${dayTitle()} 상위`,
     sub: `${selOn() ? selName() + " " : ""}읍면동 · 그날 합 · 6시간씩`,
     labels: j.labels.map((l, i) => (j.hours[i] ? l : `<s>${l}</s>`)), ft: [],
     bt: j.test ? "테스트" : `${+j.tmfc.slice(8, 10)}시 발표`,
@@ -340,7 +341,7 @@ async function accMoment() {
   // 새 프레임이 오면 show() 가 refreshMoment 로 다시 채운다. ⚠️ 1시간 격자 01:20 으로 AWS 1시간을 물어 404 였다
   const key = layerKey(), fresh = CUR?.key === key, tm = fresh ? CUR.tm || null : null, aws = kind === "aws60", fac = factor();
   const title = { obs15: "15분 강수량", obs60: "1시간 강수량", aws60: "AWS 1시간 강수량", odam: "실황 1시간(5km)",
-                  vsrt: `초단기 +${vsrtN}시간` }[kind] || labelOf(kind);
+                  vsrt: `${vsrtN}시간 뒤 올 비` }[kind] || labelOf(kind);
   const bt = !tm ? "—" : kind === "vsrt" ? `${hm(CUR.tmfc)} 발표 → ${+tm.slice(8, 10)}시` : `${hm(tm)} ${isPast() ? "지난 시각" : "실측"}`;
   let cand = [];
   if (aws) {
@@ -372,7 +373,8 @@ async function accMoment() {
   };
   const rows = selOn() ? cand.map(mk) : perSigun(cand.map(mk), r => r.sum);
   const what = aws ? "지점" : "읍면동";
-  return { moment: true, stale: !fresh, title, rows, basis: aws ? "aws" : "grid", fell: false, ft: [], H: 1, spark, bt,
+  return { moment: true, fore: kind === "vsrt", note: kind === "vsrt" ? "이미 내린 비가 아니라 예보 — 그 시각까지 1시간 합" : "",
+    stale: !fresh, title, rows, basis: aws ? "aws" : "grid", fell: false, ft: [], H: 1, spark, bt,
     per: selOn() ? 1 : accPer(), sel: selOn() ? selName() : null,
     src: test ? "테스트" : aws ? `AWS ${cand.length}곳` : (kind === "odam" || kind === "vsrt") ? "5km" : "격자 500m",
     sub: `${selOn() ? `${selName()} ${what} 전부` : accPer() === 1 ? `시군 최대 ${what}` : `${what} ${perLabel()}`} · 지도와 같은 시각${fac === 4 ? " · ×4 환산" : ""}` };
@@ -589,6 +591,11 @@ function renderAcc() {
   const tSteps = stepsOf(tk), tHr = HOURLY.has(tk);
   const tcol = v => { const x = v * (tk === kind ? factor() : 1); return (x >= tSteps[0] && rampColor(x, tSteps, tHr)) || ""; };
   body.classList.toggle("tone", tone);
+  // 예보(단기 · 초단기) — 아직 안 온 비라 속 빈 점선 막대로, 값은 ~. 초단기 선 그래프는 실측에 예측 점선이 이미 이어져 단기만 점선으로.
+  // --sw: 재생 중 프레임마다 다시 그려도 빛이 처음으로 튀지 않게 흐름 위치를 잇는다
+  const fore = !!(A.day || A.fore);
+  body.classList.toggle("fore", fore); body.classList.toggle("fday", !!A.day);
+  body.style.setProperty("--sw", `-${Math.round(performance.now() % 3600)}ms`);
   const h1Chip = (r, v) => {
     if (r.dead) return `<span class="h1v z" title="결측">—</span>`;
     const c = v >= 0.1 ? rampColor(v, SIU, true) : null;
@@ -611,10 +618,10 @@ function renderAcc() {
     const g0 = A.per > 1 && !A.sel && i > 0 && rows[i - 1].sig !== r.sig;
     return `<div class="ar${r.det ? " det" : ""}${g0 ? " g0" : ""}${A.basis === "aws" && r.org === "kma" ? " kma" : ""}" data-s="${r.sig}" data-k="${r.sig}|${r.stn}"${at} title="${r.det ? "" : `${r.sig} — 눌러서 이 시군 ${A.basis === "grid" ? "읍면동" : "지점"} 보기`}">
       <div class="nm2">${rank}<small>${r.tag ?? r.sig}</small>${r.stn}</div>
-      <div class="abar" title="막대를 누르면 색 — ${tone ? "한 색으로" : "지도 범례 색조로(값마다 그 범주 색)"}"${tone && tcol(r.sum) ? ` style="--tc:${tcol(r.sum)}"` : ""}><div class="o${A.day ? " dayb" : hw >= o - 0.05 && !r.fc ? " all" : ""}" style="width:${o.toFixed(1)}%"></div>
+      <div class="abar" title="막대를 누르면 색 — ${tone ? "한 색으로" : "지도 범례 색조로(값마다 그 범주 색)"}"${tone && tcol(r.sum) ? ` style="--tc:${tcol(r.sum)}"` : ""}><div class="o${fore ? (o > 0 ? " fb" : "") : hw >= o - 0.05 && !r.fc ? " all" : ""}" style="width:${o.toFixed(1)}%"></div>
         ${h1 >= 0.1 ? `<div class="h${r.fc ? "" : " end"}${hw >= o - 0.05 ? " all" : ""}" style="left:${(o - hw).toFixed(1)}%;width:${hw.toFixed(1)}%" title="그중 최근 1시간 ${h1.toFixed(1)}㎜"></div>` : ""}
         ${r.fc ? `<div class="f" style="left:${o.toFixed(1)}%;width:${f.toFixed(1)}%"></div>` : ""}
-        <span class="v${r.dead ? " dead" : ""}" style="${vpos}"${ge}>${r.dead ? "결측" : r.sum.toFixed(1)}${r.fc ? `<i>+${fcTxt(r.fc)}</i>` : ""}</span></div>
+        <span class="v${r.dead ? " dead" : ""}" style="${vpos}"${ge}>${r.dead ? "결측" : fore ? `~${+r.sum.toFixed(r.sum >= 10 ? 0 : 1)}` : r.sum.toFixed(1)}${r.fc ? `<i>+${fcTxt(r.fc)}</i>` : ""}</span></div>
       <svg viewBox="0 0 ${SW.toFixed(0)} ${SH.toFixed(0)}" preserveAspectRatio="none">
         <path class="sp-a" d="${po.a}"/><path class="sp-l" d="${po.d}"/>
         <path class="sp-fa" d="${pf.a}"/><path class="sp-fl" d="${pf.d}"/>
@@ -625,7 +632,7 @@ function renderAcc() {
     + (A.note ? `<div class="case-note">${A.note}</div>` : "")
     + (A.moment ? `<div class="acc-lg">${A.basis === "aws"
           ? (rows.some(r => r.org !== "kma") ? `<span><i class="p"></i>경남 AWS</span>` : "") + (rows.some(r => r.org === "kma") ? `<span><i class="pk"></i>기상청 AWS</span>` : "")
-          : `<span><i class="p"></i>격자 최대 칸</span>`}${A.spark ? `<span>선 그래프: 그 시군 최대 · 세로선 = 지도 재생 위치</span>` : ""}${anyAvg ? `<span><i class="av"></i>평균</span>` : ""}</div>`
+          : `<span><i class="${fore ? "d" : "p"}"></i>${fore ? "예보 · " : ""}격자 최대 칸</span>`}${A.spark ? `<span>선 그래프: 그 시군 최대 · 세로선 = 지도 재생 위치</span>` : ""}${anyAvg ? `<span><i class="av"></i>평균</span>` : ""}</div>`
       : A.day ? `<div class="acc-lg"><span><i class="d"></i>그날 예보 합(단기 PCP 매시 합 · 읍면동 최대)</span><span>선 그래프: 매시 값</span></div>`
       : `<div class="acc-lg">${A.basis === "aws"
           ? (rows.some(r => r.org !== "kma") ? `<span><i class="p"></i>경남 AWS</span>` : "") + (rows.some(r => r.org === "kma") ? `<span><i class="pk"></i>기상청 AWS</span>` : "")

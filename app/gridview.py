@@ -49,9 +49,9 @@ LAYERS = [
      "src": "기상청 동네예보 실황 RN1(5km)", "stale_min": 30},
     {"id": "vsrt", "label": "초단기 예측", "short": "초단기", "group": "예측", "grid": "dfs",
      "src": "기상청 초단기예보 RN1(5km)", "stale_min": 30},
-    {"id": "shrt_today", "label": "단기 오늘 누적", "short": "단기 오늘", "group": "예측",
+    {"id": "shrt_today", "label": "오늘 더 올 비", "short": "오늘 더 올 비", "group": "예측",
      "grid": "dfs", "src": "기상청 단기예보 PCP(5km)"},
-    {"id": "shrt_tomorrow", "label": "단기 내일 누적", "short": "단기 내일", "group": "예측",
+    {"id": "shrt_tomorrow", "label": "내일 올 비", "short": "내일 올 비", "group": "예측",
      "grid": "dfs", "src": "기상청 단기예보 PCP(5km)"},
 ]
 BY_ID = {x["id"]: x for x in LAYERS}

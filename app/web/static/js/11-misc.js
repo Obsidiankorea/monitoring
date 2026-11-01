@@ -245,7 +245,7 @@ function watchOpen(g) {                                     // g: 'e' | 'c' | nu
   }
 }
 /* 특보 · 단기예보 한눈에 — 아이콘 하나. 지금 발효된 기상특보(+예비) · 오늘/내일 단기예보 강수 시군별 상위.
-   값은 지도 층(오늘/내일 24시까지 강수량)과 같은 /api/grid/sigun — 5km 격자라 시군 최대는 그 시군을 지나는 칸 가운데 가장 큰 값. */
+   값은 지도 층(오늘 더 올 비 · 내일 올 비)과 같은 /api/grid/sigun — 5km 격자라 시군 최대는 그 시군을 지나는 칸 가운데 가장 큰 값. */
 let FC_SEQ = 0;
 const fcHm = t => t && t.length >= 10 ? `${+t.slice(4, 6)}.${+t.slice(6, 8)}. ${t.slice(8, 10)}시 발표` : "";
 function fcTop(r, n = 5) {
@@ -287,11 +287,11 @@ async function fcLoad() {
         거제 · 통영은 자기 매뉴얼(2026.10.), 나머지 시군은 거제 기준을 준용(점선 둘레 — 그 시군 매뉴얼이 위키에 들어오면 바꾼다).</div>`;
   }
   const day = (r, lab) => r.status === "fulfilled"
-    ? `<h6>${lab} 24시까지 강수량 <em>${escH(fcHm(r.value.tmfc))}</em></h6>` + fcTop(r.value) + (r.value.capped > 0 ? `<div class="fn">30㎜ 이상 든 칸 ${r.value.capped} — 합계는 하한</div>` : "")
-    : `<h6>${lab} 24시까지 강수량</h6><div class="fe">${escH(r.reason?.message || "단기예보 격자가 아직 없다")}</div>`;
+    ? `<h6>${lab} <em>${escH(fcHm(r.value.tmfc))}</em></h6>` + fcTop(r.value) + (r.value.capped > 0 ? `<div class="fn">30㎜ 이상 든 칸 ${r.value.capped} — 합계는 하한</div>` : "")
+    : `<h6>${lab}</h6><div class="fe">${escH(r.reason?.message || "단기예보 격자가 아직 없다")}</div>`;
   pop.innerHTML = `<div class="rh"><b>⛅ 특보 · 단기예보</b><span>${escH(a.value?.data?.base_time || a.value?.base_time || "")}</span><i data-x title="닫기">✕</i></div>`
-    + `<h6>기상특보</h6>${al}` + st + day(t, "오늘") + day(m, "내일")
-    + `<div class="fn">단기예보는 3시간마다 발표(5km 격자) · 시군 값은 그 시군을 지나는 칸 가운데 최대 · 오늘은 발표 뒤 남은 시간만. 지도에서는 층 메뉴의 '오늘 · 내일 24시까지 강수량'.</div>`;
+    + `<h6>기상특보</h6>${al}` + st + day(t, "오늘 더 올 비") + day(m, "내일 올 비")
+    + `<div class="fn">단기예보는 3시간마다 발표(5km 격자) · 시군 값은 그 시군을 지나는 칸 가운데 최대 · 오늘은 발표 뒤 남은 시간만. 지도에서는 층 메뉴의 단기 예보(오늘 · 내일).</div>`;
 }
 function fcOpen(on) {
   const b = $("ly-fc"), pop = $("ly-fc-pop");
