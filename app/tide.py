@@ -48,7 +48,7 @@ def _key() -> str:
 
 
 def _mask(e: object) -> str:
-    t = str(e)
+    t = str(e) or type(e).__name__                         # 시간 초과는 글이 비어 있다
     return t.replace(_key(), "***") if _key() else t
 
 
@@ -93,8 +93,12 @@ def spring(days: list[tuple[date, float]], today: date) -> dict | None:
 
 
 async def _get(cli: httpx.AsyncClient, code: str, d: date, minute: int) -> list[tuple[str, float | None, float | None]]:
-    r = await cli.get(URL, params={"serviceKey": _key(), "type": "json", "obsCode": code, "reqDate": d.strftime("%Y%m%d"),
-                                   "min": minute, "numOfRows": 1440 // minute, "pageNo": 1})
+    params = {"serviceKey": _key(), "type": "json", "obsCode": code, "reqDate": d.strftime("%Y%m%d"),
+              "min": minute, "numOfRows": 1440 // minute, "pageNo": 1}
+    try:
+        r = await cli.get(URL, params=params)
+    except httpx.TimeoutException:                         # 서버가 막 뜰 때 수집기가 겹쳐 가끔 늦는다 — 한 번 더
+        r = await cli.get(URL, params=params)
     r.raise_for_status()
     return parse(r.json())
 
