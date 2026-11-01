@@ -571,13 +571,13 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 .sp-day { stroke: var(--ink); stroke-width: 1.2; opacity: .55; vector-effect: non-scaling-stroke; }
 .arx { display: grid; grid-template-columns: calc(118px * var(--k, 1)) 1fr calc(150px * var(--k, 1)); gap: calc(10px * var(--k, 1)); height: calc(32px * var(--k, 1)); padding: 0 6px; position: sticky; top: 0; z-index: 2; }
 #acc-b.h1c .arx { grid-template-columns: calc(118px * var(--k, 1)) 1fr calc(150px * var(--k, 1)) calc(62px * var(--k, 1)); }
-.tr { grid-column: 3; position: relative; height: 100%; }
-.tr i { position: absolute; bottom: 1px; height: 3px; opacity: .85; } .tr i:first-of-type { border-radius: 2px 0 0 2px; } .tr i:last-of-type { border-radius: 0 2px 2px 0; }
-.tr i.b0 { background: var(--tb0); } .tr i.b1 { background: var(--tb1); } .tr i.b2 { background: var(--tb2); } .tr i.b3 { background: var(--tb3); }
-.tr span, .tr b { position: absolute; bottom: calc(6px * var(--k, 1)); transform: translateX(-50%); white-space: nowrap; font: 500 calc(10.5px * var(--k, 1))/1 var(--mono); color: var(--ink-3); }
-.tr span.d { bottom: calc(19px * var(--k, 1)); font-size: calc(10px * var(--k, 1)); color: var(--ink-3); opacity: .8; }   /* 날짜 — 시각 윗줄에 약하게 */
-.tr span.d::after { content: ""; position: absolute; left: 50%; top: 100%; width: 1px; height: calc(17px * var(--k, 1)); background: var(--ink); opacity: .35; }
-.tr b { bottom: calc(3px * var(--k, 1)); font: calc(13px * var(--k, 1))/1 "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif; filter: drop-shadow(0 0 3px var(--halo)); }
+.arx .tr { grid-column: 3; position: relative; height: 100%; }
+.arx .tr i { position: absolute; bottom: 1px; height: 3px; opacity: .85; } .arx .tr i:first-of-type { border-radius: 2px 0 0 2px; } .arx .tr i:last-of-type { border-radius: 0 2px 2px 0; }
+.arx .tr i.b0 { background: var(--tb0); } .arx .tr i.b1 { background: var(--tb1); } .arx .tr i.b2 { background: var(--tb2); } .arx .tr i.b3 { background: var(--tb3); }
+.arx .tr span, .arx .tr b { position: absolute; bottom: calc(6px * var(--k, 1)); transform: translateX(-50%); white-space: nowrap; font: 500 calc(10.5px * var(--k, 1))/1 var(--mono); color: var(--ink-3); }
+.arx .tr span.d { bottom: calc(19px * var(--k, 1)); font-size: calc(10px * var(--k, 1)); color: var(--ink-3); opacity: .8; }   /* 날짜 — 시각 윗줄에 약하게 */
+.arx .tr span.d::after { content: ""; position: absolute; left: 50%; top: 100%; width: 1px; height: calc(17px * var(--k, 1)); background: var(--ink); opacity: .35; }
+.arx .tr b { bottom: calc(3px * var(--k, 1)); font: calc(13px * var(--k, 1))/1 "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif; filter: drop-shadow(0 0 3px var(--halo)); }
 /* 선 그래프 봉우리 — 가장 많이 온 시각의 값. 카드에서 봉우리가 큰 몇 줄만(다 적으면 숫자 밭이 된다) */
 .sp-pk { fill: var(--ink); stroke: var(--halo); stroke-width: 3px; paint-order: stroke; font: 700 calc(10.5px * var(--k, 1)) var(--mono); }
 .sp-pd { fill: var(--rain-6); stroke: var(--halo); stroke-width: 1.5px; }
