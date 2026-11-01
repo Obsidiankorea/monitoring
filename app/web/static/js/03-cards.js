@@ -496,7 +496,7 @@ function spTime(t0, t1) {
     else bands.push({ i, a: Math.max(t, t0), b: Math.min(t + HR, t1) });
     if (t < t0) continue;
     if (h === 0) days.push(t);
-    if (h % step === 0) ticks.push({ t, day: h === 0, txt: h === 0 ? `${dt.getMonth() + 1}.${dt.getDate()}` : `${h}시` });
+    if (h % step === 0) ticks.push({ t, txt: `${h}시` });
   }
   return { bands, days, ticks };
 }
@@ -543,7 +543,7 @@ function renderAcc() {
       + (A.note ? `<div class="case-note">${A.note}</div>` : "");
     A.sp = null; return;
   }
-  const bh = body.clientHeight - 10 * k - (A.note ? 40 * k : 0) - 22 * k - 20 * k;     // 22 = 맨 아래 막대 범례, 20 = 위 시간 눈금
+  const bh = body.clientHeight - 10 * k - (A.note ? 40 * k : 0) - 22 * k - 32 * k;     // 22 = 맨 아래 막대 범례, 32 = 위 날짜 · 시간 눈금
   const rh = Math.max(26 * k, Math.min(44 * k, bh / Math.max(1, rows.length)));   // 카드를 꽉 채운다
   // 시군을 골랐으면 줄을 다 그리고 카드 안에서 굴린다 — 내부망(스방)이면 한 시군에 수십 곳이다
   const n = A.sel ? rows.length : Math.max(1, Math.min(rows.length, Math.floor(bh / rh)));
@@ -627,8 +627,9 @@ function renderAcc() {
   const nowPc = xn / SW * 100;
   const ruler = `<div class="arx" aria-hidden="true"><div class="tr" title="시간대 색 — 새벽 0~6시 · 오전 6~12시 · 오후 12~18시 · 밤 18~24시. 굵은 선 = 자정(날짜가 바뀌는 곳)">`
     + tl.bands.map(b => `<i class="b${b.i}" style="left:${pc(b.a)}%;width:${(pc(b.b) - pc(b.a)).toFixed(2)}%"></i>`).join("")
-    + tl.ticks.filter(t => { const p = +pc(t.t); return p > 3 && p < 97 && (t.day || !(nowPc > 0 && Math.abs(p - nowPc) < 9)); })
-      .map(t => `<span class="${t.day ? "d" : ""}${t.day && nowPc > 0 && Math.abs(pc(t.t) - nowPc) < 18 ? " l" : ""}" style="left:${pc(t.t)}%">${t.txt}</span>`).join("")
+    + tl.days.filter(t => +pc(t) > 3 && +pc(t) < 97).map(t => `<span class="d" style="left:${pc(t)}%">${new Date(t).getDate()}일</span>`).join("")
+    + tl.ticks.filter(t => { const p = +pc(t.t); return p > 3 && p < 97 && !(nowPc > 0 && Math.abs(p - nowPc) < 9); })
+      .map(t => `<span style="left:${pc(t.t)}%">${t.txt}</span>`).join("")
     + (nowPc > 0 && nowPc <= 100 ? `<b style="left:${nowPc.toFixed(2)}%" title="지금">📍</b>` : "") + `</div></div>`;
   body.innerHTML = ruler + rows.slice(0, n).map((r, i) => {
     const tot = r.sum + r.fc, o = r.sum / bmax * 100, f = r.fc / bmax * 100;
