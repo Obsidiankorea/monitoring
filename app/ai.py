@@ -212,7 +212,7 @@ def ladders(r: dict, night: bool, alerts: list[str], rv: dict | None = None) -> 
     rain, fpk, f3 = r["rain"], r["fc_peak"], r["fc_run30"]
     o1, o24, o48, q15 = rain["1h"], rain["24h"], rain["48h"], r["m15"]
     accum = max(x for x in (o24, o48) if x is not None) if (o24 is not None or o48 is not None) else None
-    fcap = fpk is not None and fpk >= RN1_CAP          # 예보가 30 에 막혔으면 그 위는 모른다
+    fcap = fpk == RN1_CAP                              # 예보가 30 에 막혔으면 그 위는 모른다(그 위 값은 가상 시연에서만 온다)
     f50 = "unknown" if fpk is None or fcap else _st(fpk, 50)
     f55 = "unknown" if fpk is None or fcap else _st(fpk, 55)
     hoou = [a for a in alerts if a.startswith("호우")]
@@ -487,28 +487,55 @@ def tasks_done() -> dict:
     return {k: v for k, v in raw.items() if isinstance(v, dict) and (v.get("at") or "") >= cut}
 
 
-def set_task(text: str, done: bool) -> None:
+def set_tasks(tasks: list[dict]) -> None:
+    """적용 단추 — [{text, done}] 를 한 번에 남긴다."""
     from . import db
     cur = tasks_done()
-    if done:
-        cur[task_key(text)] = {"text": text, "at": datetime.now().strftime("%Y%m%d%H%M")}
-    else:
-        cur.pop(task_key(text), None)
+    at = datetime.now().strftime("%Y%m%d%H%M")
+    for t in tasks:
+        if t["done"]:
+            cur[task_key(t["text"])] = {"text": t["text"], "at": at}
+        else:
+            cur.pop(task_key(t["text"]), None)
     db.put_setting("task_done", cur)
 
 
+# 한 일 → 이어서 볼 일. 새 기준은 없다 — 위키 절차의 다음 칸(회신 · 현황 파악)만 잇는다. 뒤 글은 앞 열쇠말을 품지 않아야 한다(끝없이 이어지지 않게).
+FOLLOW = [("재난상황실에 유선 전파", "전파 회신 확인 — {w}: 시군의 통제 · 사전대피 판단 결과를 받아 기록 ([[시군 상황관리반 행동매뉴얼]])"),
+          ("긴급대피 실황 기준 해당", "대피 현황 확인 — {w}: 세대 · 인원, 미대피자 파악 ([[대피명령 길라잡이]])"),
+          ("사전대피 기준 해당", "권고 결과 확인 — {w}: 대피 세대 · 인원 파악 ([[대피명령 길라잡이]])"),
+          ("통제 기준 해당", "통제 유지 확인 — {w}: 통제 지점 · 담당 인력이 그대로인지 ([[통제·대피 기준]])"),
+          ("긴급재난문자 기준", "문자 결과 확인 — {w}: 송출 여부 · 문안 기록 ([[재난문자 송출기준]])")]
+CHECK_SECS = ("할 일", "별도 확인 필요")
+
+
+def follow_ups(done: list[str]) -> list[str]:
+    out = []
+    for text in done:
+        for key, tpl in FOLLOW:
+            if key in text and (m := re.search(r"— ([^:]+):", text)):
+                out.append(tpl.format(w=m[1]))
+    return out
+
+
 def apply_tasks(rep: dict, sigun: str | None = None, done: dict | None = None) -> dict:
-    """보고에 체크 상태를 얹는다 — '할 일'에 열쇠 · 완료 표시, 그 뒤(없으면 참고 앞)에 '조치 완료' 칸. 시군 보고는 그 시군 · 도 일만."""
+    """적용한 일을 보고에 반영한다 — 할 일 · 별도 확인 칸에서 빼고 이어서 볼 일을 더하고, '조치 완료' 칸에 남긴다.
+    칸에는 체크용 keys(원문)를 붙인다. 시군 보고의 조치 완료는 그 시군 · 이 보고에 있던 일만."""
     done = tasks_done() if done is None else done
     secs = rep.get("sections") or []
-    todo = next((s for s in secs if s["h"] == "할 일"), None)
-    keys = [task_key(i) for i in todo["items"]] if todo else []
-    if todo:
-        todo |= {"keys": keys, "done": [k in done for k in keys]}
-    got = sorted((v for k, v in done.items() if k in keys or not sigun or sigun in v["text"]), key=lambda v: v["at"])
+    chk = [s for s in secs if s["h"] in CHECK_SECS]
+    mine = {task_key(i) for s in chk for i in s["items"]}
+    got = sorted((v for k, v in done.items() if k in mine or not sigun or sigun in v["text"]), key=lambda v: v["at"])
+    for s in chk:
+        s["items"] = [i for i in s["items"] if task_key(i) not in done]
+        if s["h"] == "할 일":
+            s["items"] += [i for i in dict.fromkeys(follow_ups([v["text"] for v in got])) if task_key(i) not in done and i not in s["items"]]
+            s["items"] = s["items"] or ["남은 할 일 없음 — 정시마다 실황 · 예측 확인 유지"]
+        s["texts"] = list(s["items"])
     if got:
-        i = secs.index(todo) + 1 if todo else next((n for n, s in enumerate(secs) if s["h"].startswith("참고")), len(secs))
-        secs.insert(i, {"h": "조치 완료", "items": [f"{v['at'][8:10]}:{v['at'][10:12]} {v['text']}" for v in got]})
+        i = secs.index(chk[-1]) + 1 if chk else next((n for n, s in enumerate(secs) if s["h"].startswith("참고")), len(secs))
+        secs.insert(i, {"h": "조치 완료", "items": [f"{v['at'][8:10]}:{v['at'][10:12]} {v['text']}" for v in got],
+                        "texts": [v["text"] for v in got], "on": True})
     return rep
 
 

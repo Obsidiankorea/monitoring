@@ -177,12 +177,29 @@ def test_do_stage_is_automatic_and_can_be_overridden():
     assert ai.sigun_stages({"groups": g})["do_order"] == ai.DO_ORDER
 
 
-def test_apply_tasks_marks_done_and_adds_section():
-    t1, t2 = "진주 상대동 지하공간: 통제 상황 확인 ([[통제·대피 기준]])", "야간 확인"
+def test_apply_tasks_moves_done_and_adds_follow_ups():
+    t1, t2 = "통제 기준 해당 — 진주 상대동 지하공간: 통제 상황 확인 ([[통제·대피 기준]])", "야간 확인"
+    gap = "산사태 — 산림청 예보 없음"
     assert ai.task_key(t1) == ai.task_key(t1.replace("[[", "").replace("]]", ""))
     done = {ai.task_key(t1): {"text": t1, "at": "202610190015"}, "x": {"text": "창원 봉암동 확인", "at": "202610190001"}}
-    r = ai.apply_tasks({"sections": [{"h": "할 일", "items": [t1, t2]}, {"h": "참고", "items": []}]}, "진주", done)
-    assert r["sections"][0]["done"] == [True, False] and r["sections"][1] == {"h": "조치 완료", "items": ["00:15 " + t1]}
+    r = ai.apply_tasks({"sections": [{"h": "할 일", "items": [t1, t2]}, {"h": "별도 확인 필요", "items": [gap]}, {"h": "참고", "items": []}]}, "진주", done)
+    todo, chk, fin = r["sections"][:3]
+    assert todo["items"] == [t2, "통제 유지 확인 — 진주 상대동 지하공간: 통제 지점 · 담당 인력이 그대로인지 ([[통제·대피 기준]])"]
+    assert todo["texts"] == todo["items"] and chk["texts"] == [gap]
+    assert fin["h"] == "조치 완료" and fin["on"] is True and fin["items"] == ["00:15 " + t1] and fin["texts"] == [t1]
     a = ai.apply_tasks({"sections": [{"h": "지금", "items": []}, {"h": "참고", "items": []}]}, None, done)
-    assert [s["h"] for s in a["sections"]] == ["지금", "조치 완료", "참고"] and a["sections"][1]["items"][0].startswith("00:01 창원")
-    assert ai.apply_tasks({"sections": [{"h": "할 일", "items": [t2]}]}, None, {})["sections"][0]["done"] == [False]
+    assert [s["h"] for s in a["sections"]] == ["지금", "조치 완료", "참고"]
+    assert ai.apply_tasks({"sections": [{"h": "할 일", "items": [t1]}]}, None, {ai.task_key(t1): done[ai.task_key(t1)]})["sections"][0]["items"][0].startswith("통제 유지 확인")
+
+
+def test_follow_up_done_does_not_chain():
+    f = ai.follow_ups(["통제 기준 해당 — 진주 상대동: 통제 상황 확인"])
+    assert len(f) == 1 and ai.follow_ups(f) == []
+
+
+def test_gaps_lists_unknown_rules_and_missing_sources():
+    from app import aireport
+    s = {"sigun": "진주", "risk_total": {"산사태": 3}, "emd": [{"emd": "상대동", "ladders": {"하천": [{"stage": "통제", "st": "unknown", "rule": "수위"}, {"stage": "통제", "st": "no", "rule": "x"}]}}]}
+    g = aireport._gaps([s])
+    assert len(g) == 2 and "하천 통제 — 수위" in g[0] and "진주 상대동" in g[0] and g[1].startswith("산사태")
+    assert aireport._gaps([{"sigun": "진주", "risk_total": {}, "emd": []}]) == []

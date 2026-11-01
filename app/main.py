@@ -558,12 +558,15 @@ async def api_ai_sigunstage_put(body: dict):
 
 @app.put("/api/ai/task")
 async def api_ai_task(body: dict):
-    """할 일 체크 — {text, done}. 보고의 '조치 완료'에 남고 24시간 뒤 저절로 풀린다."""
+    """할 일 적용 — {tasks: [{text, done}]}. 보고의 '조치 완료'에 남고 24시간 뒤 저절로 풀린다."""
     from . import ai
-    text = str(body.get("text") or "").strip()
-    if not text or len(text) > 500:
+    raw = body.get("tasks")
+    if not isinstance(raw, list) or not raw or len(raw) > 50:
+        raise HTTPException(400, "tasks 목록이 필요하다")
+    tasks = [{"text": str(t.get("text") or "").strip(), "done": bool(t.get("done"))} for t in raw if isinstance(t, dict)]
+    if not tasks or any(not t["text"] or len(t["text"]) > 500 for t in tasks):
         raise HTTPException(400, "할 일 글이 없거나 너무 길다")
-    ai.set_task(text, bool(body.get("done")))
+    ai.set_tasks(tasks)
     return {"ok": True}
 
 

@@ -230,6 +230,26 @@ def _tasks(stage, relay_where: str, s_list: list[dict], night: bool, cbs: list[s
     return t
 
 
+def _gaps(s_list: list[dict]) -> list[str]:
+    """별도 확인 필요 — 기준은 있는데 이 대시보드에 자료가 없어 판단하지 못한 것. 충족으로도 아님으로도 치지 않고 사람에게 넘긴다."""
+    unk: dict[str, list[str]] = {}
+    for s in s_list:
+        for r in s["emd"]:
+            for fam, cs in r["ladders"].items():
+                for c in cs:
+                    if c["st"] == "unknown":
+                        unk.setdefault(f"{fam} {c['stage']} — {c['rule']}", []).append(f"{s['sigun']} {r['emd']}")
+    out = [f"{k}: 자료가 없어 판단 못 함 — {_few(list(dict.fromkeys(v)), 4)}" for k, v in unk.items()]
+    fams = {f for s in s_list for f in s["risk_total"]}
+    if "산사태" in fams:
+        out.append("산사태 — 산림청 산사태 위험 예보 · 토양함수 자료가 없다(연결 전): 산림청 화면 · 현장으로 확인")
+    if "하천" in fams:
+        out.append("하천 — 제방 만수위 90% · 교량 수위 90% · 댐 방류 협의 자료가 없다: 현장 · 댐 관리기관에 확인")
+    if "지하공간" in fams:
+        out.append("지하공간 — 침수심 5㎝ · 현장 CCTV 자료가 없다: 담당자 현장 확인")
+    return out
+
+
 def _refs(names: list[str]) -> list[str]:
     return [ref(n) for n in dict.fromkeys(names)] + [CONTACTS]
 
@@ -314,6 +334,7 @@ def report(base: str, sigun: str | None = None, mode: str = "all") -> dict:
     return {"scope": "경남", "title": "경남 전체", "tm": o["tm"], "flash": _flash_all(o, sits, own),
             "sections": [{"h": "상황", "items": sit}, {"h": "전망 — 특보 · 단기예보 · 초단기", "items": _outlook(rows) + tide.summary()},
                          {"h": "중요한 점", "items": imp}, {"h": "할 일", "items": tasks},
+                         *([{"h": "별도 확인 필요", "items": g}] if (g := _gaps(sits)) else []),
                          {"h": "살펴볼 곳", "items": look or ["특별히 살펴볼 읍면동 없음"]}, {"h": "다음 확인", "items": nxt},
                          {"h": "참고 — 위키 · 책자", "items": _refs(BASE_REFS + ["상황판단회의"] + ([TIDE_REF] if tide.summary() else []))}],
             "questions": [{"id": k, "label": v} for k, v in Q_ALL]}
@@ -412,6 +433,7 @@ def _report_sigun(base: str, sigun: str) -> dict:
     nxt.append(_ante_note([s]))
     return {"scope": sigun, "title": full, "tm": s["tm"], "flash": _flash_sigun(s, full),
             "sections": [{"h": "상황", "items": sit}, {"h": "중요한 점", "items": imp}, {"h": "할 일", "items": tasks},
+                         *([{"h": "별도 확인 필요", "items": g}] if (g := _gaps([s])) else []),
                          {"h": "살펴볼 곳", "items": look or ["우려지역이 있는 읍면동에 비 없음"]}, {"h": "다음 확인", "items": nxt},
                          {"h": "참고 — 위키 · 책자", "items": _refs([full] + BASE_REFS + ["시군별 통제·대피계획"] + ([TIDE_REF] if s.get("tide") else []))}],
             "questions": [{"id": k, "label": v} for k, v in Q_SIG]}

@@ -3,6 +3,7 @@
     .venv\\Scripts\\python.exe tools\\make_scene.py fake-20261019-x2 river.json tide.json
 
 river.json · tide.json 은 서버의 /api/river · /api/tide 응답 — 지점 · 제원 · 기준 수위 · 물결은 실제 것을 쓰고 값만 시나리오로 바꾼다.
+예보도 시나리오다 — 마지막 3시간에 온 비의 분포가 앞으로 아홉 시간 이어진다고 보고 초단기(읍면동 전부 · 격자) · 단기 격자를 채운다.
 기준 숫자는 새로 만들지 않는다. 단계는 river.stage · tide.stage 가 제원 · 고조정보 기준으로 낸다.
 """
 from __future__ import annotations
@@ -16,17 +17,20 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from app import config, river, tide  # noqa: E402
+import numpy as np  # noqa: E402
+
+from app import config, gridstore, river, tide  # noqa: E402
 
 # 지점 코드 → (지금 수위, 홍수예보 종류 · 단계, 발표, 도달 예상, 주의 지역)
 WL = {"2019625": (3.42, ("홍수주의보 발령", 2, "202610190010", "202610190150", "고성군,진주시")),     # 진주 옥산교 — 지금은 정상, 예보는 주의보
       "2019610": (3.74, ("홍수경보 변경발령", 3, "202610182350", "202610190100", "고성군")),            # 고성 두문교 — 지금 주의보, 예보는 경보
       "2504660": (3.66, ("홍수경보 발령", 3, "202610182320", "202610182350", "창원시")),                # 창원 창원천 — 이미 경보 수위
       "2504655": (3.21, ("홍수주의보 발령", 2, "202610190000", "202610190110", "창원시")),              # 창원 진북2교
-      "2018692": (3.95, None),                                                                      # 사천 검정리 — 관심
-      "2502630": (2.96, None),                                                                      # 남해 봉천교 — 관심
+      "2018692": (3.95, ("홍수주의보 발령", 2, "202610190005", "202610190140", "사천시")),              # 사천 검정리 — 관심, 예보는 주의보
+      "2502630": (2.96, ("홍수주의보 발령", 2, "202610190015", "202610190120", "남해군")),              # 남해 봉천교 — 관심, 예보는 주의보
       "2020671": (3.31, None)}                                                                      # 김해 주천교 — 관심 앞
 RAINY = {"창원", "고성", "진주", "통영", "사천", "남해"}
+FC_CURVE = [.9, 1.1, 1.25, 1.2, 1.0, .8, .6, .4, .25]         # 지금부터 한 시간째 · 두 시간째 … — 세 시간 뒤가 봉우리
 ROAD = [("창원시", "202610182310", 12), ("고성군", "202610182340", 0)]
 SPRING = {"now": True, "from": "2026-10-17", "to": "2026-10-21"}
 
@@ -73,6 +77,45 @@ def _tide(src: dict, now: datetime) -> dict:
     return {"at": f"{now:%Y-%m-%d %H:%M}", "err": None, "rows": [x for x in rows if x], "spring": SPRING}
 
 
+def _forecast(db: sqlite3.Connection, cache: Path, now: datetime) -> dict:
+    """앞으로 올 비 — 마지막 3시간 시우량(5km 칸 최대)에 FC_CURVE 를 곱해 예측 층에 얹는다. 원래 예보보다 낮추지는 않는다."""
+    gridstore.ROOT = cache / "grid"
+    ks = sorted(k for k in gridstore.keys("obs60") if k.endswith("00") and k <= f"{now:%Y%m%d%H%M}")[-3:]
+    rate = sum(np.nan_to_num(gridstore.load("obs60", k)) for k in ks) / len(ks)
+    h, w = gridstore.shape("dfs")
+    idx, flat = gridstore._dfs_index().ravel(), rate.ravel()
+    ok = idx >= 0
+    base = np.zeros(h * w)
+    np.maximum.at(base, idx[ok], flat[ok])
+    base = base.reshape(h, w)
+    h0 = now.replace(minute=0, second=0, microsecond=0)
+    field = {f"{h0 + timedelta(hours=i + 1):%Y%m%d%H}": base * c for i, c in enumerate(FC_CURVE)}
+    n = {"vsrt": 0, "shrt": 0}
+    for layer in n:
+        for k in gridstore.keys(layer):
+            f = field.get(k.split("_")[1][:10])
+            if f is not None:
+                a = gridstore.load(layer, k)
+                gridstore.save(layer, k, np.where(np.isnan(a), a, np.maximum(a, f)))
+                n[layer] += 1
+    b = gridstore.geo()["dfs"]["bbox"]
+    rows = [(float(np.nan_to_num(field[e[:10]][y - 1 - b["j0"], x - 1 - b["i0"]])), v, t, e, x, y)
+            for t, e, x, y, v in db.execute("SELECT tmfc, tmef, x, y, val FROM fcst_short WHERE var='PCP'") if e[:10] in field]
+    db.executemany("UPDATE fcst_short SET val=MAX(?, ?) WHERE tmfc=? AND tmef=? AND x=? AND y=? AND var='PCP'", rows)
+    names = [s["name"] for s in gridstore.geo()["sigun"] if s["kind"] == "gn"]
+    tmfcs = [r[0] for r in db.execute("SELECT DISTINCT tmfc FROM fcst_rn1")]
+    old = {(t, e, s, m): v for t, e, s, m, v in db.execute("SELECT tmfc, tmef, sigun, emd, rn1 FROM fcst_rn1")}
+    db.execute("DELETE FROM fcst_rn1")
+    stamp = f"{now:%Y-%m-%d %H:%M}"
+    for i in range(6):                                           # 읍면동 전부 — 예보가 비는 읍면동이 없게
+        e = f"{h0 + timedelta(hours=i + 1):%Y%m%d%H}00"
+        stats = gridstore.emd_stats(gridstore.to_hr(field[e[:10]]), names)
+        for t in tmfcs:
+            db.executemany("INSERT INTO fcst_rn1(tmfc, tmef, sigun, emd, rn1, fetched_at) VALUES(?,?,?,?,?,?)",
+                           [(t, e, r["sig"], r["name"], max(round(r["max"] or 0, 1), old.get((t, e, r["sig"], r["name"]), 0)), stamp) for r in stats])
+    return {**n, "fcst_short": len(rows), "peak": round(float(base.max() * max(FC_CURVE)), 1)}
+
+
 def main(argv=None) -> None:
     name, rf, tf = (argv or sys.argv[1:])[:3]
     d = config.SNAPS / name
@@ -83,12 +126,13 @@ def main(argv=None) -> None:
              "road": {"at": now.isoformat(timespec="seconds"), "err": None, "rows": [{"name": n, "type": "D03", "at": t, "links": k} for n, t, k in ROAD]}}
     (d / "scene.json").write_text(json.dumps(scene, ensure_ascii=False), "utf-8")
     c = sqlite3.connect(d / "state" / "gnweather.db")
+    print(_forecast(c, d / "state" / "cache", now))
     map_set = json.loads(c.execute("SELECT value FROM setting WHERE key='map'").fetchone()[0])
     map_set |= {"overlays": ["alerts", "river", "tide"], "layer": "acc"}
     c.execute("UPDATE setting SET value=? WHERE key='map'", (json.dumps(map_set, ensure_ascii=False),))
     c.commit()
     c.close()
-    m["note"] += " 하천 수위 · 홍수예보 · 댐 방류 · 조위 · 대조기 · 지하차도 경보도 지점만 실제이고 값은 시나리오(가상)."
+    m["note"] = m["note"].split(" 하천 수위 · ")[0].split(" 앞으로의 초단기")[0] + " 앞으로의 초단기 · 단기 예보(격자 · 읍면동) · 하천 수위 · 홍수예보 · 댐 방류 · 조위 · 대조기 · 지하차도 경보도 지점만 실제이고 값은 시나리오(가상)."
     (d / "meta.json").write_text(json.dumps(m, ensure_ascii=False, indent=1), "utf-8")
     wl = [r for r in scene["river"]["rows"] if r["kind"] == "wl" and (r.get("stage", -1) >= 1 or r.get("fc"))]
     print([(r["name"], r["v"], r["stage"], (r.get("fc") or {}).get("lv")) for r in wl])

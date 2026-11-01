@@ -1111,9 +1111,13 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 #aiw .sec ul { margin: 0; padding-left: 18px; }
 #aiw .sec li { margin: 4px 0; font-size: 14px; line-height: 1.55; color: var(--ink); }
 #aiw .sec.todo ol { margin: 0; padding-left: 20px; } #aiw .sec.todo li { font-weight: 500; }
-#aiw .sec.todo label { display: flex; gap: 7px; align-items: flex-start; cursor: pointer; }
-#aiw .sec.todo input { flex: none; width: 15px; height: 15px; margin: 3px 0 0; accent-color: var(--accent); }
-#aiw .sec.todo li.dn span { color: var(--ink-3); text-decoration: line-through; }
+#aiw .sec.chk label { display: flex; gap: 7px; align-items: flex-start; cursor: pointer; }
+#aiw .sec.chk input { flex: none; width: 15px; height: 15px; margin: 3px 0 0; accent-color: var(--accent); }
+#aiw .sec.chk ul { list-style: none; padding-left: 0; }
+#aiw .sec.dn li span { color: var(--ink-3); text-decoration: line-through; }
+#aiw .apl { margin: 2px 0 14px; }
+#aiw .apl button { width: 100%; padding: 8px 12px; border: 0; border-radius: 8px; font-weight: 700; color: #fff; background: var(--accent); cursor: pointer; }
+#aiw .apl button:disabled { color: var(--ink-3); background: color-mix(in oklab, var(--ink) 10%, transparent); cursor: default; }
 .rpop.fc .sg.do { display: block; }
 .rm.rdo { display: flex; align-items: center; gap: 6px; }
 #aiw .sec.ref li { font-size: 12.5px; color: var(--ink-2); }

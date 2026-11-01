@@ -44,10 +44,12 @@ try { AIW.mode = localStorage.getItem("gn-ai-mode") || "all"; } catch {}
 const aiEsc = t => String(t ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
 const aiTxt = t => aiEsc(t).replace(/\[\[([^\]]+)\]\]/g, '<span class="wk">$1</span>');
 function aiSections(secs) {
-  return secs.map(x => {
+  const last = secs.map(x => !!x.texts).lastIndexOf(true);    // 체크 칸들 맨 뒤에 적용 단추
+  return secs.map((x, n) => {
     const todo = x.h === "할 일", ref = x.h.startsWith("참고");
-    const list = x.items.map((i, n) => (x.keys ? `<li${x.done[n] ? ' class="dn"' : ""}><label><input type="checkbox" data-t="${aiEsc(i).replace(/"/g, "&quot;")}"${x.done[n] ? " checked" : ""}><span>${aiTxt(i)}</span></label></li>` : `<li>${aiTxt(i)}</li>`)).join("");
-    return `<div class="sec${todo ? " todo" : ""}${ref ? " ref" : ""}"><h5>${aiEsc(x.h)}</h5>${todo ? `<ol>${list}</ol>` : `<ul>${list}</ul>`}</div>`;
+    const list = x.items.map((i, k) => (x.texts ? `<li><label><input type="checkbox" data-t="${aiEsc(x.texts[k]).replace(/"/g, "&quot;")}"${x.on ? " checked" : ""}><span>${aiTxt(i)}</span></label></li>` : `<li>${aiTxt(i)}</li>`)).join("");
+    return `<div class="sec${todo ? " todo" : ""}${x.texts ? " chk" : ""}${x.on ? " dn" : ""}${ref ? " ref" : ""}"><h5>${aiEsc(x.h)}</h5>${todo ? `<ol>${list}</ol>` : `<ul>${list}</ul>`}</div>`
+      + (n === last ? `<div class="apl"><button type="button" id="aiw-apply" disabled>적용 — 체크한 일을 한 것으로 다시 판단</button></div>` : "");
   }).join("");
 }
 async function aiLoad() {
@@ -71,6 +73,7 @@ async function aiLoad() {
   const fl = r.flash ? `<div class="flash t${r.flash.tone}"><b>속보</b>${aiTxt(r.flash.text)}</div><div class="hl">종합 해설</div>` : "";
   $("aiw-bd").innerHTML = fl + (r.title && r.mode && r.mode !== "all" ? `<div class="sec"><h5>${aiEsc(r.title)}</h5></div>` : "") + aiSections(r.sections);
   $("aiw-q").innerHTML = r.questions.map(q => `<button type="button" data-q="${q.id}">${aiEsc(q.label)}</button>`).join("");
+  AIW.llm = r.llm;
   $("aiw-in").placeholder = r.llm ? "더 물어보기 — 지금 상황과 위키를 보고 답한다" : "더 물어보기 — (LLM 미연결: 위 질문 단추만 답한다)";
 }
 async function aiAsk(body, label) {
@@ -90,17 +93,24 @@ async function aiAsk(body, label) {
   blk.querySelector(".ans").innerHTML = (a.text ? `<pre>${aiTxt(a.text)}</pre>` : aiSections(a.sections || []))
     + `<div class="src">${aiEsc(a.source || "")}</div>`;
 }
-$("aiw-bd").addEventListener("change", async ev => {          // 할 일 체크 → 서버에 남기고 보고를 다시 읽어 '조치 완료'에 반영
-  const b = ev.target.closest("input[data-t]"), bd = $("aiw-bd");
+const aiChanged = () => [...$("aiw-bd").querySelectorAll("input[data-t]")].filter(b => b.checked !== b.defaultChecked);
+$("aiw-bd").addEventListener("change", ev => {                // 체크만으로는 남기지 않는다 — 적용 단추로 한꺼번에
+  if (!ev.target.closest("input[data-t]")) return;
+  const n = aiChanged().length, b = $("aiw-apply");
+  b.disabled = !n;
+  b.textContent = n ? `적용 ${n}건 — 한 것으로 치고 다시 판단` : "적용 — 체크한 일을 한 것으로 다시 판단";
+});
+$("aiw-bd").addEventListener("click", async ev => {
+  const b = ev.target.closest("#aiw-apply");
   if (!b) return;
   b.disabled = true;
   try {
-    const r = await fetch("/api/ai/task", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: b.dataset.t, done: b.checked }) });
+    const r = await fetch("/api/ai/task", { method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tasks: aiChanged().map(x => ({ text: x.dataset.t, done: x.checked })) }) });
     if (!r.ok) throw new Error(r.status);
-    const y = bd.scrollTop;
-    await aiLoad();
-    bd.scrollTop = y;
-  } catch { b.checked = !b.checked; b.disabled = false; }
+  } catch (e) { b.disabled = false; b.textContent = `적용하지 못했다 — ${e.message}`; return; }
+  await aiLoad();
+  if (AIW.llm) aiAsk({ text: "'조치 완료'에 적힌 일은 이미 했다고 치고 지금 상황을 다시 판단해 줘. ① 남은 위험 ② 지금 먼저 할 일 셋 ③ '별도 확인 필요' 중 먼저 확인할 것. 위키와 수치에 없는 기준은 만들지 말 것." }, "조치 반영 — 다시 판단");
 });
 function aiToggle(on = !AIW.open) {
   AIW.open = on;
