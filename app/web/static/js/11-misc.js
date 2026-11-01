@@ -157,7 +157,8 @@ $("stage").addEventListener("mouseleave", () => { $("tip").hidden = true; highli
 /* 시군을 누르면 고른다 — 오른쪽 패널이 그 시군 읍면동(격자)·지점(AWS)으로 바뀐다. 다시 누르거나 바다를 누르면 푼다.
    Ctrl(⌘)+클릭은 더하기·빼기 — 여러 시군 읍면동을 한 판에 견준다 */
 $("stage").addEventListener("click", ev => {
-  if (!V || !GEO || ev.target.closest("#tl, #play, #legend, #rail, #layers, #tip, #sw, #camgrab, #cambar, #tools, #aiw, #showdots, #td-pop")) return;
+  // 누른 아이콘이 다시 그려지면 ev.target 은 문서에서 빠져 closest 가 헛돈다 — 누른 때의 경로로 본다
+  if (!V || !GEO || ev.composedPath().some(e => e.matches?.("#tl, #play, #legend, #rail, #layers, #hud, #tip, #sw, #camgrab, #cambar, #tools, #aiw, #showdots, #td-pop"))) return;
   const rc = $("stage").getBoundingClientRect();
   const mx = (ev.clientX - rc.left - MT.tx) / MT.sc, my = (ev.clientY - rc.top - MT.ty) / MT.sc;
   const td = tideAt(mx, my);
