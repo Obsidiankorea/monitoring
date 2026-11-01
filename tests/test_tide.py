@@ -19,7 +19,7 @@ def test_parse_and_error():
 
 def test_stage_by_station():
     assert [tide.stage(MASAN, v) for v in (75, 162, 181.9, 228, 300)] == [0, 1, 1, 3, 4]
-    assert tide.stage(TONG, 322) == 1 and tide.stage(SAM, 200) is None
+    assert tide.stage(TONG, 322) == 3 and tide.stage(TONG, 279) == 0 and tide.stage(SAM, 200) is None
     assert [x["name"] for x in tide.STATIONS if "창원" in x["sigun"]][0] == "마산"    # 창원 보고는 마산 값으로
 
 

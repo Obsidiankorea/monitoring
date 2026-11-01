@@ -3,9 +3,8 @@
 오늘 값(실측 + 예측)은 수집 주기마다(설정 › API 절약을 따른다), 앞날 예측은 하루 한 번 받는다 — 예측은 하루 안에 바뀌지 않는다.
   · 응답 시각은 모두 KST, 높이는 cm. 앞날은 예측(tdlvHgt)만 오고 실측(bscTdlvHgt)은 null 이다.
   · ⚠️ 활용가이드의 예시와 달리 응답은 {"response": …} 로 감싸지 않고 header · body 로 바로 온다(2026-11 실측).
-  · 단계: 마산은 해양조사원 고조정보 4단계(2026년 8월 해안침수 주의정보 — 기본수준면 기준, 그달 '주의' 이상 예상지역만 실려 경남은 마산뿐).
-    거제도 · 통영 · 여수는 그 값을 아직 못 구해 기상청 예보업무규정 폭풍해일 주의보 · 경보 값(위키 [[재난경보와 폭풍해일 기준]])을 참고로 쓴다 — 고조정보와 다른 체계이고 기준면도 미확인이라 특보 판정이 아니다(특보는 기상청 발표).
-    삼천포 · 부산항신항은 기준이 없어 값만.
+  · 단계: 해양조사원 고조정보 4단계(기본수준면 기준). 값과 시설 지반고는 실시간 고조정보 서비스(khoa.go.kr/hightide — obsData · facility.data, 2026-11-01 확인).
+    삼천포 · 부산항신항은 그 33곳에 없어 값만. 폭풍해일 특보 기준(위키)과는 다른 체계다 — 섞지 않는다.
   · 대조기는 API 가 주지 않는다 — 예측 일 최고 만조의 봉우리 앞뒤 이틀로 계산한다(spring). 공식 날짜와 다를 수 있다.
 키는 config/api_keys.txt 의 DATA_GO_KR_KEY(산림청 산사태와 같은 키).
 """
@@ -22,23 +21,24 @@ from .domain.gridproj import hr_xy
 log = logging.getLogger("tide")
 
 URL = "https://apis.data.go.kr/1192136/surveyTideLevel/GetSurveyTideLevelApiService"
-HI = ["정상", "관심", "주의", "경계", "위험"]
-SURGE = ["정상", "주의보", "경보"]
+HI = ["안전", "관심", "주의", "경계", "위험"]              # 해양조사원 화면과 같은 이름
 SPRING_REF = "DT_0014"                                     # 대조기는 통영 예측으로 센다(남해안 한 곳이면 된다)
 STALE_MIN = 90
 PLOT_BACK, PLOT_FWD = 6, 18                                # 팝업 물결 — 지금 앞뒤(시간)
 
+F = lambda *rows: [{"name": n, "h": h} for n, h in rows]    # noqa: E731
 STATIONS = [
-    {"code": "DT_0062", "name": "마산", "lat": 35.1975, "lon": 128.57638, "sigun": ["창원"], "cuts": [162, 182, 228, 280], "names": HI, "col": [0, 1, 2, 3, 4],
-     "scale": "고조정보", "surge": [240, 290],
-     "facil": [{"name": "진해 용원 의창수협", "h": 182}, {"name": "진해 용원 안골부두", "h": 252}, {"name": "마산합포구 한진수산 부근", "h": 280},
-               {"name": "진해 용원 남양포구", "h": 291}, {"name": "마산합포구 서항부두", "h": 304}]},
-    {"code": "DT_0029", "name": "거제도", "lat": 34.80138, "lon": 128.69916, "sigun": ["거제"], "cuts": [249, 281], "names": SURGE, "col": [0, 2, 4], "scale": "폭풍해일 기준(참고)"},
-    {"code": "DT_0014", "name": "통영", "lat": 34.82777, "lon": 128.43472, "sigun": ["통영", "고성", "사천"], "cuts": [322, 370], "names": SURGE, "col": [0, 2, 4], "scale": "폭풍해일 기준(참고)"},
-    {"code": "DT_0016", "name": "여수", "lat": 34.74722, "lon": 127.76555, "sigun": ["하동", "남해"], "cuts": [420, 440], "names": SURGE, "col": [0, 2, 4], "scale": "폭풍해일 기준(참고)"},
-    # 진해 용원 앞바다 — 고조정보는 용원을 마산 구역으로 묶지만 실제 물은 이쪽이다. 기준이 없어 값만
-    {"code": "DT_0056", "name": "부산항신항", "lat": 35.0775, "lon": 128.78472, "sigun": ["창원"], "cuts": [], "names": [], "col": [], "scale": None},
-    {"code": "DT_0061", "name": "삼천포", "lat": 34.92416, "lon": 128.06972, "sigun": [], "cuts": [], "names": [], "col": [], "scale": None},
+    {"code": "DT_0062", "name": "마산", "lat": 35.1975, "lon": 128.57638, "sigun": ["창원"], "cuts": [162, 182, 228, 280],
+     "facil": F(("진해 용원 의창수협", 182), ("진해 용원 안골부두", 252), ("마산합포구 한진수산 부근", 280), ("진해 용원 남양포구", 291), ("마산합포구 서항부두", 304))},
+    {"code": "DT_0029", "name": "거제도", "lat": 34.80138, "lon": 128.69916, "sigun": ["거제"], "cuts": [221, 241, 265, 290],
+     "facil": F(("지세포항 소형선 부두", 264), ("구조라 유람선 선착장", 291), ("예구 선착장", 291), ("와현 유람선 선착장", 312))},
+    {"code": "DT_0014", "name": "통영", "lat": 34.82777, "lon": 128.43472, "sigun": ["통영", "고성", "사천"], "cuts": [280, 300, 322, 345],
+     "facil": F(("동호동 수협 소형선 부두", 301), ("강구안 소형선 부두", 306), ("기선권현망수협 소형선 부두", 327), ("여객선터미널", 347))},
+    {"code": "DT_0016", "name": "여수", "lat": 34.74722, "lon": 127.76555, "sigun": ["하동", "남해"], "cuts": [362, 382, 411, 440],
+     "facil": F(("해양공원 산책로", 383), ("오동도방파제", 429), ("연안 여객선터미널", 446), ("해양엑스포공원", 477))},
+    # 진해 용원 앞바다 — 고조정보는 용원을 마산(창원) 구역으로 묶지만 실제 물은 이쪽이다. 기준이 없어 값만
+    {"code": "DT_0056", "name": "부산항신항", "lat": 35.0775, "lon": 128.78472, "sigun": ["창원"], "cuts": []},
+    {"code": "DT_0061", "name": "삼천포", "lat": 34.92416, "lon": 128.06972, "sigun": [], "cuts": []},
 ]
 
 _LIVE: dict = {"at": None, "err": None, "rows": [], "spring": None}
@@ -141,8 +141,8 @@ def build(st: dict, today_rows: list, pred: list[tuple[str, float]], now: dateti
     mark = lambda h: h and {"t": h[0], "h": h[1], "stage": stage(st, h[1])}       # noqa: E731
     facil = st.get("facil") or []
     return {"code": st["code"], "name": st["name"], "sigun": st["sigun"], "x": x, "y": y, "t": t, "v": v, "pred": p,
-            "diff": round(v - p, 1) if p is not None else None, "stage": stage(st, v), "cuts": st["cuts"], "names": st["names"],
-            "col": st["col"], "scale": st["scale"], "surge": st.get("surge"), "next": mark(next_), "top": mark(top), "facil": facil,
+            "diff": round(v - p, 1) if p is not None else None, "stage": stage(st, v), "cuts": st["cuts"], "names": HI, "col": [0, 1, 2, 3, 4],
+            "scale": "고조정보" if st["cuts"] else None, "next": mark(next_), "top": mark(top), "facil": facil,
             "wet": [f["name"] for f in facil if top and f["h"] <= top[1]],     # 7일 안 만조가 지반고에 닿는 시설
             "series": [[a, o_by.get(a), b] for a, b in all_p if a0 <= a <= a1 and a[10:12] in ("00", "30")],
             "stale": (now - datetime.strptime(t, "%Y%m%d%H%M")).total_seconds() > STALE_MIN * 60}
