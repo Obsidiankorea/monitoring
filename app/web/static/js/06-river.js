@@ -157,14 +157,18 @@ function renderRiverLegend() {
     const fl = act.length + oth.length ? act.map(s => `<div class="rr">${dot(RV_C[s.fc.lv])}<b>${escH(s.name)}</b><span>${escH(s.fc.kind)}</span><em>발표 ${rvDt(s.fc.at)}</em></div>`)
       .concat(oth.map(f => `<div class="rr">${dot("var(--ink-3)")}<b>${escH(f.obs || "")}</b><span>${escH(f.kind || "")}</span><em>${escH(f.river || "")} ${rvDt(f.at)}</em></div>`)).slice(0, 6).join("")
       : `<div class="nt">발령 없음(최근 24시간${RIV.nfld ? ` · 전국 ${RIV.nfld}건 중 경남 영향 없음` : ""})</div>`;
+    const r9 = RIV.road, rd = !r9?.on ? "" : `<div class="sec">지하차도 침수 위험</div>` + (r9.err ? `<div class="nt w">${escH(r9.err)}</div>`
+      : r9.rows.length ? r9.rows.slice(0, 6).map(r => `<div class="rr">${dot("var(--rv-3)")}<b>${escH(r.name)}</b><span>${r.links ? `링크 ${r.links}곳` : ""}</span><em>${rvDt(r.at)}</em></div>`).join("")
+      : `<div class="nt">${r9.active ? "경남 경보 없음" : "호우특보 때만 확인"}</div>`);
     body = `<div class="keys2">${chips}</div><div class="nt">막대 색 = 지금 수위 · <i class="rvk"></i>네모 = 홍수예보 발령</div>${nthr ? `<div class="nt">기준 수위 없는 지점 ${nthr}곳은 값만(흐린 막대)</div>` : ""}`
-      + `<div class="sec">수위 높은 곳</div>${wlHtml}<div class="sec">댐 · 보 방류</div>${relHtml || `<div class="nt">값 없음</div>`}<div class="sec">홍수예보 발령</div>${fl}`;
+      + `<div class="sec">수위 높은 곳</div>${wlHtml}<div class="sec">댐 · 보 방류</div>${relHtml || `<div class="nt">값 없음</div>`}<div class="sec">홍수예보 발령</div>${fl}${rd}`;
   }
   TIPS.set("river-now", `한강홍수통제소(HRFCO) 자료 — 전국 4대강 홍수통제소 원시값(보정 전)이라 확정치와 다를 수 있다. 공식 판단은 홍수통제소 발표로.<br>
     <b>수위</b> 관측소 막대는 꼭대기가 제원의 가장 높은 기준 수위, 차오른 만큼이 지금 수위. 색은 단계(정상 · 관심 · 주의보 · 경보 · 심각), 주의보부터는 번쩍인다.
     기준 수위가 제원에 없는 지점은 흐리게 값만.<br>
     <b>네모 테두리</b>는 홍수통제소가 그 지점에 낸 홍수예보(색은 주의보 · 경보) — 막대는 지금 수위, 네모는 앞으로의 예보다. 발령이 있는 지점에만, 해제될 때까지 나온다(해제를 못 받아도 발표 뒤 4일이면 지운다).<br>
     <b>댐 · 보</b>는 방류량(총방류)이 1시간 전보다 10 ㎥/s 이상 · 20% 이상 늘면 주황으로 번쩍인다. 방류가 얼마면 위험인지는 위키에 숫자가 없어 단계를 만들지 않았다 — 하류 시군은 댐 방류 협의 · 사전예고(위키 위험예보)를 따른다.<br>
+    <b>지하차도 침수 위험</b>은 국가교통정보센터 재난상황정보 — 호우경보를 따라 나오는 경보로, 지역까지만 알려 주고 지하차도 이름 · 위치는 없다. 호출이 월 1000건이라 호우특보 중에만 15분마다 확인한다.<br>
     점선 둘레 = 경남으로 흘러드는 낙동강 위쪽(경북 · 대구) 댐 · 보. 낙동강권역 자료는 11분 넘게 늦게 들어온다(지점마다 마지막 시각이 다르다). 10분마다 갱신.`);
   const t = RIV?.at ? RIV.at.slice(11, 16) : "";
   box.innerHTML = `<div class="hd2" title="눌러서 닫기"><b>하천 · 댐</b><span class="k">${RIV?.rows?.length ? `${RIV.rows.length}곳` : ""}</span><i class="inf" data-tip="river-now">i</i><span>${t}</span></div>` + body;

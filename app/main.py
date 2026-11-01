@@ -32,7 +32,7 @@ from fastapi import Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import aiwatch, apikeys, heat, lawwatch, river, tide, clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, serverupdate, sites, snaps, update
+from . import aiwatch, apikeys, heat, its, lawwatch, river, tide, clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, serverupdate, sites, snaps, update
 from .collectors import alerts, bangjae_rain, forecast, grid_rain, qpf, rain, shortfc
 from .config import CACHE, INTERVALS, POLL_DEFAULT
 
@@ -153,6 +153,8 @@ async def lifespan(app: FastAPI):
     # 하천 수위 · 댐 · 보 — 10분마다(HRFCO_KEY 가 있는 서버에서만, app/river.py). 켠 지 20초 뒤 첫 수집
     sched.add_job(river.run, "interval", minutes=10, id="river", max_instances=1, coalesce=True,
                   next_run_time=datetime.now() + timedelta(seconds=20))
+    # 지하차도 침수 위험 경보 — 경남 호우특보 중에만 부른다(ITS_KEY, 월 1000건 — app/its.py)
+    sched.add_job(its.run, "interval", minutes=15, id="its", max_instances=1, coalesce=True)
     # 하루 한 번 묵은 자료 치우기 — 안 하면 DB 와 이미지 캐시가 계속 자란다
     sched.add_job(_nightly, "cron", hour=4, minute=20, id="maint",
                   max_instances=1, coalesce=True)
@@ -496,7 +498,7 @@ async def api_river():
     """지도 레이어 '하천·댐' — 경남 수위 · 댐 · 보 최신값(10분)과 홍수예보 발령. 키가 없으면 on=false."""
     if river.status()["on"] and not config.DEMO and not river._LIVE["at"]:
         await river.run()                                     # 첫 요청이 스케줄러보다 먼저 오면 그 자리에서 한 번 받는다
-    return river.status()
+    return river.status() | {"road": its.status()}
 
 
 @app.get("/api/keys")
