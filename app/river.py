@@ -26,6 +26,7 @@ INFO_FILE = config.STATE / "cache" / "river_info.json"
 STAGES = ("정상", "관심", "주의보", "경보", "심각")        # 수위 단계 — 홍수통제소 제원의 이름 그대로
 HIST_KEEP = 40                                             # 지점당 10분 값 40개(약 6시간)
 STALE_MIN = 90                                             # 마지막 값이 이보다 오래되면 '지연'
+FLD_KEEP_H = 96                                            # 해제를 못 받아도 이만큼 지나면 지운다 — 2025-07 호우 때 발령 102건 중 가장 긴 게 57시간
 
 _LIVE: dict = {"at": None, "err": None, "rows": [], "fld": [], "nfld": 0}
 _HIST: dict[str, list[tuple[str, float]]] = {}             # 코드 → [(ymdhm, 수위·방류)] 오래된 것부터
@@ -194,6 +195,13 @@ async def refresh() -> dict:
                 except (httpx.HTTPError, ValueError):
                     pass
     rows = [_row(s, live.get(s["id"])) for s in sts]
+    old = db.get_setting("river_fld", {}) or {}
+    now_fld = fld_state(old, fld, {s["id"] for s in sts if s["kind"] == "wl"}, datetime.now())
+    if now_fld != old:
+        db.put_setting("river_fld", now_fld)
+    for o in rows:
+        if o["id"] in now_fld:
+            o["fc"] = now_fld[o["id"]]
     ids = {s["id"] for s in sts}
     names = {s["name"] for s in sts}
     mine = [{"kind": f.get("KIND") or f.get("kind"), "obs": f.get("OBSNM") or f.get("obsnm"), "river": f.get("RVRNM") or f.get("rvrnm"),
@@ -206,6 +214,29 @@ async def refresh() -> dict:
 
 def _low(d: dict) -> dict:
     return {k.lower(): v for k, v in d.items()}
+
+
+def fld_stage(kind: str) -> int | None:
+    """KIND(홍수주의보 · 홍수경보 + 발령 · 변경발령 · 해제) → 수위 단계 번호. 해제나 모르는 값은 None."""
+    if "해제" in kind:
+        return None
+    return 3 if "경보" in kind else 2 if "주의보" in kind else None
+
+
+def fld_state(state: dict, fld: list[dict], ids: set[str], now: datetime) -> dict:
+    """지점별 지금 걸린 홍수예보. 목록은 최근 24시간뿐인데 발령은 더 오래 가므로(최장 57시간 확인) 해제가 올 때까지 들고 있는다."""
+    st = dict(state)
+    for f in sorted(map(_low, fld), key=lambda x: str(x.get("ancdt") or "")):
+        c, kind, at = str(f.get("sttnm")), str(f.get("kind") or ""), str(f.get("ancdt") or "")
+        if c not in ids or at < st.get(c, {}).get("at", ""):
+            continue
+        lv = fld_stage(kind)
+        if lv is not None:
+            st[c] = {"lv": lv, "kind": kind, "at": at, "eta": f.get("fctdt"), "area": f.get("wrnaranm")}
+        elif "해제" in kind:
+            st.pop(c, None)
+    cut = (now - timedelta(hours=FLD_KEEP_H)).strftime("%Y%m%d%H%M")
+    return {c: v for c, v in st.items() if v["at"] >= cut}
 
 
 def _near(s: dict, wl: float | None) -> bool:

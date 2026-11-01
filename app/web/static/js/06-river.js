@@ -14,6 +14,8 @@ async function loadRiver() {
 }
 const rvTop = s => (s.thr || []).filter(Boolean).pop() || null;         // 가장 높은 기준 수위(눈금 막대의 꼭대기)
 const rvHm = t => (t ? `${t.slice(8, 10)}:${t.slice(10, 12)}` : "—");
+const rvDt = t => (t ? `${+t.slice(6, 8)}일 ${rvHm(t)}` : "—");           // 홍수예보는 하루를 넘겨 이어진다
+const rvHi = s => Math.max(s.stage ?? -1, s.fc?.lv ?? -1);               // 지금 수위 · 홍수예보 중 높은 단계
 const rvMax = () => Math.max(-1, ...(RIV?.rows || []).filter(s => s.kind === "wl").map(s => s.stage ?? -1));
 function drawRiver() {
   drawTide();
@@ -24,7 +26,7 @@ function drawRiver() {
   const r = RIV_R = Math.max(5.5, Math.min(11, V.u * 1.2));
   const fs = Math.max(10, Math.min(15, V.u * 2.5));
   const marks = [], boxes = [], labs = [];
-  const rows = RIV.rows.filter(s => s.x != null).sort((a, b) => (a.stage ?? -1) - (b.stage ?? -1) || (a.kind === "wl" ? -1 : 1));
+  const rows = RIV.rows.filter(s => s.x != null).sort((a, b) => rvHi(a) - rvHi(b) || (a.kind === "wl" ? -1 : 1));
   for (const s of rows) {
     const x = V.toX(s.x), y = V.toY(s.y), st = s.stage ?? -1;
     const dim = selOn() && s.sigun && !isSel(s.sigun) ? " dim" : "";
@@ -33,12 +35,14 @@ function drawRiver() {
       const top = rvTop(s), w = r * 0.6 * (st < 0 ? 0.8 : 1), h = r * 1.15 * (st < 0 ? 0.8 : 1);
       const f = top && s.v > 0 ? Math.max(0.08, Math.min(1, s.v / top)) : 0;
       const col = st >= 0 ? RV_C[st] : "var(--ink-3)";
+      const a = h + r * 0.45;                                    // 네모 = 홍수예보 발령 단계, 막대 = 지금 수위 — '지금은 정상, 예보는 주의보'를 한 점에서 가른다
+      if (s.fc) marks.push(`<rect class="rvf${dim}" x="${(x - a).toFixed(1)}" y="${(y - a).toFixed(1)}" width="${(2 * a).toFixed(1)}" height="${(2 * a).toFixed(1)}" rx="2" style="stroke:${RV_C[s.fc.lv]}"/>`);
       if (st >= 2) marks.push(`<circle class="rvp" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(r * 0.95).toFixed(1)}" style="stroke:${col}"/>`);
       marks.push(`<g class="rv${st < 0 ? " nt" : ""}${dim}"><rect class="bx" x="${(x - w).toFixed(1)}" y="${(y - h).toFixed(1)}" width="${(2 * w).toFixed(1)}" height="${(2 * h).toFixed(1)}" rx="${(w * 0.45).toFixed(1)}"/>`
         + (f ? `<rect class="fl" x="${(x - w).toFixed(1)}" y="${(y + h - 2 * h * f).toFixed(1)}" width="${(2 * w).toFixed(1)}" height="${(2 * h * f).toFixed(1)}" rx="${(w * 0.45).toFixed(1)}" style="fill:${col}"/>` : "")
         + `</g>`);
-      rr = h;
-      if (st >= 1) labs.push({ s, x, y, pr: 10 + st, t: `${s.name.replace(/^[가-힣]+[군시]\(/, "").replace(")", "")} ${s.v.toFixed(2)}m` });
+      rr = s.fc ? a : h;
+      if (s.v != null && rvHi(s) >= 1) labs.push({ s, x, y, pr: 10 + rvHi(s), t: `${s.name.replace(/^[가-힣]+[군시]\(/, "").replace(")", "")} ${s.v.toFixed(2)}m` });
     } else if (s.kind === "dam") {
       const w = r * 1.25, h = r * 0.95, hot = s.rise, col = hot ? "var(--rv-2)" : "var(--rv-dam)";
       if (hot) marks.push(`<circle class="rvp" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(r * 1.1).toFixed(1)}" style="stroke:var(--rv-2)"/>`);
@@ -110,8 +114,9 @@ function riverTip(s) {
     const st = s.stage ?? -1, nm = st < 0 ? "기준 수위 없음" : RV_N[st];
     const thr = (s.thr || []).some(Boolean);
     const nx = st >= 0 && s.next ? ` · ${RV_N[Math.min(4, st + 1)]}수위까지 ${s.gap} m` : "";
+    const fc = s.fc ? `<div class="d"><i class="rvk" style="border-color:${RV_C[s.fc.lv]}"></i><b>${escH(s.fc.kind)}</b> · 발표 ${rvDt(s.fc.at)} · 수위 도달 예상 ${rvDt(s.fc.eta)}${s.fc.area && s.fc.area !== "-" ? ` · ${escH(s.fc.area)}` : ""}</div>` : "";
     return `<b>${escH(s.name)} ${s.v == null ? "값 없음" : s.v.toFixed(2) + " m"}</b> · ${nm}${nx}`
-      + rvBar(s)
+      + rvBar(s) + fc
       + `<div class="d">${thr ? "" : "홍수통제소 제원에 기준 수위가 없는 지점 · "}${s.q != null ? `유량 ${s.q} ㎥/s` : ""}${rvTrend(s.d1h, " m", 0.02)}</div>`
       + `<div class="d">${s.sigun ? s.sigun + " · " : ""}${escH(s.agency)} · ${at}</div>${rvSpark(s.hist, st >= 0 ? RV_C[st] : "var(--ink-3)")}`;
   }
@@ -147,14 +152,18 @@ function renderRiverLegend() {
       : `<div class="nt">관심 수위 이상 없음 — 가장 가까운 곳</div>` + near.map(s => rowW(s, RV_C[0])).join("");
     const rel = RIV.rows.filter(s => s.kind !== "wl" && s.out != null).sort((a, b) => b.out - a.out).slice(0, 6);
     const relHtml = rel.map(s => `<div class="rr">${dot(s.rise ? "var(--rv-2)" : "var(--rv-dam)")}<b>${escH(s.name)}</b><span>${s.out} ㎥/s</span><em>${s.rise ? "▲ 늘어남 · " : ""}유입 ${s.inf ?? "—"}${s.up ? " · 위쪽" : ""}</em></div>`).join("");
-    const fl = RIV.fld?.length ? RIV.fld.slice(0, 4).map(f => `<div class="rr">${dot("var(--rv-3)")}<b>${escH(f.obs || "")}</b><span>${escH(f.kind || "")}</span><em>${escH(f.river || "")} ${escH(f.at || "")}</em></div>`).join("")
+    const act = wl.filter(s => s.fc).sort((a, b) => b.fc.lv - a.fc.lv);
+    const oth = (RIV.fld || []).filter(f => !act.some(s => s.name === f.obs));   // 경남 밖 낙동강 · 지나간 해제
+    const fl = act.length + oth.length ? act.map(s => `<div class="rr">${dot(RV_C[s.fc.lv])}<b>${escH(s.name)}</b><span>${escH(s.fc.kind)}</span><em>발표 ${rvDt(s.fc.at)}</em></div>`)
+      .concat(oth.map(f => `<div class="rr">${dot("var(--ink-3)")}<b>${escH(f.obs || "")}</b><span>${escH(f.kind || "")}</span><em>${escH(f.river || "")} ${rvDt(f.at)}</em></div>`)).slice(0, 6).join("")
       : `<div class="nt">발령 없음(최근 24시간${RIV.nfld ? ` · 전국 ${RIV.nfld}건 중 경남 영향 없음` : ""})</div>`;
-    body = `<div class="keys2">${chips}</div>${nthr ? `<div class="nt">기준 수위 없는 지점 ${nthr}곳은 값만(흐린 막대)</div>` : ""}`
+    body = `<div class="keys2">${chips}</div><div class="nt">막대 색 = 지금 수위 · <i class="rvk"></i>네모 = 홍수예보 발령</div>${nthr ? `<div class="nt">기준 수위 없는 지점 ${nthr}곳은 값만(흐린 막대)</div>` : ""}`
       + `<div class="sec">수위 높은 곳</div>${wlHtml}<div class="sec">댐 · 보 방류</div>${relHtml || `<div class="nt">값 없음</div>`}<div class="sec">홍수예보 발령</div>${fl}`;
   }
   TIPS.set("river-now", `한강홍수통제소(HRFCO) 자료 — 전국 4대강 홍수통제소 원시값(보정 전)이라 확정치와 다를 수 있다. 공식 판단은 홍수통제소 발표로.<br>
     <b>수위</b> 관측소 막대는 꼭대기가 제원의 가장 높은 기준 수위, 차오른 만큼이 지금 수위. 색은 단계(정상 · 관심 · 주의보 · 경보 · 심각), 주의보부터는 번쩍인다.
     기준 수위가 제원에 없는 지점은 흐리게 값만.<br>
+    <b>네모 테두리</b>는 홍수통제소가 그 지점에 낸 홍수예보(색은 주의보 · 경보) — 막대는 지금 수위, 네모는 앞으로의 예보다. 발령이 있는 지점에만, 해제될 때까지 나온다(해제를 못 받아도 발표 뒤 4일이면 지운다).<br>
     <b>댐 · 보</b>는 방류량(총방류)이 1시간 전보다 10 ㎥/s 이상 · 20% 이상 늘면 주황으로 번쩍인다. 방류가 얼마면 위험인지는 위키에 숫자가 없어 단계를 만들지 않았다 — 하류 시군은 댐 방류 협의 · 사전예고(위키 위험예보)를 따른다.<br>
     점선 둘레 = 경남으로 흘러드는 낙동강 위쪽(경북 · 대구) 댐 · 보. 낙동강권역 자료는 11분 넘게 늦게 들어온다(지점마다 마지막 시각이 다르다). 10분마다 갱신.`);
   const t = RIV?.at ? RIV.at.slice(11, 16) : "";

@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 from app import river
 
 
@@ -77,6 +79,19 @@ def test_summary_text_and_tone(monkeypatch):
     monkeypatch.setitem(river._LIVE, "rows", [_wl("a", "적포교", 3, 5.3, gap=0.7)])
     s = river.summary()
     assert s["tone"] == 3 and s["n"] == 1 and s["top"] == "적포교 경보"
+
+
+def test_fld_state_follows_each_station_until_released():
+    now = datetime(2025, 7, 19, 12, 0)
+    f = lambda c, k, at: {"STTNM": c, "KIND": k, "ANCDT": at, "FCTDT": at, "WRNARANM": "합천군"}   # noqa: E731
+    ids = {"a", "b"}
+    assert [river.fld_stage(k) for k in ("홍수주의보 발령", "홍수경보 변경발령", "홍수주의보 변경발령", "홍수경보 해제", "x")] == [2, 3, 2, None, None]
+    st = river.fld_state({}, [f("a", "홍수경보 변경발령", "202507191010"), f("a", "홍수주의보 발령", "202507190950"), f("x", "홍수경보 발령", "202507190950")], ids, now)
+    assert list(st) == ["a"] and st["a"]["lv"] == 3                       # 시각순으로 나중 것 · 우리 지점만
+    assert river.fld_state(st, [], ids, now) == st                         # 목록에서 빠져도(24시간) 해제 전까지 남는다
+    assert river.fld_state(st, [f("a", "홍수경보 해제", "202507191100")], ids, now) == {}
+    assert river.fld_state(st, [f("a", "홍수주의보 해제", "202507190900")], ids, now) == st   # 지금 발령보다 오래된 해제는 무시
+    assert river.fld_state(st, [], ids, now + timedelta(hours=river.FLD_KEEP_H)) == {}         # 해제를 놓쳐도 영영 남지는 않는다
 
 
 def test_ai_river_rules_in_ladder():
