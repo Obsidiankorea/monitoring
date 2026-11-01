@@ -484,6 +484,22 @@ function renderCards() {
   cardsPlayhead();
 }
 
+/* 선 그래프 시간 자 — 색 띠(하루 넷) · 자정 · 눈금. 구간 길이에 맞춰 눈금 간격을 고른다 */
+function spTime(t0, t1) {
+  const HR = 3600e3, span = (t1 - t0) / HR, step = span <= 9 ? 2 : span <= 16 ? 3 : span <= 40 ? 6 : span <= 96 ? 12 : 24;
+  const bands = [], days = [], ticks = [];
+  const d = new Date(t0);
+  d.setMinutes(0, 0, 0);
+  for (let t = d.getTime(); t < t1; t += HR) {
+    const dt = new Date(t), h = dt.getHours(), i = Math.floor(h / 6), last = bands.at(-1);
+    if (last && last.i === i && last.b === t) last.b = Math.min(t + HR, t1);
+    else bands.push({ i, a: Math.max(t, t0), b: Math.min(t + HR, t1) });
+    if (t < t0) continue;
+    if (h === 0) days.push(t);
+    if (h % step === 0) ticks.push({ t, day: h === 0, txt: h === 0 ? `${dt.getMonth() + 1}.${dt.getDate()}` : `${h}시` });
+  }
+  return { bands, days, ticks };
+}
 /* 강수 누적 — 종합 화면 '강수 타임라인'을 한 줄짜리로 */
 function renderAcc() {
   const A = CARDS.acc, k = V.k, body = $("acc-b");
@@ -527,7 +543,7 @@ function renderAcc() {
       + (A.note ? `<div class="case-note">${A.note}</div>` : "");
     A.sp = null; return;
   }
-  const bh = body.clientHeight - 10 * k - (A.note ? 40 * k : 0) - 22 * k;     // 22 = 맨 아래 막대 범례
+  const bh = body.clientHeight - 10 * k - (A.note ? 40 * k : 0) - 22 * k - 20 * k;     // 22 = 맨 아래 막대 범례, 20 = 위 시간 눈금
   const rh = Math.max(26 * k, Math.min(44 * k, bh / Math.max(1, rows.length)));   // 카드를 꽉 채운다
   // 시군을 골랐으면 줄을 다 그리고 카드 안에서 굴린다 — 내부망(스방)이면 한 시군에 수십 곳이다
   const n = A.sel ? rows.length : Math.max(1, Math.min(rows.length, Math.floor(bh / rh)));
@@ -550,6 +566,10 @@ function renderAcc() {
     const p = pts.map(([t, v]) => `${sx(t).toFixed(1)},${sy(v).toFixed(1)}`);
     return { d: "M" + p.join("L"), a: `M${sx(pts[0][0]).toFixed(1)},${SH}L${p.join("L")}L${sx(pts.at(-1)[0]).toFixed(1)},${SH}Z` };
   };
+  // 시간 — 하루를 넷으로 나눈 색 띠(새벽 · 오전 · 오후 · 밤)가 줄마다 깔리고, 자정에 날짜 선. 위 눈금이 같은 자리를 글자로 읽어 준다
+  const tl = spTime(t0, t1);
+  const spBack = tl.bands.map(b => `<rect class="sp-b b${b.i}" x="${sx(b.a).toFixed(1)}" width="${(sx(b.b) - sx(b.a)).toFixed(1)}" y="-2" height="${(SH + 4).toFixed(1)}"/>`).join("")
+    + tl.days.map(t => `<line class="sp-day" x1="${sx(t).toFixed(1)}" x2="${sx(t).toFixed(1)}" y1="-2" y2="${(SH + 2).toFixed(1)}"/>`).join("");
   const tnow = NOWD().getTime(), xn = A.day ? (tnow > t0 && tnow < t1 ? sx(tnow) : -99) : sx(rows[0].dt.at(-1));
   // 다시 그리기 전 줄 자리 — 예상을 켜고 끄거나(합이 바뀐다) 시각이 바뀌어 순서가 달라지면 새 자리로 미끄러지게
   const before = new Map([...body.querySelectorAll(".ar[data-k]")].map(e => [e.dataset.k, e.getBoundingClientRect().top]));
@@ -603,7 +623,14 @@ function renderAcc() {
     const lv = v >= 20 ? 3 : v >= 10 ? 2 : v >= 5 ? 1 : 0;
     return `<span class="h1v l${lv}" style="--c:${c}" title="최근 1시간 ${v.toFixed(1)}㎜ — 왼쪽 막대는 시우량 색(지도 1시간 · 지금 오는 비와 같은 자), 많을수록 글자가 밝고 굵다"><small>1h</small>${v.toFixed(v >= 10 ? 0 : 1)}</span>`;
   };
-  body.innerHTML = rows.slice(0, n).map((r, i) => {
+  const pc = t => (sx(t) / SW * 100).toFixed(2);
+  const nowPc = xn / SW * 100;
+  const ruler = `<div class="arx" aria-hidden="true"><div class="tr" title="시간대 색 — 새벽 0~6시 · 오전 6~12시 · 오후 12~18시 · 밤 18~24시. 굵은 선 = 자정(날짜가 바뀌는 곳)">`
+    + tl.bands.map(b => `<i class="b${b.i}" style="left:${pc(b.a)}%;width:${(pc(b.b) - pc(b.a)).toFixed(2)}%"></i>`).join("")
+    + tl.ticks.filter(t => { const p = +pc(t.t); return p > 3 && p < 97 && (t.day || !(nowPc > 0 && Math.abs(p - nowPc) < 9)); })
+      .map(t => `<span class="${t.day ? "d" : ""}${t.day && nowPc > 0 && Math.abs(pc(t.t) - nowPc) < 18 ? " l" : ""}" style="left:${pc(t.t)}%">${t.txt}</span>`).join("")
+    + (nowPc > 0 && nowPc <= 100 ? `<b style="left:${nowPc.toFixed(2)}%" title="지금">📍</b>` : "") + `</div></div>`;
+  body.innerHTML = ruler + rows.slice(0, n).map((r, i) => {
     const tot = r.sum + r.fc, o = r.sum / bmax * 100, f = r.fc / bmax * 100;
     // 실측 중 최근 1시간 — 실측 막대 안의 끝 몫(합을 넘지 않게)
     const h1raw = Math.max(0, typeof r.h1 === "number" ? r.h1 : lastNum(r.d));
@@ -622,7 +649,7 @@ function renderAcc() {
         ${h1 >= 0.1 ? `<div class="h${r.fc ? "" : " end"}${hw >= o - 0.05 ? " all" : ""}" style="left:${(o - hw).toFixed(1)}%;width:${hw.toFixed(1)}%" title="그중 최근 1시간 ${h1.toFixed(1)}㎜"></div>` : ""}
         ${r.fc ? `<div class="f" style="left:${o.toFixed(1)}%;width:${f.toFixed(1)}%"></div>` : ""}
         <span class="v${r.dead ? " dead" : ""}" style="${vpos}"${ge}>${r.dead ? "결측" : fore ? `~${+r.sum.toFixed(r.sum >= 10 ? 0 : 1)}` : r.sum.toFixed(1)}${r.fc ? `<i>+${fcTxt(r.fc)}</i>` : ""}</span></div>
-      <svg viewBox="0 0 ${SW.toFixed(0)} ${SH.toFixed(0)}" preserveAspectRatio="none">
+      <svg viewBox="0 0 ${SW.toFixed(0)} ${SH.toFixed(0)}" preserveAspectRatio="none">${spBack}
         <path class="sp-a" d="${po.a}"/><path class="sp-l" d="${po.d}"/>
         <path class="sp-fa" d="${pf.a}"/><path class="sp-fl" d="${pf.d}"/>
         <line class="sp-now" x1="${xn}" x2="${xn}" y1="0" y2="${SH}"/>
