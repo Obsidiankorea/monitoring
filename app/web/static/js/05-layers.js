@@ -379,21 +379,26 @@ function swFcRows() {
   return Object.values(by).flatMap(l => l.sort((a, b) => b.sum - a.sum).slice(0, 2))
     .map(e => ({ sig: e.sigun, label: e.emd, tag: e.sigun, d: e.d.slice(0, 6), sum: e.sum }));
 }
-/* 지금 오는 비 — 장소 + 시우량(60분) 칩. 막대 길이 대신 테두리를 시우량 색으로 — 같은 높이에 더 많이 */
+/* 지금 오는 비 — 위 60분, 아래 15분 ×4(시간당 환산). 순위가 달라 두 묶음으로. 장소 + 값 칩을 한 줄에 2~3개,
+   막대 길이 대신 테두리를 시우량 색으로 — 같은 높이에 더 많이 */
 function renderNowSw(n) {
   const N = CARDS.now;
   if (N.cols) { renderNow(SW_T, n); return; }          // 사례 — 1시간 · 3시간 두 칸 그대로
   $("sw-bt").textContent = N.tm || "—";
   $("sw-lg").innerHTML = miniLegend(SIU, "시우량", true, "시우량 범주(㎜/h) — 칩 테두리 색. 지도 1시간 · 예측 상위와 같은 자");
-  const list = (N.r60 || []).filter(x => x.mm > 0), cols = $("sw").classList.contains("tall") ? 1 : 2;
-  const rows = Math.max(1, Math.floor((n * 30 + 24 - 22) / 27)), body = $("sw-b");
-  body.innerHTML = !list.length ? `<div class="sw-none">지난 1시간 비 없음</div>`
-    : `<div class="nwh">60분 시우량 · ${N.det ? "읍면동" : "지점"} 많은 순</div><div class="nwg" style="--cols:${cols}">`
-      + list.slice(0, rows * cols).map(x => {
-        const c = rampColor(x.mm, SIU, true) || "var(--line)", at = x.pos ? ` data-x="${x.pos.x}" data-y="${x.pos.y}"` : "";
-        return `<div class="nw${N.det ? " det" : ""}" data-s="${x.sig}"${at} style="--c:${c}" title="${x.sig} ${x.name} — 60분 ${x.mm.toFixed(1)}㎜">`
-          + `<span class="nm"><small>${N.det ? x.tag || "" : x.sig}</small>${x.name}</span><b>${x.mm.toFixed(1)}</b></div>`;
-      }).join("") + `</div>`;
+  const l60 = (N.r60 || []).filter(x => x.mm > 0), l15 = (N.r15 || []).filter(x => x.mm > 0);
+  const cols = $("sw").classList.contains("tall") ? 2 : 3, body = $("sw-b");
+  const rows = Math.max(2, Math.floor((n * 30 + 24 - 44) / 27));          // 44 = 묶음 머리 둘
+  const sec = (head, list, nr, mul, none) => `<div class="nwh">${head}</div>` + (!list.length ? `<div class="sw-none">${none}</div>`
+    : `<div class="nwg nws" style="--cols:${cols}">` + list.slice(0, nr * cols).map(x => {
+      const v = x.mm * mul, c = rampColor(v, SIU, true) || "var(--line)", at = x.pos ? ` data-x="${x.pos.x}" data-y="${x.pos.y}"` : "";
+      const tip = mul === 1 ? `60분 ${v.toFixed(1)}㎜` : `15분 ${x.mm.toFixed(1)}㎜ × 4 = 시간당 ${v.toFixed(1)}㎜`;
+      return `<div class="nw${N.det ? " det" : ""}" data-s="${x.sig}"${at} style="--c:${c}" title="${x.sig} ${x.name} — ${tip}">`
+        + `<span class="nm"><small>${N.det ? x.tag || "" : x.sig}</small>${x.name}</span><b>${v.toFixed(v >= 100 ? 0 : 1)}</b></div>`;
+    }).join("") + `</div>`);
+  body.innerHTML = !l60.length && !l15.length ? `<div class="sw-none">지난 1시간 비 없음</div>`
+    : sec(`60분 강수량 · ${N.det ? "읍면동" : "지점"} 많은 순`, l60, Math.ceil(rows / 2), 1, "지난 1시간 비 없음")
+      + sec("15분 강수량 ×4 · 시간당 환산", l15, Math.floor(rows / 2), 4, "지난 15분 비 없음");
   rowEvents(body);
 }
 const swMode = () => (SW_MODES.includes(SET.sea_w) ? SET.sea_w : "fc");   // 예전 값 alert(특보)는 예측 상위로

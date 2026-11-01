@@ -1215,6 +1215,11 @@ body.cam-edit #sw { pointer-events: none; opacity: .5; }
 #sw .nw .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: calc(13px * var(--k, 1)); }
 #sw .nw .nm small { color: var(--ink-3); margin-right: 4px; font-size: calc(11px * var(--k, 1)); }
 #sw .nw b { flex: none; font: 700 calc(13.5px * var(--k, 1)) var(--mono); }
+/* 지금 비 칩 — 좁은 창에 두 개씩 들어가도 시군 + 지점명이 잘리지 않게 */
+#sw .nws .nw { gap: 3px; padding: 0 calc(5px * var(--k, 1)); }
+#sw .nws .nw .nm { font-size: calc(12.5px * var(--k, 1)); }
+#sw .nws .nw .nm small { margin-right: 2px; }
+#sw .nws .nw b { font-size: calc(12.5px * var(--k, 1)); }
 /* 시군 평균 — 넓은 판은 경남 모양 타일 지도(6×4), 테두리 · 옅은 바탕이 지도 범례 색. 비 없는 시군은 흐리게(10-24) */
 #sw .avm { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); grid-template-rows: repeat(4, calc(var(--rh) * var(--k, 1)));
   gap: calc(5px * var(--k, 1)); }
