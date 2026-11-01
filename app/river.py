@@ -278,6 +278,23 @@ def status() -> dict:
             "nfld": _LIVE["nfld"], "high": n}
 
 
+def flood() -> list[dict]:
+    """지금 걸린 홍수예보 지점(낙동강 위쪽 제외) — 높은 단계 · 최근 발표 먼저."""
+    return sorted((s for s in _LIVE["rows"] if s.get("fc") and not s.get("up")), key=lambda s: (-s["fc"]["lv"], s["fc"]["at"]))
+
+
+def _hm(t) -> str:
+    d = "".join(c for c in str(t or "") if c.isdigit())
+    return f"{d[6:8]}일 {d[8:10]}:{d[10:12]}" if len(d) >= 12 else ""
+
+
+def fld_text(s: dict) -> str:
+    """'고성군(두문교) 홍수경보 변경발령(18일 23:50 발표 · 19일 01:00 도달 예상)'."""
+    f = s["fc"]
+    when = [x for x in (_hm(f.get("at")) and _hm(f.get("at")) + " 발표", _hm(f.get("eta")) and _hm(f.get("eta")) + " 도달 예상") if x]
+    return f"{s['name']} {f['kind']}" + (f"({' · '.join(when)})" if when else "")
+
+
 def summary() -> dict | None:
     """경남 전체 한 줄 — AI 보고 · 속보용. tone: 0 없음 · 1 관심 · 2 주의보 · 3 경보 이상. 자료가 없으면 None."""
     rows = _LIVE["rows"]
@@ -294,7 +311,10 @@ def summary() -> dict | None:
         near = min((s for s in wl if s.get("gap") is not None), key=lambda s: s["gap"], default=None)
         t += "관심 수위 이상 없음" + (f"(가장 가까운 곳 {near['name']} {near['v']:.2f}m, 관심까지 {near['gap']}m)" if near else "")
     t += " · 방류 늘어난 댐·보: " + (", ".join(f"{s['name']} {s['out']:g}㎥/s{'(위쪽)' if s['up'] else ''}" for s in rise[:4]) or "없음")
-    return {"text": t, "tone": max(s["stage"] for s in wl) if hi else 0, "n": len(hi), "cnt": cnt,
+    fl = flood()
+    if fl:
+        t += " · 홍수예보 발령: " + ", ".join(fld_text(s) for s in fl[:4]) + (f" 외 {len(fl) - 4}곳" if len(fl) > 4 else "")
+    return {"text": t, "tone": max([s["stage"] for s in hi] + [s["fc"]["lv"] for s in fl], default=0), "n": len(hi), "cnt": cnt,
             "top": f"{hi[0]['name']} {STAGES[hi[0]['stage']]}" if hi else ""}
 
 

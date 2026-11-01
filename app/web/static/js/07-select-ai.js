@@ -43,6 +43,14 @@ const AIW = { open: false, seq: 0, scope: null, mode: "all" };
 try { AIW.mode = localStorage.getItem("gn-ai-mode") || "all"; } catch {}
 const aiEsc = t => String(t ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
 const aiTxt = t => aiEsc(t).replace(/\[\[([^\]]+)\]\]/g, '<span class="wk">$1</span>');
+/* LLM 답의 마크다운 — 소제목 · 굵게 · 목록(들여쓰기)만. 글자는 aiTxt 가 먼저 막으므로 HTML 이 새지 않는다 */
+const aiInl = t => aiTxt(t).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`([^`]+)`/g, "$1");
+const aiMd = t => String(t ?? "").split(/\r?\n/).map(l => {
+  const h = /^#{1,6}\s+(.*)$/.exec(l) || /^\*\*([^*]+)\*\*:?\s*$/.exec(l), li = /^(\s*)([-*•]|\d+[.)])\s+(.*)$/.exec(l);
+  if (h) return `<h6>${aiInl(h[1])}</h6>`;
+  if (li) return `<div class="li${li[1].length ? " sub" : ""}"><i>${/\d/.test(li[2]) ? aiEsc(li[2]) : "·"}</i><span>${aiInl(li[3])}</span></div>`;
+  return !l.trim() || /^\s*(-{3,}|\*{3,})\s*$/.test(l) ? "" : `<p>${aiInl(l)}</p>`;
+}).join("");
 function aiSections(secs) {
   const last = secs.map(x => !!x.texts).lastIndexOf(true);    // 체크 칸들 맨 뒤에 적용 단추
   return secs.map((x, n) => {
@@ -90,7 +98,7 @@ async function aiAsk(body, label) {
     if (!res.ok) throw new Error(a.detail || res.status);
   } catch (e) { a = { sections: [{ h: "답", items: ["못 받았다 — " + e.message] }] }; }
   if (my !== AIW.seq) return;
-  blk.querySelector(".ans").innerHTML = (a.text ? `<pre>${aiTxt(a.text)}</pre>` : aiSections(a.sections || []))
+  blk.querySelector(".ans").innerHTML = (a.text ? `<div class="mdt">${aiMd(a.text)}</div>` : aiSections(a.sections || []))
     + `<div class="src">${aiEsc(a.source || "")}</div>`;
 }
 const aiChanged = () => [...$("aiw-bd").querySelectorAll("input[data-t]")].filter(b => b.checked !== b.defaultChecked);

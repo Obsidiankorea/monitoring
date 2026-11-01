@@ -196,7 +196,21 @@ def _sites_by(sigun: str) -> dict:
     return out
 
 
-def _tasks(stage, relay_where: str, s_list: list[dict], night: bool, cbs: list[str], sg_for_relay: str) -> list[str]:
+def _river_tasks(sigun: str | None = None) -> list[str]:
+    """홍수특보 · 댐 방류 증가 — 위키 절차로 확인할 일만. 방류가 하류 수위를 얼마나 올리는지는 위키에 없어 말하지 않는다."""
+    fld = ai.flood_of(sigun) if sigun else river.flood()
+    dams = [d["name"] for d in river.status()["rows"] if d["kind"] != "wl" and d.get("rise") and (not sigun or d.get("sigun") == sigun or d.get("up"))]
+    t = []
+    if fld:
+        t.append("홍수특보 발령 — " + _few([f"{s['name']} {ai.RV_NAME[s['fc']['lv']]}" for s in fld], 6) +
+                 ": 홍수통제소 재난문자 송출 여부 확인, 시군 하천변 통제 · 대피 기준 대조 ([[하천 홍수예보와 홍수특보]] · [[재난문자 표준문안]])")
+    if dams:
+        t.append("댐 방류 증가 — " + _few(dams, 4) +
+                 ": 관리기관에 방류 계획 · 사전예고 여부 확인, 하류 침수 예찰 ([[비상단계별 협업부서 임무]] · [[행동요령 카드 목록]])")
+    return t
+
+
+def _tasks(stage, relay_where: str, s_list: list[dict], night: bool, cbs: list[str], sg_for_relay: str, sigun: str | None = None) -> list[str]:
     t = []
     if stage and stage["stage"] != ai.DO_ORDER[0]:           # 기준에 닿으면 그 단계가 된 것으로 본다 — 회의를 다시 시키지 않는다
         t.append(f"도 {stage['stage']} 근무 중으로 본다 — 이 단계 근무 · 임무 유지, 실제와 다르면 왼쪽 특보 아이콘에서 단계 수정 ([[위기경보와 비상단계]])")
@@ -223,6 +237,7 @@ def _tasks(stage, relay_where: str, s_list: list[dict], night: bool, cbs: list[s
     if cbs:
         t.append("긴급재난문자 기준(1시간 50 + 3시간 90 · 또는 1시간 72㎜) 해당 가능 — " + _few(cbs, 8) +
                  ": 기상청 송출 여부 확인, 시군 문자 문안 ([[재난문자 송출기준]] · [[재난문자 표준문안]])")
+    t += _river_tasks(sigun)
     if night:
         t.append("야간(취약시간대) — 현장 확인은 2인 1조, 단독 출입 · 붕괴 위험지역 접근 금지 ([[시군 상황관리반 행동매뉴얼]])")
     if not t:
@@ -245,6 +260,12 @@ def _gaps(s_list: list[dict]) -> list[str]:
         out.append("산사태 — 산림청 산사태 위험 예보 · 토양함수 자료가 없다(연결 전): 산림청 화면 · 현장으로 확인")
     if "하천" in fams:
         out.append("하천 — 제방 만수위 90% · 교량 수위 90% · 댐 방류 협의 자료가 없다: 현장 · 댐 관리기관에 확인")
+        pr = [x["name"] for s in s_list for x in s.get("flood") or [] if x["fc"]["lv"] == 2]
+        if pr:
+            out.append("하천 — 홍수주의보 발령 " + _few(pr, 4) + ": 지금은 통제로 봤다. 위키 표 긴급대피 칸에도 적혀 있어 시군 기준 확인 ([[통제·대피 기준]] · [[시군별 통제·대피계획]])")
+        dm = [d["name"] for s in s_list for d in (s.get("river") or {}).get("dams") or [] if d["rise"]]
+        if dm:
+            out.append("댐 방류 — " + _few(dm, 4) + " 증가는 실황이다. 긴급대피 조건 '호우 중 댐 방류 예보' 는 판단 못 함 · 하류 수위 영향 모름: 관리기관 확인")
     if "지하공간" in fams:
         out.append("지하공간 — 침수심 5㎝ · 현장 CCTV 자료가 없다: 담당자 현장 확인")
     return out
@@ -318,6 +339,8 @@ def report(base: str, sigun: str | None = None, mode: str = "all") -> dict:
         hits = [f"{r['emd']} {fam} {c['stage']}" for r in s["emd"] for fam, cs in r["ladders"].items() for c in cs if c["st"] == "met" and c["stage"] != "통제"]
         if hits:
             imp.append(f"{s['sigun']}: 대피 기준 해당 — " + _few(hits, 5))
+    if river.flood():
+        imp.append("홍수예보 발령: " + _few([river.fld_text(s) for s in river.flood()], 6))
     if not imp:
         imp.append("기준에 닿은 곳 없음")
     tasks = _tasks(o["stage"], _few([r["sigun"] for r in relay], 8), sits, o["night"], cbs, "해당 시군 ")
@@ -354,6 +377,9 @@ def _flash_sigun(s: dict, full: str) -> dict:
     if rv and rv["stage"] >= 1:
         txt += f" · 하천 {rv['name']} {ai.RV_NAME[rv['stage']]} 수위"
         tone = max(tone, 3 if rv["stage"] >= 3 else rv["stage"])
+    if s.get("flood"):
+        txt += " · 홍수예보 " + ", ".join(f"{x['name']} {ai.RV_NAME[x['fc']['lv']]}" for x in s["flood"][:2])
+        tone = max(tone, s["flood"][0]["fc"]["lv"])
     rank = {"긴급대피": 3, "사전대피": 2, "통제": 1}
     best = max(((rank[c["stage"]], c["st"] == "met", r["emd"], fam, c) for r in s["emd"] for fam, cs2 in r["ladders"].items()
                 for c in cs2 if c["st"] in ("met", "near") and c.get("gap")), key=lambda x: x[:2], default=None)
@@ -384,6 +410,9 @@ def _flash_all(o: dict, sits: list[dict], own: dict) -> dict:
     if rs and rs["n"]:
         parts.append(f"하천 {rs['top']}" + (f" 외 {rs['n'] - 1}곳" if rs["n"] > 1 else ""))
         tone = max(tone, 3 if rs["tone"] >= 3 else rs["tone"])
+    if river.flood():
+        parts.append("홍수예보 " + _few([f"{x['name']} {ai.RV_NAME[x['fc']['lv']]}" for x in river.flood()], 2))
+        tone = max(tone, river.flood()[0]["fc"]["lv"])
     if len(parts) == 1:
         parts.append("경남 전체 평시 — 호우특보 · 우려지역 기준 근접 없음")
     return {"tone": tone, "text": " · ".join(parts)}
@@ -402,7 +431,7 @@ def _report_sigun(base: str, sigun: str) -> dict:
     if s.get("tide"):
         sit.append(s["tide"])
     sit.append("우려지역(위키): " + " · ".join(f"{FAM_SHORT[k]} {v}" for k, v in sorted(s["risk_total"].items(), key=lambda x: -x[1])))
-    sit.append(ai.river_text(s.get("river")))
+    sit.append(ai.river_text(s.get("river"), s.get("flood")))
     relay = [r for r in s["emd"] if r["relay"]]
     imp = []
     if relay:
@@ -419,10 +448,12 @@ def _report_sigun(base: str, sigun: str) -> dict:
     rv = s.get("river")
     if rv and rv["stage"] >= 2:
         imp.append(f"하천 수위: {rv['name']} {ai.RV_NAME[rv['stage']]} 수위 이상({rv['wl']:.2f}m) — 하천변 통제 · 대피 판단 확인(홍수통제소 홍수정보)")
+    if s.get("flood"):
+        imp.append("홍수예보 발령: " + _few([river.fld_text(x) for x in s["flood"]], 6))
     if not imp:
         imp.append("기준에 닿은 곳 없음")
     full = ai.SIGUN_FULL.get(sigun, sigun)
-    tasks = _tasks(s["stage"], _few([r["emd"] for r in relay], 6), [s], s["night"], cbs, f"{full} ")
+    tasks = _tasks(s["stage"], _few([r["emd"] for r in relay], 6), [s], s["night"], cbs, f"{full} ", sigun)
     look = [_emd_line(s, r, sb) for r in [x for x in s["emd"] if x["risk"]][:4]]
     nxt = [f"{_next(s['tm'])} 실황 · 초단기 새 발표"]
     near = [f"{r['emd']} {fam} {c['stage']}({c['rule']}){_gt(c)}" for r in s["emd"] for fam, cs in r["ladders"].items() for c in cs if c["st"] == "near"]
@@ -523,7 +554,9 @@ def answer(base: str, qid: str, sigun: str | None = None) -> dict:
 
 
 SYSTEM_HEAD = ("너는 경상남도 재난안전상황실의 풍수해 상황판단 보조다. 아래 [지시문]과 [지금 상황]만 근거로 짧게 답한다. "
-               "위키에 없는 것은 '모름'이라 하고, 대피 결정은 권한자 몫으로 남긴다. 연락처 · 실명은 쓰지 않는다.")
+               "위키에 없는 것은 '모름'이라 하고, 대피 결정은 권한자 몫으로 남긴다. 연락처 · 실명은 쓰지 않는다. "
+               "답은 개조식 — 소제목 아래 '- ' 항목만 쓰고 문단은 쓰지 않는다. 한 항목에 한 사실, "
+               "끝은 '~함 · ~임 · ~필요' 나 명사로 맺고 '~습니다' 는 쓰지 않는다.")
 
 
 def ask_free(base: str, text: str, sigun: str | None = None) -> dict:
@@ -878,13 +911,14 @@ def _m_evac(base, sigun):
 def _m_control(base, sigun):
     o, sits = _scope(base, sigun)
     rows = o["rows"] if not sigun else [r for r in o["rows"] if r["sigun"] == sigun]
-    if _calm(o, rows):
+    fld = ai.flood_of(sigun) if sigun else river.flood()
+    if _calm(o, rows, bool(fld)):
         return _quiet(o, sigun, rows, "통제(지하차도 · 하천)", [
             "지하차도 · 지하공간 — 호우특보가 나면 통제 기준에 해당(침수심 5㎝ 이상이면 통제)",
             "지하공간 15분 강우 14㎜ 이상이면 눈여겨보고, 20㎜ 사전대피 · 30㎜(+ 시간당 55㎜) 긴급대피 기준 ([[통제·대피 기준]])",
             "하천 — 시간당 30㎜ 이상이 3시간 지속된다는 예보 · 홍수주의보면 통제"],
             ["통제·대피 기준", "인명피해 우려지역"])
-    under, river = [], []
+    under, banks = [], []
     for r in rows:
         sb = _sites_by(r["sigun"])
         on = "호우특보 발령 — 통제 기준 해당" if any(a.startswith("호우") for a in r["alerts"]) else "특보 없음"
@@ -893,8 +927,8 @@ def _m_control(base, sigun):
                 fam = ai.FAMILY_OF.get(x["유형"])
                 if fam == "지하공간" and (r["alerts"] or sigun):
                     under.append(f"{r['sigun']} {e} — {x['유형']} {_site_name(x)}({x['리']}) · {on}")
-                elif fam == "하천" and (r["alerts"] or r["relay"] or sigun):
-                    river.append(f"{r['sigun']} {e} — {x['유형']} {_site_name(x)}({x['리']})")
+                elif fam == "하천" and (r["alerts"] or r["relay"] or sigun or ai.flood_of(r["sigun"])):
+                    banks.append(f"{r['sigun']} {e} — {x['유형']} {_site_name(x)}({x['리']})")
     hot15 = []
     for s_ in sits:
         for e in s_["emd"]:
@@ -904,10 +938,11 @@ def _m_control(base, sigun):
     rv = [f"{a} {b['emd']} 하천 {c['stage']}: {c['rule']} ({STL[c['st']]})" for a, b, f, c in rv if f == "하천"]
     sec = [{"h": "지하차도 · 지하공간", "items": under[:20] or ["특보 시군에 지하공간 우려지역 없음"]},
            {"h": "지하공간 15분 강우 높은 곳", "items": hot15[:10] or ["15분 14㎜ 넘은 지하공간 읍면동 없음"]},
-           {"h": "하천변 산책로 · 둔치주차장 · 세천 · 소교량", "items": river[:20] or ["대상 없음"]},
+           *([{"h": "홍수특보 발령", "items": [river.fld_text(s) for s in fld]}] if fld else []),
+           {"h": "하천변 산책로 · 둔치주차장 · 세천 · 소교량", "items": banks[:20] or ["대상 없음"]},
            {"h": "하천 기준 대조", "items": rv[:10] or ["하천 통제 · 대피 기준에 닿은 곳 없음(30㎜/h 3시간 지속 예보 · 누적 200㎜ + 30㎜/h)"]},
            {"h": "기준 · 유의", "items": ["지하차도: 호우특보 발령 · 침수심 5㎝ 이상이면 통제. 4인 담당자(공무원 2 · 민간 1 · 경찰 1) — [[통제·대피 기준]]",
-                                         "하천: 30㎜/h 이상 3시간 지속 예보 · 홍수주의보면 통제", "하천 수위 · 침수심 · CCTV 는 대시보드에 없다 — 시군 · 홍수통제소 확인"]},
+                                         "하천: 30㎜/h 이상 3시간 지속 예보 · 홍수주의보면 통제", "침수심 · CCTV · 제방 · 교량 수위는 대시보드에 없다 — 시군 · 현장 확인"]},
            *([j] if (j := _judicial([18, 4, 6, 11], ("대피", "시설"), "지하차도 · 하천 · 도로 통제에서")) else []),
            {"h": "참고 — 위키 · 책자", "items": _refs(["통제·대피 기준", "인명피해 우려지역", "도로 침수 낙석 사면붕괴 확인사항", "판례 업무별 적용"])}]
     return {**_hdr(o, sigun, "통제(지하차도 · 하천)"), "sections": sec}
@@ -917,7 +952,8 @@ def _m_msg(base, sigun):
     o, sits = _scope(base, sigun)
     rows = o["rows"] if not sigun else [r for r in o["rows"] if r["sigun"] == sigun]
     cbs = [f"{r['sigun']} — 시간당 {r['r1']:g}㎜ · 3시간 {r['r3']:g}㎜" for r in rows if r["cbs"]]
-    if _calm(o, rows, bool(_hits(sits, ("긴급대피", "사전대피"), ("met", "near")))):
+    fld = ai.flood_of(sigun) if sigun else river.flood()
+    if _calm(o, rows, bool(fld or _hits(sits, ("긴급대피", "사전대피"), ("met", "near")))):
         return _quiet(o, sigun, rows, "재난문자", [
             "긴급재난문자 기준 — 시간당 50㎜ + 3시간 90㎜, 또는 시간당 72㎜ (기상청 송출)",
             "호우특보 · 대피 기준 해당 · 상황전파 기준에 닿으면 상황에 맞는 표준문안(90자)을 이 화면이 골라 보여 준다"],
@@ -925,7 +961,7 @@ def _m_msg(base, sigun):
     tbl = {}
     for a, b in _rows("재난문자 표준문안"):
         tbl.setdefault(a.replace("**", "").strip(), b)
-    want = []
+    want = ["홍수주의보"] if any(s["fc"]["lv"] == 2 for s in fld) else []   # 위키 문안에 홍수경보는 없다
     if any(r["alerts"] for r in rows):
         want += [g for g in ("호우경보", "호우주의보") if any(g in r["alerts"] for r in rows)][:1]
     if _hits(sits, ("긴급대피",), ("met",)):
@@ -938,6 +974,7 @@ def _m_msg(base, sigun):
         want += ["침수1", "지하1"]
     want = list(dict.fromkeys(want)) or ["사전대비1"]
     sec = [{"h": "긴급재난문자 기준(1시간 50 + 3시간 90 · 또는 1시간 72㎜) — 기상청 송출", "items": cbs or ["해당 없음"]},
+           *([{"h": "홍수특보 — 홍수통제소장 송출, 시군은 송출 여부 확인", "items": [river.fld_text(s) for s in fld]}] if fld else []),
            {"h": "상황에 맞는 표준문안 (90자 · ○○ 채우기)", "items": [f"{k}: {tbl[k]}" for k in want if k in tbl] or ["위키 문안을 못 읽었다"]},
            {"h": "송출 · 유의", "items": ["대피 정보는 긴급재난문자 + 민방위 경보(사이렌) + 마을방송 + 현장 전파를 동시에 — [[통제·대피 기준]]",
                                          "대피 지역 주변 주민에게도 알려 유입을 막는다 — [[대피명령 길라잡이]]"]},

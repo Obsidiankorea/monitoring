@@ -11,6 +11,28 @@ def test_dms_and_sigun():
     assert river._sigun("", "창녕·함안보") == "창녕" and river._sigun("경상북도 안동시", "안동댐") is None
 
 
+ROW = {"rain": {"1h": 0, "24h": 0, "48h": 0}, "m15": 0, "fc_peak": 0, "fc_run30": 0}
+
+
+def _fc(name, lv, area="", sigun="진주", up=False):
+    return {"kind": "wl", "name": name, "sigun": sigun, "up": up, "fc": {"lv": lv, "kind": "홍수주의보 발령" if lv == 2 else "홍수경보 발령", "at": "202610190010", "eta": "202610190150", "area": area}}
+
+
+def test_flood_orders_by_stage_and_skips_upstream(monkeypatch):
+    monkeypatch.setitem(river._LIVE, "rows", [_fc("옥산교", 2), _fc("두문교", 3), _fc("위쪽", 3, up=True), {"kind": "wl", "name": "없음", "up": False}])
+    assert [s["name"] for s in river.flood()] == ["두문교", "옥산교"]
+    assert river.fld_text(river.flood()[0]) == "두문교 홍수경보 발령(19일 00:10 발표 · 19일 01:50 도달 예상)"
+
+
+def test_flood_reaches_sigun_by_area_and_ladder(monkeypatch):
+    from app import ai
+    monkeypatch.setitem(river._LIVE, "rows", [_fc("옥산교", 2, "고성군,진주시")])
+    assert ai.flood_of("고성") and ai.flood_of("진주") and not ai.flood_of("창원")
+    rule = lambda rv, fld, s: next(c for c in ai.ladders(ROW, False, [], rv, fld)["하천"] if c["rule"].startswith(s))["st"]   # noqa: E731
+    assert rule(None, ai.flood_of("진주"), "홍수주의보 발령") == "met" and rule(None, ai.flood_of("진주"), "홍수경보 발령") == "unknown"
+    assert rule({"stage": 0, "name": "x", "wl": 1.0, "thr": [2, 3, 4, 5]}, [], "홍수주의보 발령") == "no"
+
+
 def test_stage_walks_the_four_levels_and_names_the_next():
     thr = [3.0, 4.0, 5.0, 6.0]
     assert river.stage(2.0, thr) == (0, 3.0)
