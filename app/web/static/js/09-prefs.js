@@ -359,7 +359,7 @@ async function updAct(a) {
 }
 /* ── API 절약 모드(설정) — 기상청 호출 간격 ── */
 let SAVER = null;
-const SV_NAME = { alerts: "특보", rain: "강수", minute: "매분", forecast: "예보", qpf: "예측", bangjae: "스방", short: "단기", grid: "격자", odam: "실황" };
+const SV_NAME = { alerts: "특보", rain: "강수", minute: "매분", forecast: "예보", qpf: "예측", bangjae: "스방", short: "단기", grid: "격자", odam: "실황", tide: "조위" };
 function saverPaint(msg) {
   const st = $("pf-sv-st");
   if (!st || !SAVER) return;

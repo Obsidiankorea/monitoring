@@ -861,6 +861,39 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 .rvb .b i { min-width: 0; }
 .rvb u { position: absolute; top: 0; width: 0; height: 0; margin-left: -5px; border: 5px solid transparent; border-bottom: 0; border-top: 7px solid var(--ink); }
 .rvb span { position: absolute; top: 18px; transform: translateX(-50%); font: 600 10.5px var(--mono); color: var(--ink-3); }
+/* 조위 — 해안 표식 · 클릭 팝업(게이지 + 물결) */
+#over .td rect { fill: color-mix(in oklab, var(--panel) 90%, transparent); stroke-width: 1.5; }
+#over .td text { fill: var(--ink); font-family: var(--sans); text-anchor: middle; dominant-baseline: central; }
+#over .td .n { fill: var(--ink-2); font-weight: 600; }
+#over .td .v { font-family: var(--mono); font-weight: 700; }
+#td-pop { position: absolute; z-index: 9; width: 340px; padding: 12px 16px 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line);
+  box-shadow: 0 16px 40px rgba(0,0,0,.4); color: var(--ink-2); font-size: 13px; }
+#td-pop .h { display: flex; align-items: center; gap: 7px; }
+#td-pop .h b { font-size: 16px; color: var(--ink); }
+#td-pop .h span { margin-left: auto; font-size: 12px; color: var(--ink-3); }
+#td-pop .h i.x { font-style: normal; cursor: pointer; color: var(--ink-3); font-size: 16px; }
+#td-pop svg { display: block; width: 100%; }
+#td-pop .tnow { text-align: center; margin-top: -4px; }
+#td-pop .tnow b { font: 700 21px var(--mono); color: var(--ink); }
+#td-pop .tnow div { font-size: 12.5px; color: var(--ink-2); }
+#td-pop .tr { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 4px 0; border-top: 1px solid var(--line-soft); font-size: 12.5px; }
+#td-pop .tr b { font: 600 12.5px var(--mono); color: var(--ink); }
+#td-pop .tr b.s { font-family: var(--sans); }
+#td-pop .tg { font: 700 10.5px var(--sans); padding: 1px 6px; border-radius: 4px; margin-left: 6px; color: #14181f; white-space: nowrap; }
+#td-pop .nt { font-size: 11.5px; color: var(--ink-3); margin-top: 4px; }
+.ly-ic .tsp { position: absolute; left: calc(100% + 6px); top: 50%; transform: translateY(-50%); font: 700 11px var(--sans); padding: 2px 7px; border-radius: 6px; white-space: nowrap;
+  color: #14181f; background: var(--rv-2); }
+.ly-ic .tsp.off { color: var(--ink-3); background: color-mix(in oklab, var(--panel) 90%, transparent); border: 1px solid var(--line); font-weight: 600; }
+#ly-tide { width: auto; min-width: 280px; max-width: 360px; padding: 10px 12px 12px; }
+#ly-tide .hd2 { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; cursor: pointer; }
+#ly-tide .hd2 b { font-size: 15px; }
+#ly-tide .hd2 span { font: 600 12px var(--mono); color: var(--ink-3); margin-left: auto; }
+#ly-tide .nt { font-size: 12px; color: var(--ink-3); line-height: 1.5; }
+#ly-tide .nt.w { color: var(--lv-fail); }
+#ly-tide .rr { display: grid; grid-template-columns: 58px 62px 1fr; gap: 6px; font-size: 12.5px; padding: 3px 0; border-top: 1px solid var(--line-soft); cursor: pointer; align-items: baseline; }
+#ly-tide .rr b { color: var(--ink); }
+#ly-tide .rr span { font-family: var(--mono); }
+#ly-tide .rr em { font-style: normal; color: var(--ink-3); font-size: 11.5px; }
 #over .rv .bx { fill: color-mix(in oklab, var(--panel) 80%, transparent); stroke: var(--ink); stroke-width: 1.4; stroke-linejoin: round; }
 #over .rv .fl { stroke: none; }
 #over .rv.nt { opacity: .55; }
@@ -907,8 +940,8 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 #over .en .pc { fill: var(--lv-warn); font-weight: 700; }
 /* 날아가는 동안 — 선은 viewBox 로 같이 커지되 굵기는 그대로, 글자·점은 잠깐 감췄다가 다 오면 새로 그린다 */
 #stage.zooming #mapwrap path { vector-effect: non-scaling-stroke; }
-#over :is(#names, #labels, #stns, #rivr, #wbadge, #ranks, #hot, #emdn) { transition: opacity .25s; }
-#stage.zooming #over :is(#names, #labels, #stns, #rivr, #wbadge, #ranks, #hot, #emdn) { opacity: 0; transition: opacity .1s; }
+#over :is(#names, #labels, #stns, #rivr, #tidr, #wbadge, #ranks, #hot, #emdn) { transition: opacity .25s; }
+#stage.zooming #over :is(#names, #labels, #stns, #rivr, #tidr, #wbadge, #ranks, #hot, #emdn) { opacity: 0; transition: opacity .1s; }
 /* 지도 위 순위 원(1~3위)은 경남 전체 지도일 때만 — 시군을 골라 확대하면 천천히 사라지고, 경남 전체로 돌아오면 다시 나온다(10-24) */
 #stage:is(.zooming, .zoomed) #over #ranks { opacity: 0; transition: opacity .6s var(--ease); }
 #over #hot circle.c { fill: var(--accent); stroke: var(--halo); stroke-width: 2; }

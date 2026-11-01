@@ -13,7 +13,7 @@ from collections import Counter
 from datetime import datetime, timedelta
 from functools import lru_cache
 
-from . import ai, river
+from . import ai, river, tide
 
 FAM_SHORT = {"산사태": "산사태", "하천": "하천", "지하공간": "지하공간", "침수·해안": "침수·해안", "야외·기타": "야외"}
 CONTACTS = ("연락처 · 담당자는 위키에 두지 않는다(실명 · 전화번호) → 원문에서: "
@@ -311,7 +311,7 @@ def report(base: str, sigun: str | None = None, mode: str = "all") -> dict:
         nxt.append("호우경보 3개 시군 이상 → 도 비상 2단계" if st == "비상 1단계" else "호우주의보 4개 시군 이상 → 도 비상 1단계")
     nxt.append(_ante_note(sits))
     return {"scope": "경남", "title": "경남 전체", "tm": o["tm"], "flash": _flash_all(o, sits, own),
-            "sections": [{"h": "상황", "items": sit}, {"h": "전망 — 특보 · 단기예보 · 초단기", "items": _outlook(rows)},
+            "sections": [{"h": "상황", "items": sit}, {"h": "전망 — 특보 · 단기예보 · 초단기", "items": _outlook(rows) + tide.summary()},
                          {"h": "중요한 점", "items": imp}, {"h": "할 일", "items": tasks},
                          {"h": "살펴볼 곳", "items": look or ["특별히 살펴볼 읍면동 없음"]}, {"h": "다음 확인", "items": nxt},
                          {"h": "참고 — 위키 · 책자", "items": _refs(BASE_REFS + ["상황판단회의"])}],
@@ -377,6 +377,8 @@ def _report_sigun(base: str, sigun: str) -> dict:
     sd = ai.sigun_stage(sigun, s["alerts"], [p["name"] for p in s["pending"]], ai.overrides().get(sigun))
     sit.append("시군 비상단계: " + (ai.stage_text(sigun, sd) if sd else "이 시군의 매뉴얼은 위키에 아직 없다 — 도 기준만 본다"))
     sit.append(ai.outlook_text(s["outlook"]))
+    if s.get("tide"):
+        sit.append(s["tide"])
     sit.append("우려지역(위키): " + " · ".join(f"{FAM_SHORT[k]} {v}" for k, v in sorted(s["risk_total"].items(), key=lambda x: -x[1])))
     sit.append(ai.river_text(s.get("river")))
     relay = [r for r in s["emd"] if r["relay"]]
@@ -728,7 +730,7 @@ def _m_meeting(base, sigun):
           + (" (산출 · 가상)" if o["computed"] else "")]
     wx += [f"{r['sigun']} — 시간당 최대 {r['r1']:g}㎜{'(' + r['emd1'] + ')' if r['r1'] else ''} · 3시간 {r['r3']:g}㎜ · 24시간 {r['r24']:g}㎜"
            + (f" · 앞으로 6시간 {r['fc_sum']:g}㎜" if r["fc_sum"] else "") for r in sorted(rows, key=lambda x: -x["r24"])[:6]]
-    wx += _outlook(rows, 4)
+    wx += _outlook(rows, 4) + tide.summary()
     if o["night"]:
         wx.append("야간 · 취약시간대(21~06시) — 일몰 전 사전대피 원칙을 이미 넘겼다")
     hit = _hits(sits, ("긴급대피", "사전대피"), ("met",))

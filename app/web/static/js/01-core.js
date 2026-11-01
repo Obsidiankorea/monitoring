@@ -359,7 +359,7 @@ function buildBase() {
   $("over").innerHTML =
     `<path class="bh" d="${sg}${cs}"/><path class="bh z" d="${zn}${sb}"/>`
     + `<path class="sg" d="${sg}"/><path class="cs" d="${cs}"/><path class="sb" d="${sb}"/><path class="zn" d="${zn}"/><g id="emd"></g>`
-    + `<path id="selmask"/><g id="walerts"></g><path id="hl"/><path id="selh"/><path id="sel"/><g id="emdn"></g><g id="stns"></g><g id="rivr"></g><g id="labels"></g><g id="names">${names}</g>`
+    + `<path id="selmask"/><g id="walerts"></g><path id="hl"/><path id="selh"/><path id="sel"/><g id="emdn"></g><g id="stns"></g><g id="rivr"></g><g id="tidr"></g><g id="labels"></g><g id="names">${names}</g>`
     + `<g id="wbadge"></g><g id="ranks"></g><g id="hot"></g>`;
   HL = null;
   drawAlerts();

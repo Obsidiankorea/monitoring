@@ -103,12 +103,19 @@ function valueAt(gx, gy) {
   return CUR.u[r * CUR.w + c];
 }
 $("stage").addEventListener("mousemove", ev => {
-  if (!V || !GEO || ev.target.closest("#tl, #play, #legend, #layers, #rail, #pop, #sw, #camgrab, #cambar, #tools, #aiw, #showdots")) { $("tip").hidden = true; $("stage").style.cursor = ""; return; }
+  if (!V || !GEO || ev.target.closest("#tl, #play, #legend, #layers, #rail, #pop, #sw, #camgrab, #cambar, #tools, #aiw, #showdots, #td-pop")) { $("tip").hidden = true; $("stage").style.cursor = ""; return; }
   const rc = $("stage").getBoundingClientRect(), x = ev.clientX - rc.left, y = ev.clientY - rc.top;
   const mx = (x - MT.tx) / MT.sc, my = (y - MT.ty) / MT.sc;
   const gx = V.fromX(mx), gy = V.fromY(my), v = valueAt(gx, gy), tip = $("tip");
-  const sp = stationAt(mx, my), rv = sp ? null : riverAt(mx, my);
-  $("stage").style.cursor = sp || rv || sigunAt(gx, gy) ? "pointer" : "";
+  const td = tideAt(mx, my), sp = td ? null : stationAt(mx, my), rv = sp || td ? null : riverAt(mx, my);
+  $("stage").style.cursor = td || sp || rv || sigunAt(gx, gy) ? "pointer" : "";
+  if (td) {                              // 조위 표식 위 — 짧은 요약만. 누르면 팝업
+    tip.innerHTML = tideTip(td);
+    tip.hidden = false;
+    tip.style.left = Math.min(V.W - tip.offsetWidth - 6, x + 16) + "px";
+    tip.style.top = Math.max(6, y - tip.offsetHeight - 12) + "px";
+    return;
+  }
   if (rv) {                              // 하천 · 댐 · 보 위 — 수위 · 기준 수위 · 1시간 변화 · 방류
     tip.innerHTML = riverTip(rv);
     tip.hidden = false;
@@ -150,9 +157,11 @@ $("stage").addEventListener("mouseleave", () => { $("tip").hidden = true; highli
 /* 시군을 누르면 고른다 — 오른쪽 패널이 그 시군 읍면동(격자)·지점(AWS)으로 바뀐다. 다시 누르거나 바다를 누르면 푼다.
    Ctrl(⌘)+클릭은 더하기·빼기 — 여러 시군 읍면동을 한 판에 견준다 */
 $("stage").addEventListener("click", ev => {
-  if (!V || !GEO || ev.target.closest("#tl, #play, #legend, #rail, #layers, #tip, #sw, #camgrab, #cambar, #tools, #aiw, #showdots")) return;
+  if (!V || !GEO || ev.target.closest("#tl, #play, #legend, #rail, #layers, #tip, #sw, #camgrab, #cambar, #tools, #aiw, #showdots, #td-pop")) return;
   const rc = $("stage").getBoundingClientRect();
   const mx = (ev.clientX - rc.left - MT.tx) / MT.sc, my = (ev.clientY - rc.top - MT.ty) / MT.sc;
+  const td = tideAt(mx, my);
+  if (td) { tidePop(td, ev.clientX - rc.left, ev.clientY - rc.top); return; }
   const sg = sigunAt(V.fromX(mx), V.fromY(my));
   pickSig(sg, ev.ctrlKey || ev.metaKey);
 });
@@ -610,6 +619,7 @@ document.addEventListener("keydown", ev => {
     if (!$("lg-pop").hidden) { lgPop(null); return; }
     if (!$("sw-ctx").hidden) { $("sw-ctx").classList.remove("open"); $("sw-ctx").hidden = true; return; }
     if (!$("stn-pop").hidden) { stnPop(null); return; }
+    if ($("td-pop") && !$("td-pop").hidden) { tidePop(null); return; }
     if (!$("showdlg").hidden) { closeShowDlg(); return; }
     if (AIW.open) { aiToggle(false); return; }
     if (!$("prefs").hidden) closePrefs(); else if (!$("help").hidden) closeHelp(); else if (selOn()) selectSig(null); else if (SHOW.on) stopShow();
@@ -629,6 +639,7 @@ document.addEventListener("keydown", ev => {
   else if (ev.key === "s" || ev.key === "S") setOverlay("stations", !OV.has("stations"));
   else if ((ev.key === "v" || ev.key === "V") && OV.has("stations")) setOverlay("stnval", !OV.has("stnval"));
   else if (ev.key === "d" || ev.key === "D") setOverlay("river", !OV.has("river"));
+  else if (ev.key === "o" || ev.key === "O") setOverlay("tide", !OV.has("tide"));
   else if (ev.key === "b" || ev.key === "B") toggleBasis();
   else if (ev.key === "f" || ev.key === "F") toggleAccFc();
   else if (ev.key === "h" || ev.key === "H") toggleAccH1();
@@ -703,6 +714,7 @@ async function boot() {
                : CASE ? ["alerts"] : (SET.overlays || []));
   renderLayers();
   if (OV.has("river")) loadRiver();
+  if (OV.has("tide")) loadTide();
   vsrtN = +SET.vsrt_n || 1; x4 = !!SET.x4;
   applyAccFull(); applyHdrPin();
   // 색 — ?pal=kma|blue 가 서버 설정보다 먼저(벽면 화면 고정용). 기상청 색은 서버가 뽑아 둔 범례를 받아 와야 쓴다

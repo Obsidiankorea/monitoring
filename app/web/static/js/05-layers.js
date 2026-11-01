@@ -6,6 +6,7 @@ const OVL = [
   { id: "stations", label: "관측소", short: "관측소", key: "S" },
   { id: "stnval", label: "지점 강수량 글자", short: "값", key: "V", parent: "stations" },
   { id: "river", label: "하천 · 댐", short: "하천", key: "D" },
+  { id: "tide", label: "조위", short: "조위", key: "O" },
 ];
 /* ⓘ 에 올리거나 누르면 뜨는 설명 — 레이어 목록·범례는 짧게 두고 긴 말은 여기에 */
 const TIPS = new Map([
@@ -18,6 +19,8 @@ const TIPS = new Map([
     예측 층에서는 자리만. 경남 AWS(내부망) 지점은 이 층에 없다 — 시군을 누르면 오른쪽 패널에 목록으로 나온다(막대 파랑 경남 · 청록 기상청).`],
   ["ov-river", `<b>하천 · 댐</b> — 경남 하천 수위 관측소(눈금 막대) · 댐 · 보를 홍수통제소 자료로. 막대 색은 수위 단계, 주의보부터는 번쩍인다.
     낙동강 위쪽(경북 · 대구) 댐 · 보도 함께 — 경남으로 흘러드는 물이라 점선 둘레로. 점에 마우스를 올리면 수위 · 기준 수위 · 1시간 변화 · 방류. 10분마다 갱신.`],
+  ["ov-tide", `<b>조위</b> — 경남 해안 조위관측소의 바닷물 높이(해양조사원). 표식의 숫자는 지금 실측, 괄호는 예측과의 차이.
+    마우스를 올리면 요약, 누르면 게이지 · 물결 팝업. 대조기 기간에는 아이콘 옆에 표시한다.`],
   ["ov-stnval", `<b>지점 강수량 글자</b> — 관측소 옆에 값을 단다. 센 곳부터 빈자리에만, 상위 셋은 지점 이름도.
     시군을 골랐으면 그 시군 지점만. 켜면 지도가 붐빌 수 있어 기본은 끔 — 점 색만으로도 단계는 읽힌다.`],
 ]);
@@ -26,6 +29,7 @@ let OV = new Set();
 const OV_IC = {
   alerts: `<svg viewBox="0 0 24 24"><path d="M7 16.5a4.2 4.2 0 0 1-.5-8.3 5.6 5.6 0 0 1 10.8 1.3A3.5 3.5 0 0 1 17 16.5"/><path d="m12.6 12-2.4 3.6h2.8L11.4 20"/></svg>`,
   stations: `<svg viewBox="0 0 24 24"><path d="M12 4 20 12 12 20 4 12z"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/></svg>`,
+  tide: `<svg viewBox="0 0 24 24"><path d="M3 15c2.2-2 3.8-2 6 0s3.8 2 6 0 3.8-2 6 0"/><path d="M3 20c2.2-2 3.8-2 6 0s3.8 2 6 0 3.8-2 6 0" opacity=".5"/><path d="M12 11V3M8.8 6 12 3l3.2 3"/></svg>`,
   river: `<svg viewBox="0 0 24 24"><path d="M3 8.5c2.2-2 3.8-2 6 0s3.8 2 6 0 3.8-2 6 0"/><path d="M3 13.5c2.2-2 3.8-2 6 0s3.8 2 6 0 3.8-2 6 0"/><path d="M3 18.5c2.2-2 3.8-2 6 0s3.8 2 6 0 3.8-2 6 0" opacity=".5"/></svg>`,
 };
 let LY_OPEN = null;                     // 펼친 범례(stations) — 창마다 기억
@@ -79,13 +83,13 @@ function renderLyIcons() {
     const lv = (ALERTS?.land || []).reduce((a, g) => ((LVRANK[g.lv] || 0) > (LVRANK[a] || 0) ? g.lv : a), null);
     return lv ? `var(--lv-${lv})` : "";
   };
-  box.innerHTML = ["alerts", "stations", "river"].filter(id => OV.has(id)).map(id => {
+  box.innerHTML = ["alerts", "stations", "river", "tide"].filter(id => OV.has(id)).map(id => {
     const o = OVL.find(x => x.id === id);
     const hiR = RIV?.rows ? RIV.rows.filter(s => s.kind === "wl" && (s.stage ?? -1) >= 1).length : 0;
-    const n = id === "alerts" && ALERTS && !ALERTS.err ? ALERTS.land.length + ALERTS.sea.length : id === "river" ? hiR : 0;
-    const col = id === "alerts" ? lvTop() : id === "river" && hiR ? RV_C[rvMax()] : "";
+    const n = id === "alerts" && ALERTS && !ALERTS.err ? ALERTS.land.length + ALERTS.sea.length : id === "river" ? hiR : id === "tide" ? tdHigh().length : 0;
+    const col = id === "alerts" ? lvTop() : id === "river" && hiR ? RV_C[rvMax()] : id === "tide" ? tdCol() : "";
     return `<button class="ly-ic sm" data-d="${id}" aria-expanded="${id === "alerts" ? alShown() : LY_OPEN === id}" title="${o.label} — 눌러서 ${id === "alerts" ? "특보 줄 펼치기 · 접기" : "범례·설명"} (${o.key}: 끄기)"
-      ${col ? `style="color:${col}"` : ""}>${OV_IC[id]}${n ? `<span class="bd" style="background:${col || "var(--ink-3)"}">${n}</span>` : ""}</button>`;
+      ${col ? `style="color:${col}"` : ""}>${OV_IC[id]}${n ? `<span class="bd" style="background:${col || "var(--ink-3)"}">${n}</span>` : ""}${id === "tide" ? tdSpringChip() : ""}</button>`;
   }).join("");
   for (const b of box.querySelectorAll("[data-d]")) b.onclick = () => (b.dataset.d === "alerts" ? setAlOpen(!AL_OPEN)
     : setLyOpen(LY_OPEN === b.dataset.d ? null : b.dataset.d));
@@ -94,6 +98,8 @@ function renderLyIcons() {
   if (ic) $("ly-stn").style.top = ic.offsetTop + "px";
   const ir = box.querySelector(`[data-d="river"]`);
   if (ir) $("ly-river").style.top = ir.offsetTop + "px";
+  const it = box.querySelector(`[data-d="tide"]`);
+  if (it) $("ly-tide").style.top = it.offsetTop + "px";
   fitAlCol();
 }
 /* 특보 줄 자리 — 아이콘들 밑에서 범례 위까지(범례가 바뀌면 다시 — 기상청 색 누적은 범례가 길다) */
@@ -122,6 +128,7 @@ function renderLayers() {
   renderAlertLegend();
   renderStnLegend();
   renderRiverLegend();
+  renderTideLegend();
   renderLyIcons();
 }
 function setOverlay(id, on) {
@@ -130,6 +137,7 @@ function setOverlay(id, on) {
   if (id === "alerts") { if (on) loadAlerts(); else { ALERTS = null; drawAlerts(); draw(); } if (V) { camGo(true); placeSw(); } }
   if (id === "stations") loadStations();
   if (id === "river") { if (on) setLyOpen("river"); loadRiver(); }
+  if (id === "tide") { if (on) setLyOpen("tide"); loadTide(); }
   if (id === "stnval") drawStations();
   renderLayers();
 }

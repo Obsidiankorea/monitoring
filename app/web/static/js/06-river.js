@@ -16,6 +16,7 @@ const rvTop = s => (s.thr || []).filter(Boolean).pop() || null;         // 가�
 const rvHm = t => (t ? `${t.slice(8, 10)}:${t.slice(10, 12)}` : "—");
 const rvMax = () => Math.max(-1, ...(RIV?.rows || []).filter(s => s.kind === "wl").map(s => s.stage ?? -1));
 function drawRiver() {
+  drawTide();
   const g = $("rivr");
   if (!g) return;
   RIV_HIT = [];

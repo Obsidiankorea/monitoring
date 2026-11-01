@@ -24,6 +24,8 @@ from pathlib import Path
 
 import httpx
 
+from . import tide
+
 def _default_wiki() -> Path:
     """GN_WIKI 가 없으면 이 사용자 홈의 obsidian/재난(행정 PC — 환경변수 없이 압축만 풀어 둔다), 그다음 개발 PC 경로."""
     for c in (Path.home() / "obsidian" / "재난", Path(r"C:\Users\ms\obsidian\재난")):
@@ -601,6 +603,7 @@ def situation(sigun: str, base: str = "http://127.0.0.1:8000") -> dict:
         "sigun": sigun, "tm": tm, "night": night, "rain_src": src, "fc_tmfc": fc.get("tmfc"),
         "ante": {k: an.get(k) for k in ("ok", "have", "want", "missing", "from", "to")},
         "alerts": mine, "pending": pend, "stage": _stage(groups), "river": rv, "outlook": ol,
+        "tide": tide.text(tide.of_sigun(sigun), max((r["fc6h"] or 0 for r in emds), default=0)),
         "risk_total": dict(Counter(FAMILY_OF.get(s["유형"], "야외·기타") for s in sites["sites"])),
         "emd": emds,
         "rules": {"cbs": "1시간 50㎜ + 3시간 90㎜ 동시, 또는 1시간 72㎜(기상청 긴급재난문자)",
@@ -610,6 +613,7 @@ def situation(sigun: str, base: str = "http://127.0.0.1:8000") -> dict:
                    f"초단기 예보 시우량은 {RN1_CAP:g}㎜ 에서 막혀 온다 — 50·55㎜/h 예보 조건은 '모름'",
                    "선행 5일 강우 · 토양함수 · 침수심 · 제방 만수위 · 교량 수위 · 댐 방류 예보 · 예측정보(산림청 산사태 예보)는 여기 없다 — 따로 확인(하천 수위는 홍수통제소 원시값을 연결했다)",
                    "기준 N% · 남은 ㎜ · 닿는 시각은 가장 먼 조건 기준이다 — 닿는 시각은 예보 시우량을 지금 누적에 더한 것이라 창에서 빠지는 옛 비는 빼지 않아 실제보다 이를 수 있다",
+                   "조위 단계는 해양조사원 고조정보(마산) · 위키 폭풍해일 기준 참고(거제도 · 통영 · 여수)다 — 특보 판정이 아니고, 호우와 만조의 겹침은 나란히 보일 뿐 판정하지 않는다(위키에 기준이 없다)",
                    "전망(높음 · 주의 · 낮음)은 특보 · 단기예보 · 초단기를 묶은 참고다 — 새 발표일수록 무겁고, 지금 비가 같은 말을 하면 시간이 지나도 깎지 않는다. 위키 기준 대조 · 비상단계는 바꾸지 않는다",
                    "목록에 없다고 위험이 없는 것이 아니다", "대피명령은 시장·군수·구청장 권한(재난안전법 제40조)",
                    sites["source_basis"]],
@@ -649,6 +653,8 @@ def brief(s: dict, top: int = 4) -> str:
     out.append("특보: " + (", ".join(s["alerts"]) or "없음") + (f" · 예비 {', '.join(p['name'] for p in s['pending'])}" if s["pending"] else ""))
     if s.get("outlook"):
         out.append(outlook_text(s["outlook"]))
+    if s.get("tide"):
+        out.append(s["tide"])
     if s["stage"]:
         out.append(f"도 비상단계 기준: {s['stage']['stage']} ({s['stage']['why']})")
     out.append("우려지역(위키): " + " · ".join(f"{k} {v}" for k, v in sorted(s["risk_total"].items(), key=lambda x: -x[1])))

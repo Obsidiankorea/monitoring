@@ -32,7 +32,7 @@ from fastapi import Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import aiwatch, apikeys, lawwatch, river, clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, serverupdate, sites, snaps, update
+from . import aiwatch, apikeys, lawwatch, river, tide, clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, serverupdate, sites, snaps, update
 from .collectors import alerts, bangjae_rain, forecast, grid_rain, qpf, rain, shortfc
 from .config import CACHE, INTERVALS, POLL_DEFAULT
 
@@ -56,7 +56,9 @@ COLLECTORS = {"rain": rain.collect, "forecast": forecast.collect,
               # 단기예보 격자 — 권역·시군 예보 판. 받은 발표분은 다시 부르지 않는다.
               "short": shortfc.collect,
               # 경남 지도 — 500m 격자(15분·60분·일)와 실황 5km. 경남 bbox 만 잘라 둔다.
-              "grid": grid_rain.collect, "odam": grid_rain.collect_odam}
+              "grid": grid_rain.collect, "odam": grid_rain.collect_odam,
+              # 조위 — 경남 해안 5곳 실측 · 예측(app/tide.py). 키가 없으면 건너뛴다
+              "tide": tide.collect}
 
 def base_intervals() -> dict:
     """수집 주기 — 저장한 것 위에 기본값을 깐다. 저장한 뒤에 생긴 수집기(minute 등)도 기본 주기로 돈다.
@@ -475,6 +477,12 @@ async def api_law_run():
     if not config.KEYS.get("LAW_OC"):
         raise HTTPException(400, "LAW_OC 없음 — config/api_keys.txt")
     return await lawwatch.run()
+
+
+@app.get("/api/tide")
+async def api_tide():
+    """경남 해안 조위 — 지점별 실측 · 예측 · 단계 · 다음 만조 · 7일 최고 만조 + 대조기(계산)."""
+    return tide.status()
 
 
 @app.get("/api/river")
