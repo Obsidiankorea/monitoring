@@ -99,7 +99,7 @@ function renderLyIcons() {
   const ir = box.querySelector(`[data-d="river"]`);
   if (ir) $("ly-river").style.top = ir.offsetTop + "px";
   const it = box.querySelector(`[data-d="tide"]`);
-  if (it) $("ly-tide").style.top = it.offsetTop + "px";
+  if (it) { $("ly-tide").style.top = it.offsetTop + "px"; tdFit(); }
   fitAlCol();
 }
 /* 특보 줄 자리 — 아이콘들 밑에서 범례 위까지(범례가 바뀌면 다시 — 기상청 색 누적은 범례가 길다) */

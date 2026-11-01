@@ -133,6 +133,26 @@ function tidePop(s, x, y) {
   pop.style.left = left + "px";
   pop.style.top = Math.max(8, Math.min(y - h / 2, r.height - h - 8)) + "px";
 }
+/* 목록의 일자 막대 — 단계 띠 위에 지금(▼) · 다음 만조(점), 그 사이는 앞으로 오르내릴 구간. 기준이 없는 지점은 회색 띠 */
+function tdBar(s) {
+  const nh = s.next?.h, max = s.cuts.length ? Math.max(s.cuts.at(-1) * 1.06, s.v, nh ?? 0) : Math.max(s.v, nh ?? 0) * 1.25;
+  const pc = v => (Math.max(0, v) / max * 100).toFixed(1);
+  const ed = [0, ...s.cuts, max];
+  const segs = s.cuts.length ? ed.slice(0, -1).map((a, i) => `<i style="flex:${ed[i + 1] - a};background:${RV_C[s.col[i]]}"></i>`).join("") : `<i style="flex:1;background:var(--ink-3)"></i>`;
+  const span = nh == null ? "" : `<b style="left:${pc(Math.min(s.v, nh))}%;width:${(Math.abs(nh - s.v) / max * 100).toFixed(1)}%"></b>`;
+  const dot = nh == null ? "" : `<em style="left:${pc(nh)}%;background:${tdColOf(s, s.next.stage)}" title="다음 만조 ${tdCm(nh)}"></em>`;
+  return `<div class="tb"><div class="b">${segs}</div>${span}<u style="left:${pc(s.v)}%"></u>${dot}</div>`;
+}
+const tdLeft = t => {                                       // 만조까지 남은 시간
+  const m = Math.round((new Date(+t.slice(0, 4), +t.slice(4, 6) - 1, +t.slice(6, 8), +t.slice(8, 10), +t.slice(10, 12)) - Date.now()) / 60000);
+  return m <= 0 ? "지금" : m < 60 ? `${m}분 뒤` : `${Math.floor(m / 60)}시간${m % 60 ? ` ${m % 60}분` : ""} 뒤`;
+};
+function tdFit() {                                          // 목록이 화면 아래로 나가지 않게 위로 올린다
+  const box = $("ly-tide");
+  if (box.hidden) return;
+  const over = box.getBoundingClientRect().bottom - $("stage").getBoundingClientRect().bottom + 8;
+  if (over > 0) box.style.top = parseFloat(box.style.top) - over + "px";
+}
 function renderTideLegend() {
   const box = $("ly-tide");
   if (!box) return;
@@ -146,7 +166,9 @@ function renderTideLegend() {
   else if (!TID.rows?.length) body = `<div class="nt">첫 수집을 기다린다.</div>`;
   else {
     const sp = TID.spring;
-    body = TID.rows.map(s => `<div class="rr" data-c="${s.code}"><b>${escH(s.name)}</b><span>${Math.round(s.v)}${s.diff != null ? ` ${s.diff >= 0 ? "+" : ""}${s.diff.toFixed(1)}` : ""}</span><em>${s.next ? `만조 ${tdHm(s.next.t)} ${Math.round(s.next.h)}cm` : ""}</em></div>`).join("")
+    body = TID.rows.map(s => `<div class="rr" data-c="${s.code}" title="눌러서 자세히"><div class="t1"><b>${escH(s.name)}</b><span>${Math.round(s.v)}<small> cm</small></span>`
+      + `${s.diff != null ? `<em>${s.diff >= 0 ? "+" : ""}${s.diff.toFixed(1)}</em>` : ""}${s.stage != null ? `<i style="background:${tdColOf(s, s.stage)}">${s.names[s.stage]}</i>` : ""}</div>${tdBar(s)}`
+      + (s.next ? `<div class="t2"><span class="d" style="background:${tdColOf(s, s.next.stage)}"></span>만조 ${tdHm(s.next.t)} · ${Math.round(s.next.h)} cm<em>${tdLeft(s.next.t)}</em></div>` : "") + `</div>`).join("")
       + (sp ? `<div class="nt" style="margin-top:6px">대조기(계산): ${sp.now ? `지금 — ${tdIso(sp.to)}까지` : `다음 ${tdIso(sp.from)}~${tdIso(sp.to)}`}</div>` : "");
   }
   box.innerHTML = `<div class="hd2" title="눌러서 닫기"><b>조위</b><i class="inf" data-tip="ov-tide">i</i><span>${TID?.at ? TID.at.slice(11, 16) : ""}</span></div>${body}`;

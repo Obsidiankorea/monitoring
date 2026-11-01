@@ -884,16 +884,30 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 .ly-ic .tsp { position: absolute; left: calc(100% + 6px); top: 50%; transform: translateY(-50%); font: 700 11px var(--sans); padding: 2px 7px; border-radius: 6px; white-space: nowrap;
   color: #14181f; background: var(--rv-2); }
 .ly-ic .tsp.off { color: var(--ink-3); background: color-mix(in oklab, var(--panel) 90%, transparent); border: 1px solid var(--line); font-weight: 600; }
-#ly-tide { width: auto; min-width: 280px; max-width: 360px; padding: 10px 12px 12px; }
+#ly-tide { padding: 10px 12px 12px; }
 #ly-tide .hd2 { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; cursor: pointer; }
 #ly-tide .hd2 b { font-size: 15px; }
 #ly-tide .hd2 span { font: 600 12px var(--mono); color: var(--ink-3); margin-left: auto; }
 #ly-tide .nt { font-size: 12px; color: var(--ink-3); line-height: 1.5; }
 #ly-tide .nt.w { color: var(--lv-fail); }
-#ly-tide .rr { display: grid; grid-template-columns: 58px 62px 1fr; gap: 6px; font-size: 12.5px; padding: 3px 0; border-top: 1px solid var(--line-soft); cursor: pointer; align-items: baseline; }
-#ly-tide .rr b { color: var(--ink); }
-#ly-tide .rr span { font-family: var(--mono); }
-#ly-tide .rr em { font-style: normal; color: var(--ink-3); font-size: 11.5px; }
+#ly-tide { width: 320px; max-height: calc(100vh - 24px); overflow-y: auto; overscroll-behavior: contain; }
+#ly-tide .rr { padding: 3px 0 4px; border-top: 1px solid var(--line-soft); cursor: pointer; }
+#ly-tide .rr:hover { background: color-mix(in oklab, var(--accent) 8%, transparent); }
+#ly-tide .t1 { display: flex; align-items: baseline; gap: 7px; font-size: 13px; }
+#ly-tide .t1 b { color: var(--ink); }
+#ly-tide .t1 span { margin-left: auto; font: 700 14px var(--mono); color: var(--ink); }
+#ly-tide .t1 small { font: 500 11px var(--sans); color: var(--ink-3); }
+#ly-tide .t1 em { font: 600 12px var(--mono); font-style: normal; color: var(--ink-2); }
+#ly-tide .t1 i { font: 700 10.5px var(--sans); font-style: normal; padding: 0 5px; border-radius: 4px; color: #14181f; }
+#ly-tide .t2 { display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--ink-2); }
+#ly-tide .t2 .d { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+#ly-tide .t2 em { margin-left: auto; font-style: normal; color: var(--ink-3); }
+#ly-tide .tb { position: relative; height: 16px; margin: 1px 0 0; }
+#ly-tide .tb .b { position: absolute; left: 0; right: 0; top: 8px; height: 6px; display: flex; gap: 1px; border-radius: 3px; overflow: hidden; }
+#ly-tide .tb .b i { min-width: 0; opacity: .75; }
+#ly-tide .tb > b { position: absolute; top: 6px; height: 10px; background: color-mix(in oklab, var(--ink) 38%, transparent); border-radius: 2px; }
+#ly-tide .tb u { position: absolute; top: 0; margin-left: -5px; width: 0; height: 0; border: 5px solid transparent; border-bottom: 0; border-top: 7px solid var(--ink); }
+#ly-tide .tb em { position: absolute; top: 6px; margin-left: -5px; width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--ink); box-sizing: border-box; }
 #over .rv .bx { fill: color-mix(in oklab, var(--panel) 80%, transparent); stroke: var(--ink); stroke-width: 1.4; stroke-linejoin: round; }
 #over .rv .fl { stroke: none; }
 #over .rv.nt { opacity: .55; }
