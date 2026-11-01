@@ -87,7 +87,7 @@ function tdWave(s) {
   return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="조위 물결" style="margin:6px 0 2px">`
     + (cut != null ? `<line x1="0" x2="${W}" y1="${Y(cut).toFixed(1)}" y2="${Y(cut).toFixed(1)}" stroke="${RV_C[s.col[s.cuts.indexOf(cut) + 1]]}" stroke-width=".9" stroke-dasharray="2 3"/><text x="${W - 2}" y="${(Y(cut) + 11).toFixed(1)}" text-anchor="end" font-size="11" fill="var(--ink-3)">${s.names[s.cuts.indexOf(cut) + 1]} ${cut}</text>` : "")
     + `<path d="${line(2)}" fill="none" stroke="var(--ink-3)" stroke-width="1.5" stroke-dasharray="4 3"/><path d="${line(1)}" fill="none" stroke="var(--accent)" stroke-width="2.2"/>`
-    + (nowI >= 0 ? `<line x1="${X(nowI).toFixed(1)}" x2="${X(nowI).toFixed(1)}" y1="4" y2="${bot + 2}" stroke="var(--ink-3)" stroke-width=".6"/><text x="${(X(nowI) + 4).toFixed(1)}" y="${H - 2}" font-size="11" fill="var(--ink-3)">지금</text>` : "")
+    + (nowI >= 0 ? `<line x1="${X(nowI).toFixed(1)}" x2="${X(nowI).toFixed(1)}" y1="4" y2="${bot + 2}" stroke="var(--ink-3)" stroke-width=".6"/><text x="${(X(nowI) + 4).toFixed(1)}" y="13" font-size="11" fill="var(--ink-3)">지금</text>` : "")
     + (nx != null ? `<circle cx="${nx.toFixed(1)}" cy="${ny.toFixed(1)}" r="3.5" fill="${ncol}"/><text x="${Math.min(W - 30, Math.max(30, nx)).toFixed(1)}" y="${H - 2}" text-anchor="middle" font-size="11" fill="var(--ink-3)">${tdHm(s.next.t)} 만조</text>` : "")
     + `</svg>`;
 }
