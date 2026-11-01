@@ -183,7 +183,12 @@ def _hm(t: str) -> str:
     return f"{int(t[4:6])}.{int(t[6:8])}. {t[8:10]}:{t[10:12]}"
 
 
-def text(r: dict | None, fc6h=None) -> str | None:
+def _spring_text() -> str | None:
+    s = _LIVE["spring"]
+    return f"대조기(계산, 공식 날짜와 다를 수 있다): {s['from'][5:]} ~ {s['to'][5:]}" if s and s["now"] else None
+
+
+def text(r: dict | None, fc6h=None, spring: bool = True) -> str | None:
     """AI 보고 한 줄 — 만조와 비를 나란히 둘 뿐 겹침을 판정하지 않는다(위키에 그 기준이 없다)."""
     if not r:
         return None
@@ -201,14 +206,15 @@ def text(r: dict | None, fc6h=None) -> str | None:
         out += f" · 7일 안 최고 {_hm(r['top']['t'])} {r['top']['h']:g}cm{lab(r['top'])}"
     if r["wet"]:
         out += f" · 7일 안 만조가 지반고에 닿는 시설: {', '.join(r['wet'])}"
+    if spring and _spring_text():
+        out += f" · {_spring_text()}"
     return out
 
 
 def summary() -> list[str]:
     """경남 전체 보고용 — 평소에는 비고, 단계 · 대조기 · 시설 침수 우려가 있을 때만 줄을 낸다."""
-    s = _LIVE["spring"]
-    out = [f"대조기(계산, 공식 날짜와 다를 수 있다): {s['from'][5:]} ~ {s['to'][5:]}"] if s and s["now"] else []
+    out = [_spring_text()] if _spring_text() else []
     for r in _LIVE["rows"]:
         if (r["stage"] or 0) >= 1 or ((r["next"] or {}).get("stage") or 0) >= 1 or r["wet"]:
-            out.append(text(r))
+            out.append(text(r, spring=False))
     return out

@@ -234,6 +234,7 @@ def _refs(names: list[str]) -> list[str]:
     return [ref(n) for n in dict.fromkeys(names)] + [CONTACTS]
 
 
+TIDE_REF = "고조정보 4단계와 대조기 해안침수"
 BASE_REFS = ["통제·대피 기준", "시군 상황관리반 행동매뉴얼", "대피명령 길라잡이", "위기경보와 비상단계", "재난문자 송출기준"]
 Q_ALL = [("relay", "상황전파 해야 할 곳은?"), ("stage", "비상단계 · 다음 단계 조건은?"),
          ("evac", "대피 기준에 닿은 곳은?"), ("control", "통제할 시설은? (지하차도 · 하천변 · 둔치)"),
@@ -314,7 +315,7 @@ def report(base: str, sigun: str | None = None, mode: str = "all") -> dict:
             "sections": [{"h": "상황", "items": sit}, {"h": "전망 — 특보 · 단기예보 · 초단기", "items": _outlook(rows) + tide.summary()},
                          {"h": "중요한 점", "items": imp}, {"h": "할 일", "items": tasks},
                          {"h": "살펴볼 곳", "items": look or ["특별히 살펴볼 읍면동 없음"]}, {"h": "다음 확인", "items": nxt},
-                         {"h": "참고 — 위키 · 책자", "items": _refs(BASE_REFS + ["상황판단회의"])}],
+                         {"h": "참고 — 위키 · 책자", "items": _refs(BASE_REFS + ["상황판단회의"] + ([TIDE_REF] if tide.summary() else []))}],
             "questions": [{"id": k, "label": v} for k, v in Q_ALL]}
 
 
@@ -412,7 +413,7 @@ def _report_sigun(base: str, sigun: str) -> dict:
     return {"scope": sigun, "title": full, "tm": s["tm"], "flash": _flash_sigun(s, full),
             "sections": [{"h": "상황", "items": sit}, {"h": "중요한 점", "items": imp}, {"h": "할 일", "items": tasks},
                          {"h": "살펴볼 곳", "items": look or ["우려지역이 있는 읍면동에 비 없음"]}, {"h": "다음 확인", "items": nxt},
-                         {"h": "참고 — 위키 · 책자", "items": _refs([full] + BASE_REFS + ["시군별 통제·대피계획"])}],
+                         {"h": "참고 — 위키 · 책자", "items": _refs([full] + BASE_REFS + ["시군별 통제·대피계획"] + ([TIDE_REF] if s.get("tide") else []))}],
             "questions": [{"id": k, "label": v} for k, v in Q_SIG]}
 
 
@@ -658,7 +659,7 @@ def _quiet(o: dict, sigun: str | None, rows: list[dict], title: str, when: list[
     top = max(rows, key=lambda r: r["fc_sum"] or 0, default=None)
     now_ = "호우특보 없음 · 기준에 닿은 곳 없음 · " + (f"앞으로 6시간 가장 많은 곳 {top['sigun']} {top['fc_sum']:g}㎜" if top and top["fc_sum"] else "앞으로 6시간 비 예보 거의 없음")
     return {**_hdr(o, sigun, f"{title} — 지금은 해당 없음"),
-            "sections": [{"h": "지금", "items": [now_] + [x for x in _outlook(rows, 2) if "큰 비 없음" not in x]}, {"h": "이렇게 되면 필요하다", "items": when},
+            "sections": [{"h": "지금", "items": [now_] + [x for x in _outlook(rows, 2) if "큰 비 없음" not in x] + tide.summary()},   # 대조기만으로도 저지대가 잠길 수 있다 {"h": "이렇게 되면 필요하다", "items": when},
                          {"h": "참고 — 위키 · 책자", "items": _refs(refs)}]}
 
 

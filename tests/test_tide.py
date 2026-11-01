@@ -51,3 +51,14 @@ def test_build_and_text():
 
 def test_no_observed_row_is_none():
     assert tide.build({**MASAN}, [("202611010000", None, 1.0)], [], datetime(2026, 11, 1)) is None
+
+
+def test_spring_shows_in_sigun_text_and_summary(monkeypatch):
+    r = tide.build({**MASAN}, [("202611010830", 75.0, 73.8)], [], datetime(2026, 11, 1, 8, 35))
+    monkeypatch.setitem(tide._LIVE, "rows", [r])
+    monkeypatch.setitem(tide._LIVE, "spring", {"now": True, "from": "2026-11-07", "to": "2026-11-11"})
+    assert "대조기" in tide.text(r)
+    s = tide.summary()
+    assert len(s) == 1 and "11-07 ~ 11-11" in s[0]                      # 평소 지점 줄은 없고 대조기 한 줄만
+    monkeypatch.setitem(tide._LIVE, "spring", {"now": False, "from": "2026-11-07", "to": "2026-11-11"})
+    assert tide.summary() == [] and "대조기" not in tide.text(r)
