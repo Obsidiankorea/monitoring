@@ -80,4 +80,4 @@ async def run() -> None:
 
 
 def status() -> dict:
-    return {"on": bool(_key()), "active": hoou(), "calls": calls(datetime.now()), **_LIVE}
+    return {"on": bool(_key()) or bool(_LIVE["rows"]), "active": hoou(), "calls": calls(datetime.now()), **_LIVE}

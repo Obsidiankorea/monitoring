@@ -272,7 +272,7 @@ def _row(s: dict, r: dict | None) -> dict:
 
 
 def status() -> dict:
-    on = bool(_key())
+    on = bool(_key()) or bool(_LIVE["rows"])                  # 시연은 키 없이 scene.json 으로 채운다
     n = len([r for r in _LIVE["rows"] if r.get("stage", -1) >= 1])
     return {"on": on, "demo": config.DEMO, "at": _LIVE["at"], "err": _LIVE["err"], "rows": _LIVE["rows"], "fld": _LIVE["fld"],
             "nfld": _LIVE["nfld"], "high": n}

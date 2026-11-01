@@ -1,11 +1,12 @@
 """가상 시연 — 굳혀 둔 실제 시연의 비를 k배로 키워 '대피 기준까지 간 비'를 만든다(발표 · 훈련용, 실제 아님).
 
-    .venv\\Scripts\\python.exe tools\\make_scaled_snap.py live-20261019-0024 fake-20261019-x4 --factor 4 --qpf-from 202409210000
+    .venv\\Scripts\\python.exe tools\\make_scaled_snap.py live-20261019-0024 fake-20261019-x2 --factor 2 --qpf-copy fake-20261019-x4
 
 키우는 것: 격자(obs15 · obs60 · obsday · odam · 초단기 vsrt · 단기 shrt), 관측 매시(rn_hr1 · rn_day) · 매분(rn_15m · rn_60m ·
 rn_day), 스방 매시, 초단기 RN1(읍면동), 단기 PCP. 예측 분포 그림(QPF)은 그림이라 키울 수 없어 뺀다 —
 --qpf-from <발표시각> 을 주면 그 과거 발표분(실제 큰비)을 기상청에서 받아 이 시연의 발표 시각 자리에 넣는다
 (그림 속 비는 그날 비다 — meta.note 에 적는다). 2024.9.21 00:00 은 남해안 띠 모양이 10.19 와 닮았고 훨씬 세다.
+--qpf-copy <시연> 을 주면 그 시연에 넣어 둔 그림을 그대로 옮긴다(기상청을 부르지 않는다).
 특보는 키운 비에 [[기상특보 발표기준]] 호우 기준(주의보 3시간 60 · 12시간 110㎜, 경보 3시간 90 · 12시간 180㎜)을
 시군 최대 칸으로 적용해 **산출**한다 — 발표 내역이 아니다(기준은 '예상'인데 여기서는 실측으로 본다).
 meta.fake = true → 화면이 '가상'으로 표시한다. 원본 시연은 건드리지 않는다.
@@ -96,6 +97,20 @@ def borrow_qpf(cache: Path, db: Path, src_tm: str) -> tuple[str, int]:
     return dst, n
 
 
+def copy_qpf(cache: Path, db: Path, src: Path) -> tuple[int, str]:
+    """다른 시연에 넣어 둔 예측 분포 그림을 옮긴다. 그림 출처 문구도 그 시연 meta.note 에서 가져온다."""
+    shutil.copytree(src / "state" / "cache" / "qpf", cache / "qpf", dirs_exist_ok=True)
+    a = sqlite3.connect(src / "state" / "gnweather.db")
+    rows = a.execute("SELECT tmfc, ef, path, bytes, fetched_at FROM qpf_frame").fetchall()
+    a.close()
+    c = sqlite3.connect(db)
+    c.executemany("INSERT OR REPLACE INTO qpf_frame(tmfc, ef, path, bytes, fetched_at) VALUES(?,?,?,?,?)", rows)
+    c.commit()
+    c.close()
+    note = json.loads((src / "meta.json").read_text("utf-8"))["note"]
+    return len(rows), note[note.index("예측 분포 그림"):]
+
+
 def computed_alerts(cache: Path, now: datetime) -> dict:
     """키운 매시 격자로 시군 최대 3 · 12시간 합 → 호우주의보 · 경보(산출)."""
     gridstore.ROOT = cache / "grid"
@@ -129,6 +144,7 @@ def main(argv=None) -> None:
     ap.add_argument("--factor", type=float, default=4.0)
     ap.add_argument("--root", type=Path, default=config.SNAPS)
     ap.add_argument("--qpf-from", metavar="YYYYMMDDHHMM", help="이 과거 발표분의 예측 분포 그림을 빌려 넣는다(기상청에서 받음)")
+    ap.add_argument("--qpf-copy", metavar="시연", help="이 시연에 넣어 둔 예측 분포 그림을 옮긴다")
     a = ap.parse_args(argv)
     src, out = a.root / a.src, a.root / a.name
     if out.exists():
@@ -149,6 +165,8 @@ def main(argv=None) -> None:
         qpf_note = (f"예측 분포 그림 {nq}장은 {src.year}.{src.month}.{src.day}. {src:%H:%M} 발표분(실제 다른 날 비)을 "
                     f"{dst[8:10]}:{dst[10:12]} 발표 자리에 빌려 넣음.")
         files["qpf"] = nq
+    if a.qpf_copy:
+        files["qpf"], qpf_note = copy_qpf(out / "state" / "cache", db, a.root / a.qpf_copy)
     T = now.strftime("%Y-%m-%d %H:%M")
     c = sqlite3.connect(db)
     c.execute("DELETE FROM snapshot WHERE kind='alerts'")

@@ -36,6 +36,17 @@ def root() -> Path:
     return config.SNAPS
 
 
+def add_scene(name: str) -> None:
+    """가상 시연의 하천 · 조위 · 도로 값(tools/make_scene.py). 시연은 수집하지 않으므로 띄울 때 그 값을 넣어 둔다."""
+    from . import its, river, tide
+    f = root() / name / "scene.json"
+    if f.exists():
+        d = json.loads(f.read_text("utf-8"))
+        river._LIVE.update(d["river"])
+        tide._LIVE.update(d["tide"])
+        its._LIVE.update(d["road"])
+
+
 def check_name(name: str) -> str:
     if not NAME_RE.match(name or "") or name.startswith(".tmp"):
         raise ValueError(f"시연 이름이 낯설다: {name!r}")

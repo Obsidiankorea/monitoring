@@ -178,7 +178,7 @@ async def collect(now: datetime | None = None) -> dict:
 
 
 def status() -> dict:
-    return {"on": bool(_key()), "demo": config.DEMO, **_LIVE}
+    return {"on": bool(_key()) or bool(_LIVE["rows"]), "demo": config.DEMO, **_LIVE}
 
 
 def of_sigun(sigun: str) -> dict | None:
