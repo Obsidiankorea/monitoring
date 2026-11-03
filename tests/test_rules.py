@@ -59,3 +59,12 @@ def test_cases_picked_by_wiki_property(tmp_path, monkeypatch):
     items = aireport._judicial("대피", [7], ("대피",), "대피")["items"]
     assert len(items) == 2 and "[[판례 30 사건]]" in items[1]            # 07 은 속성이 없어 빠지고, 31 은 다른 장면
     assert aireport._judicial("없는장면", [7], (), "x") is None
+
+
+def test_evac_ladder_follows_wiki_value(tmp_path, monkeypatch):
+    """[[통제·대피 기준]] 값도 위키에서 — 산사태 통제 누적 100 → 80 이면 90㎜ 에 닿는다."""
+    _vault(tmp_path, monkeypatch, "산사태_통제_누적,80,mm,,,\n")
+    r = {"rain": {"1h": 5, "3h": 12, "24h": 90, "48h": 90}, "fc_peak": 25, "fc_run30": 0, "m15": 2, "ante": 10,
+         "fc_hours": [25], "fc_labels": ["14"]}
+    c = ai.ladders(r, False, [])["산사태"][0]
+    assert c["rule"].startswith("일/누적 80㎜↑") and c["st"] == "met"

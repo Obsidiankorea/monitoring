@@ -175,8 +175,8 @@ def _emd_line(s: dict, r: dict, sites_by: dict) -> str:
     ln = f"{s['sigun']} {r['emd']} — " + " · ".join(b for b in bits if b)
     if r.get("fc6h"):
         ln += f" · 앞으로 6시간 {r['fc6h']:g}㎜"
-    if r.get("ante") is not None and r["ante"] >= 60:
-        ln += f" · 직전 5일 {r['ante']:g}㎜(선행강우 기준 120㎜)"
+    if r.get("ante") is not None and r["ante"] >= ai.R("산사태_사전대피_선행5일") / 2:
+        ln += f" · 직전 5일 {r['ante']:g}㎜(선행강우 기준 {ai.R('산사태_사전대피_선행5일')}㎜)"
     hits = [f"{fam} {c['stage']} 기준({c['rule']}) {STL[c['st']]}{_gt(c)}" for fam, cs in r["ladders"].items() for c in cs if c["st"] in STL]
     if hits:
         ln += ". " + "; ".join(hits[:3])
@@ -972,8 +972,9 @@ def _m_control(base, sigun):
     if _calm(o, rows, bool(fld)):
         return _quiet(o, sigun, rows, "통제(지하차도 · 하천)", [
             "지하차도 · 지하공간 — 호우특보가 나면 통제 기준에 해당(침수심 5㎝ 이상이면 통제)",
-            "지하공간 15분 강우 14㎜ 이상이면 눈여겨보고, 20㎜ 사전대피 · 30㎜(+ 시간당 55㎜) 긴급대피 기준 ([[통제·대피 기준]])",
-            "하천 — 시간당 30㎜ 이상이 3시간 지속된다는 예보 · 홍수주의보면 통제"],
+            f"지하공간 15분 강우 {ai.R('지하공간_사전대피_15분') * .7:g}㎜ 이상이면 눈여겨보고, {ai.R('지하공간_사전대피_15분')}㎜ 사전대피 · "
+            f"{ai.R('지하공간_긴급대피_15분')}㎜(+ 시간당 {ai.R('지하공간_긴급대피_시우량')}㎜) 긴급대피 기준 ([[통제·대피 기준]])",
+            f"하천 — 시간당 {ai.R('하천_통제_시우량')}㎜ 이상이 {ai.R('하천_통제_지속시간')}시간 지속된다는 예보 · 홍수주의보면 통제"],
             ["통제·대피 기준", "인명피해 우려지역"])
     under, banks = [], []
     for r in rows:
@@ -989,8 +990,9 @@ def _m_control(base, sigun):
     hot15 = []
     for s_ in sits:
         for e in s_["emd"]:
-            if (e["m15"] or 0) >= 14 and e["risk"].get("지하공간"):
-                hot15.append(f"{s_['sigun']} {e['emd']} — 15분 {e['m15']:g}㎜ · 시간당 {e['rain']['1h']:g}㎜ (지하공간 사전대피 15분 20 · 긴급 15분 30 + 시간당 55㎜)")
+            if (e["m15"] or 0) >= ai.R("지하공간_사전대피_15분") * .7 and e["risk"].get("지하공간"):
+                hot15.append(f"{s_['sigun']} {e['emd']} — 15분 {e['m15']:g}㎜ · 시간당 {e['rain']['1h']:g}㎜ (지하공간 사전대피 15분 {ai.R('지하공간_사전대피_15분')}"
+                             f" · 긴급 15분 {ai.R('지하공간_긴급대피_15분')} + 시간당 {ai.R('지하공간_긴급대피_시우량')}㎜)")
     rv = _hits(sits, ("통제", "사전대피", "긴급대피"), ("met", "near"))
     rv = [f"{a} {b['emd']} 하천 {c['stage']}: {c['rule']} ({STL[c['st']]})" for a, b, f, c in rv if f == "하천"]
     sec = [{"h": "지하차도 · 지하공간", "items": under[:20] or ["특보 시군에 지하공간 우려지역 없음"]},

@@ -68,7 +68,14 @@ def wiki_check(path: Path) -> dict:
 # ── 판정값 — 위키 data/판정값.csv([[판정값]]). 숫자 기준은 여기서만 읽는다. 못 읽으면 2026-05 값 + 경고 ──
 RULES_CSV = Path("data") / "판정값.csv"
 RULE_DEFAULT = {"비상1단계_호우주의보_시군": 4, "비상2단계_호우경보_시군": 3, "긴급재난문자_1시간": 50, "긴급재난문자_3시간": 90,
-                "긴급재난문자_1시간_단독": 72, "상황전파_1시간": 20, "상황전파_일": 100}
+                "긴급재난문자_1시간_단독": 72, "상황전파_1시간": 20, "상황전파_일": 100,
+                # [[통제·대피 기준]] 3대 유형 — 조건의 짝(그리고 · 예보/실황)은 ladders() 코드에
+                "산사태_통제_누적": 100, "산사태_통제_예보시우량": 20, "산사태_사전대피_누적": 200, "산사태_사전대피_예보시우량": 50,
+                "산사태_사전대피_선행5일": 120, "산사태_사전대피_야간예보시우량": 30, "산사태_긴급대피_시우량": 50,
+                "산사태_긴급대피_일": 170, "산사태_긴급대피_누적": 270, "하천_통제_시우량": 30, "하천_통제_지속시간": 3,
+                "하천_사전대피_누적": 200, "하천_사전대피_예보시우량": 30, "하천_긴급대피_누적": 200, "하천_긴급대피_시우량": 30,
+                "지하공간_사전대피_15분": 20, "지하공간_사전대피_예보시우량": 55, "지하공간_긴급대피_15분": 30,
+                "지하공간_긴급대피_시우량": 55}
 _RULES: dict = {}
 
 
@@ -94,7 +101,8 @@ def rules() -> dict:
                 v[k] = int(got[k])
             else:
                 err.append(f"{k} = {got[k]!r} — 양의 정수가 아니다")
-        if v["비상1단계_호우주의보_시군"] < 2 or v["긴급재난문자_1시간_단독"] <= v["긴급재난문자_1시간"]:
+        if (v["비상1단계_호우주의보_시군"] < 2 or v["긴급재난문자_1시간_단독"] <= v["긴급재난문자_1시간"]
+                or v["산사태_사전대피_누적"] <= v["산사태_통제_누적"] or v["지하공간_긴급대피_15분"] <= v["지하공간_사전대피_15분"]):
             err.append("단계가 겹친다 — 전부 기본값으로")
             v = dict(RULE_DEFAULT)
         _RULES.update(key=key, val={"v": v, "err": err, "src": "위키" if not err else "위키(일부 기본값)"})
@@ -282,14 +290,16 @@ def _riv(rv: dict | None, need: int) -> tuple[str, dict | None]:
 
 
 def ladders(r: dict, night: bool, alerts: list[str], rv: dict | None = None, fld: list[dict] | None = None) -> dict:
-    """읍면동 하나 — [[통제·대피 기준]] 3대 유형 단계별 조건 대조(위키 표의 숫자 그대로).
+    """읍면동 하나 — [[통제·대피 기준]] 3대 유형 단계별 조건 대조(숫자는 위키 [[판정값]], 조건의 짝은 여기).
     st 는 '그 조건에 닿았나', gap 은 '기준에서 얼마나 먼가'(비율 · 남은 양 · 닿는 시각)."""
     rain, fpk, f3 = r["rain"], r["fc_peak"], r["fc_run30"]
     o1, o24, o48, q15 = rain["1h"], rain["24h"], rain["48h"], r["m15"]
     accum = max(x for x in (o24, o48) if x is not None) if (o24 is not None or o48 is not None) else None
     fcap = fpk == RN1_CAP                              # 예보가 30 에 막혔으면 그 위는 모른다(그 위 값은 가상 시연에서만 온다)
-    f50 = "unknown" if fpk is None or fcap else _st(fpk, 50)
-    f55 = "unknown" if fpk is None or fcap else _st(fpk, 55)
+    v = rules()["v"]
+    L, H, U = ({k.split("_", 1)[1]: x for k, x in v.items() if k.startswith(f"{t}_")} for t in ("산사태", "하천", "지하공간"))
+    f50 = "unknown" if fpk is None or fcap else _st(fpk, L["사전대피_예보시우량"])
+    f55 = "unknown" if fpk is None or fcap else _st(fpk, U["사전대피_예보시우량"])
     hoou = [a for a in alerts if a.startswith("호우")]
     fh, fl = r.get("fc_hours") or [], r.get("fc_labels") or []
     fpk_ok = None if fpk is None or fcap else fpk          # 30 에 막힌 예보는 50·55 와 견줄 수 없다
@@ -302,28 +312,34 @@ def ladders(r: dict, night: bool, alerts: list[str], rv: dict | None = None, fld
 
     out = {
         "산사태": [
-            {"stage": "통제", "rule": "일/누적 100㎜↑ + 20㎜/h↑ 예보", "st": _all(_st(accum, 100), _st(fpk, 20)),
-             "gap": _gap(cum("일/누적", accum, 100), one("예보 시우량", fpk, 20, "㎜/h"))},
-            {"stage": "사전대피", "rule": "일/누적 200㎜↑ + 50㎜/h↑ 예보", "st": _all(_st(accum, 200), f50),
-             "gap": _gap(cum("일/누적", accum, 200), one("예보 시우량", fpk_ok, 50, "㎜/h"))},
+            {"stage": "통제", "rule": f"일/누적 {L['통제_누적']}㎜↑ + {L['통제_예보시우량']}㎜/h↑ 예보",
+             "st": _all(_st(accum, L["통제_누적"]), _st(fpk, L["통제_예보시우량"])),
+             "gap": _gap(cum("일/누적", accum, L["통제_누적"]), one("예보 시우량", fpk, L["통제_예보시우량"], "㎜/h"))},
+            {"stage": "사전대피", "rule": f"일/누적 {L['사전대피_누적']}㎜↑ + {L['사전대피_예보시우량']}㎜/h↑ 예보",
+             "st": _all(_st(accum, L["사전대피_누적"]), f50),
+             "gap": _gap(cum("일/누적", accum, L["사전대피_누적"]), one("예보 시우량", fpk_ok, L["사전대피_예보시우량"], "㎜/h"))},
             # 선행 5일 120㎜ 는 대시보드가 격자로 계산한다. 뒤의 '산사태 위험 증가 예보'(산림청)는 없어서 → 충족으로는 못 친다(모름)
-            {"stage": "사전대피", "rule": "선행 5일 120㎜↑ + 산사태 위험 증가 예보(산림청)", "st": _all(_st(r.get("ante"), 120), "unknown"),
-             "gap": _gap(one("선행 5일", r.get("ante"), 120), one("산림청 예보", None, 1))},
-            {"stage": "사전대피", "rule": "취약시간대(21~06시) 30㎜/h↑ 예보",
-             "st": ("no" if not night else _st(fpk, 30)),
-             "gap": _gap(one("예보 시우량", fpk, 30, "㎜/h")) if night else None},
-            {"stage": "긴급대피", "rule": "50㎜/h↑ + 일 170㎜↑(실황)", "st": _all(_st(o1, 50), _st(o24, 170)),
-             "gap": _gap(one("1시간", o1, 50, "㎜/h"), cum("24시간", o24, 170))},
-            {"stage": "긴급대피", "rule": "누적 270㎜↑(실황)", "st": _st(o48, 270),
-             "gap": _gap(cum("48시간", o48, 270))},
+            {"stage": "사전대피", "rule": f"선행 5일 {L['사전대피_선행5일']}㎜↑ + 산사태 위험 증가 예보(산림청)",
+             "st": _all(_st(r.get("ante"), L["사전대피_선행5일"]), "unknown"),
+             "gap": _gap(one("선행 5일", r.get("ante"), L["사전대피_선행5일"]), one("산림청 예보", None, 1))},
+            {"stage": "사전대피", "rule": f"취약시간대(21~06시) {L['사전대피_야간예보시우량']}㎜/h↑ 예보",
+             "st": ("no" if not night else _st(fpk, L["사전대피_야간예보시우량"])),
+             "gap": _gap(one("예보 시우량", fpk, L["사전대피_야간예보시우량"], "㎜/h")) if night else None},
+            {"stage": "긴급대피", "rule": f"{L['긴급대피_시우량']}㎜/h↑ + 일 {L['긴급대피_일']}㎜↑(실황)",
+             "st": _all(_st(o1, L["긴급대피_시우량"]), _st(o24, L["긴급대피_일"])),
+             "gap": _gap(one("1시간", o1, L["긴급대피_시우량"], "㎜/h"), cum("24시간", o24, L["긴급대피_일"]))},
+            {"stage": "긴급대피", "rule": f"누적 {L['긴급대피_누적']}㎜↑(실황)", "st": _st(o48, L["긴급대피_누적"]),
+             "gap": _gap(cum("48시간", o48, L["긴급대피_누적"]))},
         ],
         "하천": [
-            {"stage": "통제", "rule": "30㎜/h↑ 3시간 이상 지속 예보", "st": _st(f3, 3),
-             "gap": _gap(one("30㎜/h↑ 이어진 시간", f3, 3, "시간"))},
-            {"stage": "사전대피", "rule": "누적 200㎜↑ + 30㎜/h↑ 예보", "st": _all(_st(accum, 200), _st(fpk, 30)),
-             "gap": _gap(cum("일/누적", accum, 200), one("예보 시우량", fpk, 30, "㎜/h"))},
-            {"stage": "긴급대피", "rule": "누적 200㎜↑ + 30㎜/h↑ 실제", "st": _all(_st(accum, 200), _st(o1, 30)),
-             "gap": _gap(cum("일/누적", accum, 200), one("1시간", o1, 30, "㎜/h"))},
+            {"stage": "통제", "rule": f"{H['통제_시우량']}㎜/h↑ {H['통제_지속시간']}시간 이상 지속 예보", "st": _st(f3, H["통제_지속시간"]),
+             "gap": _gap(one(f"{H['통제_시우량']}㎜/h↑ 이어진 시간", f3, H["통제_지속시간"], "시간"))},
+            {"stage": "사전대피", "rule": f"누적 {H['사전대피_누적']}㎜↑ + {H['사전대피_예보시우량']}㎜/h↑ 예보",
+             "st": _all(_st(accum, H["사전대피_누적"]), _st(fpk, H["사전대피_예보시우량"])),
+             "gap": _gap(cum("일/누적", accum, H["사전대피_누적"]), one("예보 시우량", fpk, H["사전대피_예보시우량"], "㎜/h"))},
+            {"stage": "긴급대피", "rule": f"누적 {H['긴급대피_누적']}㎜↑ + {H['긴급대피_시우량']}㎜/h↑ 실제",
+             "st": _all(_st(accum, H["긴급대피_누적"]), _st(o1, H["긴급대피_시우량"])),
+             "gap": _gap(cum("일/누적", accum, H["긴급대피_누적"]), one("1시간", o1, H["긴급대피_시우량"], "㎜/h"))},
             {"stage": "긴급대피", "rule": "호우경보 발령", "st": "met" if "호우경보" in hoou else "no"},
             # 홍수통제소 수위(app/river.py) — 시군 안 관측소 가운데 가장 높은 단계. 제방 만수위 90% · 교량 수위 90% · 댐 방류 예보는 자료가 없다
             {"stage": "통제", "rule": "홍수주의보 수준 하천수위(주의보 수위↑, 홍수통제소)", "st": _riv(rv, 2)[0], "gap": _riv(rv, 2)[1]},
@@ -334,10 +350,12 @@ def ladders(r: dict, night: bool, alerts: list[str], rv: dict | None = None, fld
         ],
         "지하공간": [
             {"stage": "통제", "rule": "(지하차도) 호우특보 발령", "st": "met" if hoou else "no"},
-            {"stage": "사전대피", "rule": "15분 20㎜↑ + 시간당 55㎜↑ 예보", "st": _all(_st(q15, 20), f55),
-             "gap": _gap(one("15분", q15, 20), one("예보 시우량", fpk_ok, 55, "㎜/h"))},
-            {"stage": "긴급대피", "rule": "15분 30㎜↑ + 시간당 55㎜↑ 실제", "st": _all(_st(q15, 30), _st(o1, 55)),
-             "gap": _gap(one("15분", q15, 30), one("1시간", o1, 55, "㎜/h"))},
+            {"stage": "사전대피", "rule": f"15분 {U['사전대피_15분']}㎜↑ + 시간당 {U['사전대피_예보시우량']}㎜↑ 예보",
+             "st": _all(_st(q15, U["사전대피_15분"]), f55),
+             "gap": _gap(one("15분", q15, U["사전대피_15분"]), one("예보 시우량", fpk_ok, U["사전대피_예보시우량"], "㎜/h"))},
+            {"stage": "긴급대피", "rule": f"15분 {U['긴급대피_15분']}㎜↑ + 시간당 {U['긴급대피_시우량']}㎜↑ 실제",
+             "st": _all(_st(q15, U["긴급대피_15분"]), _st(o1, U["긴급대피_시우량"])),
+             "gap": _gap(one("15분", q15, U["긴급대피_15분"]), one("1시간", o1, U["긴급대피_시우량"], "㎜/h"))},
         ],
     }
     return out
@@ -743,7 +761,7 @@ def situation(sigun: str, base: str = "http://127.0.0.1:8000") -> dict:
         d = f.get("d") or []
         run, best = 0, 0
         for v in d:
-            run = run + 1 if v >= 30 else 0
+            run = run + 1 if v >= R("하천_통제_시우량") else 0
             best = max(best, run)
         row = {"emd": name, "rain": {f"{h}h": acc[h].get(name) for h in WINDOWS}, "m15": m15.get(name),
                "fc6h": f.get("sum"), "fc_peak": f.get("peak"), "fc_hours": d, "fc_labels": fc.get("labels") or [],
