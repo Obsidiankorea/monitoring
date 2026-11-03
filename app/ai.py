@@ -61,7 +61,68 @@ def wiki_check(path: Path) -> dict:
     md = sum(1 for x in path.rglob("*.md") if ".obsidian" not in x.parts) if path.is_dir() else 0
     has = (path / "tools" / "lookup.py").exists()
     return {"path": str(path), "dir": path.is_dir(), "lookup": has,
-            "csv": (path / "data" / "인명피해 우려지역.csv").exists(), "md": md, "ok": path.is_dir() and has and md > 0}
+            "csv": (path / "data" / "인명피해 우려지역.csv").exists(), "rules": (path / RULES_CSV).exists(),
+            "md": md, "ok": path.is_dir() and has and md > 0}
+
+
+# ── 판정값 — 위키 data/판정값.csv([[판정값]]). 숫자 기준은 여기서만 읽는다. 못 읽으면 2026-05 값 + 경고 ──
+RULES_CSV = Path("data") / "판정값.csv"
+RULE_DEFAULT = {"비상1단계_호우주의보_시군": 4, "비상2단계_호우경보_시군": 3, "긴급재난문자_1시간": 50, "긴급재난문자_3시간": 90,
+                "긴급재난문자_1시간_단독": 72, "상황전파_1시간": 20, "상황전파_일": 100}
+_RULES: dict = {}
+
+
+def rules() -> dict:
+    """{v: {항목: 값}, err: [...], src: 위키|기본값} — CSV 가 바뀌면(mtime) 다시 읽는다."""
+    import csv
+    try:
+        p = wiki() / RULES_CSV
+        key = (str(p), p.stat().st_mtime)
+    except OSError:
+        return {"v": dict(RULE_DEFAULT), "err": ["위키에 data/판정값.csv 가 없다"], "src": "기본값"}
+    if _RULES.get("key") != key:
+        v, err = dict(RULE_DEFAULT), []
+        try:
+            with open(p, encoding="utf-8-sig", newline="") as f:
+                got = {r.get("항목", "").strip(): (r.get("값") or "").strip() for r in csv.DictReader(f)}
+        except (OSError, csv.Error, UnicodeDecodeError) as e:
+            got, err = {}, [f"data/판정값.csv 를 못 읽었다 ({type(e).__name__})"]
+        for k in RULE_DEFAULT:
+            if k not in got:
+                err.append(f"{k} 줄이 없다")
+            elif got[k].isdigit() and int(got[k]) > 0:
+                v[k] = int(got[k])
+            else:
+                err.append(f"{k} = {got[k]!r} — 양의 정수가 아니다")
+        if v["비상1단계_호우주의보_시군"] < 2 or v["긴급재난문자_1시간_단독"] <= v["긴급재난문자_1시간"]:
+            err.append("단계가 겹친다 — 전부 기본값으로")
+            v = dict(RULE_DEFAULT)
+        _RULES.update(key=key, val={"v": v, "err": err, "src": "위키" if not err else "위키(일부 기본값)"})
+    return _RULES["val"]
+
+
+def R(k: str) -> int:
+    return rules()["v"][k]
+
+
+def cbs_rule() -> str:
+    return f"1시간 {R('긴급재난문자_1시간')}㎜ + 3시간 {R('긴급재난문자_3시간')}㎜ 동시, 또는 1시간 {R('긴급재난문자_1시간_단독')}㎜"
+
+
+def relay_rule() -> str:
+    return f"시간당 {R('상황전파_1시간')}㎜ · 일 {R('상황전파_일')}㎜"
+
+
+def is_cbs(r1: float, r3: float) -> bool:
+    """[[재난문자 송출기준]] 기상청 호우 긴급재난문자."""
+    return (r1 >= R("긴급재난문자_1시간") and r3 >= R("긴급재난문자_3시간")) or r1 >= R("긴급재난문자_1시간_단독")
+
+
+def is_relay(r1: float, r24: float) -> bool:
+    """[[시군 상황관리반 행동매뉴얼]] 상황전파."""
+    return r1 >= R("상황전파_1시간") or r24 >= R("상황전파_일")
+
+
 WINDOWS = (1, 3, 12, 24, 48)
 RN1_CAP = 30.0
 SIGUN_FULL = {"창원": "창원시", "진주": "진주시", "통영": "통영시", "사천": "사천시", "김해": "김해시", "밀양": "밀양시",
@@ -345,16 +406,17 @@ def _get(base: str, path: str, **params) -> dict:
 
 
 def _stage(groups: list[dict]) -> dict | None:
-    """[[위기경보와 비상단계]] 호우 — 주의보 3개 이하 초기대응 · 4개↑ 또는 경보 2개 이하 비상1 · 경보 3개↑ 비상2."""
+    """[[위기경보와 비상단계]] 호우 — 주의보 A개↑ 또는 경보 W개 미만 비상1 · 경보 W개↑ 비상2 · 그 밖의 주의보 초기대응(A · W 는 [[판정값]])."""
     land = [g for g in groups if not g.get("sea")]
     n_w = sum(len(g["siguns"]) for g in land if g["name"] == "호우경보")
     n_a = sum(len(g["siguns"]) for g in land if g["name"] == "호우주의보")
-    if n_w >= 3:
-        return {"stage": "비상 2단계", "why": f"호우경보 {n_w}개 시군(3개 이상)"}
-    if n_a >= 4 or n_w >= 1:
+    a, w = R("비상1단계_호우주의보_시군"), R("비상2단계_호우경보_시군")
+    if n_w >= w:
+        return {"stage": "비상 2단계", "why": f"호우경보 {n_w}개 시군({w}개 이상)"}
+    if n_a >= a or n_w >= 1:
         return {"stage": "비상 1단계", "why": f"호우주의보 {n_a}개 · 경보 {n_w}개 시군"}
     if n_a >= 1:
-        return {"stage": "초기대응", "why": f"호우주의보 {n_a}개 시군(3개 이하)"}
+        return {"stage": "초기대응", "why": f"호우주의보 {n_a}개 시군({a - 1}개 이하)"}
     return None
 
 
@@ -688,8 +750,8 @@ def situation(sigun: str, base: str = "http://127.0.0.1:8000") -> dict:
                "fc_run30": best if d else None,
                "ante": ante.get(name)}
         r1, r3, r24 = row["rain"]["1h"] or 0, row["rain"]["3h"] or 0, row["rain"]["24h"] or 0
-        row["cbs"] = (r1 >= 50 and r3 >= 90) or r1 >= 72                   # [[재난문자 송출기준]]
-        row["relay"] = r1 >= 20 or r24 >= 100                               # [[시군 상황관리반 행동매뉴얼]] 상황전파
+        row["cbs"] = is_cbs(r1, r3)
+        row["relay"] = is_relay(r1, r24)
         fam = Counter(FAMILY_OF.get(s["유형"], "야외·기타") for s in by_emd.get(name, []))
         row["risk"] = dict(fam)
         lad = ladders(row, night, mine, rv, fld)
@@ -716,8 +778,8 @@ def situation(sigun: str, base: str = "http://127.0.0.1:8000") -> dict:
         "tide": tide.text(tide.of_sigun(sigun), max((r["fc6h"] or 0 for r in emds), default=0)),
         "risk_total": dict(Counter(FAMILY_OF.get(s["유형"], "야외·기타") for s in sites["sites"])),
         "emd": emds,
-        "rules": {"cbs": "1시간 50㎜ + 3시간 90㎜ 동시, 또는 1시간 72㎜(기상청 긴급재난문자)",
-                  "relay": "시간당 20㎜ 이상 또는 일강우 100㎜ 이상 → 시군 재난상황실 유선 전파, 우려지역 통제·사전대피 여부 판단",
+        "rules": {"cbs": cbs_rule() + "(기상청 긴급재난문자)",
+                  "relay": f"시간당 {R('상황전파_1시간')}㎜ 이상 또는 일강우 {R('상황전파_일')}㎜ 이상 → 시군 재난상황실 유선 전파, 우려지역 통제·사전대피 여부 판단",
                   "principle": "사전대피는 예보, 긴급대피는 실황 · 일몰 전 사전대피 · 그 유형 우려지역에만 적용"},
         "limits": ["지구 좌표가 없어 읍면동 안 가장 많이 온 격자(500m)로 견준다 — 지구 강우의 상한",
                    f"초단기 예보 시우량은 {RN1_CAP:g}㎜ 에서 막혀 온다 — 50·55㎜/h 예보 조건은 '모름'",
@@ -772,7 +834,7 @@ def brief(s: dict, top: int = 4) -> str:
         out.append(do_text(s["stage"]))
     out.append("우려지역(위키): " + " · ".join(f"{k} {v}" for k, v in sorted(s["risk_total"].items(), key=lambda x: -x[1])))
     relay = [r["emd"] for r in s["emd"] if r["relay"]]
-    out.append("상황전파 기준(20㎜/h · 일 100㎜): " + (", ".join(relay) if relay else "없음"))
+    out.append(f"상황전파 기준({relay_rule()}): " +(", ".join(relay) if relay else "없음"))
     cbs = [r["emd"] for r in s["emd"] if r["cbs"]]
     out.append("재난문자 기준(실황): " + (", ".join(cbs) if cbs else "없음"))
     out.append(river_text(s.get("river"), s.get("flood")))
@@ -819,5 +881,6 @@ def reset_wiki_cache() -> None:
     _lookup_fn.cache_clear()
     _LK.clear()
     _GET.clear()
+    _RULES.clear()
     from . import aireport
     aireport.reset_cache()

@@ -637,6 +637,13 @@ async def api_ai_wiki_put(body: dict):
     return {**r, "source": ai.wiki_source()[1], "default": ai.DEFAULT_WIKI}
 
 
+@app.get("/api/ai/rules")
+async def api_ai_rules():
+    """위키 판정값(data/판정값.csv) — 도움말이 숫자를 채운다. 못 읽으면 기본값 + err."""
+    from . import ai
+    return await asyncio.to_thread(ai.rules)
+
+
 @app.get("/api/settings/ai-llm")
 async def api_ai_llm_get():
     from . import llm

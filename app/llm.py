@@ -105,11 +105,13 @@ def mode() -> str | None:
     return None if m == "off" else configured() if m == "auto" else m
 
 
-def _openai(url: str, key: str, model: str, system: str, user: str) -> str:
-    r = httpx.post(f"{url.rstrip('/')}/v1/chat/completions", timeout=TIMEOUT,
-                   headers={"Authorization": f"Bearer {key}"} if key else {},
-                   json={"model": model or "default",
-                         "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]})
+def _openai(url: str, key: str, model: str, system: str, user: str, local: bool = False) -> str:
+    body = {"model": model or "default",
+            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
+    if local:   # 이 PC GPU 는 초당 7~9 토큰 — Qwen3 생각을 끄고(그것만 수백 토큰) 답 길이를 막는다. 긴 글 읽기에 1분 넘게 걸려 제한도 넉넉히
+        body |= {"chat_template_kwargs": {"enable_thinking": False}, "max_tokens": 700}
+    r = httpx.post(f"{url.rstrip('/')}/v1/chat/completions", timeout=300 if local else TIMEOUT,
+                   headers={"Authorization": f"Bearer {key}"} if key else {}, json=body)
     r.raise_for_status()
     out = r.json()["choices"][0]["message"].get("content") or ""
     out = re.sub(r"<think>.*?</think>", "", out, flags=re.S).strip()    # Qwen3 생각 줄은 빼고
@@ -150,7 +152,9 @@ def start_local(wait: float = 0) -> dict:
         raise RuntimeError(f"여기서 켤 수 없다 — {'이 PC 주소가 아니다' if not port else f'{LLAMA_DIR} 에 vulkan/llama-server 와 모델(.gguf)이 없다'}")
     if not (_PROC and _PROC.poll() is None):
         log = open(config.ROOT / "data" / "llama-server.log", "ab")
+        # -b · -ub 작게: 2048 토큰을 한 번에 GPU 에 넘기면 Windows GPU 시간 제한에 걸려 Vulkan device lost 로 죽는다(Arc 140V)
         _PROC = subprocess.Popen([str(found[0]), "-m", str(found[1]), "-ngl", "99", "-c", "16384", "--jinja",
+                                  "-np", "1", "-b", "512", "-ub", "256",
                                   "--host", "127.0.0.1", "--port", port.group(1) or "80"],
                                  stdout=log, stderr=log, stdin=subprocess.DEVNULL,
                                  creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
@@ -170,11 +174,16 @@ def ask(system: str, user: str) -> str:
     if m == "local":
         s = setting()
         try:
-            return _openai(s["url"] or LOCAL_URL, "", s["model"], system, user)
-        except httpx.ConnectError:
+            return _openai(s["url"] or LOCAL_URL, "", s["model"], system, user, local=True)
+        except (httpx.ConnectError, httpx.HTTPStatusError) as e:
+            if isinstance(e, httpx.HTTPStatusError):  # 500 = GPU 가 끊겨 서버가 못 쓰게 됐다 — 내가 켠 것이면 껐다 켠다
+                if not (_PROC and _PROC.poll() is None) or e.response.status_code < 500:
+                    raise
+                _PROC.kill()
+                _PROC.wait(10)
             if not start_local(wait=60)["up"]:       # 꺼져 있으면 켜고 한 번 더
                 raise RuntimeError("로컬 LLM 서버를 켰지만 1분 안에 뜨지 않았다 — 잠시 뒤 다시 묻는다") from None
-            return _openai(s["url"] or LOCAL_URL, "", s["model"], system, user)
+            return _openai(s["url"] or LOCAL_URL, "", s["model"], system, user, local=True)
     if m == "openai":
         url = os.environ.get("GN_AI_URL", "")
         if not url:

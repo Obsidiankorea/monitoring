@@ -498,7 +498,7 @@ $("prefs").addEventListener("click", ev => {
 function wikiPaint(w, msg) {
   const st = $("pf-wiki-st");
   if (!st) return;
-  st.innerHTML = msg || (w.ok ? `<b>쓰는 중</b> — ${escH(w.path)} · 문서 ${w.md}개 · 우려지역 CSV ${w.csv ? "있음" : "없음"} · 출처 ${w.source}`
+  st.innerHTML = msg || (w.ok ? `<b>쓰는 중</b> — ${escH(w.path)} · 문서 ${w.md}개 · 우려지역 CSV ${w.csv ? "있음" : "없음"} · 판정값 CSV ${w.rules ? "있음" : '<span class="warnx">없음 — 기본값으로 판정</span>'} · 출처 ${w.source}`
     : `<span class="warnx">못 쓴다</span> — ${escH(w.path)} (${!w.dir ? "폴더가 없다" : !w.lookup ? "tools/lookup.py 가 없다" : "문서가 없다"}) · 출처 ${w.source}`);
 }
 async function loadWiki() {

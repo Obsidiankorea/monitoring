@@ -72,6 +72,34 @@ def _rows(name: str) -> list[tuple[str, str]]:
     return out
 
 
+_MISS: set = set()
+
+
+@lru_cache(maxsize=64)
+def _block(name: str, bid: str) -> str | None:
+    """옵시디언 블록 문단 — 끝에 ' ^bid' 가 붙은 줄. 콜아웃(>) · 목록 머리 · 굵게(**)는 벗긴다."""
+    p = _index().get(name)
+    if not p:
+        return None
+    for ln in p.read_text("utf-8").splitlines():
+        ln = ln.rstrip()
+        if ln.endswith(f" ^{bid}"):
+            s = re.sub(r"^(?:>\s*)+|^(?:\d+\.|[-*])\s+", "", ln[: -len(bid) - 2].strip())
+            return re.sub(r"^(?:\d+\.|[-*])\s+", "", s).replace("**", "").strip()
+    return None
+
+
+def block(link: str, fallback: str) -> str:
+    """[[문서#^ID]] 문단을 위키에서 그대로 — 못 찾으면 예전 문장(fallback)과 경고(_rule_warn)."""
+    name, _, bid = link.partition("#^")
+    s = _block(name, bid)
+    if s is None:
+        _MISS.add(f"[[{link}]]")
+        return fallback
+    _MISS.discard(f"[[{link}]]")
+    return s
+
+
 # ── 경남 전체 ───────────────────────────────────────────────────────────
 def overview(base: str) -> dict:
     def build():
@@ -102,7 +130,7 @@ def overview(base: str) -> dict:
                          "m15": (m15.get(sg) or {}).get("max"), "fc_sum": f.get("sum"), "fc_emd": f.get("emd"),
                          "fc_peak": f.get("peak"),
                          "alerts": [x["name"] for x in groups if sg in x.get("siguns", [])],
-                         "relay": v1 >= 20 or v24 >= 100, "cbs": (v1 >= 50 and v3 >= 90) or v1 >= 72,
+                         "relay": ai.is_relay(v1, v24), "cbs": ai.is_cbs(v1, v3),
                          "risk": dict(Counter(ai.FAMILY_OF.get(s["유형"], "야외·기타") for s in sites)),
                          "under": Counter(s["유형"] for s in sites),
                          "outlook": ai.outlook(ai.alert_times(groups, sg), [p for p in al.get("pending", []) if p.get("sigun") == sg],
@@ -184,7 +212,7 @@ def _few(items: list[str], n: int = 6) -> str:
 
 def _relay_txt(r: dict) -> str:
     """상황전파에 걸린 까닭 — 시간당이 넘었으면 시간당, 아니면 일(24시간)."""
-    if r["r1"] >= 20:
+    if r["r1"] >= ai.R("상황전파_1시간"):
         return f"{r['sigun']}({r['emd1']} 시간당 {r['r1']:g}㎜)"
     return f"{r['sigun']}(24시간 {r['r24']:g}㎜)"
 
@@ -215,7 +243,7 @@ def _tasks(stage, relay_where: str, s_list: list[dict], night: bool, cbs: list[s
     if stage and stage["stage"] != ai.DO_ORDER[0]:           # 기준에 닿으면 그 단계가 된 것으로 본다 — 회의를 다시 시키지 않는다
         t.append(f"도 {stage['stage']} 근무 중으로 본다 — 이 단계 근무 · 임무 유지, 실제와 다르면 왼쪽 특보 아이콘에서 단계 수정 ([[위기경보와 비상단계]])")
     if relay_where:
-        t.append(f"{sg_for_relay}재난상황실에 유선 전파 — {relay_where}: 시간당 20㎜ 이상(또는 일 100㎜ 이상), "
+        t.append(f"{sg_for_relay}재난상황실에 유선 전파 — {relay_where}: 시간당 {ai.R('상황전파_1시간')}㎜ 이상(또는 일 {ai.R('상황전파_일')}㎜ 이상), "
                  "우려지역 통제·사전대피 여부 판단 요청, 통화 기록 남기기 ([[시군 상황관리반 행동매뉴얼]])")
     emerg, pre, ctrl = [], [], []
     for s in s_list:
@@ -235,7 +263,7 @@ def _tasks(stage, relay_where: str, s_list: list[dict], night: bool, cbs: list[s
     if ctrl:
         t.append("통제 기준 해당 — " + _few(ctrl, 6) + ": 통제 상황 확인 (지하차도 · 하천변 산책로 · 둔치주차장 · 산사태 지구) ([[통제·대피 기준]])")
     if cbs:
-        t.append("긴급재난문자 기준(1시간 50 + 3시간 90 · 또는 1시간 72㎜) 해당 가능 — " + _few(cbs, 8) +
+        t.append(f"긴급재난문자 기준({ai.cbs_rule()}) 해당 가능 — " + _few(cbs, 8) +
                  ": 기상청 송출 여부 확인, 시군 문자 문안 ([[재난문자 송출기준]] · [[재난문자 표준문안]])")
     t += _river_tasks(sigun)
     if night:
@@ -272,7 +300,16 @@ def _gaps(s_list: list[dict]) -> list[str]:
 
 
 def _refs(names: list[str]) -> list[str]:
-    return [ref(n) for n in dict.fromkeys(names)] + [CONTACTS]
+    return [ref(n) for n in dict.fromkeys(names)] + [CONTACTS] + _rule_warn()
+
+
+def _rule_warn() -> list[str]:
+    """위키 판정값 · 블록 문단을 못 읽었으면 참고 칸 끝에 — 판정은 기본값으로 계속한다([[판정값]])."""
+    r = ai.rules()
+    out = [f"⚠️ 위키 판정값을 못 읽었다 — {' · '.join(r['err'][:3])}. 2026-05 기준값으로 판정했다 ([[판정값]])"] if r["err"] else []
+    if _MISS:
+        out.append(f"⚠️ 위키 문단을 못 찾았다 — {', '.join(sorted(_MISS))}. 예전 문장을 보였다 (블록 ID 확인, [[판정값]])")
+    return out
 
 
 TIDE_REF = "고조정보 4단계와 대조기 해안침수"
@@ -332,7 +369,7 @@ def report(base: str, sigun: str | None = None, mode: str = "all") -> dict:
     sits = [situation(sg, base) for sg in focus]
     imp = []
     if relay:
-        imp.append(f"시간당 20㎜ · 일 100㎜ 넘은 시군 {len(relay)}곳: " + _few([_relay_txt(r) for r in relay], 8))
+        imp.append(f"{ai.relay_rule()} 넘은 시군 {len(relay)}곳: " + _few([_relay_txt(r) for r in relay], 8))
     if cbs:
         imp.append("긴급재난문자 기준 해당 가능: " + ", ".join(cbs))
     for s in sits:
@@ -352,7 +389,7 @@ def report(base: str, sigun: str | None = None, mode: str = "all") -> dict:
     nxt = [f"{_next(o['tm'])} 실황 · 초단기 새 발표"]
     st = (o["stage"] or {}).get("stage")
     if st != "비상 2단계":
-        nxt.append("호우경보 3개 시군 이상 → 도 비상 2단계" if st == "비상 1단계" else "호우주의보 4개 시군 이상 → 도 비상 1단계")
+        nxt.append(f"호우경보 {ai.R('비상2단계_호우경보_시군')}개 시군 이상 → 도 비상 2단계" if st == "비상 1단계" else f"호우주의보 {ai.R('비상1단계_호우주의보_시군')}개 시군 이상 → 도 비상 1단계")
     nxt.append(_ante_note(sits))
     return {"scope": "경남", "title": "경남 전체", "tm": o["tm"], "flash": _flash_all(o, sits, own),
             "sections": [{"h": "상황", "items": sit}, {"h": "전망 — 특보 · 단기예보 · 초단기", "items": _outlook(rows) + tide.summary()},
@@ -435,7 +472,7 @@ def _report_sigun(base: str, sigun: str) -> dict:
     relay = [r for r in s["emd"] if r["relay"]]
     imp = []
     if relay:
-        imp.append(f"시간당 20㎜ · 일 100㎜ 넘은 읍면동 {len(relay)}곳: " +
+        imp.append(f"{ai.relay_rule()} 넘은 읍면동 {len(relay)}곳: " +
                    ", ".join(f"{r['emd']}({r['rain']['1h']:g}㎜/h)" for r in sorted(relay, key=lambda x: -(x['rain']['1h'] or 0))[:8]))
     for r in s["emd"]:
         for fam, cs in r["ladders"].items():
@@ -482,7 +519,7 @@ def answer(base: str, qid: str, sigun: str | None = None) -> dict:
         want = ("산사태", "대응1", "사전대비1", "대피", "호우경보", "호우주의보")
         sec = [{"h": "표준문안(위키 [[재난문자 표준문안]] — 90자, ○○에 시각 · 지역 · 대피소)",
                 "items": [f"{a}: {b}" for a, b in rows if any(w in a for w in want)][:8] or ["위키에서 문안 표를 못 읽었다"]},
-               {"h": "송출 기준", "items": [ref("재난문자 송출기준"), "1시간 50㎜ + 3시간 90㎜ 동시, 또는 1시간 72㎜ — 기상청 긴급재난문자"]}]
+               {"h": "송출 기준", "items": [ref("재난문자 송출기준"), ai.cbs_rule() + " — 기상청 긴급재난문자"]}]
     elif sigun:
         s = situation(sigun, base)
         sb = _sites_by(sigun)
@@ -513,13 +550,15 @@ def answer(base: str, qid: str, sigun: str | None = None) -> dict:
         o = overview(base)
         rows = o["rows"]
         if qid == "relay":
-            sec = [{"h": "상황전파 대상(시간당 20㎜ · 일 100㎜)", "items": [f"{r['sigun']} — {r['emd1']} 시간당 {r['r1']:g}㎜ · 24시간 {r['r24']:g}㎜" for r in rows if r["relay"]] or ["없음"]},
-                   {"h": "전파 방법", "items": ["유선으로 시군 재난상황실에 — 수신자 · 송신자 · 통화시간 · 내용 기록 (위키 [[시군 상황관리반 행동매뉴얼]] 전파 문안)"]}]
+            sec = [{"h": f"상황전파 대상({ai.relay_rule()})", "items": [f"{r['sigun']} — {r['emd1']} 시간당 {r['r1']:g}㎜ · 24시간 {r['r24']:g}㎜" for r in rows if r["relay"]] or ["없음"]},
+                   {"h": "전파 방법", "items": [block("시군 상황관리반 행동매뉴얼#^전파", "두 경우 모두 유선으로 시군 재난상황실에 전파한다."),
+                                                 block("시군 상황관리반 행동매뉴얼#^기록", "기록할 것: 수신자 ↔ 송신자, 통화시간, 통화내용."),
+                                                 "문안 예시 · 근거 — " + ref("시군 상황관리반 행동매뉴얼")]}]
         elif qid == "stage":
             sec = [{"h": "지금", "items": [f"{o['stage']['stage']} — {o['stage']['why']}" if o["stage"] else "호우특보 없음 — 상시대비"]},
-                   {"h": "단계 기준(호우)", "items": ["초기대응: 주의보 3개 시군 이하", "비상 1단계: 주의보 4개 시군 이상 · 경보 2개 이하",
-                                                    "비상 2단계: 경보 3개 시군 이상 · 국지적 피해", "비상 3단계: 광역적 경보 · 광역적 피해",
-                                                    "도서 · 산지 · 먼바다 특보는 셈에서 뺀다 — " + ref("위기경보와 비상단계")]}]
+                   {"h": "단계 기준(호우)", "items": [f"초기대응: 주의보 {ai.R('비상1단계_호우주의보_시군') - 1}개 시군 이하", f"비상 1단계: 주의보 {ai.R('비상1단계_호우주의보_시군')}개 시군 이상 · 경보 {ai.R('비상2단계_호우경보_시군') - 1}개 이하",
+                                                    f"비상 2단계: 경보 {ai.R('비상2단계_호우경보_시군')}개 시군 이상 · 국지적 피해", "비상 3단계: 광역적 경보 · 광역적 피해",
+                                                    block("위기경보와 비상단계#^특보제외", "단계 기준이 되는 특보에서 도서지역 · 산지 · 먼바다는 제외한다.") + " — " + ref("위기경보와 비상단계")]}]
         elif qid == "evac":
             items = []
             for r in rows:
@@ -792,7 +831,7 @@ def _m_meeting(base, sigun):
     dis = [f"대피 기준 해당 {len({(a, b['emd']) for a, b, _, _ in hit})}개 읍면동: " + _few([f"{a} {b['emd']} {f} {c['stage']}" for a, b, f, c in hit], 6)] if hit else ["대피 기준 해당 없음"]
     relay = [r["sigun"] for r in rows if r["relay"]]
     if relay:
-        dis.append(f"상황전파 기준(시간당 20 · 일 100㎜) 시군 {len(relay)}곳: {_few(relay, 8)}")
+        dis.append(f"상황전파 기준({ai.relay_rule()}) 시군 {len(relay)}곳: {_few(relay, 8)}")
     cbs = [r["sigun"] for r in rows if r["cbs"]]
     if cbs:
         dis.append("긴급재난문자 기준 해당 가능: " + _few(cbs, 8))
@@ -806,10 +845,10 @@ def _m_meeting(base, sigun):
                "학교 휴교 협의(교육청) — 등교 시간 전 호우 지속 예보면", "재난문자 · 재난방송 요청(통합지원본부장 → 지상파)"]
     if _calm(o, rows, bool(hit)):
         return _quiet(o, sigun, rows, "상황판단회의", [
-            "예비 상황판단회의 · 초기대응 — 호우주의보 발표(3개 시군 이하) ([[위기경보와 비상단계]])",
-            "초기 상황판단회의 · 비상 1단계 — 주의보 4개 시군 이상 또는 경보 2개 시군 이하",
-            "본 상황판단회의 · 비상 2단계 — 호우경보 3개 시군 이상",
-            "그 전이라도 상황전파 기준(시간당 20㎜ · 일 100㎜)에 닿는 곳이 생기면 이 화면이 자료를 펼친다"],
+            f"예비 상황판단회의 · 초기대응 — 호우주의보 발표({ai.R('비상1단계_호우주의보_시군') - 1}개 시군 이하) ([[위기경보와 비상단계]])",
+            f"초기 상황판단회의 · 비상 1단계 — 주의보 {ai.R('비상1단계_호우주의보_시군')}개 시군 이상 또는 경보 {ai.R('비상2단계_호우경보_시군') - 1}개 시군 이하",
+            f"본 상황판단회의 · 비상 2단계 — 호우경보 {ai.R('비상2단계_호우경보_시군')}개 시군 이상",
+            f"그 전이라도 상황전파 기준({ai.relay_rule()})에 닿는 곳이 생기면 이 화면이 자료를 펼친다"],
             ["상황판단회의", "위기경보와 비상단계"])
     jud = _judicial([18, 3, 19, 20], ("판단", "위험정보"), "상황판단회의 · 비상근무 단계에서")
     sec = [{"h": "1. 기상상황(현황 · 전망)", "items": wx}, {"h": "2. 재난상황", "items": dis},
@@ -865,8 +904,8 @@ def _m_dept(base, sigun):
     pick = ["창원기상대", "경상남도경찰청", "한국전력공사", "제39보병사단"] + (["한국농어촌공사", "한국수자원공사"] if "하천" in fams else [])
     firm = [f"{k}: {v[:140]}" for k in co for v in [co[k]] if any(k.startswith(x[:6]) or x in k for x in pick)]
     sec.append({"h": "협업기관 — 먼저 연락할 곳", "items": firm[:6] or ["위키 표를 읽지 못했다"]})
-    nxt = {"초기대응": "호우주의보 4개 시군 이상 또는 호우경보 발표 → 비상 1단계(초기 상황판단회의)",
-           "비상 1단계": "호우경보 3개 시군 이상 → 비상 2단계(본 상황판단회의)", "비상 2단계": "더 오르는 단계는 없다 — 대책본부 운영 · 중앙 보고"}.get(st or "", "호우주의보 발표 → 초기대응")
+    nxt = {"초기대응": f"호우주의보 {ai.R('비상1단계_호우주의보_시군')}개 시군 이상 또는 호우경보 발표 → 비상 1단계(초기 상황판단회의)",
+           "비상 1단계": f"호우경보 {ai.R('비상2단계_호우경보_시군')}개 시군 이상 → 비상 2단계(본 상황판단회의)", "비상 2단계": "더 오르는 단계는 없다 — 대책본부 운영 · 중앙 보고"}.get(st or "", "호우주의보 발표 → 초기대응")
     sec.append({"h": "다음 단계", "items": [nxt]})
     sec.append({"h": "참고 — 위키 · 책자", "items": _refs(["비상단계별 협업부서 임무", "상황근무체계", "재난안전대책본부 조직", "실국별 행동매뉴얼", "시군 상황관리반 행동매뉴얼"])})
     return {**_hdr(o, sigun, "단계별 부서 임무"), "sections": sec}
@@ -954,7 +993,7 @@ def _m_msg(base, sigun):
     fld = ai.flood_of(sigun) if sigun else river.flood()
     if _calm(o, rows, bool(fld or _hits(sits, ("긴급대피", "사전대피"), ("met", "near")))):
         return _quiet(o, sigun, rows, "재난문자", [
-            "긴급재난문자 기준 — 시간당 50㎜ + 3시간 90㎜, 또는 시간당 72㎜ (기상청 송출)",
+            f"긴급재난문자 기준 — {ai.cbs_rule()} (기상청 송출)",
             "호우특보 · 대피 기준 해당 · 상황전파 기준에 닿으면 상황에 맞는 표준문안(90자)을 이 화면이 골라 보여 준다"],
             ["재난문자 송출기준", "재난문자 표준문안"])
     tbl = {}
@@ -972,7 +1011,7 @@ def _m_msg(base, sigun):
     if any(e["risk"].get("지하공간") and e["relay"] for s_ in sits for e in s_["emd"]):
         want += ["침수1", "지하1"]
     want = list(dict.fromkeys(want)) or ["사전대비1"]
-    sec = [{"h": "긴급재난문자 기준(1시간 50 + 3시간 90 · 또는 1시간 72㎜) — 기상청 송출", "items": cbs or ["해당 없음"]},
+    sec = [{"h": f"긴급재난문자 기준({ai.cbs_rule()}) — 기상청 송출", "items": cbs or ["해당 없음"]},
            *([{"h": "홍수특보 — 홍수통제소장 송출, 시군은 송출 여부 확인", "items": [river.fld_text(s) for s in fld]}] if fld else []),
            {"h": "상황에 맞는 표준문안 (90자 · ○○ 채우기)", "items": [f"{k}: {tbl[k]}" for k in want if k in tbl] or ["위키 문안을 못 읽었다"]},
            {"h": "송출 · 유의", "items": ["대피 정보는 긴급재난문자 + 민방위 경보(사이렌) + 마을방송 + 현장 전파를 동시에 — [[통제·대피 기준]]",
@@ -1009,4 +1048,6 @@ def reset_cache() -> None:
     _TTL.clear()
     _index.cache_clear()
     page.cache_clear()
+    _block.cache_clear()
+    _MISS.clear()
     _cases.cache_clear()
