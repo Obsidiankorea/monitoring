@@ -6,9 +6,9 @@ function prefTabs() {
   const box = $("prefs").querySelector(".box"), top = box.querySelector(".top");
   const panes = [];
   let cur = null;
-  // 머리글 아홉 개를 네 탭으로 — 탭이 많아 글자가 꺾이던 것을 묶는다(머리글은 탭 안의 소제목으로 남는다)
+  // 머리글 열 개를 네 탭으로 — 탭이 많아 글자가 꺾이던 것을 묶는다(머리글은 탭 안의 소제목으로 남는다)
   const GROUP = { "재생": "화면", "오른쪽 패널": "화면", "화면": "화면", "관측소": "자료", "API 절약": "자료",
-                  "AI 알림": "AI", "AI 위키": "AI", "API 키": "시스템", "업데이트": "시스템", "데모": "시스템" };
+                  "AI 답변": "AI", "AI 알림": "AI", "AI 위키": "AI", "API 키": "시스템", "업데이트": "시스템", "데모": "시스템" };
   for (const el of [...box.children]) {
     if (el === top) continue;
     if (el.tagName === "H4") {
@@ -139,6 +139,13 @@ function openPrefs() {
       이 PC 는 <b>지금 받기</b>(git pull — 이 PC 에서 손댄 파일이 있으면 받지 않는다), 서버(언레이드)는 <b>서버 갱신</b>(1분 안에 서버가 다시 빌드해 띄운다).
       자동으로 받지 않는다 — 누를 때만.</span></div>
     <div class="upd" id="pf-upd">${updHtml()}</div>
+    <h4>AI 답변</h4>
+    <div class="row"><span class="note">AI 상황판단(I)의 <b>자유 질문 · 다시 판단</b>을 누가 답할지. 예상 질문 단추는 어느 쪽이든 규칙으로 바로 답한다.
+      <b>로컬</b> = 이 서버(PC)의 llama-server(Vulkan · Qwen3 8B) — 인터넷 · 키 없이, 질문당 30~40초. 꺼져 있으면 고를 때 · 물을 때 알아서 켠다. <b>Claude</b> = Claude Code 로그인(수십 초).
+      <b>기타</b> = OpenAI 호환 주소(서버 환경변수 GN_AI_URL · GN_AI_KEY). <b>자동</b> = 서버 환경변수(GN_AI)대로.</span></div>
+    <div class="row"><span class="k">답하는 쪽</span><span class="seg" id="pf-llm">${[["auto", "자동"], ["off", "끔"], ["claude-cli", "Claude"], ["local", "로컬"], ["openai", "기타"]].map(([m, t]) => `<button type="button" data-m="${m}">${t}</button>`).join("")}</span></div>
+    <div class="row" id="pf-llm-loc"><span class="k">로컬 주소</span><input id="pf-llm-url" style="flex:1;min-width:0;font:inherit" spellcheck="false"><input id="pf-llm-model" style="width:120px;font:inherit" spellcheck="false" placeholder="모델(비워도 됨)"><button id="pf-llm-save" type="button">저장</button></div>
+    <div class="row"><span class="note" id="pf-llm-st">읽는 중…</span></div>
     <h4>AI 알림</h4>
     <div class="row"><span class="note">AI 팝업을 열지 않아도, 위키 기준(통제 · 사전대피 · 긴급대피)에 <b>가까워지거나(70%↑) 닿으면</b> 텔레그램으로 알린다 — 새로 생기거나 한 단계 오른 것만, 5분마다 본다.
       <b>켜는 서버는 한 곳만</b>(PC 와 서버를 둘 다 켜면 같은 알림이 두 번 간다). 기본은 끔.</span></div>
@@ -155,6 +162,7 @@ function openPrefs() {
   </div>`;
   prefTabs();
   loadWiki();
+  loadLlm();
   loadKeys();
   loadAlert();
   loadSaver();
@@ -428,6 +436,63 @@ $("prefs").addEventListener("click", async ev => {
     if (!r.ok) throw new Error(j.detail || r.status);
     ALERT = j; alertPaint();
   } catch (e) { alertPaint(`<span class="warnx">${escH(e.message)}</span>`); }
+});
+/* ── AI 답변(설정) — 자유 질문을 누가 답할지 ── */
+const LLM_NAME = { "claude-cli": "Claude", local: "로컬", openai: "기타(OpenAI 호환)" };
+function llmPaint(j, msg) {
+  const st = $("pf-llm-st");
+  if (!st) return;
+  if (j) {
+    document.querySelectorAll("#pf-llm button").forEach(b => b.classList.toggle("on", b.dataset.m === j.mode));
+    $("pf-llm-loc").style.display = j.mode === "local" ? "" : "none";
+    $("pf-llm-url").placeholder = j.local_url;
+    if (document.activeElement !== $("pf-llm-url")) $("pf-llm-url").value = j.url || "";
+    if (document.activeElement !== $("pf-llm-model")) $("pf-llm-model").value = j.model || "";
+  }
+  st.innerHTML = msg || [j.now ? `지금 답하는 쪽: <b>${LLM_NAME[j.now] || j.now}</b>` : "<b>꺼짐</b> — 예상 질문만",
+    j.mode === "auto" && `환경변수 ${j.env ? LLM_NAME[j.env] : "없음"}`,
+    j.mode === "local" && (j.up ? `서버 켜져 있음${j.models?.length ? ` · ${escH(j.models.join(", "))}` : ""}`
+      : j.starting ? "서버 켜는 중 — 모델을 올리는 데 10~20초"
+      : `<span class="warnx">서버가 꺼져 있다(${escH(j.url || j.local_url)})${j.start_err ? ` — ${escH(j.start_err)}` : ""}</span> <button id="pf-llm-start" type="button">켜기</button>`),
+    j.mode === "openai" && j.env !== "openai" && `<span class="warnx">GN_AI_URL 이 없으면 답하지 못한다</span>`].filter(Boolean).join(" · ");
+}
+async function loadLlm() {
+  try { llmPaint(await getJson("/api/settings/ai-llm")); }
+  catch (e) { llmPaint(null, `<span class="warnx">못 읽었다 — ${escH(e.message)}</span>`); }
+}
+async function llmPut(body) {
+  try {
+    const r = await fetch("/api/settings/ai-llm", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.detail || r.status);
+    llmPaint(j);
+    if (j.starting) llmWait(15);
+    if (AIW.open) aiLoad();
+  } catch (e) { llmPaint(null, `<span class="warnx">저장하지 않았다 — ${escH(e.message)}</span>`); }
+}
+/* 켜는 중이면 2초마다 다시 본다(30초까지) */
+async function llmWait(n) {
+  await new Promise(r => setTimeout(r, 2000));
+  try {
+    const j = await getJson("/api/settings/ai-llm");
+    if (!j.up && n > 1) { llmPaint({ ...j, starting: true }); return llmWait(n - 1); }
+    llmPaint(j);
+  } catch (e) { llmPaint(null, `<span class="warnx">못 읽었다 — ${escH(e.message)}</span>`); }
+}
+async function llmStart() {
+  try {
+    const r = await fetch("/api/settings/ai-llm/start", { method: "POST" });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.detail || r.status);
+    llmPaint(j);
+    if (j.starting) llmWait(15);
+  } catch (e) { llmPaint(null, `<span class="warnx">켜지 못했다 — ${escH(e.message)}</span>`); }
+}
+$("prefs").addEventListener("click", ev => {
+  const t = ev.target, v = () => ({ url: $("pf-llm-url").value, model: $("pf-llm-model").value });
+  if (t.closest?.("#pf-llm") && t.dataset.m) llmPut({ mode: t.dataset.m, ...v() });
+  else if (t.id === "pf-llm-save") llmPut({ mode: "local", ...v() });
+  else if (t.id === "pf-llm-start") llmStart();
 });
 /* ── AI 위키 폴더(설정) ── */
 function wikiPaint(w, msg) {

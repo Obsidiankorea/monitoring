@@ -637,6 +637,37 @@ async def api_ai_wiki_put(body: dict):
     return {**r, "source": ai.wiki_source()[1], "default": ai.DEFAULT_WIKI}
 
 
+@app.get("/api/settings/ai-llm")
+async def api_ai_llm_get():
+    from . import llm
+    return {**llm.setting(), "now": llm.mode(), "env": llm.configured(), "local_url": llm.LOCAL_URL,
+            **await asyncio.to_thread(llm.ping)}
+
+
+@app.put("/api/settings/ai-llm")
+async def api_ai_llm_put(body: dict):
+    """AI 자유 질문을 누가 답할지 — {mode: auto|off|claude-cli|local|openai, url, model}. 키는 받지 않는다."""
+    from . import llm
+    try:
+        s = llm.put_setting(body)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    if s["mode"] == "local":                   # 로컬을 고르면 꺼져 있을 때 바로 켠다(뜨기는 기다리지 않는다)
+        return await api_ai_llm_start()
+    return await api_ai_llm_get()
+
+
+@app.post("/api/settings/ai-llm/start")
+async def api_ai_llm_start():
+    """이 PC 의 llama-server 를 켠다 — 이미 켜져 있으면 그대로."""
+    from . import llm
+    try:
+        r = await asyncio.to_thread(llm.start_local)
+    except RuntimeError as e:
+        return {**await api_ai_llm_get(), "start_err": str(e)}
+    return {**await api_ai_llm_get(), "starting": r["started"] and not r["up"]}
+
+
 @app.get("/api/settings/ai-alert")
 async def api_ai_alert_get():
     return aiwatch.status()

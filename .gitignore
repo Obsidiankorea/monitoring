@@ -8,6 +8,7 @@ data/*.db
 data/*.db-wal
 data/*.db-shm
 data/cache/
+data/*.log
 
 __pycache__/
 *.pyc
