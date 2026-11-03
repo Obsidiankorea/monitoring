@@ -45,3 +45,17 @@ def test_block_reads_paragraph_and_falls_back(tmp_path, monkeypatch):
     assert aireport.block("매뉴얼#^제외", "옛") == "섬은 제외한다."
     assert aireport.block("매뉴얼#^없음", "옛") == "옛"
     assert any("[[매뉴얼#^없음]]" in x for x in aireport._refs([]))
+
+
+def test_cases_picked_by_wiki_property(tmp_path, monkeypatch):
+    """판례 문서 '적용' 속성으로 고른다 — 새 판례도 속성만 적으면 나온다. 속성이 하나도 없으면 예전 번호."""
+    v = _vault(tmp_path, monkeypatch, "")
+    pan = lambda n, fm: (v / f"판례 {n:02d} 사건.md").write_text(f"---\nsummary: 사건 — 요지{n}\n{fm}---\n# 판례\n", "utf-8")  # noqa: E731
+    pan(7, "")
+    assert aireport._judicial("대피", [7], ("대피",), "대피")["items"][1].startswith("⚠️ [[판례 07 사건]]")
+    pan(30, "적용: [대피, 통제]\n")
+    pan(31, "적용: [상황판단회의]\n")
+    aireport.reset_cache()
+    items = aireport._judicial("대피", [7], ("대피",), "대피")["items"]
+    assert len(items) == 2 and "[[판례 30 사건]]" in items[1]            # 07 은 속성이 없어 빠지고, 31 은 다른 장면
+    assert aireport._judicial("없는장면", [7], (), "x") is None

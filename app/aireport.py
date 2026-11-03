@@ -781,8 +781,27 @@ def _record_items(*labels: str) -> list[str]:
     return [ln.lstrip("- ").strip() for ln in sec.splitlines() if ln.startswith("- ") and any(ln.lstrip("- ").startswith(x) for x in labels)]
 
 
-def _judicial(nums: list[int], record: tuple[str, ...], why: str) -> dict | None:
-    """⚠️ 판례로 본 점검 — 지금 상황(why)에서 예전에 책임이 문제된 조치와, 그래서 남겨 둘 기록. 비가 없을 때는 쓰지 않는다."""
+@lru_cache(maxsize=1)
+def _pan_scenes() -> dict[str, list[int]]:
+    """판례 문서 머리말 '적용: [상황판단회의, 대피, 통제]' → {장면: [번호…]}. 새 판례도 속성만 적으면 그 화면에 나온다."""
+    out: dict[str, list[int]] = {}
+    for stem, p_ in sorted(_index().items()):
+        if not (m := re.match(r"판례 (\d+) ", stem)):
+            continue
+        t = p_.read_text("utf-8")
+        fm = t.split("---", 2)[1] if t.startswith("---") else ""
+        if (a := re.search(r"^적용:\s*\[(.*)\]\s*$", fm, re.M)):
+            for sc in (x.strip().strip('"') for x in a.group(1).split(",")):
+                if sc:
+                    out.setdefault(sc, []).append(int(m.group(1)))
+    return out
+
+
+def _judicial(scene: str, old: list[int], record: tuple[str, ...], why: str) -> dict | None:
+    """⚠️ 판례로 본 점검 — 지금 상황(why)에서 예전에 책임이 문제된 조치와, 그래서 남겨 둘 기록. 비가 없을 때는 쓰지 않는다.
+    고를 판례는 위키 판례 문서의 '적용' 속성(scene). 어느 판례에도 속성이 없으면(옛 위키) 예전 번호(old)."""
+    sc = _pan_scenes()
+    nums = sc.get(scene, []) if sc else old
     items = [f"⚠️ {why} — 아래는 판례를 바탕으로 한 업무 점검 해석이다(판시 아님). 책임은 사무분장 · 관리청 · 정보를 안 시점 · 조치 가능성에 따라 다르다 ([[판례 인용규칙]])"]
     for n in nums:
         c = _pan(n)
@@ -850,7 +869,7 @@ def _m_meeting(base, sigun):
             f"본 상황판단회의 · 비상 2단계 — 호우경보 {ai.R('비상2단계_호우경보_시군')}개 시군 이상",
             f"그 전이라도 상황전파 기준({ai.relay_rule()})에 닿는 곳이 생기면 이 화면이 자료를 펼친다"],
             ["상황판단회의", "위기경보와 비상단계"])
-    jud = _judicial([18, 3, 19, 20], ("판단", "위험정보"), "상황판단회의 · 비상근무 단계에서")
+    jud = _judicial("상황판단회의", [18, 3, 19, 20], ("판단", "위험정보"), "상황판단회의 · 비상근무 단계에서")
     sec = [{"h": "1. 기상상황(현황 · 전망)", "items": wx}, {"h": "2. 재난상황", "items": dis},
            {"h": "3. 과거 재해이력 비교", "items": _analogs(o, risk_sg or [r["sigun"] for r in rows])
             + _uosim((risk_sg or [r["sigun"] for r in rows])[:6])
@@ -937,7 +956,7 @@ def _m_evac(base, sigun):
         "발령권자: 시장 · 군수 · 구청장(대책본부장) — 긴급하면 읍면동장이 주민대피명령 (재난안전법 제40조)",
         "취약계층 먼저 · 일몰 전 사전대피 원칙" + (" — 지금 야간: 대피로 · 이동 수단 안전 먼저 확인" if o["night"] else ""),
         "사전대피는 예보, 긴급대피는 실황이 기준 — 지구별 원문 기준은 [[시군별 통제·대피계획]]"]})
-    jud = _judicial([1, 3, 22], ("위험정보", "대피"), "대피 판단 · 경보 전파에서")
+    jud = _judicial("대피", [1, 3, 22], ("위험정보", "대피"), "대피 판단 · 경보 전파에서")
     if jud:
         sec.append(jud)
     sec.append({"h": "확인할 것", "items": [_ante_note(sits) + " (사전대피 첫 조건: 산림청 예측정보)",
@@ -981,7 +1000,7 @@ def _m_control(base, sigun):
            {"h": "하천 기준 대조", "items": rv[:10] or ["하천 통제 · 대피 기준에 닿은 곳 없음(30㎜/h 3시간 지속 예보 · 누적 200㎜ + 30㎜/h)"]},
            {"h": "기준 · 유의", "items": ["지하차도: 호우특보 발령 · 침수심 5㎝ 이상이면 통제. 4인 담당자(공무원 2 · 민간 1 · 경찰 1) — [[통제·대피 기준]]",
                                          "하천: 30㎜/h 이상 3시간 지속 예보 · 홍수주의보면 통제", "침수심 · CCTV · 제방 · 교량 수위는 대시보드에 없다 — 시군 · 현장 확인"]},
-           *([j] if (j := _judicial([18, 4, 6, 11], ("대피", "시설"), "지하차도 · 하천 · 도로 통제에서")) else []),
+           *([j] if (j := _judicial("통제", [18, 4, 6, 11], ("대피", "시설"), "지하차도 · 하천 · 도로 통제에서")) else []),
            {"h": "참고 — 위키 · 책자", "items": _refs(["통제·대피 기준", "인명피해 우려지역", "도로 침수 낙석 사면붕괴 확인사항", "판례 업무별 적용"])}]
     return {**_hdr(o, sigun, "통제(지하차도 · 하천)"), "sections": sec}
 
@@ -1049,5 +1068,6 @@ def reset_cache() -> None:
     _index.cache_clear()
     page.cache_clear()
     _block.cache_clear()
+    _pan_scenes.cache_clear()
     _MISS.clear()
     _cases.cache_clear()
