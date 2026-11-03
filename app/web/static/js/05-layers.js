@@ -6,6 +6,9 @@ const OVL = [
   { id: "stations", label: "관측소", short: "관측소", key: "S" },
   { id: "stnval", label: "지점 강수량 글자", short: "값", key: "V", parent: "stations" },
   { id: "river", label: "하천 · 댐", short: "하천", key: "D" },
+  { id: "slide", label: "산사태 예보 · 예측", short: "산사태", key: "J" },
+  { id: "reservoir", label: "위험저수지", short: "저수지", key: "K" },
+  { id: "flood", label: "침수흔적", short: "침수흔적", key: "N" },
   { id: "tide", label: "조위", short: "조위", key: "O" },
   { id: "temp", label: "기온", short: "기온", key: "E" },
 ];
@@ -20,6 +23,10 @@ const TIPS = new Map([
     예측 층에서는 자리만. 경남 AWS(내부망) 지점은 이 층에 없다 — 시군을 누르면 오른쪽 패널에 목록으로 나온다(막대 파랑 경남 · 청록 기상청).`],
   ["ov-river", `<b>하천 · 댐</b> — 경남 하천 수위 관측소(눈금 막대) · 댐 · 보를 홍수통제소 자료로. 막대 색은 수위 단계, 주의보부터는 번쩍인다. 네모 테두리는 그 지점에 걸린 홍수예보.
     낙동강 위쪽(경북 · 대구) 댐 · 보도 함께 — 경남으로 흘러드는 물이라 점선 둘레로. 점에 마우스를 올리면 수위 · 기준 수위 · 1시간 변화 · 방류. 10분마다 갱신.`],
+  ["ov-slide", `<b>산사태 예보 · 예측</b> — 시장 · 군수가 낸 산사태 주의보 · 경보와 산림청 예측정보가 걸린 시군에 갈색 테두리 · 이름 위 딱지.
+    서버는 경남에 호우 · 태풍 특보가 있을 때만 받는다(범례에서 '늘 받기'로 바꿀 수 있다).`],
+  ["ov-reservoir", `<b>위험저수지</b> — 재해위험 저수지 계측기(수위계 · 경사계) 세모. 발령 중이면 단계 색(관심~대피), 해제면 회색. 마우스를 올리면 현수위 · 기준.`],
+  ["ov-flood", `<b>침수흔적</b> — 2002년부터 실제 침수된 구역(행정안전부 침수흔적도)을 옅은 파랑 면으로. 마우스를 올리면 해 · 재해 이름 · 침수심.`],
   ["ov-temp", `<b>기온</b> — 시군 이름 밑에 그 시군 가장 더운 AWS 지점의 정시 기온. 33° 이상은 범례 색으로. 폭염 화면(M)은 시군 면과 오른쪽 패널까지 기온으로 바뀐다.`],
   ["ov-tide", `<b>조위</b> — 경남 해안 조위관측소의 바닷물 높이(해양조사원). 표식의 숫자는 지금 실측, 괄호는 예측과의 차이.
     마우스를 올리면 요약, 누르면 게이지 · 물결 팝업. 대조기 기간에는 아이콘 옆에 표시한다.`],
@@ -32,6 +39,9 @@ const OV_IC = {
   alerts: `<svg viewBox="0 0 24 24"><path d="M7 16.5a4.2 4.2 0 0 1-.5-8.3 5.6 5.6 0 0 1 10.8 1.3A3.5 3.5 0 0 1 17 16.5"/><path d="m12.6 12-2.4 3.6h2.8L11.4 20"/></svg>`,
   stations: `<svg viewBox="0 0 24 24"><path d="M12 4 20 12 12 20 4 12z"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/></svg>`,
   tide: `<svg viewBox="0 0 24 24"><path d="M3 15c2.2-2 3.8-2 6 0s3.8 2 6 0 3.8-2 6 0"/><path d="M3 20c2.2-2 3.8-2 6 0s3.8 2 6 0 3.8-2 6 0" opacity=".5"/><path d="M12 11V3M8.8 6 12 3l3.2 3"/></svg>`,
+  slide: `<svg viewBox="0 0 24 24"><path d="M3 19 9.5 8l3.5 6 2-3 6 8z"/><path d="m11 13 1.5 1.5M8 16l1.5 1" opacity=".6"/></svg>`,
+  reservoir: `<svg viewBox="0 0 24 24"><path d="M12 4 21 19H3z"/><path d="M7.5 15.5c1.5-1 3-1 4.5 0s3 1 4.5 0" opacity=".7"/></svg>`,
+  flood: `<svg viewBox="0 0 24 24"><path d="M4 6h16v12H4z" opacity=".5"/><path d="M4 14c2.7-2 5.3-2 8 0s5.3 2 8 0"/></svg>`,
   river: `<svg viewBox="0 0 24 24"><path d="M3 8.5c2.2-2 3.8-2 6 0s3.8 2 6 0 3.8-2 6 0"/><path d="M3 13.5c2.2-2 3.8-2 6 0s3.8 2 6 0 3.8-2 6 0"/><path d="M3 18.5c2.2-2 3.8-2 6 0s3.8 2 6 0 3.8-2 6 0" opacity=".5"/></svg>`,
 };
 let LY_OPEN = null;                     // 펼친 범례(stations) — 창마다 기억
@@ -85,11 +95,12 @@ function renderLyIcons() {
     const lv = alLand().reduce((a, g) => ((LVRANK[g.lv] || 0) > (LVRANK[a] || 0) ? g.lv : a), null);
     return lv ? `var(--lv-${lv})` : "";
   };
-  box.innerHTML = ["alerts", "stations", "river", "tide"].filter(id => OV.has(id)).map(id => {
+  box.innerHTML = ["alerts", "stations", "river", ...SAF_IDS, "tide"].filter(id => OV.has(id)).map(id => {
     const o = OVL.find(x => x.id === id);
     const hiR = RIV?.rows ? RIV.rows.filter(s => s.kind === "wl" && (s.stage ?? -1) >= 1 && selHas(s.sigun)).length : 0;
-    const n = id === "alerts" && ALERTS && !ALERTS.err ? alLand().length + alSea().length : id === "river" ? hiR : id === "tide" ? tdHigh().length : 0;
-    const col = id === "alerts" ? lvTop() : id === "river" && hiR ? RV_C[rvMax()] : id === "tide" ? tdCol() : "";
+    const sfN = safCount(id);
+    const n = id === "alerts" && ALERTS && !ALERTS.err ? alLand().length + alSea().length : id === "river" ? hiR : id === "tide" ? tdHigh().length : sfN;
+    const col = id === "alerts" ? lvTop() : id === "river" && hiR ? RV_C[rvMax()] : id === "tide" ? tdCol() : sfN ? "var(--lv-watch)" : "";
     return `<button class="ly-ic sm" data-d="${id}" aria-expanded="${id === "alerts" ? alShown() : LY_OPEN === id}" title="${o.label} — 눌러서 ${id === "alerts" ? "특보 줄 펼치기 · 접기" : "범례·설명"} (${o.key}: 끄기)"
       ${col ? `style="color:${col}"` : ""}>${OV_IC[id]}${n ? `<span class="bd" style="background:${col || "var(--ink-3)"}">${n}</span>` : ""}${id === "tide" ? tdSpringChip() : ""}</button>`;
   }).join("");
@@ -100,6 +111,7 @@ function renderLyIcons() {
   if (ic) $("ly-stn").style.top = ic.offsetTop + "px";
   const ir = box.querySelector(`[data-d="river"]`);
   if (ir) $("ly-river").style.top = ir.offsetTop + "px";
+  for (const sid of SAF_IDS) { const b = box.querySelector(`[data-d="${sid}"]`); if (b) $(`ly-${sid}`).style.top = b.offsetTop + "px"; }
   const it = box.querySelector(`[data-d="tide"]`);
   if (it) { $("ly-tide").style.top = it.offsetTop + "px"; tdFit(); }
   fitAlCol();
@@ -130,6 +142,7 @@ function renderLayers() {
   renderAlertLegend();
   renderStnLegend();
   renderRiverLegend();
+  renderSafetyLegend();
   renderTideLegend();
   renderLyIcons();
 }
@@ -139,6 +152,7 @@ function setOverlay(id, on) {
   if (id === "alerts") { if (on) loadAlerts(); else { ALERTS = null; drawAlerts(); draw(); } if (V) { camGo(true); placeSw(); } }
   if (id === "stations") loadStations();
   if (id === "river") { if (on) setLyOpen("river"); loadRiver(); }
+  if (SAF_IDS.includes(id)) { if (on) setLyOpen(id); loadSafety(); }
   if (id === "tide") { if (on) setLyOpen("tide"); loadTide(); }
   if (id === "temp") loadHeat();
   if (id === "stnval") drawStations();

@@ -19,6 +19,7 @@ const rvHi = s => Math.max(s.stage ?? -1, s.fc?.lv ?? -1);               // ì§€ê
 const rvMax = () => Math.max(-1, ...(RIV?.rows || []).filter(s => s.kind === "wl" && selHas(s.sigun)).map(s => s.stage ?? -1));
 function drawRiver() {
   drawTide();
+  drawSafety();
   const g = $("rivr");
   if (!g) return;
   RIV_HIT = [];

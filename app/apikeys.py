@@ -17,7 +17,11 @@ EDITABLE = [
     ("LAW_OC", "법제처 국가법령정보(OC)", "법령 · 행정규칙 · 자치법규 변경 감시 — 서버 공인 IP 등록 필요", "law-go-kr"),
     ("HRFCO_KEY", "홍수통제소(HRFCO)", "하천 수위 · 댐 · 보 · 홍수예보 — 지도 레이어 '하천·댐'", "hrfco"),
     ("ITS_KEY", "국가교통정보센터 재난상황정보", "호우특보 중 지하차도 침수 위험 경보 — NAS 서버에만", "its"),
-    ("DATA_GO_KR_KEY", "공공데이터포털", "조위(해양조사원) · 산림청 산사태 예보(승인 뒤)", "data-go-kr"),
+    ("DATA_GO_KR_KEY", "공공데이터포털", "조위(해양조사원)", "data-go-kr"),
+    ("SD_SLIDE_FCST_KEY", "재난안전데이터 · 산사태 예보", "시군 산사태 주의보 · 경보 — 레이어 '산사태'(J), 호우 · 태풍 특보 때만", "safetydata"),
+    ("SD_SLIDE_PRED_KEY", "재난안전데이터 · 산사태 예측", "산림청 예측정보 — 레이어 '산사태'(J), 호우 · 태풍 특보 때만", "safetydata"),
+    ("SD_RESERVOIR_KEY", "재난안전데이터 · 위험저수지", "저수지 계측기 경보 — 레이어 '위험저수지'(K)", "safetydata"),
+    ("SD_FLOODMAP_KEY", "재난안전데이터 · 침수흔적도", "과거 침수 구역 — 레이어 '침수흔적'(N), 7일마다", "safetydata"),
     ("TELEGRAM_BOT_TOKEN", "텔레그램 봇 토큰", "AI 알림 · 법령 알림", "telegram"),
     ("TELEGRAM_CHAT_ID", "텔레그램 채팅 번호", "알림 받을 곳", "telegram"),
 ]

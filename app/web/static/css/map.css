@@ -935,20 +935,20 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 @keyframes rvpulse { 0% { transform: scale(.7); opacity: .95; } 100% { transform: scale(2.3); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { #over .rvp { animation: none; opacity: .6; } }
 #over .rvl text { font-family: var(--sans); font-weight: 700; fill: var(--ink); stroke: var(--panel); paint-order: stroke; stroke-linejoin: round; dominant-baseline: central; }
-#ly-river { width: auto; min-width: 280px; max-width: 360px; padding: 10px 12px 12px; }
-#ly-river .hd2 { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; cursor: pointer; }
-#ly-river .hd2 b { font-size: 15px; }
-#ly-river .hd2 span { font: 600 12px var(--mono); color: var(--ink-3); margin-left: auto; }
-#ly-river .hd2 .k { font: 600 12px var(--sans); color: var(--ink-3); margin-left: 0; }
-#ly-river .keys2 { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; color: var(--ink-2); }
-#ly-river .dt { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px; flex: none; }
-#ly-river .sec { font: 700 11.5px var(--sans); color: var(--ink-3); letter-spacing: .06em; margin: 10px 0 3px; }
-#ly-river .rr { display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 2px 0; }
-#ly-river .rr b { font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
-#ly-river .rr span { font: 600 12px var(--mono); color: var(--ink-2); white-space: nowrap; }
-#ly-river .rr em { font-style: normal; font-size: 12px; color: var(--ink-3); margin-left: auto; white-space: nowrap; }
-#ly-river .nt { font-size: 12.5px; color: var(--ink-3); margin-top: 6px; line-height: 1.4; }
-#ly-river .nt.w { color: var(--lv-fail); }
+:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood) { width: auto; min-width: 280px; max-width: 360px; padding: 10px 12px 12px; }
+:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood) .hd2 { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; cursor: pointer; }
+:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood) .hd2 b { font-size: 15px; }
+:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood) .hd2 span { font: 600 12px var(--mono); color: var(--ink-3); margin-left: auto; }
+:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood) .hd2 .k { font: 600 12px var(--sans); color: var(--ink-3); margin-left: 0; }
+:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood) .keys2 { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; color: var(--ink-2); }
+:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood) .dt { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px; flex: none; }
+:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood) .sec { font: 700 11.5px var(--sans); color: var(--ink-3); letter-spacing: .06em; margin: 10px 0 3px; }
+:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood) .rr { display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 2px 0; }
+:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood) .rr b { font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
+:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood) .rr span { font: 600 12px var(--mono); color: var(--ink-2); white-space: nowrap; }
+:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood) .rr em { font-style: normal; font-size: 12px; color: var(--ink-3); margin-left: auto; white-space: nowrap; }
+:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood) .nt { font-size: 12.5px; color: var(--ink-3); margin-top: 6px; line-height: 1.4; }
+:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood) .nt.w { color: var(--lv-fail); }
 #tip .spk { display: block; margin-top: 4px; }
 #tip .spk polyline { fill: none; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
 #over .st text { font-family: var(--mono); font-weight: 600; fill: var(--ink); dominant-baseline: central; }
@@ -1170,11 +1170,11 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 #prefs h4 { margin: 16px 0 6px; font-size: 12px; color: var(--ink-3); letter-spacing: .12em; }
 #prefs .row { display: flex; align-items: center; gap: 12px; padding: 6px 0; }
 #prefs .row .k { width: 92px; color: var(--ink-2); flex: none; }
-#prefs .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
-#prefs .seg button { font: 600 13px var(--sans); color: var(--ink-2); background: transparent; border: 0;
+:is(#prefs, #ly-slide) .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+:is(#prefs, #ly-slide) .seg button { font: 600 13px var(--sans); color: var(--ink-2); background: transparent; border: 0;
   border-right: 1px solid var(--line); padding: 6px 12px; cursor: pointer; }
-#prefs .seg button:last-child { border-right: 0; }
-#prefs .seg button.on { color: var(--ink); background: color-mix(in oklab, var(--accent) 24%, transparent); }
+:is(#prefs, #ly-slide) .seg button:last-child { border-right: 0; }
+:is(#prefs, #ly-slide) .seg button.on { color: var(--ink); background: color-mix(in oklab, var(--accent) 24%, transparent); }
 #prefs .grid2 { display: grid; grid-template-columns: 1fr 1fr; column-gap: 24px; }
 #prefs .grid2 .row.wide { grid-column: 1 / -1; }
 #prefs .grid2 .row { min-width: 0; flex-wrap: wrap; }
@@ -1470,3 +1470,17 @@ body.heat #ht-lg { position: absolute; left: 22px; bottom: 22px; z-index: 5; dis
   .hr, .ht-ax { grid-template-columns: calc(104px * var(--k, 1)) minmax(0, 1fr) calc(86px * var(--k, 1)); gap: calc(8px * var(--k, 1)); }
   .hr svg, .ht-ax span:last-child { display: none; }
 }
+
+/* 산사태 · 저수지 · 침수흔적(06d-safety.js) */
+#ly-slide .sfm { margin: 6px 0 2px; }
+:root { --sf-flood: #3E9BD9; --sf-slide: #A0622D; }
+#safg .sff { fill: var(--sf-flood); fill-opacity: .22; fill-rule: evenodd; stroke: var(--sf-flood); stroke-opacity: .5; stroke-width: .6; }
+#safg .sfs { fill: none; stroke: var(--sf-slide); stroke-width: 3; stroke-dasharray: 7 4; }
+#safg .sfs.l2 { stroke-width: 4.5; stroke-dasharray: none; }
+#safg .sfr { fill: var(--ink-3); fill-opacity: .55; stroke: var(--halo); stroke-width: 1; }
+#safg .sfr.on { fill-opacity: 1; stroke: var(--ink); stroke-width: 1.2; }
+#safg .sfr.dim { opacity: .35; }
+#safg .sfb rect { fill: var(--sf-slide); }
+#safg .sfb.l2 rect { fill: var(--lv-warn); }
+#safg .sfb text { fill: #fff; font-weight: 700; dominant-baseline: central; }
+#stage.zooming #over #safg { opacity: 0; transition: opacity .1s; }

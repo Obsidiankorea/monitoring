@@ -32,7 +32,7 @@ from fastapi import Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import aiwatch, apikeys, heat, its, lawwatch, river, tide, clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, serverupdate, sites, snaps, update
+from . import aiwatch, apikeys, heat, its, lawwatch, river, safety, tide, clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, serverupdate, sites, snaps, update
 from .collectors import alerts, bangjae_rain, forecast, grid_rain, qpf, rain, shortfc
 from .config import CACHE, INTERVALS, POLL_DEFAULT
 
@@ -154,6 +154,9 @@ async def lifespan(app: FastAPI):
     # 하천 수위 · 댐 · 보 — 10분마다(HRFCO_KEY 가 있는 서버에서만, app/river.py). 켠 지 20초 뒤 첫 수집
     sched.add_job(river.run, "interval", minutes=10, id="river", max_instances=1, coalesce=True,
                   next_run_time=datetime.now() + timedelta(seconds=20))
+    # 재난안전데이터 — 산사태 예보 · 예측, 위험저수지, 침수흔적(키마다 따로, 하루 1000건 — app/safety.py). 켠 지 40초 뒤 첫 수집
+    sched.add_job(safety.run, "interval", minutes=10, id="safety", max_instances=1, coalesce=True,
+                  next_run_time=datetime.now() + timedelta(seconds=40))
     # 지하차도 침수 위험 경보 — 경남 호우특보 중에만 부른다(ITS_KEY, 월 1000건 — app/its.py)
     sched.add_job(its.run, "interval", minutes=15, id="its", max_instances=1, coalesce=True)
     # 하루 한 번 묵은 자료 치우기 — 안 하면 DB 와 이미지 캐시가 계속 자란다
@@ -502,6 +505,32 @@ async def api_river():
     return river.status() | {"road": its.status()}
 
 
+@app.get("/api/safety")
+async def api_safety():
+    """지도 레이어 '산사태 · 저수지 · 침수흔적' — 산사태 예보 · 예측, 위험저수지 계측 경보(경남). 키가 없으면 on=false."""
+    return safety.status()
+
+
+@app.put("/api/settings/slide")
+async def api_slide_put(body: dict):
+    """산사태 예보 · 예측 받기 — {mode: auto(호우 · 태풍 특보 때만) | on(늘)}. 켜면 바로 한 번 받는다."""
+    m = body.get("mode")
+    if m not in ("auto", "on"):
+        raise HTTPException(400, "mode 는 auto · on")
+    db.put_setting("sd_slide", {"mode": m})
+    if safety.slide_why():
+        safety._LIVE["at"].pop("fcst", None)
+        safety._LIVE["at"].pop("pred", None)
+        await safety.run()
+    return safety.status()
+
+
+@app.get("/api/safety/flood")
+async def api_safety_flood():
+    """경남 침수흔적 다각형(경위도) — 7일마다 받아 둔 파일 그대로."""
+    return PlainTextResponse(safety.flood(), media_type="application/json")
+
+
 @app.get("/api/keys")
 async def api_keys():
     """설정 › API 키 — 어떤 키가 설정돼 있나(값은 주지 않는다: 설정됨 · 끝 네 글자만)."""
@@ -532,6 +561,8 @@ async def api_keys_put(body: dict):
         raise HTTPException(500, f"파일에 쓰지 못했다 — {e}") from e
     if body.get("name") == "HRFCO_KEY":                       # 키를 넣자마자 한 번 받아 지도에 바로 뜨게
         asyncio.create_task(river.run())
+    if str(body.get("name") or "").startswith("SD_"):
+        asyncio.create_task(safety.run())
     return {"keys": apikeys.status(), "demo": config.DEMO}
 
 
