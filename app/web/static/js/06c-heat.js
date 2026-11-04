@@ -32,7 +32,22 @@ async function loadHeat() {
   drawHeat(); renderHeat();
   HT_T = setTimeout(loadHeat, 5 * 60 * 1000);
 }
+/* 화면을 바꿀 때 한 번 — 폭염으로: 붉게 달아오르며 해가 돈다 · 호우로: 화면 가득 빗줄기. 누를 때만(켤 때 · 저장 없이 맞출 때는 안 한다) */
+function modeFx(heat) {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  $("modefx")?.remove();
+  const fx = document.createElement("div");
+  fx.id = "modefx";
+  fx.className = heat ? "sun" : "rain";
+  fx.innerHTML = heat
+    ? `<svg viewBox="-60 -60 120 120"><g class="ray">${Array.from({ length: 12 }, (_, i) => `<rect x="-3" y="-56" width="6" height="18" rx="3" transform="rotate(${i * 30})"/>`).join("")}</g><circle r="30"/></svg>`
+    : Array.from({ length: 90 }, () => `<i style="left:${(Math.random() * 100).toFixed(1)}%;animation-delay:${(Math.random() * .7).toFixed(2)}s;animation-duration:${(.45 + Math.random() * .35).toFixed(2)}s;height:${(40 + Math.random() * 70).toFixed(0)}px"></i>`).join("");
+  document.body.appendChild(fx);
+  $("mode").classList.remove("spin"); void $("mode").offsetWidth; $("mode").classList.add("spin");
+  setTimeout(() => fx.remove(), 1700);
+}
 function setHeat(on, save = true) {
+  if (save && !!on !== HEAT) modeFx(!!on);
   HEAT = !!on;
   if (save) { try { localStorage.setItem("gn-map-heat", HEAT ? "1" : "0"); } catch {} }
   document.body.classList.toggle("heat", HEAT);

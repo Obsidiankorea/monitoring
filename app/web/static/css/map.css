@@ -1484,3 +1484,20 @@ body.heat #ht-lg { position: absolute; left: 22px; bottom: 22px; z-index: 5; dis
 #safg .sfb.l2 rect { fill: var(--lv-warn); }
 #safg .sfb text { fill: #fff; font-weight: 700; dominant-baseline: central; }
 #stage.zooming #over #safg { opacity: 0; transition: opacity .1s; }
+
+/* 호우 ↔ 폭염 화면 바꿀 때 한 번(06c-heat.js modeFx) */
+#modefx { position: fixed; inset: 0; z-index: 9999; pointer-events: none; overflow: hidden; }
+#modefx.sun { background: radial-gradient(circle at 50% 50%, rgba(255,110,30,.75), rgba(225,35,15,.55) 50%, rgba(140,0,0,.25) 100%);
+  animation: fxHeat 1.6s ease-out forwards; display: grid; place-items: center; }
+#modefx.sun svg { width: 42vmin; height: 42vmin; animation: fxSun 1.6s cubic-bezier(.2,.7,.3,1) forwards; }
+#modefx.sun circle { fill: #FFB23A; filter: drop-shadow(0 0 30px #ff7a1a); }
+#modefx.sun .ray rect { fill: #FFD15A; }
+@keyframes fxHeat { 0% { opacity: 0; } 15% { opacity: 1; } 70% { opacity: .85; } 100% { opacity: 0; } }
+@keyframes fxSun { 0% { transform: scale(.2) rotate(0); opacity: 0; } 25% { opacity: 1; } 100% { transform: scale(1.5) rotate(360deg); opacity: 0; } }
+#modefx.rain { background: linear-gradient(rgba(30,70,150,.5), rgba(20,45,100,.3)); animation: fxRainBg 1.6s ease-out forwards; }
+#modefx.rain i { position: absolute; top: -120px; width: 3px; border-radius: 2px;
+  background: linear-gradient(rgba(150,210,255,0), rgba(200,235,255,1)); animation: fxDrop linear 3 both; }
+@keyframes fxDrop { to { transform: translate(-60px, 110vh); } }
+@keyframes fxRainBg { 0% { opacity: 0; } 12% { opacity: 1; } 75% { opacity: 1; } 100% { opacity: 0; } }
+#mode.spin { animation: fxIcon .8s ease-out; }
+@keyframes fxIcon { 0% { transform: scale(1) rotate(0); } 50% { transform: scale(1.5) rotate(200deg); } 100% { transform: scale(1) rotate(360deg); } }
