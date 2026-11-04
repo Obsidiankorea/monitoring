@@ -608,6 +608,14 @@ def ask_free(base: str, text: str, sigun: str | None = None) -> dict:
     ctx = "\n".join(f"[{s['h']}]\n" + "\n".join("- " + i for i in s["items"]) for s in rep["sections"])
     if sigun:
         ctx += "\n\n[읍면동 수치]\n" + ai.brief(situation(sigun, base), top=8)
+        from . import db
+        with db.tx() as con:                                # 상황판단 모드에서 사람이 누른 결정 — '보류한 것' 등을 물을 수 있게
+            dec = [dict(r) for r in con.execute("SELECT * FROM decision WHERE sigun=? ORDER BY id DESC LIMIT 12", (sigun,))]
+        if dec:
+            ctx += "\n\n[판단 기록(사람이 누른 결정, 새것부터)]\n" + "\n".join(
+                f"- {d['at'][5:16]} {d['act']} {d['emd'] or ''} {d['fam'] or ''} {d['stage'] or ''}"
+                + (f" · 그때 {d['pct']}%" if d["pct"] is not None else "") + (f" · {d['eta']}시 예상" if d["eta"] else "")
+                + (f" — {d['note']}" if d["note"] else "") for d in dec)
     skill = (ai.Path(__file__).resolve().parent.parent / "deploy" / "hermes" / "gn-situation" / "SKILL.md")
     system = SYSTEM_HEAD + "\n\n[지시문]\n" + (skill.read_text("utf-8") if skill.exists() else "")
     try:

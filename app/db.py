@@ -123,6 +123,20 @@ CREATE TABLE IF NOT EXISTS collect_log (
   detail     TEXT
 );
 
+-- 상황판단 모드의 판단 기록 — 누른 결정을 그 시각 수치와 함께(판례가 묻는 '정보를 안 시점 · 한 조치'). 서버 공유
+CREATE TABLE IF NOT EXISTS decision (
+  id     INTEGER PRIMARY KEY AUTOINCREMENT,
+  at     TEXT NOT NULL,                -- 누른 시각
+  sigun  TEXT NOT NULL,
+  emd    TEXT,
+  fam    TEXT,                         -- 산사태 · 하천 · 지하공간
+  stage  TEXT,                         -- 통제 · 사전대피 · 긴급대피
+  act    TEXT NOT NULL,                -- 통제 지시 · 사전대피 권고 · 대피명령 요청 · 보류 · 메모
+  pct    INTEGER,                      -- 그때 기준 도달률
+  eta    TEXT,                         -- 그때 도달 예상 시각
+  note   TEXT
+);
+
 -- 설정. 벽면 화면이라 브라우저가 아니라 서버에 둔다 — 어느 화면에서 바꿔도 같이 간다.
 CREATE TABLE IF NOT EXISTS setting (
   key TEXT PRIMARY KEY,

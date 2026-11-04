@@ -448,14 +448,53 @@ async def api_server_update_ask(body: dict | None = None, request: Request = Non
         raise HTTPException(404, str(e))
 
 
+@app.get("/api/ai/shrt_emd")
+async def api_ai_shrt_emd(sigun: str, start: str):
+    """읍면동별 단기예보 1시간 강수 — start(YYYYMMDDHH) 뒤부터 내일 24시까지(상황판단 도달 시각용)."""
+    return await asyncio.to_thread(queries.short_emd, sigun, start)
+
+
+@app.get("/api/ai/decisions")
+async def api_ai_decisions(sigun: str | None = None, limit: int = 50):
+    """상황판단 모드 판단 기록 — 새것부터. 서버 공유(어느 PC 에서 눌러도 같이 보인다)."""
+    q, a = "SELECT * FROM decision", []
+    if sigun:
+        q, a = q + " WHERE sigun=?", [sigun]
+    with db.tx() as con:
+        return {"rows": [dict(r) for r in con.execute(q + " ORDER BY id DESC LIMIT ?", (*a, max(1, min(limit, 500))))]}
+
+
+@app.post("/api/ai/decisions")
+async def api_ai_decisions_post(body: dict):
+    """{sigun, emd, fam, stage, act, pct, eta, note} — 결정을 기록만 한다(문자 · 보고를 보내지 않는다)."""
+    acts = ("통제 지시", "사전대피 권고", "대피명령 요청", "보류", "메모")
+    if not body.get("sigun") or body.get("act") not in acts:
+        raise HTTPException(400, f"sigun 과 act({' · '.join(acts)}) 가 필요하다")
+    s = lambda k, n=80: (str(body.get(k) or "").strip()[:n] or None)  # noqa: E731
+    pct = body.get("pct")
+    with db.tx() as con:
+        con.execute("INSERT INTO decision(at, sigun, emd, fam, stage, act, pct, eta, note) VALUES(?,?,?,?,?,?,?,?,?)",
+                    (clock.now().isoformat(timespec="seconds"), s("sigun", 10), s("emd", 20), s("fam", 10), s("stage", 10), body["act"],
+                     int(pct) if isinstance(pct, (int, float)) else None, s("eta", 20), s("note", 300)))
+    return await api_ai_decisions(body["sigun"])
+
+
+@app.delete("/api/ai/decisions/{did}")
+async def api_ai_decisions_del(did: int):
+    """잘못 누른 결정 하나를 지운다."""
+    with db.tx() as con:
+        con.execute("DELETE FROM decision WHERE id=?", (did,))
+    return {"ok": True}
+
+
 @app.get("/api/ai/situation")
-async def api_ai_situation(sigun: str, base: str | None = None):
+async def api_ai_situation(sigun: str, base: str | None = None, k: float = 1.0):
     """AI 상황판단 — 시군 하나의 지금 수치(이 서버 API)와 LLM 위키 기준(산사태 지구 대피기준까지 %)을 맞대 놓는다.
     판단하지 않는다(app/ai.py). base 를 주면 그 대시보드 서버의 자료로(시험용 — 예: NAS)."""
     from . import ai
     me = base or f"http://127.0.0.1:{os.environ.get('PORT', '8000')}"
     try:
-        s = await asyncio.to_thread(ai.situation, sigun, me)
+        s = await asyncio.to_thread(ai.situation, sigun, me, max(0.5, min(2.0, k)))
     except FileNotFoundError as e:
         raise HTTPException(503, f"LLM 위키를 못 찾았다(설정 › AI 위키): {e}")
     s["brief"] = ai.brief(s)

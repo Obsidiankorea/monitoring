@@ -301,7 +301,7 @@ def ladders(r: dict, night: bool, alerts: list[str], rv: dict | None = None, fld
     f50 = "unknown" if fpk is None or fcap else _st(fpk, L["사전대피_예보시우량"])
     f55 = "unknown" if fpk is None or fcap else _st(fpk, U["사전대피_예보시우량"])
     hoou = [a for a in alerts if a.startswith("호우")]
-    fh, fl = r.get("fc_hours") or [], r.get("fc_labels") or []
+    fh, fl = r.get("eta_hours") or r.get("fc_hours") or [], r.get("eta_labels") or r.get("fc_labels") or []   # 도달 시각은 초단기 + 단기예보로
     fpk_ok = None if fpk is None or fcap else fpk          # 30 에 막힌 예보는 50·55 와 견줄 수 없다
 
     def cum(label, v, need):                               # 쌓이는 값 — 예보 시우량을 더해 닿는 시각도 본다
@@ -726,9 +726,10 @@ def short_of(base: str) -> dict:
     return out
 
 
-def situation(sigun: str, base: str = "http://127.0.0.1:8000") -> dict:
+def situation(sigun: str, base: str = "http://127.0.0.1:8000", k: float = 1.0) -> dict:
     """시군 하나 — 읍면동별 지금 수치 · 우려지역(유형별) · 3대 유형 단계 대조 · 지구 대피기준까지 % ·
-    상황전파 기준 · 특보 · 비상단계 · 재난문자 기준. 판정하지 않는다(st 는 '그 조건에 닿았나'일 뿐)."""
+    상황전파 기준 · 특보 · 비상단계 · 재난문자 기준. 판정하지 않는다(st 는 '그 조건에 닿았나'일 뿐).
+    k = 상황판단 모드의 '만약에' — 예보 시우량(초단기 · 단기)에 곱한다."""
     base = base.rstrip("/")
     w = _get(base, "/api/ai/emdwin")                       # 읍면동 × 1·3·12·24·48시간 · 15분 — 한 번에
     mine_rows = [r for r in w["rows"] if r["sig"] == sigun]
@@ -756,17 +757,28 @@ def situation(sigun: str, base: str = "http://127.0.0.1:8000") -> dict:
         by_emd[s["읍면동"]].append(s)
 
     emds = []
+    labels = fc.get("labels") or []
+    try:                                                   # 초단기 6시간 뒤는 단기예보로 이어 내일 24시까지(도달 시각 · 오늘/내일 누적)
+        h0 = datetime.strptime((tm or "")[:10], "%Y%m%d%H") + timedelta(hours=len(labels))
+        sh = _get(base, "/api/ai/shrt_emd", sigun=sigun, start=h0.strftime("%Y%m%d%H"))
+    except Exception:                                      # noqa: BLE001 — 단기예보가 없어도 돈다
+        sh = {"labels": [], "emd": {}, "tmefs": []}
     for name in acc[3]:
         f = fce.get(name) or {}
-        d = f.get("d") or []
+        d = [round(v * k, 1) for v in f.get("d") or []]
+        sd = [round(v * k, 1) for v in sh["emd"].get(name) or []]
         run, best = 0, 0
         for v in d:
             run = run + 1 if v >= R("하천_통제_시우량") else 0
             best = max(best, run)
         row = {"emd": name, "rain": {f"{h}h": acc[h].get(name) for h in WINDOWS}, "m15": m15.get(name),
-               "fc6h": f.get("sum"), "fc_peak": f.get("peak"), "fc_hours": d, "fc_labels": fc.get("labels") or [],
+               "fc6h": round(sum(d), 1) if d else f.get("sum"), "fc_peak": max(d) if d else f.get("peak"), "fc_hours": d, "fc_labels": labels,
                "fc_run30": best if d else None,
                "ante": ante.get(name)}
+        if d and sd:
+            row["eta_hours"], row["eta_labels"] = d + sd, labels + sh["labels"]
+            row["later"] = {"today": round(sum(v for v, l in zip(sd, sh["labels"]) if " " not in l), 1),
+                            "tomorrow": round(sum(v for v, l in zip(sd, sh["labels"]) if l.startswith("내일")), 1)}
         r1, r3, r24 = row["rain"]["1h"] or 0, row["rain"]["3h"] or 0, row["rain"]["24h"] or 0
         row["cbs"] = is_cbs(r1, r3)
         row["relay"] = is_relay(r1, r24)
@@ -790,7 +802,7 @@ def situation(sigun: str, base: str = "http://127.0.0.1:8000") -> dict:
                  max((r["rain"]["3h"] or 0 for r in emds), default=0), max((r["fc6h"] or 0 for r in emds), default=0),
                  max((r["fc_peak"] or 0 for r in emds), default=0), now)
     return {
-        "sigun": sigun, "tm": tm, "night": night, "rain_src": src, "fc_tmfc": fc.get("tmfc"),
+        "sigun": sigun, "tm": tm, "night": night, "rain_src": src, "fc_tmfc": fc.get("tmfc"), "k": k, "shrt_tmfc": sh.get("tmfc"),
         "ante": {k: an.get(k) for k in ("ok", "have", "want", "missing", "from", "to")},
         "alerts": mine, "pending": pend, "stage": do_stage(groups), "river": rv, "flood": fld, "outlook": ol,
         "tide": tide.text(tide.of_sigun(sigun), max((r["fc6h"] or 0 for r in emds), default=0)),

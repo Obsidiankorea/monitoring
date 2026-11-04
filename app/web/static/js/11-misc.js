@@ -633,6 +633,7 @@ document.addEventListener("keydown", ev => {
     if ($("td-pop") && !$("td-pop").hidden) { tidePop(null); return; }
     if (!$("showdlg").hidden) { closeShowDlg(); return; }
     if (AIW.open) { aiToggle(false); return; }
+    if (SJ.open) { sjToggle(false); return; }
     if (!$("prefs").hidden) closePrefs(); else if (!$("help").hidden) closeHelp(); else if (selOn()) selectSig(null); else if (SHOW.on) stopShow();
     return;
   }
@@ -651,6 +652,7 @@ document.addEventListener("keydown", ev => {
   else if ((ev.key === "v" || ev.key === "V") && OV.has("stations")) setOverlay("stnval", !OV.has("stnval"));
   else if (ev.key === "d" || ev.key === "D") setOverlay("river", !OV.has("river"));
   else if (ev.key === "j" || ev.key === "J") setOverlay("slide", !OV.has("slide"));
+  else if (ev.key === "x" || ev.key === "X") sjToggle();
   else if (ev.key === "k" || ev.key === "K") setOverlay("reservoir", !OV.has("reservoir"));
   else if (ev.key === "n" || ev.key === "N") setOverlay("flood", !OV.has("flood"));
   else if (ev.key === "o" || ev.key === "O") setOverlay("tide", !OV.has("tide"));
