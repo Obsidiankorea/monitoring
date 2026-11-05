@@ -34,7 +34,8 @@ def test_judge_pack_picks_best_per_stage_and_site_rule():
                                {"stage": "통제", "st": "no", "rule": "b", "gap": {"pct": 99}},
                                {"stage": "긴급대피", "st": "no", "rule": "c", "gap": {"pct": 62, "eta": {"at": "02"}}}]}}
     p = judge.pack(e, "산사태", "누적강우 250mm이상")
-    assert p["st"]["통제"] == {"pct": 100, "met": True, "unk": False, "eta": None, "rule": "a"}
+    assert {k: p["st"]["통제"][k] for k in ("pct", "met", "unk", "eta", "rule")} == {"pct": 100, "met": True, "unk": False, "eta": None, "rule": "a"}
+    assert p["st"]["긴급대피"]["eta_h"] is None and p["st"]["통제"]["parts"] == []
     assert p["st"]["긴급대피"]["eta"] == "02" and "사전대피" not in p["st"]
     assert p["site"] == 48 and p["top"] == 100
 

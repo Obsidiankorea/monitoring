@@ -35,10 +35,17 @@ def pack(e: dict, fam: str, rule: str) -> dict:
             continue
         g = c.get("gap") or {}
         met = c["st"] == "met"
+        ei = (g.get("eta") or {}).get("i")
         st[s] = {"pct": max(100, g.get("pct") or 0) if met else (g.get("pct") or 0), "met": met,
-                 "unk": c["st"] == "unknown", "eta": (g.get("eta") or {}).get("at"), "rule": c["rule"]}
-    site = next((x["max_pct"] for x in e.get("sites", []) if (x["rule"] or "").strip() == rule), None)
+                 "unk": c["st"] == "unknown", "eta": (g.get("eta") or {}).get("at"), "eta_h": None if ei is None else ei + 1,
+                 "rule": c["rule"], "partial": bool(g.get("partial")),
+                 # 조건 하나하나(그리고로 묶임) — 지금 · 필요 · % · 단위. 상세 칸이 '무엇이 모자라나'를 보인다
+                 "parts": [{k: p.get(k) for k in ("label", "now", "need", "unit", "pct")} for p in g.get("parts") or []]}
+    sx = next((x for x in e.get("sites", []) if (x["rule"] or "").strip() == rule), None)
+    site = sx["max_pct"] if sx else None
     return {"rain": {k: e["rain"].get(k) for k in ("1h", "3h", "24h")}, "st": st, "site": site,
+            "site_parts": [{"label": c.get("label"), "now": c.get("now"), "need": c.get("mm"), "unit": "㎜", "pct": c.get("pct")}
+                           for c in (sx or {}).get("conds", [])],
             "top": max([v["pct"] for v in st.values()] + [site or 0])}
 
 

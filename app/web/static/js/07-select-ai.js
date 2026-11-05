@@ -130,6 +130,7 @@ function aiToggle(on = !AIW.open) {
 
 function setSel(list) {
   SELS = list.slice(0, SEL_MAX);
+  sjSync(SELS);                                           // 상황판단 창(또는 지도 창)도 같은 시군으로
   if (AIW.open && AIW.scope !== (list[0] || null)) setTimeout(aiLoad, 0);   // 시군을 바꾸면 그 시군 보고로
   drawSel(); drawStations(); hot(null); link(null);
   watchBadges(); renderAlertLegend(); renderRiverLegend(); renderTideLegend();   // 왼쪽 아이콘 · 목록도 고른 시군으로
