@@ -1,8 +1,9 @@
 """상황판단 모드의 지구 한 줄 — 위키 우려지역 지구 × 두 강수 기준(기상청 격자 · AWS 면)의 통제 · 사전대피 · 긴급대피 %.
 
-⚠️ 지구 좌표가 아직 없다(지오코딩 전) → 지구 값은 그 읍면동의 최대 칸(기준마다). 같은 읍면동 · 같은 유형 지구는 % 가 같다.
-   지구 대피기준(원문)만 지구마다 다르다. 연락처는 넣지 않는다 — 화면이 /api/contacts 로 따로(잠금 뒤).
-기준 판정은 ai.situation(ladders) 그대로 — 여기는 묶고 줄 세우기만.
+지구 좌표(app/geocode.py)가 있으면 그 자리 강수(둘레 1.5km 최대 칸, 기준마다)로 사다리를 다시 대조한다 — where="지구".
+좌표가 없으면 그 읍면동의 최대 칸 — where="읍면동"(같은 읍면동 · 같은 유형 지구는 % 가 같다).
+예보 시우량 · 선행 5일은 읍면동 값 그대로(5km 예보라 지구까지 나눠지지 않는다). 연락처는 넣지 않는다 — 화면이 /api/contacts 로 따로(잠금 뒤).
+기준 판정은 ai.ladders 그대로 — 여기는 지구 값으로 다시 부르고 묶고 줄 세우기만.
 """
 from __future__ import annotations
 
@@ -80,9 +81,32 @@ def _sit(sg: str, base: str, k: float, basis: str, add: tuple = (0.0, 0.0)) -> d
     return v
 
 
+def _pts(base: str, basis: str) -> dict:
+    """지구 자리 강수 {지구ID: {1h, 3h, …, 15m}} — 좌표가 없거나 못 받으면 빈 것(읍면동 기준으로 떨어진다)."""
+    try:
+        return ai._get(base, "/api/ai/emdwin", basis=basis, pts=1).get("pts") or {}
+    except Exception:                                          # noqa: BLE001
+        return {}
+
+
+def at_point(e: dict, p: dict | None, s: dict, fam: str, rule: str) -> dict:
+    """읍면동 줄 e 를 지구 자리 강수 p 로 바꿔 그 유형 사다리 · 지구 대피기준을 다시 대조한다. p 가 없으면 e 그대로."""
+    if not p:
+        return e
+    rain = {h: p.get(h, e["rain"].get(h)) for h in e["rain"]}
+    row = {**e, "rain": rain, "m15": p.get("15m", e.get("m15"))}
+    row["ladders"] = {fam: ai.ladders(row, s["night"], s["alerts"], s.get("river"), s.get("flood")).get(fam, [])}
+    prog = [{**c, "now": rain.get(f"{c['win']}h"),
+             "pct": None if rain.get(f"{c['win']}h") is None else round(rain[f"{c['win']}h"] / c["mm"] * 100)}
+            for c in ai.conditions(rule)] if fam == "산사태" else []
+    row["sites"] = [{"rule": rule, "conds": prog, "max_pct": max((c["pct"] or 0 for c in prog), default=None)}] if prog else []
+    return row
+
+
 def rows_of(sg: str, base: str, k: float, add: tuple = (0.0, 0.0)) -> tuple[list[dict], dict]:
     g, a = _sit(sg, base, k, "grid", add), _sit(sg, base, k, "aws", add)
     ga = {e["emd"]: e for e in a["emd"]}
+    pg, pa = _pts(base, "grid"), _pts(base, "aws")
     dist = contacts.districts(sg)["emd"]
     sl = slide_of(sg)
     out = []
@@ -91,12 +115,14 @@ def rows_of(sg: str, base: str, k: float, add: tuple = (0.0, 0.0)) -> tuple[list
             if d["fam"] not in e["ladders"]:
                 continue
             ea = ga.get(e["emd"])
-            b = {"grid": pack(e, d["fam"], d["rule"]), "aws": pack(ea, d["fam"], d["rule"]) if ea else None}
+            eg, ea2 = at_point(e, pg.get(d["id"]), g, d["fam"], d["rule"]), ea and at_point(ea, pa.get(d["id"]), a, d["fam"], d["rule"])
+            b = {"grid": pack(eg, d["fam"], d["rule"]), "aws": pack(ea2, d["fam"], d["rule"]) if ea else None}
             ss = slide_site(d["rule"], sl) if d["fam"] == "산사태" else None
             for v in b.values():                             # 산사태 예보 발령이 기준인 지구 — 강수가 아니라 발령으로
                 if v and ss is not None:
                     v.update(site=ss, site_slide=True, top=max(v["top"], ss))
             out.append({"sigun": sg, "emd": e["emd"], **d, "b": b, "slide": sl if d["fam"] == "산사태" else None,
+                        "where": "지구" if d["id"] in pg else "읍면동",
                         "fc6h": e.get("fc6h"), "later": e.get("later")})
     return out, g
 

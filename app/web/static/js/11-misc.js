@@ -108,8 +108,8 @@ $("stage").addEventListener("mousemove", ev => {
   const mx = (x - MT.tx) / MT.sc, my = (y - MT.ty) / MT.sc;
   const gx = V.fromX(mx), gy = V.fromY(my), v = valueAt(gx, gy), tip = $("tip");
   const td = tideAt(mx, my), sp = td ? null : stationAt(mx, my), rv = sp || td ? null : riverAt(mx, my);
-  const sf = td || sp || rv ? null : safetyAt(mx, my);
-  $("stage").style.cursor = td || sp || rv || sf?.res || sigunAt(gx, gy) ? "pointer" : "";
+  const sf = td || sp || rv ? null : safetyAt(mx, my) || districtAt(mx, my);
+  $("stage").style.cursor = td || sp || rv || sf?.res || sf?.dz || sigunAt(gx, gy) ? "pointer" : "";
   if (td) {                              // 조위 표식 위 — 짧은 요약만. 누르면 팝업
     tip.innerHTML = tideTip(td);
     tip.hidden = false;
@@ -118,7 +118,7 @@ $("stage").addEventListener("mousemove", ev => {
     return;
   }
   if (rv || sf) {                        // 하천 · 댐 · 보 위 — 수위 · 기준 수위 · 1시간 변화 · 방류 / 저수지 계측기 · 침수흔적
-    tip.innerHTML = rv ? riverTip(rv) : safetyTip(sf);
+    tip.innerHTML = rv ? riverTip(rv) : sf.dz ? districtTip(sf.dz) : safetyTip(sf);
     tip.hidden = false;
     tip.style.left = Math.min(V.W - tip.offsetWidth - 6, x + 16) + "px";
     tip.style.top = Math.max(6, y - tip.offsetHeight - 12) + "px";
@@ -164,6 +164,8 @@ $("stage").addEventListener("click", ev => {
   const mx = (ev.clientX - rc.left - MT.tx) / MT.sc, my = (ev.clientY - rc.top - MT.ty) / MT.sc;
   const td = tideAt(mx, my);
   if (td) { tidePop(td, ev.clientX - rc.left, ev.clientY - rc.top); return; }
+  const dz = districtAt(mx, my);
+  if (dz) { districtOpen(dz.dz); return; }
   const sg = sigunAt(V.fromX(mx), V.fromY(my));
   pickSig(sg, ev.ctrlKey || ev.metaKey);
 });
@@ -654,6 +656,7 @@ document.addEventListener("keydown", ev => {
   else if (ev.key === "j" || ev.key === "J") setOverlay("slide", !OV.has("slide"));
   else if (ev.key === "x" || ev.key === "X") sjToggle();
   else if (ev.key === "k" || ev.key === "K") setOverlay("reservoir", !OV.has("reservoir"));
+  else if (ev.key === "u" || ev.key === "U") setOverlay("district", !OV.has("district"));
   else if (ev.key === "n" || ev.key === "N") setOverlay("flood", !OV.has("flood"));
   else if (ev.key === "o" || ev.key === "O") setOverlay("tide", !OV.has("tide"));
   else if (ev.key === "e" || ev.key === "E") setOverlay("temp", !OV.has("temp"));
@@ -734,6 +737,7 @@ async function boot() {
   renderLayers();
   if (OV.has("river")) loadRiver();
   if (SAF_IDS.some(id => OV.has(id))) loadSafety();
+  if (OV.has("district")) loadDistrict();
   if (OV.has("tide")) loadTide();
   vsrtN = +SET.vsrt_n || 1; x4 = !!SET.x4;
   applyAccFull(); applyHdrPin();

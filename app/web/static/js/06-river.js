@@ -20,6 +20,7 @@ const rvMax = () => Math.max(-1, ...(RIV?.rows || []).filter(s => s.kind === "wl
 function drawRiver() {
   drawTide();
   drawSafety();
+  drawDistrict();
   const g = $("rivr");
   if (!g) return;
   RIV_HIT = [];

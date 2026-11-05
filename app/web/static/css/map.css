@@ -926,20 +926,20 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 @keyframes rvpulse { 0% { transform: scale(.7); opacity: .95; } 100% { transform: scale(2.3); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { #over .rvp { animation: none; opacity: .6; } }
 #over .rvl text { font-family: var(--sans); font-weight: 700; fill: var(--ink); stroke: var(--panel); paint-order: stroke; stroke-linejoin: round; dominant-baseline: central; }
-:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood) { width: auto; min-width: 280px; max-width: 360px; padding: 10px 12px 12px; }
-:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood) .hd2 { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; cursor: pointer; }
-:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood) .hd2 b { font-size: 15px; }
-:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood) .hd2 span { font: 600 12px var(--mono); color: var(--ink-3); margin-left: auto; }
-:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood) .hd2 .k { font: 600 12px var(--sans); color: var(--ink-3); margin-left: 0; }
-:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood) .keys2 { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; color: var(--ink-2); }
-:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood) .dt { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px; flex: none; }
-:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood) .sec { font: 700 11.5px var(--sans); color: var(--ink-3); letter-spacing: .06em; margin: 10px 0 3px; }
-:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood) .rr { display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 2px 0; }
-:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood) .rr b { font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
-:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood) .rr span { font: 600 12px var(--mono); color: var(--ink-2); white-space: nowrap; }
-:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood) .rr em { font-style: normal; font-size: 12px; color: var(--ink-3); margin-left: auto; white-space: nowrap; }
-:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood) .nt { font-size: 12.5px; color: var(--ink-3); margin-top: 6px; line-height: 1.4; }
-:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood) .nt.w { color: var(--lv-fail); }
+:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood, #ly-district) { width: auto; min-width: 280px; max-width: 360px; padding: 10px 12px 12px; }
+:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood, #ly-district) .hd2 { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; cursor: pointer; }
+:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood, #ly-district) .hd2 b { font-size: 15px; }
+:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood, #ly-district) .hd2 span { font: 600 12px var(--mono); color: var(--ink-3); margin-left: auto; }
+:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood, #ly-district) .hd2 .k { font: 600 12px var(--sans); color: var(--ink-3); margin-left: 0; }
+:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood, #ly-district) .keys2 { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; color: var(--ink-2); }
+:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood, #ly-district) .dt { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px; flex: none; }
+:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood, #ly-district) .sec { font: 700 11.5px var(--sans); color: var(--ink-3); letter-spacing: .06em; margin: 10px 0 3px; }
+:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood, #ly-district) .rr { display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 2px 0; }
+:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood, #ly-district) .rr b { font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
+:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood, #ly-district) .rr span { font: 600 12px var(--mono); color: var(--ink-2); white-space: nowrap; }
+:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood, #ly-district) .rr em { font-style: normal; font-size: 12px; color: var(--ink-3); margin-left: auto; white-space: nowrap; }
+:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood, #ly-district) .nt { font-size: 12.5px; color: var(--ink-3); margin-top: 6px; line-height: 1.4; }
+:is(#ly-river, #ly-slide, #ly-reservoir, #ly-flood, #ly-district) .nt.w { color: var(--lv-fail); }
 #tip .spk { display: block; margin-top: 4px; }
 #tip .spk polyline { fill: none; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
 #over .st text { font-family: var(--mono); font-weight: 600; fill: var(--ink); dominant-baseline: central; }
@@ -1457,6 +1457,7 @@ body.heat #ht-lg { position: absolute; left: 22px; bottom: 22px; z-index: 5; dis
 /* 산사태 · 저수지 · 침수흔적(06d-safety.js) */
 #ly-slide .sfm { margin: 6px 0 2px; }
 :root { --sf-flood: #3E9BD9; --sf-slide: #A0622D; }
+:root { --dz-slide: #C07A3A; --dz-river: #2FB3C9; --dz-under: #A77BE0; --dz-coast: #4F8FE8; --dz-etc: #9AA3B2; --dz-ring: #0B0F17; }
 #safg .sfs { fill: none; stroke: var(--sf-slide); stroke-width: 3; stroke-dasharray: 7 4; }
 #safg .sfs.l2 { stroke-width: 4.5; stroke-dasharray: none; }
 #safg .sfr { fill: var(--ink-3); fill-opacity: .55; stroke: var(--halo); stroke-width: 1; }

@@ -64,8 +64,10 @@ function sjGroups() {
   }
   const out = [];
   for (const g of by.values()) {
-    const b = sjB(g.rows[0]);
-    g.st = b.st;
+    // 지구마다 자리 비가 달라 % 도 다르다 — 묶음 머리는 단계마다 가장 많이 찬 지구 것, 칩은 많이 찬 순서
+    g.rows.sort((a, b) => sjB(b).top - sjB(a).top);
+    g.st = Object.fromEntries(SJ_STG.map(s => [s, g.rows.map(r => sjB(r).st[s]).filter(Boolean).sort((a, b) => b.pct - a.pct)[0]]).filter(([, v]) => v));
+    const b = { st: g.st };
     g.top = Math.max(...g.rows.map(r => sjB(r).top));
     g.dec = SJ.log.filter(x => x.sigun === g.sigun && x.emd === g.emd && x.fam === g.fam);
     g.met = SJ_STG.some(s => b.st[s]?.met);
@@ -82,7 +84,7 @@ function sjGroup(g) {
   const subs = g.rows.slice(0, sel ? 99 : 4).map(r => {
     const b = sjB(r), p0 = SJ.ct?.people?.[r.id]?.[0];
     return `<button class="sb${r.id === SJ.sel ? " on" : ""}" data-r="${escH(r.id)}"><b>${escH(sjName(r))}</b><span>${escH(sjAddr(r).replace(`${r.emd} `, ""))}</span>`
-      + `<em>${b.site != null ? `지구 기준 <i class="t${sjLv(b.site)}">${b.site_slide ? (b.site >= 100 ? "발령 중" : "발령 없음") : `${b.site}%`}</i>` : ""}</em>`
+      + `<em><i class="t${sjLv(b.top)}" title="${r.where === "지구" ? "이 지구 자리 비로 판정" : "읍면동 기준"}">${b.top}%${r.where === "지구" ? "" : "*"}</i> ${b.site != null ? `지구 기준 <i class="t${sjLv(b.site)}">${b.site_slide ? (b.site >= 100 ? "발령 중" : "발령 없음") : `${b.site}%`}</i>` : ""}</em>`
       + `<small>${p0 ? escH((p0.who || "").replace(/담당부서\s*/g, "")) : ""}</small></button>`;
   }).join("") + (!sel && g.rows.length > 4 ? `<button class="sb mr" data-r="${escH(g.rows[4].id)}">외 ${g.rows.length - 4}곳</button>` : "");
   const done = g.dec.length ? `<span class="dn">✔ ${escH(g.dec[0].act)} ${g.dec[0].at.slice(11, 16)}</span>` : "";
@@ -115,7 +117,7 @@ const sjParts = ps => ps.map(p => `<div class="pt"><span>${escH(p.label || "")}<
 function sjDetail() {
   const r = (SJ.d?.rows || []).find(x => x.id === SJ.sel);
   if (!r) return `<div class="ph"><b>지구를 고르면</b><p>조건마다 지금 · 필요, 두 강수 기준, 담당 전화 · 문자, 결정이 여기 나온다.</p>
-    <p class="mute">가운데 묶음은 읍면동 · 유형별 — 지구 위치가 아직 없어(지오코딩 전) 같은 묶음은 % 가 같다. 지구 기준만 지구마다 다르다.</p></div>`;
+    <p class="mute">가운데 묶음은 읍면동 · 유형별 — 좌표가 있는 지구는 그 자리 비로 따로 판정한다(좌표 없는 지구는 읍면동 기준).</p></div>`;
   const b = sjB(r), o = r.b[SJ.basis === "grid" ? "aws" : "grid"], recs = SJ.log.filter(x => x.sigun === r.sigun && x.emd === r.emd && x.fam === r.fam);
   const stg = SJ_STG.map(s => {
     const c = b.st[s];
@@ -136,8 +138,9 @@ function sjDetail() {
   const sl = r.slide && (r.slide.fcst || r.slide.pred);
   return `<div class="dt"><div class="dh"><b>${escH(sjName(r))}</b><span>${escH(r.sigun)} ${escH(sjAddr(r))}</span><span>${escH(r.kind || r.fam)}${r.shelter && r.shelter !== "–" ? ` · 대피 ${escH(r.shelter)}` : ""}</span>
       ${sl ? `<span class="slb">산사태${escH((r.slide.fcst || r.slide.pred).kind)} ${r.slide.fcst ? "예보" : "예측"} 발령 중</span>` : ""}</div>
-    <div class="dsec"><h5>위치</h5>${r.pos ? `<p>${r.pos[0].toFixed(5)}, ${r.pos[1].toFixed(5)} <span class="mute">— 지번으로 찾음(대표 필지 한 점)</span></p>`
-      : `<p class="mute">${SJ.geo?.state === "받는 중" ? `지구 위치 받는 중(${SJ.geo.done}/${SJ.geo.total})` : "지구 위치 없음"} — 읍면동 기준으로 계산</p>`}</div>
+    <div class="dsec"><h5>위치</h5>${r.pos ? `<p>${r.pos[0].toFixed(5)}, ${r.pos[1].toFixed(5)} <span class="mute">— 지번 필지 중심</span></p>` : ""}
+      <p class="mute">${r.where === "지구" ? "판정 비 = 이 지구 자리(둘레 1.5km 가장 많이 온 칸) · 예보는 읍면동"
+        : `${r.pos ? "지구 자리 비를 아직 못 받아" : SJ.geo?.state === "받는 중" ? `지구 위치 받는 중(${SJ.geo.done}/${SJ.geo.total}) —` : "지구 위치가 없어"} 읍면동에서 가장 많이 온 칸으로 판정`}</p></div>
     <div class="dsec"><h5>결정 — 판단 기록에 남는다</h5><div class="acs">${acts}</div></div>
     <div class="dsec"><h5>담당</h5>${who}</div>
     <div class="dsec"><h5>판정 · ${SJ_BN[SJ.basis]} 기준 <span class="mute">(조건이 '그리고'면 가장 덜 찬 것이 그 기준의 %)</span></h5>${stg}

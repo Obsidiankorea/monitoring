@@ -530,6 +530,32 @@ async def api_districts(sigun: str):
     return await asyncio.to_thread(contacts.districts, sigun)
 
 
+@app.get("/api/districts/all")
+async def api_districts_all():
+    """지도 레이어 '우려지역 지구'(U) — 좌표가 있는 지구 전부(위키 공개 자료). 연락처는 없다."""
+    from . import ai, contacts
+
+    def one():
+        out = []
+        for sg in ai.SIGUN_FULL:
+            for emd, ds in contacts.districts(sg)["emd"].items():
+                out += [{"sigun": sg, "emd": emd, **{k: d[k] for k in ("id", "name", "ri", "jibun", "kind", "fam", "shelter", "rule", "pos")}}
+                        for d in ds if d["pos"]]
+        return out
+    rows = await asyncio.to_thread(one)
+    return {"rows": rows, "geo": geocode.status()}
+
+
+@app.get("/api/districts/shapes")
+async def api_districts_shapes():
+    """지구 필지 모양(위키 data/지구필지.geojson, 경위도) — 없으면 빈 묶음."""
+    from . import ai
+    try:
+        return PlainTextResponse((ai.wiki() / "data" / "지구필지.geojson").read_text("utf-8"), media_type="application/json")
+    except OSError:
+        return {"type": "FeatureCollection", "features": []}
+
+
 @app.get("/api/geocode")
 async def api_geocode():
     """지구 좌표 받기 진행 — 받는 중 · 끝 · 키 없음, 찾은 곳 수, 못 찾은 이유 묶음. 좌표 값은 /api/districts 에."""
@@ -589,10 +615,12 @@ async def api_ai_situation(sigun: str, base: str | None = None, k: float = 1.0):
 
 
 @app.get("/api/ai/emdwin")
-async def api_grid_emdwin(basis: str = "grid"):
-    """경남 읍면동마다 1 · 3 · 12 · 24 · 48시간 누적 · 15분 최대 칸(격자 500m) — 한 번에. AI 상황판단 · Hermes 도구용."""
+async def api_grid_emdwin(basis: str = "grid", pts: int = 0):
+    """경남 읍면동마다 1 · 3 · 12 · 24 · 48시간 누적 · 15분 최대 칸(격자 500m) — 한 번에. AI 상황판단 · Hermes 도구용.
+    pts=1 이면 좌표가 있는 지구마다 그 자리(둘레 1.5km) 값도(pts) — 상황판단 지구별 판정."""
     try:
-        return await asyncio.to_thread(gridview.emd_windows, (1, 3, 12, 24, 48), None, "aws" if basis == "aws" else "grid")
+        return await asyncio.to_thread(gridview.emd_windows, (1, 3, 12, 24, 48), None, "aws" if basis == "aws" else "grid",
+                                       dict(geocode.POS) if pts else None)
     except LookupError as e:
         raise HTTPException(404, str(e)) from e
 

@@ -47,3 +47,25 @@ def test_slide_rule_sites_follow_landslide_forecast():
     assert judge.slide_site("산사태 경보 발령 시", warn) == 100 and judge.slide_site("산사태 경보 발령 시", watch) == 0
     assert judge.slide_site("산사태예보 발령 시", watch) == 100 and judge.slide_site("산사태예보 발령 시", none) == 0
     assert judge.slide_site("누적강우 250mm이상", warn) is None
+
+
+def test_district_point_rain_redoes_ladder_and_site_rule():
+    """지구 좌표가 있으면 그 자리 비로 사다리 · 지구 대피기준을 다시 — 읍면동 최대 칸(270)보다 지구 자리(120)가 적으면 % 도 낮다."""
+    from app import judge
+    e = {"emd": "북면", "rain": {"1h": 40, "3h": 90, "12h": 200, "24h": 270, "48h": 270}, "m15": 10, "fc_peak": 4, "fc_run30": 0,
+         "ante": 0, "fc_hours": [4] * 6, "fc_labels": [str(h) for h in range(6)], "sites": [], "ladders": {}}
+    s = {"night": False, "alerts": [], "river": None, "flood": None}
+    assert judge.at_point(e, None, s, "산사태", "") is e                     # 좌표 없으면 읍면동 그대로
+    p = judge.at_point(e, {"1h": 10, "3h": 30, "24h": 120, "48h": 120, "15m": 2}, s, "산사태", "누적강우 250mm이상")
+    assert p["rain"]["24h"] == 120 and p["rain"]["12h"] == 200 and p["m15"] == 2   # 없는 창은 읍면동 값
+    assert p["sites"][0]["max_pct"] == 48 and set(p["ladders"]) == {"산사태"}
+    full = judge.pack({**e, "ladders": ai.ladders(e, False, [])}, "산사태", "")
+    assert judge.pack(p, "산사태", "누적강우 250mm이상")["top"] < full["top"]
+
+
+def test_point_max_looks_at_neighbours():
+    import numpy as np
+    from app import gridview
+    a = np.zeros((5, 5)); a[1, 1] = 9; a[4, 4] = np.nan
+    assert gridview._pt_max(a, [("x", 2, 2), ("y", 4, 4)]) == {"x": 9.0, "y": 0.0}
+    assert gridview._pt_max(np.full((3, 3), np.nan), [("z", 1, 1)]) == {}
