@@ -5,6 +5,8 @@
 
 쓰는 곳: 위키 data/지구좌표.csv(지역ID · 위도 · 경도 · PNU · 지번 · 방법 · 메모) · data/지구필지.geojson(필지 모양).
 방법: 정확 = 지번 그대로 · 대시복원 = 위키 지번에 '-' 가 빠져(84939) 나눠 보니 하나만 있음 · 본번근사 = 부번 필지가 없어(분할 · 합병) 같은 본번의 가장 큰 필지.
+      리중심 · 읍면동중심 = 지번이 없거나(○○리 일원) 못 찾아 그 리(읍면동) 필지들의 가운데 — 지도 표시용 근사, 판정은 읍면동 최대 칸(app/geocode.py APPROX).
+      리 이름이 위키에 틀리게(용탸라) 적혔으면 같은 읍면동에서 가장 비슷한 이름으로 — 메모에 남긴다.
 필요: pip install pyshp pyproj (개발용 — 서버에는 필요 없다. 서버는 결과 csv 만 읽는다)
 지적도는 분기마다 바뀐다 — 지구 자료가 바뀌거나 반년에 한 번쯤 새로 받아 다시 돌린다.
 """
@@ -56,16 +58,42 @@ def norm(w: dict) -> dict:
     return w
 
 
+def _emd_variants(emd: str) -> list[str]:
+    """'제황 산동' · '양덕 일동'(행정동) · '신포동 일가' · '장대동 옥봉동'(둘) 같은 위키 표기 → 법정동 이름 후보."""
+    out = []
+    for e in (emd, emd.replace(" ", ""), emd.split()[0] if emd.split() else ""):
+        e = e.replace("일가", "1가").replace("이가", "2가").replace("일동", "1동").replace("이동", "2동")
+        first = re.match(r"(.+?[동읍면가])(?=.)", e)              # '장대동옥봉동' → '장대동'
+        out += [e, re.sub(r"\d+동$", "동", e)] + ([first.group(1)] if first else [])
+    return list(dict.fromkeys(x for x in out if x))
+
+
 def dong_code(w: dict, cd: dict[str, str]) -> str:
     """지구 → 법정동(리) 코드. 위키에 '광도 · 죽림'처럼 면 · 리를 줄여 쓴 곳이 있어 붙여 본다."""
     sg, emd, ri = (w.get(k, "").strip() for k in ("시군", "읍면동", "리"))
-    ri = "" if ri in ("–", "-") else ri
-    for e in [emd] + ([emd + s for s in ("면", "읍", "동")] if emd and emd[-1] not in "읍면동가로" else []):
-        for r in [ri] + ([ri + "리", ri + "동"] if ri and ri[-1] not in "리동가" else []):
+    ri = "" if ri in ("–", "-") else re.split(r"[\s~,]+", ri)[0]
+    for e in [x for v in _emd_variants(emd) for x in [v] + ([v + s for s in ("면", "읍", "동")] if v[-1] not in "읍면동가로" else [])] or [""]:
+        for r in [ri] + ([ri + "리", ri + "동"] if ri and ri[-1] not in "리동가" else [ri + "리"] if ri.endswith("동") else []):   # '우동' → 우동리
             c = _dong(sg, e, r, w, cd)
             if c:
                 return c
     return ""
+
+
+def dong_fuzzy(w: dict, cd: dict[str, str]) -> tuple[str, str]:
+    """리 이름 오타(용탸라 · 작전리) — 같은 시군 · 읍면동의 리 중 가장 비슷한 것. (코드, 메모) 또는 ('', '')."""
+    import difflib
+    sg, emd, ri = (w.get(k, "").strip() for k in ("시군", "읍면동", "리"))
+    if not ri or ri in ("–", "-"):
+        return "", ""
+    for e in _emd_variants(emd):
+        pre = [n for n in cd if n.startswith(f"경상남도 {sg} ") and f" {e} " in n + " " and n.split()[-1] != e]
+        names = [n.split()[-1] for n in pre]
+        got = difflib.get_close_matches(ri, names, n=1, cutoff=0.5) or [x for x in difflib.get_close_matches(ri, names, n=3, cutoff=0.3) if x[0] == ri[0]][:1]
+        if got:
+            n = next(x for x in pre if x.split()[-1] == got[0])
+            return cd[n], f"리 이름 비슷 — 위키 '{ri}' → '{got[0]}'"
+    return "", ""
 
 
 def _dong(sg: str, emd: str, ri: str, w: dict, cd: dict[str, str]) -> str:
@@ -131,22 +159,32 @@ def main(shp: str, code_txt: str) -> int:
     src = ai.wiki() / "data" / "인명피해 우려지역.csv"
     rows = [w for w in csv.DictReader(open(src, encoding="utf-8-sig", newline="")) if w.get("지역ID")]
     cd = codes(code_txt)
-    plan, out = {}, {}
+    plan, out, area_of = {}, {}, {}                       # area_of: 지번으로 못 가면 그 리(읍면동) 가운데로 — {지역ID: (코드, 메모)}
     for w in map(norm, rows):
-        dc = dong_code(w, cd)
+        dc, memo = dong_code(w, cd), ""
+        if not dc:
+            dc, memo = dong_fuzzy(w, cd)
         san, cands = jibuns(w.get("지번", ""))
-        if not dc or not cands:
-            out[w["지역ID"]] = {"지역ID": w["지역ID"], "메모": "법정동 못 찾음" if not dc else f"지번 못 읽음({w.get('지번', '')})"}
+        if not dc:
+            out[w["지역ID"]] = {"지역ID": w["지역ID"], "메모": "법정동 못 찾음"}
             continue
-        plan[w["지역ID"]] = (dc, san, cands)
+        area_of[w["지역ID"]] = (dc, memo)
+        if cands:
+            plan[w["지역ID"]] = (dc, san, cands)
     want = {pnu(dc, san, a, b) for dc, san, cs in plan.values() for a, b in cs}
     bonbun = {pnu(dc, san, cs[0][0], 0)[:15] for dc, san, cs in plan.values()}   # 본번까지(부번 필지가 없을 때)
     print(f"지구 {len(rows)}곳 · 법정동 찾음 {len(plan)} · 찾을 PNU {len(want)} — 지적도 읽는 중(몇 분)…")
 
     r = shapefile.Reader(shp.removesuffix(".shp"), encoding="euc-kr")
     hit, near = {}, {}
+    # 리 코드(…00 이 아닌 끝) 는 그 리, 읍면동 코드(끝 00) 는 앞 8자리로 그 읍면동 전부
+    zone = {dc if not dc.endswith("00") else dc[:8] for dc, _ in area_of.values()}
+    zpick: dict[str, list] = {}
     for i, rec in enumerate(r.iterRecords(fields=["PNU", "JIBUN"])):
         p = rec["PNU"]
+        for z in (p[:10], p[:8]):
+            if z in zone and len(zpick.setdefault(z, [])) < 600:  # 리마다 600필지면 가운데가 충분히 선다
+                zpick[z].append(i)
         if p in want:
             hit[p] = (i, rec["JIBUN"])
         if p[:15] in bonbun:
@@ -184,6 +222,20 @@ def main(shp: str, code_txt: str) -> int:
             put(rid, i, r.record(i)["PNU"], jb, "본번근사", "그 지번 필지가 없어(분할 · 합병) 같은 본번에서")
         else:
             out[rid] = {"지역ID": rid, "메모": "지적도에 그 지번 없음"}
+    # 지번이 없거나 못 찾은 곳 — 그 리(읍면동) 필지들 가운데(바운딩 상자 가운데의 평균)
+    for rid, (dc, memo) in area_of.items():
+        if out.get(rid, {}).get("위도"):
+            continue
+        z = dc if not dc.endswith("00") else dc[:8]
+        idx = zpick.get(z) or []
+        if not idx:
+            continue
+        cs = [((b[0] + b[2]) / 2, (b[1] + b[3]) / 2) for b in (r.shape(i).bbox for i in idx)]
+        x, y = sum(c[0] for c in cs) / len(cs), sum(c[1] for c in cs) / len(cs)
+        lon, lat = tf.transform(x, y)
+        how = "리중심" if not dc.endswith("00") else "읍면동중심"
+        out[rid] = {"지역ID": rid, "위도": f"{lat:.6f}", "경도": f"{lon:.6f}", "PNU": "", "지번": "", "방법": how,
+                    "메모": " · ".join(x for x in (memo, f"지번으로 못 찾아 그 {how[:-2]} 필지 {len(cs)}곳 가운데 — 지도 표시용") if x)}
 
     d = ai.wiki() / "data"
     cols = ["지역ID", "위도", "경도", "PNU", "지번", "방법", "메모"]

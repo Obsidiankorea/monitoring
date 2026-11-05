@@ -539,7 +539,7 @@ async def api_districts_all():
         out = []
         for sg in ai.SIGUN_FULL:
             for emd, ds in contacts.districts(sg)["emd"].items():
-                out += [{"sigun": sg, "emd": emd, **{k: d[k] for k in ("id", "name", "ri", "jibun", "kind", "fam", "shelter", "rule", "pos")}}
+                out += [{"sigun": sg, "emd": emd, **{k: d[k] for k in ("id", "name", "ri", "jibun", "kind", "fam", "shelter", "rule", "pos", "approx")}}
                         for d in ds if d["pos"]]
         return out
     rows = await asyncio.to_thread(one)
@@ -620,7 +620,7 @@ async def api_grid_emdwin(basis: str = "grid", pts: int = 0):
     pts=1 이면 좌표가 있는 지구마다 그 자리(둘레 1.5km) 값도(pts) — 상황판단 지구별 판정."""
     try:
         return await asyncio.to_thread(gridview.emd_windows, (1, 3, 12, 24, 48), None, "aws" if basis == "aws" else "grid",
-                                       dict(geocode.POS) if pts else None)
+                                       geocode.exact() if pts else None)
     except LookupError as e:
         raise HTTPException(404, str(e)) from e
 

@@ -99,6 +99,7 @@ function districtTip(r) {
   return `<b>${escH(name)}</b> · ${escH(r.kind || r.fam)}${p != null ? ` · <b style="color:${dzColVar(dzLv(p))}">${p}%</b>` : ""}`
     + `<div class="d">${escH(r.sigun)} ${escH(r.emd)} ${escH(where)}</div>`
     + (p != null ? `<div class="d">기준 대비 가장 높은 단계 — ${ACC_BASIS === "grid" ? "격자" : "AWS"} 기준${w === "읍면동" ? " · 좌표 없이 읍면동 값" : ""}</div>` : "")
+    + (r.approx ? `<div class="d">위치는 근사 — 지번으로 못 찾아 그 리 · 읍면동 가운데(판정은 읍면동 기준)</div>` : "")
     + (r.rule ? `<div class="d">대피기준 ${escH(r.rule)}</div>` : "")
     + (r.shelter && r.shelter !== "–" ? `<div class="d">대피장소 ${escH(r.shelter)}</div>` : "")
     + `<div class="d">누르면 상황판단 창에서 이 지구</div>`;

@@ -63,7 +63,8 @@ def districts(sigun: str) -> dict:
                         "id": w["지역ID"], "name": w.get("지구명") or "", "ri": w.get("리") or "", "jibun": w.get("지번") or "",
                         "kind": w.get("유형") or "", "fam": ai.FAMILY_OF.get(w.get("유형") or "", "야외·기타"),   # 상황판단 모드의 유형 줄
                         "shelter": w.get("대피장소") or "", "rule": (w.get("대피기준") or "").strip(),
-                        "pos": geocode.POS.get(w["지역ID"])})   # (위도, 경도) — 메모리에만, 없으면 읍면동 기준
+                        "pos": geocode.POS.get(w["지역ID"]),   # (위도, 경도) — 메모리에만, 없으면 읍면동 기준
+                        "approx": w["지역ID"] in geocode.APPROX})   # 리 · 읍면동 가운데(지도 표시용)
     except OSError:
         pass
     return {"emd": out}

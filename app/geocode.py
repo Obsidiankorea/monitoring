@@ -21,6 +21,7 @@ URL = "https://api.vworld.kr/req/address"
 GU = {"의창구", "성산구", "마산합포구", "마산회원구", "진해구"}   # 창원은 지구명 칸에 구가 들어 있다('횡천지구' 같은 지구 이름과 구별)
 
 POS: dict[str, tuple[float, float]] = {}    # 지역ID → (위도, 경도) — 메모리에만
+APPROX: set[str] = set()                     # 리 · 읍면동 가운데로 찍은 근사 — 지도에만, 판정(지구 자리 비)에는 안 쓴다
 FAIL: dict[str, str] = {}                    # 지역ID → 못 찾은 이유
 STATE = {"state": "대기", "total": 0, "done": 0, "found": 0, "manual": 0, "at": None, "err": ""}
 
@@ -87,6 +88,19 @@ def _manual(name: str = "지구좌표_수동.csv") -> dict[str, tuple[float, flo
     return out
 
 
+def _approx() -> set[str]:
+    try:
+        with open(ai.wiki() / "data" / "지구좌표.csv", encoding="utf-8-sig", newline="") as f:
+            return {w["지역ID"] for w in csv.DictReader(f) if (w.get("방법") or "").endswith("중심")}
+    except OSError:
+        return set()
+
+
+def exact() -> dict[str, tuple[float, float]]:
+    """판정에 쓸 좌표 — 근사(리 · 읍면동 가운데)는 뺀다. 한 점으로 비를 보면 읍면동 최대 칸보다 덜 잡을 수 있다."""
+    return {k: v for k, v in POS.items() if k not in APPROX}
+
+
 def _rows() -> list[dict]:
     try:
         with open(ai.wiki() / "data" / "인명피해 우려지역.csv", encoding="utf-8-sig", newline="") as f:
@@ -102,24 +116,27 @@ async def run() -> None:
     key = config.KEYS.get("VWORLD_KEY", "")
     rows = _rows()
     man = {**_manual("지구좌표.csv"), **_manual()}                  # 지적도 위에 사람이 적은 것
+    APPROX.clear()
+    APPROX.update(_approx() - set(_manual()))
     POS.update(man)
     STATE.update(state="받는 중", total=len(rows), done=0, found=len(POS), manual=len(man), err="", at=None)
-    if all(w["지역ID"] in man for w in rows):
+    if all(w["지역ID"] in man and w["지역ID"] not in APPROX for w in rows):
         STATE.update(state="끝", done=len(rows), at=datetime.now().isoformat(timespec="seconds"))
         return
     if not key:
-        STATE.update(state="키 없음", done=len(rows), err=f"좌표 없는 {len(rows) - len(man)}곳은 읍면동 기준(VWORLD_KEY 없음)")
+        STATE.update(state="키 없음", done=len(rows), err=f"좌표 없는 {len(rows) - len(man)}곳 · 근사 {len(APPROX)}곳은 읍면동 기준(VWORLD_KEY 없음)")
         return
     sem = asyncio.Semaphore(2)                                      # 5개씩이면 절반이 끊겼다(2026-11 시험)
 
     async def one(cli: httpx.AsyncClient, w: dict) -> None:
         rid = w["지역ID"]
-        if rid not in man and not STATE["err"]:
+        if (rid not in man or rid in APPROX) and not STATE["err"]:      # 근사(리 · 읍면동 가운데)는 브이월드로 정확한 점을 찾아 본다
             async with sem:
                 r = await ask(cli, key, address(w))
                 await asyncio.sleep(0.1)
             if isinstance(r, tuple):
                 POS[rid] = r
+                APPROX.discard(rid)
                 FAIL.pop(rid, None)
             else:
                 FAIL[rid] = r
