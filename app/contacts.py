@@ -71,6 +71,7 @@ def of_sigun(sigun: str) -> dict:
         people = [{"who": r.get(f"담당{i}") or "", "tel": r.get(f"담당{i}_연락처_정규화") or r.get(f"담당{i}_연락처") or ""}
                   for i in (1, 2) if r.get(f"담당{i}_연락처") or r.get(f"담당{i}")]
         out.setdefault(r.get("읍면동") or "", []).append({
-            "id": rid, "name": r.get("지구명") or "", "ri": r.get("리") or "", "kind": w.get("유형", ""),
+            "id": rid, "name": r.get("지구명") or "", "ri": r.get("리") or "", "jibun": r.get("지번") or "", "kind": w.get("유형", ""),
+            "fam": ai.FAMILY_OF.get(w.get("유형", ""), "야외·기타"),         # 상황판단 모드의 유형 줄(산사태 · 하천 · 지하공간)에 붙인다
             "shelter": w.get("대피장소", ""), "people": people, "check": r.get("연락처확인") or ""})
     return {"on": True, "emd": out, "n": sum(len(v) for v in out.values())}

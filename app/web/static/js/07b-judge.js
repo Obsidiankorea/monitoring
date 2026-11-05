@@ -11,20 +11,30 @@ async function sjContacts() {
     SJ.ct = r.status === 401 ? { pin: true } : r.status === 429 ? { err: "잠금 번호를 여러 번 틀렸다 — 5분 뒤" } : await r.json();
   } catch (e) { SJ.ct = { err: e.message }; }
 }
-/* 읍면동 하나의 담당자 — 지구마다 담당1 · 2, 전화 · 문자 링크(문자는 문안을 채워 폰 문자 앱을 연다 — 보내기는 사람이) */
-function sjCt(r) {
+/* 지구 담당자 — 유형 줄(fam)마다 그 유형 지구만, fam 이 없으면 유형 줄이 없는 지구(침수 · 해안 · 야외 등). 지구마다 담당1 · 2,
+   전화 · 문자 링크(문자는 문안을 채워 폰 문자 앱을 연다 — 보내기는 사람이) */
+const sjCtList = (r, fam) => (SJ.ct?.emd?.[r.emd] || []).filter(d => (fam ? d.fam === fam : !r.ladders[d.fam]));
+function sjCt(r, fam) {
   const c = SJ.ct;
   if (!c) return `<div class="sj-ct"><div class="hint">읽는 중…</div></div>`;
   if (c.pin) return `<div class="sj-ct"><form class="sj-pin"><input type="password" inputmode="numeric" autocomplete="off" placeholder="연락처 잠금 번호"><button>열기</button></form></div>`;
   if (c.err) return `<div class="sj-ct"><div class="hint">${escH(c.err)}</div></div>`;
   if (!c.on) return `<div class="sj-ct"><div class="hint">연락처 파일이 없다 — 서버 상태 폴더에 contacts.csv(위키 지역ID 로 맞춘 것)를 둔다.</div></div>`;
-  const list = c.emd[r.emd] || [];
-  if (!list.length) return `<div class="sj-ct"><div class="hint">이 읍면동은 연락처 표에 없다</div></div>`;
-  const msg = encodeURIComponent(`${SJ.s?.tm ? `${SJ.s.tm.slice(8, 10)}:${SJ.s.tm.slice(10, 12)}` : ""} ${SJ.sg} ${r.emd} 강우 기준 근접 — 통제 · 사전대피 여부 판단 바랍니다. (경남 재난안전상황실)`);
+  const list = sjCtList(r, fam);
+  if (!list.length) return `<div class="sj-ct"><div class="hint">${fam ? `이 읍면동 ${fam} 지구는` : "이 읍면동은"} 연락처 표에 없다</div></div>`;
+  const msg = encodeURIComponent(`${SJ.s?.tm ? `${SJ.s.tm.slice(8, 10)}:${SJ.s.tm.slice(10, 12)}` : ""} ${SJ.sg} ${r.emd}${fam ? ` ${fam}` : ""} 강우 기준 근접 — 통제 · 사전대피 여부 판단 바랍니다. (경남 재난안전상황실)`);
   return `<div class="sj-ct">${list.map(d => `<div class="ct"><b>${escH(d.name || d.ri)}</b><em>${escH([d.kind, d.ri, d.shelter && "대피 " + d.shelter].filter(Boolean).join(" · "))}</em>`
     + d.people.map((p, i) => `<span class="p">${escH(p.who || `담당${i + 1}`)}${p.tel ? ` <a href="tel:${escH(p.tel.replace(/[^0-9-]/g, ""))}" data-ct="${escH(r.emd)}|${escH(d.name)}|담당${i + 1}|전화">📞 ${escH(p.tel)}</a>`
       + (/^01/.test(p.tel) ? ` <a href="sms:${escH(p.tel.replace(/[^0-9]/g, ""))}?body=${msg}" data-ct="${escH(r.emd)}|${escH(d.name)}|담당${i + 1}|문자">✉ 문자</a>` : "") : " · 번호 없음"}</span>`).join("")
     + (d.check ? `<i class="ck" title="${escH(d.check)}">번호 확인 필요</i>` : "") + `</div>`).join("")}</div>`;
+}
+/* 칸 안 — 이 유형 지구의 이름 · 주소(리 지번) · 담당자 이름(번호는 📞 펼치면). 셋까지, 나머지는 '외 n곳' */
+function sjWho(r, fam) {
+  const list = SJ.ct?.on ? sjCtList(r, fam) : [];
+  if (!list.length) return "";
+  return `<div class="who">${list.slice(0, 3).map(d => `<div><b>${escH(d.name || d.ri)}</b> <span>${escH([d.ri, d.jibun].filter(Boolean).join(" "))}</span>`
+    + `<em>${escH(d.people.map(p => p.who).filter(Boolean).join(" · "))}</em></div>`).join("")}`
+    + (list.length > 3 ? `<button class="more" data-cto="${escH(r.emd)}|${fam}">외 ${list.length - 3}곳 · 📞 펼치기</button>` : "") + `</div>`;
 }
 const SJ_ACT = { 통제: "통제 지시", 사전대피: "사전대피 권고", 긴급대피: "대피명령 요청" };
 const SJ_FAM = ["산사태", "하천", "지하공간"];
@@ -78,7 +88,7 @@ function sjCell(r, fam, stg, alt) {
     <div class="bar"><i style="width:${Math.min(100, pct || 0)}%"></i></div>${eta}
     <div class="acts"><button data-a="${SJ_ACT[stg]}" data-e="${escH(r.emd)}" data-f="${fam}" data-s="${stg}" data-p="${pct ?? ""}" data-t="${e1 || ""}" class="${met ? "hot" : ""}">${SJ_ACT[stg]}</button>
     <button class="g" data-a="보류" data-e="${escH(r.emd)}" data-f="${fam}" data-s="${stg}" data-p="${pct ?? ""}" data-t="${e1 || ""}">보류</button></div>
-    ${last ? `<div class="dec">✔ ${escH(last.act)} ${last.at.slice(11, 16)}</div>` : ""}</div>`;
+    ${last ? `<div class="dec">✔ ${escH(last.act)} ${last.at.slice(11, 16)}</div>` : ""}${sjWho(r, fam)}</div>`;
 }
 function sjRender() {
   const s = SJ.s;
@@ -88,12 +98,16 @@ function sjRender() {
   const show = SJ.more ? rows : rows.slice(0, 8);
   const cards = show.map(r => {
     const rn = r.rain, alt = altBy[r.emd];
-    const fams = SJ_FAM.filter(f => r.ladders[f]).map(f => `<div class="fam"><div class="fn">${f}<em>우려 ${r.risk[f] || 0}곳</em></div>${["통제", "사전대피", "긴급대피"].map(stg => sjCell(r, f, stg, alt)).join("")}</div>`).join("");
+    const fams = SJ_FAM.filter(f => r.ladders[f]).map(f => {
+      const n = sjCtList(r, f).length, k = `${r.emd}|${f}`, on = SJ.ctOpen.has(k);
+      return `<div class="fam"><div class="fn">${f}<em>우려 ${r.risk[f] || 0}곳</em>${SJ.ct && (n || !SJ.ct.on) ? `<button class="ctb${on ? " on" : ""}" data-cto="${escH(k)}">📞 ${n || "담당"}</button>` : ""}</div>`
+        + `${["통제", "사전대피", "긴급대피"].map(stg => sjCell(r, f, stg, alt)).join("")}</div>${on ? sjCt(r, f) : ""}`;
+    }).join("");
     const later = r.later ? ` · 그 뒤 오늘 ${r.later.today}㎜ · 내일 ${r.later.tomorrow}㎜` : "";
     const tag = r.hot === 3 ? `<span class="tag t3">기준 닿음</span>` : r.hot === 2 ? `<span class="tag t2">근접</span>` : "";
-    const nct = SJ.ct?.emd?.[r.emd]?.length, open = SJ.ctOpen.has(r.emd);
+    const nct = sjCtList(r).length, open = SJ.ctOpen.has(r.emd);
     return `<section class="sj-e" id="sje-${escH(r.emd)}"><header><b>${escH(r.emd)}</b>${tag}
-      <button class="ctb${open ? " on" : ""}" data-cto="${escH(r.emd)}">📞 담당자${nct ? ` ${nct}` : ""}</button>
+      ${nct ? `<button class="ctb${open ? " on" : ""}" data-cto="${escH(r.emd)}" title="유형 줄이 없는 지구(침수 · 해안 · 야외 등)">📞 그 밖의 지구 ${nct}</button>` : ""}
       <span>1시간 ${rn["1h"] ?? "—"} · 3시간 ${rn["3h"] ?? "—"} · 24시간 ${rn["24h"] ?? "—"}㎜${r.m15 != null ? ` · 15분 ${r.m15}㎜` : ""}</span>
       <span class="fc">${r.fc6h != null ? `앞으로 6시간 ${r.fc6h}㎜ (최대 ${r.fc_peak}㎜/h)` : "예보 칸 없음"}${later}</span></header>${open ? sjCt(r) : ""}${fams}</section>`;
   }).join("") + (rows.length > 8 ? `<button class="sj-more" id="sj-more">${SJ.more ? "접기" : `나머지 ${rows.length - 8}곳 더 보기`}</button>` : "");
@@ -166,6 +180,7 @@ async function sjAsk(body, label) {
 $("sj").addEventListener("click", async ev => {
   const t = ev.target, d = t.closest("[data-a]");
   if (t.closest("#sj-x")) return sjToggle(false);
+  if (d && d.dataset.a !== "보류") SJ.ctOpen.add(`${d.dataset.e}|${d.dataset.f}`);   // 결정하면 그 유형 지구 담당자를 펼친다 — 바로 연락
   if (d) return sjDecide({ act: d.dataset.a, emd: d.dataset.e, fam: d.dataset.f, stage: d.dataset.s, pct: d.dataset.p === "" ? null : +d.dataset.p, eta: d.dataset.t || null });
   if (t.closest("#sj-more")) { SJ.more = !SJ.more; return sjRender(); }
   const cto = t.closest("[data-cto]");
