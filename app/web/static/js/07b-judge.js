@@ -35,7 +35,7 @@ function sjToggle(on = !SJ.open) {
   sjLoad();
 }
 async function sjLoad(onlyData) {
-  const my = ++SJ.seq, sg = SJ.sg, qs = new URLSearchParams({ sigun: sg, k: SJ.k, add_h: SJ.addH, add_24: SJ.add24 });
+  const my = ++SJ.seq, sg = SJ.sg, qs = new URLSearchParams({ sigun: sg, k: SJ.k, add_h: SJ.addH, add_24: SJ.add24, series: 1 });
   if (!onlyData) $("sj-c").innerHTML = `<div class="sj-ld">${sg === "all" ? "경남 전체 18개 시군" : escH(sg)} 지구 판정을 모으는 중…</div>`;
   $("sj").classList.add("busy");
   try {
@@ -92,24 +92,6 @@ function sjGroup(g) {
       <span class="gn">${all ? `<i>${escH(g.sigun)}</i>` : ""}${escH(g.emd)} <em>${escH(g.fam)}</em></span>
       ${SJ_STG.map(s => sjPct(g.st[s])).join("")}<span class="et">${g.met ? "넘음" : g.soon < 99 ? `${g.soon}시간 뒤` : "—"}</span>
       <span class="gc">${g.rows.length}곳${done}</span></button><div class="sbs">${subs}</div></div>`;
-}
-/* 경남 전체 — 시군 × 유형 칸판(문턱 이상 지구 수 / 지구 수 · 색 = 가장 많이 찬 %). 누르면 그 시군으로 */
-function sjChart() {
-  const cut = SJ.cut.on ? SJ.cut.pct : 50, F = ["산사태", "하천", "지하공간"];
-  const ch = (SJ.d?.chart || []).map(c => {
-    const f = c.fam?.[SJ.basis] || {}, k = x => (f[x]?.v || []).filter(v => v >= cut).length;
-    return { c, f, tot: F.reduce((s, x) => s + k(x), 0), top: Math.max(0, ...F.map(x => f[x]?.top ?? 0)) };
-  }).sort((a, b) => b.tot - a.tot || b.top - a.top);
-  const cell = (sg, f, x) => {
-    const d = f[x];
-    if (!d?.n) return `<span class="hc none"></span>`;
-    const n = (d.v || []).filter(v => v >= cut).length;
-    return `<button class="hc l${sjLv(d.top ?? 0)}${n ? "" : " zero"}" data-sg="${sg}" title="${sg} ${x} — ${cut}% 이상 ${n}곳 / ${d.n}곳 · 가장 많이 찬 곳 ${d.top}%"><b>${n || ""}</b><small>${n ? `/${d.n}` : d.n}</small></button>`;
-  };
-  const hh = `<div class="hh"><span></span>${F.map(x => `<span>${x}</span>`).join("")}<span>합</span><span>가장 높음</span></div>`;
-  const rows = ch.map(({ c, f, tot, top }) => `<div class="hr"><button class="hn" data-sg="${c.sigun}">${c.sigun}</button>${F.map(x => cell(c.sigun, f, x)).join("")}
-    <b class="ht${tot ? "" : " zero"}">${tot || "—"}</b><b class="hp t${sjLv(top)}">${top ? `${top}%` : "—"}</b></div>`);
-  return `<div class="heat">${hh}${rows.slice(0, 9).join("")}${hh}${rows.slice(9).join("")}</div>`;
 }
 /* 조건 막대 — 지금/필요. '그리고'로 묶인 조건은 가장 덜 찬 것이 그 기준의 % */
 const sjParts = ps => ps.map(p => `<div class="pt"><span>${escH(p.label || "")}</span><i><u class="b${sjLv(p.pct ?? 0)}" style="width:${Math.min(100, p.pct ?? 0)}%"></u></i>
@@ -242,10 +224,10 @@ function sjRender() {
     if (g.sec !== cur) { cur = g.sec; body += `<div class="sec s${cur}"><b>${SJ_SEC[cur]}</b><span>${gs.filter(x => x.sec === cur).length}</span></div>`; }
     body += sjGroup(g);
   }
-  $("sj-c").innerHTML = (all ? sjChart() : "") + `<div class="lh"><span>읍면동 · 유형</span><span>통제</span><span>사전대피</span><span>긴급대피</span><span>도달</span><span>지구</span></div>`
+  $("sj-c").innerHTML = `<div class="sjp" id="sj-plot">${sjPlotInner()}</div><div class="lh"><span>읍면동 · 유형</span><span>통제</span><span>사전대피</span><span>긴급대피</span><span>도달</span><span>지구</span></div>`
     + (body || `<div class="sj-ld">${SJ.cut.on ? `${SJ.cut.pct}% 이상인 곳이 없다` : "지구가 없다"}</div>`)
     + (gs.length > shown.length ? `<button class="more" id="sj-more">나머지 ${gs.length - shown.length}묶음 더 보기</button>` : "")
-    + `<p class="mute foot">지구 위치 미확정(지오코딩 전) — 같은 읍면동 · 유형은 그 읍면동 최대 칸으로 같은 % · 색: 50 · 70 · 80 · 90 · 100% 이상</p>`;
+    + `<p class="mute foot">좌표가 있는 지구는 그 자리 비, 없으면(*) 읍면동 최대 칸 · 예보는 읍면동 · 색: 50 · 70 · 80 · 90 · 100% 이상</p>`;
   $("sj-d").innerHTML = sjDetail();
   if (!$("sj-l").querySelector(".mtab")) $("sj-l").innerHTML = `<div class="mtab"></div><div class="mbd"></div>`;
   $("sj-l").querySelector(".mtab").innerHTML = sjTabs().map(n => `<button data-tab="${escH(n)}">${escH(SJ_TN[n] || n)}</button>`).join("");
@@ -281,6 +263,7 @@ function sjPick(sg, remote) {
 /* 두 창 맞추기 — 시군을 바꾸면 다른 창도 */
 function sjSync(sel) { if (!SJ_REMOTE) SJ_BC?.postMessage({ sel }); }
 if (SJ_BC) SJ_BC.onmessage = ev => {
+  if (ev.data?.dzt != null) { if (!SJ_SOLO && typeof dzTime === "function") dzTime(ev.data.dzt, ev.data.lab); return; }
   const sel = ev.data?.sel;
   if (!Array.isArray(sel)) return;
   SJ_REMOTE = true;

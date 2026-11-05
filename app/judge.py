@@ -103,7 +103,36 @@ def at_point(e: dict, p: dict | None, s: dict, fam: str, rule: str) -> dict:
     return row
 
 
-def rows_of(sg: str, base: str, k: float, add: tuple = (0.0, 0.0)) -> tuple[list[dict], dict]:
+def series_of(e: dict, s: dict, fam: str, rule: str) -> dict | None:
+    """앞으로 시간마다 그 지구의 가장 높은 단계 % — 차트 줄 · 재생. e 는 지구 자리로 바꾼 줄(at_point 뒤).
+    t 시각의 비 = 지금 누적 + 그때까지 예보 합(창에서 빠지는 옛 비는 빼지 않는다 — 도달 시각과 같은 가정),
+    1시간 = 그 시각 예보 시우량, 15분 = 모름. 예보 시우량 조건은 그 뒤 6시간 예보로. 야간(21~06시)은 그 시각으로.
+    ⚠️ 예보 끝 시각은 넣지 않는다 — 뒤 예보가 없어 예보 조건이 '모름'으로 빠지면 누적만 남아 % 가 튀었다."""
+    fh, fl = e.get("eta_hours") or e.get("fc_hours") or [], e.get("eta_labels") or e.get("fc_labels") or []
+    if not fh:
+        return None
+    r0, cut30 = e["rain"], ai.R("하천_통제_시우량")
+    out, cum = [], 0.0
+    for i, v in enumerate(fh[:-1]):
+        v = v or 0
+        cum += v
+        rain = {h: None if r0.get(h) is None else round(r0[h] + cum, 1) for h in r0}
+        rain["1h"] = v
+        rain["3h"] = round(sum(fh[max(0, i - 2):i + 1]) + (r0.get("3h") or 0) * max(0, 2 - i) / 3, 1)
+        nxt = fh[i + 1:i + 7]
+        run = best = 0
+        for x in nxt:
+            run = run + 1 if (x or 0) >= cut30 else 0
+            best = max(best, run)
+        hh = re.search(r"(\d{1,2})$", str(fl[i]) if i < len(fl) else "")
+        night = s["night"] if not hh else int(hh.group(1)) >= 21 or int(hh.group(1)) < 6
+        row = {**e, "fc_hours": nxt, "fc_labels": fl[i + 1:i + 7], "eta_hours": fh[i + 1:], "eta_labels": fl[i + 1:],
+               "fc_peak": max(nxt) if nxt else None, "fc_run30": best}
+        out.append(pack(at_point(row, {**rain, "15m": None}, {**s, "night": night}, fam, rule), fam, rule)["top"])
+    return {"t": list(fl[:len(out)]), "v": out}
+
+
+def rows_of(sg: str, base: str, k: float, add: tuple = (0.0, 0.0), series: bool = False) -> tuple[list[dict], dict]:
     g, a = _sit(sg, base, k, "grid", add), _sit(sg, base, k, "aws", add)
     ga = {e["emd"]: e for e in a["emd"]}
     pg, pa = _pts(base, "grid"), _pts(base, "aws")
@@ -117,6 +146,10 @@ def rows_of(sg: str, base: str, k: float, add: tuple = (0.0, 0.0)) -> tuple[list
             ea = ga.get(e["emd"])
             eg, ea2 = at_point(e, pg.get(d["id"]), g, d["fam"], d["rule"]), ea and at_point(ea, pa.get(d["id"]), a, d["fam"], d["rule"])
             b = {"grid": pack(eg, d["fam"], d["rule"]), "aws": pack(ea2, d["fam"], d["rule"]) if ea else None}
+            if series:
+                b["grid"]["series"] = series_of(eg, g, d["fam"], d["rule"])
+                if ea:
+                    b["aws"]["series"] = series_of(ea2, a, d["fam"], d["rule"])
             ss = slide_site(d["rule"], sl) if d["fam"] == "산사태" else None
             for v in b.values():                             # 산사태 예보 발령이 기준인 지구 — 강수가 아니라 발령으로
                 if v and ss is not None:
@@ -127,10 +160,10 @@ def rows_of(sg: str, base: str, k: float, add: tuple = (0.0, 0.0)) -> tuple[list
     return out, g
 
 
-def build(sigun: str, base: str, k: float = 1.0, add_h: float = 0.0, add_24: float = 0.0) -> dict:
+def build(sigun: str, base: str, k: float = 1.0, add_h: float = 0.0, add_24: float = 0.0, series: bool = False) -> dict:
     sgs = list(ai.SIGUN_FULL) if sigun == "all" else [sigun]
     with ThreadPoolExecutor(max_workers=4) as ex:
-        got = list(ex.map(lambda s: (s, *rows_of(s, base, k, (add_h, add_24))), sgs))
+        got = list(ex.map(lambda s: (s, *rows_of(s, base, k, (add_h, add_24), series)), sgs))
     rows, chart, head = [], [], None
     for sg, rs, g in got:
         rows += rs

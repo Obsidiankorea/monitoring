@@ -38,8 +38,20 @@ def _default_wiki() -> Path:
 DEFAULT_WIKI = str(_default_wiki())
 
 
+_WS: list = [0.0, None]                                 # (언제, 값) — 판정 한 번에 수만 번 불려 DB 를 매번 읽으면 느렸다(2026-11)
+
+
 def wiki_source() -> tuple[Path, str]:
-    """위키 폴더와 그 출처 — 화면 설정(DB ai_wiki) > 환경변수 GN_WIKI > 기본."""
+    """위키 폴더와 그 출처 — 화면 설정(DB ai_wiki) > 환경변수 GN_WIKI > 기본. 5초 동안은 앞에 읽은 것(set_wiki 가 비운다)."""
+    import time as _t
+    if _WS[1] and _t.time() - _WS[0] < 5:
+        return _WS[1]
+    _WS[1] = _wiki_source()
+    _WS[0] = _t.time()
+    return _WS[1]
+
+
+def _wiki_source() -> tuple[Path, str]:
     from . import db
     try:
         v = str(db.get_setting("ai_wiki", "") or "").strip()
@@ -915,6 +927,7 @@ def set_wiki(path: str) -> dict:
 
 
 def reset_wiki_cache() -> None:
+    _WS[1] = None
     _lookup_fn.cache_clear()
     _LK.clear()
     _GET.clear()

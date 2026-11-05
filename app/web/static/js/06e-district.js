@@ -4,7 +4,7 @@
    색: 상황판단과 같은 단계(50 · 70 · 80 · 90 · 100%), 50 아래 · 모름은 회색. % 는 /api/judge?sigun=all(5분마다) — 지도 기준(AWS · 격자)을 따른다.
    자료: /api/districts/all(좌표가 있는 지구) · /api/districts/shapes(필지 모양, 처음 켤 때 한 번). 배지 · 면은 GL 층(1,500곳 넘음).
    누르면 상황판단 창(map.html?sj)에서 그 지구를 연다. shortcut: 배지 그림은 색을 구워 넣는다 — 테마를 바꾸면 다음 갱신(5분)에 바뀐다. */
-let DZ = null, DZ_SH = null, DZ_PCT = null, DZ_T = 0;
+let DZ = null, DZ_SH = null, DZ_PCT = null, DZ_T = 0, DZ_TI = 0, DZ_TL = "";   // DZ_TI = 상황판단 창 재생 위치(0 = 지금)
 const DZ_FAM = ["산사태", "하천", "지하공간", "침수·해안", "야외·기타"];
 const DZ_LV = [0, 50, 70, 80, 90, 100];
 const dzLv = p => (p == null ? 0 : p >= 100 ? 100 : p >= 90 ? 90 : p >= 80 ? 80 : p >= 70 ? 70 : p >= 50 ? 50 : 0);
@@ -61,19 +61,22 @@ async function loadDistrict() {
   if (!DZ_SH && !DZ.fail) { try { DZ_SH = await getJson("/api/districts/shapes"); } catch { DZ_SH = { features: [] }; } }
   drawDistrict(); districtLegend(); renderLyIcons();
   try {                                                  // 위험도 — 경남 전체 판정은 몇 초 걸린다(뒤에 칠한다)
-    const j = await getJson("/api/judge?sigun=all");
-    DZ_PCT = Object.fromEntries(j.rows.map(r => [r.id, { grid: r.b.grid?.top, aws: r.b.aws?.top, where: r.where }]));
+    const j = await getJson("/api/judge?sigun=all&series=1");
+    DZ_PCT = Object.fromEntries(j.rows.map(r => [r.id, { grid: [r.b.grid?.top, ...(r.b.grid?.series?.v || [])],
+                                                         aws: [r.b.aws?.top, ...(r.b.aws?.series?.v || [])], where: r.where }]));
   } catch { DZ_PCT = DZ_PCT || {}; }
   drawDistrict(); districtLegend();
   DZ_T = setTimeout(loadDistrict, 5 * 60 * 1000);
 }
 const dzRows = () => (OV.has("district") && DZ?.rows ? DZ.rows.filter(r => selHas(r.sigun)) : []);
-const dzPct = r => DZ_PCT?.[r.id]?.[ACC_BASIS === "grid" ? "grid" : "aws"] ?? null;
+const dzPct = r => { const v = DZ_PCT?.[r.id]?.[ACC_BASIS === "grid" ? "grid" : "aws"]; return v ? v[Math.min(DZ_TI, v.length - 1)] ?? null : null; };
+/* 상황판단 창이 재생 위치를 보냈다 — 배지 색을 그 시각으로(0 이면 지금) */
+function dzTime(i, lab) { DZ_TI = +i || 0; DZ_TL = DZ_TI ? lab || "" : ""; drawDistrict(); districtLegend(); }
 function drawDistrict() {
   if (!GL_OK) return;
   const rows = dzRows(), on = OV.has("district") && DZ?.rows;
   if (on) dzIcons();
-  const key = on ? `${DZ.rows.length}|${SELS.join()}|${ACC_BASIS}|${DZ_PCT ? Object.keys(DZ_PCT).length : 0}|${DZ_T}` : "";
+  const key = on ? `${DZ.rows.length}|${SELS.join()}|${ACC_BASIS}|${DZ_PCT ? Object.keys(DZ_PCT).length : 0}|${DZ_T}|${DZ_TI}` : "";
   const lv = new Map(rows.map(r => [r.id, dzLv(dzPct(r))]));
   glData("dz", key, () => rows.map(r => glF({ type: "Point", coordinates: LCCF(r.pos[1], r.pos[0]) },
     { id: r.id, lv: lv.get(r.id), ic: `dz-${DZ_FAM.includes(r.fam) ? r.fam : "야외·기타"}-${lv.get(r.id)}` })));
@@ -106,14 +109,20 @@ function districtOpen(r) {
 }
 TIPS.set("district-now", `위키 인명피해 우려지역 지구. 동그라미 색은 상황판단의 기준 % 중 가장 높은 단계(지도 기준 AWS · 격자를 따른다, 5분마다), 안의 그림은 유형.<br>
   좌표는 연속지적도(국가공간정보포털) 필지 중심, 못 찾은 곳은 브이월드. 넓은 필지(하천 · 도로 · 임야)는 중심 한 점이라 실제 위험 지점과 다를 수 있다 — 위키 data/지구좌표_수동.csv 에 적으면 그것을 쓴다.`);
-/* 범례 그림 — 배지 그림을 작은 캔버스로(지도와 같은 것) */
-function dzBadge(fam, lv) {
+/* 배지 그림 한 장(data URL) — 범례 · 상황판단 차트가 같은 그림을 쓴다 */
+const DZ_URL = {};
+function dzBadgeUrl(fam, lv) {
+  fam = DZ_FAM.includes(fam) ? fam : "야외·기타";
+  const k = `${fam}-${lv}`;
+  if (DZ_URL[k]) return DZ_URL[k];
   const cv = document.createElement("canvas"); cv.width = cv.height = 40;
   const c = cv.getContext("2d");
   c.beginPath(); c.arc(20, 20, 17.5, 0, 7); c.fillStyle = cssVal(dzColVar(lv)); c.fill();
+  c.lineWidth = 2.5; c.strokeStyle = cssVal("var(--dz-ring)"); c.stroke();
   const g = document.createElement("canvas"); g.width = g.height = 40; dzGlyph(g.getContext("2d"), fam); c.drawImage(g, 0, 0);
-  return `<img src="${cv.toDataURL()}" width="20" height="20" alt="" style="flex:none">`;
+  return (DZ_URL[k] = cv.toDataURL());
 }
+const dzBadge = (fam, lv) => `<img src="${dzBadgeUrl(fam, lv)}" width="20" height="20" alt="" style="flex:none">`;
 function districtLegend() {
   const box = $("ly-district");
   if (!box) return;
@@ -124,7 +133,7 @@ function districtLegend() {
   const hot = rows.filter(r => (dzPct(r) ?? 0) >= 70).length;
   const body = !DZ ? `<div class="nt">읽는 중…</div>` : DZ.fail ? `<div class="nt w">불러오지 못했다 — ${escH(DZ.fail)}</div>`
     : DZ_FAM.map(f => `<div class="rr">${dzBadge(f, 0)}<b>${f}</b><span>${rows.filter(r => r.fam === f).length}곳</span></div>`).join("")
-      + `<div class="sec">색 = 기준 대비 % (${ACC_BASIS === "grid" ? "격자" : "AWS"})</div>`
+      + `<div class="sec">색 = 기준 대비 % (${ACC_BASIS === "grid" ? "격자" : "AWS"})${DZ_TI ? ` · <b>${escH(DZ_TL)} 예상</b>(상황판단 재생)` : ""}</div>`
       + `<div class="keys2">${DZ_LV.map(lv => `<span><i class="dt" style="background:${dzColVar(lv)}"></i>${lv ? `${lv}%↑` : "50 아래"}</span>`).join("")}</div>`
       + `<div class="nt">${DZ_PCT ? `70% 넘은 지구 ${hot}곳` : "위험도 계산 중…"} · ${selOn() ? `고른 시군 ${rows.length}곳` : `경남 ${rows.length}곳`}${g ? ` · 좌표 ${g.found}/${g.total}` : ""} — 확대하면 필지 모양</div>`;
   box.innerHTML = `<div class="hd2" title="눌러서 닫기"><b>우려지역 지구</b><i class="inf" data-tip="district-now">i</i></div>` + body;

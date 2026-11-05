@@ -1642,3 +1642,30 @@ body.sj-on > header, body.sj-on #stage, body.sj-on #tl, body.sj-on #rail { displ
   #sj .sj-c { overflow: visible; }
 }
 @media (prefers-reduced-motion: reduce) { #sj.busy .sj-c { transition: none; } }
+/* 상황판단 차트(07c-judge-plot.js) — 지구마다 앞으로 % 줄 + 재생 */
+#sj .sjp { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px 6px; margin-bottom: 10px; }
+#sj .sjp-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12.5px; color: var(--ink-2); }
+#sj .sjp-bar .pp { width: 34px; height: 28px; border-radius: 8px; border: 1px solid var(--line); background: var(--raised); color: var(--ink); font-size: 13px; }
+#sj .sjp-bar input[type=range] { flex: 1 1 200px; min-width: 140px; }
+#sj .sjp-bar .tm { font: 700 14px var(--mono); color: var(--ink); min-width: 62px; }
+#sj .sjp-bar .ct i { font-style: normal; font-weight: 700; }
+#sj .sjp-bar label { display: inline-flex; align-items: center; gap: 4px; }
+#sj .sjp-bar select { font: inherit; color: var(--ink); background: var(--raised); border: 1px solid var(--line); border-radius: 6px; padding: 2px 4px; }
+#sj .sjp-bar .chips, #sj .sjp-sg { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+#sj .sjp-sg { display: flex; margin-top: 6px; }
+#sj .sjp-bar .chips button, #sj .sjp-sg button { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line);
+  background: transparent; color: var(--ink-3); font-size: 12px; }
+#sj .sjp-bar .chips button.on, #sj .sjp-sg button.on { color: var(--ink); background: var(--raised); border-color: var(--ink-3); }
+#sj .sjp-bar .chips img { width: 16px; height: 16px; }
+#sj .sjp-svg { width: 100%; height: auto; display: block; margin-top: 4px; }
+#sj .sjp-svg .gl { stroke: var(--line); stroke-width: 1; }
+#sj .sjp-svg .g100 { stroke: var(--t100); stroke-width: 1.2; stroke-dasharray: 6 4; }
+#sj .sjp-svg .ax { fill: var(--ink-3); font: 500 11px var(--mono); }
+#sj .sjp-svg .pl { fill: none; stroke-width: 1.4; }
+#sj .sjp-svg .cur { stroke: var(--accent); stroke-width: 1.5; }
+#sj .sjp-svg .pm { cursor: pointer; }
+#sj .sjp-svg .pm.on image { outline: 2px solid var(--ink); }
+#sj .sjp-svg .lk { stroke: var(--ink-3); stroke-width: 0.6; opacity: .5; }
+#sj .sjp-svg .lb { font: 600 11.5px var(--sans); fill: var(--ink-2); }
+#sj .sjp-svg .lb.t50 { fill: var(--t50); } #sj .sjp-svg .lb.t70 { fill: var(--t70); } #sj .sjp-svg .lb.t80 { fill: var(--t80); }
+#sj .sjp-svg .lb.t90 { fill: var(--t90); } #sj .sjp-svg .lb.t100 { fill: var(--t100); }

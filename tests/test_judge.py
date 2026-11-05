@@ -69,3 +69,15 @@ def test_point_max_looks_at_neighbours():
     a = np.zeros((5, 5)); a[1, 1] = 9; a[4, 4] = np.nan
     assert gridview._pt_max(a, [("x", 2, 2), ("y", 4, 4)]) == {"x": 9.0, "y": 0.0}
     assert gridview._pt_max(np.full((3, 3), np.nan), [("z", 1, 1)]) == {}
+
+
+def test_series_adds_forecast_hour_by_hour():
+    """앞으로 시간별 % — 누적은 예보를 더해 오르고, 1시간 조건은 그 시각 예보 시우량으로."""
+    from app import judge
+    e = {"emd": "북면", "rain": {"1h": 10, "3h": 20, "12h": 60, "24h": 80, "48h": 80}, "m15": 2, "fc_peak": 20, "fc_run30": 0, "ante": 0,
+         "fc_hours": [20, 20, 20], "fc_labels": ["19", "20", "21"], "sites": [], "ladders": {}}
+    s = {"night": False, "alerts": [], "river": None, "flood": None}
+    sr = judge.series_of(e, s, "산사태", "누적강우 250mm이상")
+    assert sr["t"] == ["19", "20"] and len(sr["v"]) == 2            # 예보 끝 시각은 뺀다(뒤 예보가 없어 % 가 튄다)
+    assert sr["v"][0] <= sr["v"][1]                                 # 비가 계속 오면 % 는 내려가지 않는다
+    assert judge.series_of({**e, "fc_hours": []}, s, "산사태", "") is None

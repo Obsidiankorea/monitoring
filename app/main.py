@@ -589,13 +589,13 @@ async def api_contacts_pin_put(body: dict):
 
 
 @app.get("/api/judge")
-async def api_judge(sigun: str = "all", k: float = 1.0, add_h: float = 0.0, add_24: float = 0.0):
+async def api_judge(sigun: str = "all", k: float = 1.0, add_h: float = 0.0, add_24: float = 0.0, series: int = 0):
     """상황판단 모드 — 지구 한 줄씩(위키 지구 × 기상청 격자 · AWS 면 두 기준의 강수 · 통제 · 사전대피 · 긴급대피 %).
-    sigun=all 이면 경남 전체(시군 차트 + 지구 목록). 연락처는 넣지 않는다(/api/contacts)."""
+    sigun=all 이면 경남 전체(시군 차트 + 지구 목록). series=1 이면 지구마다 앞으로 시간별 % (차트 줄 · 재생). 연락처는 넣지 않는다(/api/contacts)."""
     from . import judge
     me = f"http://127.0.0.1:{os.environ.get('PORT', '8000')}"
     try:
-        return await asyncio.to_thread(judge.build, sigun, me, max(0.5, min(3.0, k)), max(0.0, min(100.0, add_h)), max(0.0, min(500.0, add_24)))
+        return await asyncio.to_thread(judge.build, sigun, me, max(0.5, min(3.0, k)), max(0.0, min(100.0, add_h)), max(0.0, min(500.0, add_24)), bool(series))
     except FileNotFoundError as e:
         raise HTTPException(503, f"LLM 위키를 못 찾았다(설정 › AI 위키): {e}")
 
