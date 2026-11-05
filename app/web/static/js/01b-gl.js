@@ -62,7 +62,8 @@ GL_LAYERS.push(
   { id: "flood", type: "fill", source: "flood", paint: { "fill-color": "var(--sf-flood)", "fill-opacity": 0.22 } },
   { id: "flood-line", type: "line", source: "flood", paint: { "line-color": "var(--sf-flood)", "line-opacity": 0.5, "line-width": 0.6 } },
 );
-const CANVAS_SRC = ["rain", "ghost", "hatch"];          // 격자 그림 — 2D 캔버스에 그려 텍스처로 올린다
+const CANVAS_SRC = ["rain", "ghost", "hatch"];          // 격자 그림 — 2D 캔버스에 그려 이미지(PNG)로 올린다
+const BLANK_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
 
 /* "var(--x)" → 지금 테마의 값. 식(배열) 안도 찾아 바꾼다 */
 const cssVal = v => typeof v === "string" && v.startsWith("var(")
@@ -77,10 +78,9 @@ let GL = null, GL_OK = false;      // GL_OK = 스타일이 섰다(층 · 소스�
 function glInit() {
   const q = document.createElement("canvas").getContext("webgl2") || document.createElement("canvas").getContext("webgl");
   if (!q) throw new Error("이 PC 브라우저에서 WebGL 을 쓸 수 없다 — 그래픽 가속(하드웨어 가속)을 켜거나 다른 브라우저로");
-  const blank = () => { const c = document.createElement("canvas"); c.width = c.height = 1; return c; };
   const sources = Object.fromEntries(GL_LAYERS.map(L => [L.source, { type: "geojson", data: glFC([]) }]));
   const corner = [gll(GC[0], GC[1]), gll(GC[0] + 1, GC[1]), gll(GC[0] + 1, GC[1] - 1), gll(GC[0], GC[1] - 1)];
-  for (const id of CANVAS_SRC) sources[id] = { type: "canvas", canvas: blank(), coordinates: corner, animate: false };
+  for (const id of CANVAS_SRC) sources[id] = { type: "image", url: BLANK_PNG, coordinates: corner };
   GL = new maplibregl.Map({
     container: "gl", interactive: false, attributionControl: false, fadeDuration: 0, renderWorldCopies: false,
     center: gll(...GC), zoom: 8, maxZoom: 22,
@@ -134,29 +134,26 @@ function gridCorners(gr) {
   const at = (px, py) => { const x = b.i0 - 0.5 + px, y = b.j0 + gr.h - 0.5 - py; return gll(A * x + B * y + C, Dd * x + E * y + F); };
   return [at(0, 0), at(gr.w, 0), at(gr.w, gr.h), at(0, gr.h)];
 }
-/* 캔버스 소스 id 를 w×h 로 맞추고 paint(ctx) 로 그린 뒤 한 번만 텍스처로 올린다. paint 가 없으면 감춘다 */
+/* 격자 그림 id 를 w×h 캔버스에 paint(ctx) 로 그려 PNG 로 이미지 소스에 올린다. paint 가 없으면 감춘다.
+   ⚠️ 처음엔 MapLibre 캔버스 소스(play · pause)였다 — 어떤 PC · 브라우저에선 텍스처가 끝내 안 올라가 비 격자만 검게 남았다(2026-11).
+      이미지 소스는 브라우저가 그림을 다 읽은 뒤 올리므로 그런 타이밍 문제가 없다 */
+const GL_CV = {}, GL_GEN = {}, GL_URL = {};
 function glCanvas(id, w, h, paint, coords) {
-  const s = GL.getSource(id), cv = s.getCanvas();
   GL.setLayoutProperty(id, "visibility", paint ? "visible" : "none");
   if (!paint) return;
+  const cv = GL_CV[id] ||= document.createElement("canvas");
   if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
   const c = cv.getContext("2d");
   c.globalCompositeOperation = "source-over"; c.clearRect(0, 0, w, h);
   paint(c);
-  s.setCoordinates(coords);
-  // '재생'해 두고, 소스 타일이 선 뒤 두 장을 더 그린 다음 멈춘다 — 그 사이 텍스처가 올라간다.
-  // ⚠️ 예전엔 다음 한 장에서 바로 멈췄다 — 느린 PC 에선 그 장에 타일이 아직 없어 못 올리고 멈춰 격자가 검게 남았다(2026-11)
-  const my = GL_PLAY[id] = (GL_PLAY[id] || 0) + 1;
-  s.play();
-  let n = 0;
-  const tick = () => {
-    if (GL_PLAY[id] !== my) return;                       // 새 그림이 뒤에 왔다 — 그쪽이 멈춘다
-    if (GL.isSourceLoaded(id) && ++n >= 2) s.pause();
-    else GL.once("render", tick);
-  };
-  GL.once("render", tick);
+  const my = GL_GEN[id] = (GL_GEN[id] || 0) + 1;
+  cv.toBlob(b => {
+    if (!b || GL_GEN[id] !== my) return;                  // 그사이 새 그림이 왔다
+    const old = GL_URL[id], u = GL_URL[id] = URL.createObjectURL(b);
+    GL.getSource(id).updateImage({ url: u, coordinates: coords });
+    if (old) setTimeout(() => URL.revokeObjectURL(old), 3000);   // 앞 그림은 다 읽은 뒤에 버린다
+  });
 }
-const GL_PLAY = {};
 const copyOf = img => c => c.drawImage(img, 0, 0);
 /* 결측 빗금 — 결측 칸 그림(miss)을 S 배로 키운 캔버스에 사선을 긋고 결측 칸 모양으로 도려낸다.
    S = 500m 칸 하나에 4 픽셀(5km 칸은 40) — 경남 전체에서 화면 7px 남짓 간격. 확대하면 빗금도 같이 커진다 */
@@ -175,7 +172,7 @@ function glRain(o, gr, fade) {
   if (!GL_OK) return;
   if (fade && GL_COORDS && GL.getLayoutProperty("rain", "visibility") !== "none") {
     // 앞 그림을 잠깐 남겨 겹쳐 사라지게 — 재생 · 끌기로 프레임이 넘어갈 때 뚝뚝 끊기지 않게
-    const prev = GL.getSource("rain").getCanvas();
+    const prev = GL_CV.rain;
     glCanvas("ghost", prev.width, prev.height, copyOf(prev), GL_COORDS);
     GL.setPaintProperty("ghost", "raster-opacity-transition", { duration: 0 });
     GL.setPaintProperty("ghost", "raster-opacity", 1);
