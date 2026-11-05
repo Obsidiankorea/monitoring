@@ -144,10 +144,19 @@ function glCanvas(id, w, h, paint, coords) {
   c.globalCompositeOperation = "source-over"; c.clearRect(0, 0, w, h);
   paint(c);
   s.setCoordinates(coords);
-  // 다음 한 장 동안만 '재생' — 그 장에서 텍스처를 올리고 멈춘다. ⚠️ play 바로 뒤 pause 는 setCoordinates 직후라
-  //    타일이 아직 없어 올리지 못하고, 그 뒤로는 크기가 안 바뀌면 다시 올리지 않았다(격자가 안 보였다)
-  s.play(); GL.once("render", () => s.pause());
+  // '재생'해 두고, 소스 타일이 선 뒤 두 장을 더 그린 다음 멈춘다 — 그 사이 텍스처가 올라간다.
+  // ⚠️ 예전엔 다음 한 장에서 바로 멈췄다 — 느린 PC 에선 그 장에 타일이 아직 없어 못 올리고 멈춰 격자가 검게 남았다(2026-11)
+  const my = GL_PLAY[id] = (GL_PLAY[id] || 0) + 1;
+  s.play();
+  let n = 0;
+  const tick = () => {
+    if (GL_PLAY[id] !== my) return;                       // 새 그림이 뒤에 왔다 — 그쪽이 멈춘다
+    if (GL.isSourceLoaded(id) && ++n >= 2) s.pause();
+    else GL.once("render", tick);
+  };
+  GL.once("render", tick);
 }
+const GL_PLAY = {};
 const copyOf = img => c => c.drawImage(img, 0, 0);
 /* 결측 빗금 — 결측 칸 그림(miss)을 S 배로 키운 캔버스에 사선을 긋고 결측 칸 모양으로 도려낸다.
    S = 500m 칸 하나에 4 픽셀(5km 칸은 40) — 경남 전체에서 화면 7px 남짓 간격. 확대하면 빗금도 같이 커진다 */
