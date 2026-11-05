@@ -8,7 +8,7 @@ function prefTabs() {
   let cur = null;
   // 머리글 열 개를 네 탭으로 — 탭이 많아 글자가 꺾이던 것을 묶는다(머리글은 탭 안의 소제목으로 남는다)
   const GROUP = { "재생": "화면", "오른쪽 패널": "화면", "화면": "화면", "관측소": "자료", "API 절약": "자료",
-                  "AI 답변": "AI", "AI 알림": "AI", "AI 위키": "AI", "API 키": "시스템", "업데이트": "시스템", "데모": "시스템" };
+                  "AI 답변": "AI", "AI 알림": "AI", "AI 위키": "AI", "연락처 잠금": "AI", "API 키": "시스템", "업데이트": "시스템", "데모": "시스템" };
   for (const el of [...box.children]) {
     if (el === top) continue;
     if (el.tagName === "H4") {
@@ -151,6 +151,11 @@ function openPrefs() {
       <b>켜는 서버는 한 곳만</b>(PC 와 서버를 둘 다 켜면 같은 알림이 두 번 간다). 기본은 끔.</span></div>
     <div class="row"><span class="k">알림</span><span class="seg"><button id="pf-al-off" type="button">끔</button><button id="pf-al-on" type="button">켬</button></span><button id="pf-al-test" type="button">시험 발송</button></div>
     <div class="row"><span class="note" id="pf-al-st">읽는 중…</span></div>
+    <h4>연락처 잠금</h4>
+    <div class="row"><span class="note">상황판단 모드(X)의 📞 담당자 연락처를 이 번호를 아는 화면에서만 연다. 연락처는 AI 물어보기 · 위키에 넘기지 않는다.
+      대시보드에 로그인이 없으니 <b>연락처 파일을 둔 서버는 꼭 잠근다</b>(숫자 4자리 이상, 서버에는 해시만). 바꾸려면 지금 번호가 필요하다.</span></div>
+    <div class="row"><input id="pf-pin-old" type="password" inputmode="numeric" autocomplete="off" placeholder="지금 번호(처음이면 비움)" style="flex:1;min-width:0;font:inherit"><input id="pf-pin-new" type="password" inputmode="numeric" autocomplete="off" placeholder="새 번호(비우면 잠금 풂)" style="flex:1;min-width:0;font:inherit"><button id="pf-pin-save" type="button">저장</button></div>
+    <div class="row"><span class="note" id="pf-pin-st">읽는 중…</span></div>
     <h4>AI 위키</h4>
     <div class="row"><span class="note">AI 상황판단(I)이 기준 · 우려지역 · 책자 쪽수를 읽는 재난업무 LLM 위키(옵시디언) 폴더. <b>이 서버(PC)</b> 안의 경로다 —
       폴더에 <code>tools/lookup.py</code> 와 문서(.md)가 있어야 한다. 비우고 저장하면 환경변수(GN_WIKI) · 기본으로 돌아간다.</span></div>
@@ -163,6 +168,7 @@ function openPrefs() {
   prefTabs();
   loadWiki();
   loadLlm();
+  loadPin();
   loadKeys();
   loadAlert();
   loadSaver();
@@ -493,6 +499,26 @@ $("prefs").addEventListener("click", ev => {
   if (t.closest?.("#pf-llm") && t.dataset.m) llmPut({ mode: t.dataset.m, ...v() });
   else if (t.id === "pf-llm-save") llmPut({ mode: "local", ...v() });
   else if (t.id === "pf-llm-start") llmStart();
+});
+/* ── 연락처 잠금(설정) ── */
+function pinPaint(j, msg) {
+  const st = $("pf-pin-st");
+  if (st) st.innerHTML = msg || `${j.locked ? "<b>잠금</b>" : '<span class="warnx">잠금 없음</span>'} · 연락처 파일 ${j.file ? "있음" : "없음"}${!j.locked && j.file ? ' — <span class="warnx">누구나 열 수 있다</span>' : ""}`;
+}
+async function loadPin() {
+  try { pinPaint(await getJson("/api/settings/contacts-pin")); } catch (e) { pinPaint(null, `<span class="warnx">못 읽었다 — ${escH(e.message)}</span>`); }
+}
+$("prefs").addEventListener("click", async ev => {
+  if (ev.target.id !== "pf-pin-save") return;
+  const old = $("pf-pin-old").value, nw = $("pf-pin-new").value;
+  try {
+    const r = await fetch("/api/settings/contacts-pin", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ old, new: nw }) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.detail || r.status);
+    try { nw ? localStorage.setItem("gn-ct-pin", nw) : localStorage.removeItem("gn-ct-pin"); } catch {}
+    $("pf-pin-old").value = $("pf-pin-new").value = "";
+    pinPaint(j);
+  } catch (e) { pinPaint(null, `<span class="warnx">바꾸지 않았다 — ${escH(e.message)}</span>`); }
 });
 /* ── AI 위키 폴더(설정) ── */
 function wikiPaint(w, msg) {

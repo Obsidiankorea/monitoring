@@ -27,7 +27,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi import Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -485,6 +485,47 @@ async def api_ai_decisions_del(did: int):
     with db.tx() as con:
         con.execute("DELETE FROM decision WHERE id=?", (did,))
     return {"ok": True}
+
+
+_PIN_FAIL: list[float] = []                                   # 잠금 번호 틀린 시각 — 5분에 5번 넘으면 막는다(4자리 맞히기 방지)
+
+
+def _contacts_pin(pin: str | None) -> None:
+    from . import contacts
+    import time as _t
+    _PIN_FAIL[:] = [x for x in _PIN_FAIL if _t.time() - x < 300]
+    if len(_PIN_FAIL) >= 5:
+        raise HTTPException(429, "잠금 번호를 여러 번 틀렸다 — 5분 뒤 다시")
+    if not contacts.pin_ok(pin):
+        _PIN_FAIL.append(_t.time())
+        raise HTTPException(401, "잠금 번호가 필요하다")
+
+
+@app.get("/api/contacts")
+async def api_contacts(sigun: str, x_pin: str | None = Header(None)):
+    """상황판단 모드 전용 — 시군 우려지역 담당자 연락처(상태 폴더 contacts.csv). AI 쪽 코드는 이것을 부르지 않는다."""
+    from . import contacts
+    _contacts_pin(x_pin)
+    return JSONResponse(await asyncio.to_thread(contacts.of_sigun, sigun), headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/settings/contacts-pin")
+async def api_contacts_pin_get():
+    from . import contacts
+    return {"locked": contacts.locked(), "file": contacts.FILE.exists()}
+
+
+@app.put("/api/settings/contacts-pin")
+async def api_contacts_pin_put(body: dict):
+    """{old, new} — 연락처 잠금 번호. 이미 있으면 old 가 맞아야 바꾼다. new 가 비면 푼다."""
+    from . import contacts
+    if contacts.locked():
+        _contacts_pin(str(body.get("old") or ""))
+    try:
+        contacts.set_pin(str(body.get("old") or ""), str(body.get("new") or "").strip())
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return await api_contacts_pin_get()
 
 
 @app.get("/api/ai/situation")

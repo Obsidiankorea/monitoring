@@ -24,3 +24,5 @@ tools/.cache/
 data/snaps/*
 # 가상 ×4 시연만 저장소에 둔다(내부망 PC 에서 git pull 로 바로 시연) — make_scaled_snap.py 로 만든 것, 실제 자료 아님
 !data/snaps/fake-*/
+# 우려지역 담당자 연락처 — 상황판단 모드 전용(app/contacts.py). 저장소 · 위키에 두지 않는다
+data/contacts.csv

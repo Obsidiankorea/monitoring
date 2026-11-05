@@ -2,7 +2,30 @@
 /* ── 상황판단 모드(X) — 시군 하나의 판단 자료만 한 화면에: 기준이 얼마나 찼나 · 몇 시에 닿나 · 지금 무엇을 결정할까 ──────────
    전략 시뮬레이션의 지휘판처럼 — 읍면동 카드(통제 · 사전대피 · 긴급대피, 결정 단추) + 오른쪽 ① 단계 조정 ② 만약에(예보 배수) ③ 판단 기록 ④ 물어보기.
    도달 시각은 초단기 6시간 + 단기예보(내일 24시까지)로 본다(/api/ai/situation). 결정 단추는 기록만 남긴다(문자 · 보고를 보내지 않는다). */
-const SJ = { open: false, sg: null, k: 1, s: null, alt: null, log: [], st: null, seq: 0, more: false, q: [], llm: null };
+const SJ = { open: false, sg: null, k: 1, s: null, alt: null, log: [], st: null, seq: 0, more: false, q: [], llm: null, ct: null, ctOpen: new Set() };
+/* 연락처 — 이 화면에서만(/api/contacts, 잠금 번호는 이 브라우저에만 기억). AI 물어보기에는 넘기지 않는다 */
+const sjPin = () => { try { return localStorage.getItem("gn-ct-pin") || ""; } catch { return ""; } };
+async function sjContacts() {
+  try {
+    const r = await fetch(`/api/contacts?sigun=${encodeURIComponent(SJ.sg)}`, { headers: { "x-pin": sjPin() }, cache: "no-store" });
+    SJ.ct = r.status === 401 ? { pin: true } : r.status === 429 ? { err: "잠금 번호를 여러 번 틀렸다 — 5분 뒤" } : await r.json();
+  } catch (e) { SJ.ct = { err: e.message }; }
+}
+/* 읍면동 하나의 담당자 — 지구마다 담당1 · 2, 전화 · 문자 링크(문자는 문안을 채워 폰 문자 앱을 연다 — 보내기는 사람이) */
+function sjCt(r) {
+  const c = SJ.ct;
+  if (!c) return `<div class="sj-ct"><div class="hint">읽는 중…</div></div>`;
+  if (c.pin) return `<div class="sj-ct"><form class="sj-pin"><input type="password" inputmode="numeric" autocomplete="off" placeholder="연락처 잠금 번호"><button>열기</button></form></div>`;
+  if (c.err) return `<div class="sj-ct"><div class="hint">${escH(c.err)}</div></div>`;
+  if (!c.on) return `<div class="sj-ct"><div class="hint">연락처 파일이 없다 — 서버 상태 폴더에 contacts.csv(위키 지역ID 로 맞춘 것)를 둔다.</div></div>`;
+  const list = c.emd[r.emd] || [];
+  if (!list.length) return `<div class="sj-ct"><div class="hint">이 읍면동은 연락처 표에 없다</div></div>`;
+  const msg = encodeURIComponent(`${SJ.s?.tm ? `${SJ.s.tm.slice(8, 10)}:${SJ.s.tm.slice(10, 12)}` : ""} ${SJ.sg} ${r.emd} 강우 기준 근접 — 통제 · 사전대피 여부 판단 바랍니다. (경남 재난안전상황실)`);
+  return `<div class="sj-ct">${list.map(d => `<div class="ct"><b>${escH(d.name || d.ri)}</b><em>${escH([d.kind, d.ri, d.shelter && "대피 " + d.shelter].filter(Boolean).join(" · "))}</em>`
+    + d.people.map((p, i) => `<span class="p">${escH(p.who || `담당${i + 1}`)}${p.tel ? ` <a href="tel:${escH(p.tel.replace(/[^0-9-]/g, ""))}" data-ct="${escH(r.emd)}|${escH(d.name)}|담당${i + 1}|전화">📞 ${escH(p.tel)}</a>`
+      + (/^01/.test(p.tel) ? ` <a href="sms:${escH(p.tel.replace(/[^0-9]/g, ""))}?body=${msg}" data-ct="${escH(r.emd)}|${escH(d.name)}|담당${i + 1}|문자">✉ 문자</a>` : "") : " · 번호 없음"}</span>`).join("")
+    + (d.check ? `<i class="ck" title="${escH(d.check)}">번호 확인 필요</i>` : "") + `</div>`).join("")}</div>`;
+}
 const SJ_ACT = { 통제: "통제 지시", 사전대피: "사전대피 권고", 긴급대피: "대피명령 요청" };
 const SJ_FAM = ["산사태", "하천", "지하공간"];
 const sjEta = l => (l ? `${l}시` : "");
@@ -29,6 +52,7 @@ async function sjLoad(onlyAlt) {
         getJson(`/api/ai/report?sigun=${encodeURIComponent(sg)}`).catch(() => null)]);
       if (my !== SJ.seq) return;
       Object.assign(SJ, { s, st, log: lg.rows, q: rp?.questions || [], llm: rp?.llm ?? null });
+      await sjContacts();
     } catch (e) { if (my === SJ.seq) $("sj-bd").innerHTML = `<div class="sj-ld">못 모았다 — ${escH(e.message)}</div>`; return; }
   }
   SJ.alt = null;
@@ -67,9 +91,11 @@ function sjRender() {
     const fams = SJ_FAM.filter(f => r.ladders[f]).map(f => `<div class="fam"><div class="fn">${f}<em>우려 ${r.risk[f] || 0}곳</em></div>${["통제", "사전대피", "긴급대피"].map(stg => sjCell(r, f, stg, alt)).join("")}</div>`).join("");
     const later = r.later ? ` · 그 뒤 오늘 ${r.later.today}㎜ · 내일 ${r.later.tomorrow}㎜` : "";
     const tag = r.hot === 3 ? `<span class="tag t3">기준 닿음</span>` : r.hot === 2 ? `<span class="tag t2">근접</span>` : "";
+    const nct = SJ.ct?.emd?.[r.emd]?.length, open = SJ.ctOpen.has(r.emd);
     return `<section class="sj-e" id="sje-${escH(r.emd)}"><header><b>${escH(r.emd)}</b>${tag}
+      <button class="ctb${open ? " on" : ""}" data-cto="${escH(r.emd)}">📞 담당자${nct ? ` ${nct}` : ""}</button>
       <span>1시간 ${rn["1h"] ?? "—"} · 3시간 ${rn["3h"] ?? "—"} · 24시간 ${rn["24h"] ?? "—"}㎜${r.m15 != null ? ` · 15분 ${r.m15}㎜` : ""}</span>
-      <span class="fc">${r.fc6h != null ? `앞으로 6시간 ${r.fc6h}㎜ (최대 ${r.fc_peak}㎜/h)` : "예보 칸 없음"}${later}</span></header>${fams}</section>`;
+      <span class="fc">${r.fc6h != null ? `앞으로 6시간 ${r.fc6h}㎜ (최대 ${r.fc_peak}㎜/h)` : "예보 칸 없음"}${later}</span></header>${open ? sjCt(r) : ""}${fams}</section>`;
   }).join("") + (rows.length > 8 ? `<button class="sj-more" id="sj-more">${SJ.more ? "접기" : `나머지 ${rows.length - 8}곳 더 보기`}</button>` : "");
   const met = s.emd.filter(r => r.hot === 3).length, near = s.emd.filter(r => r.hot === 2).length;
   const do_ = SJ.st?.do, order = SJ.st?.do_order || [];
@@ -142,6 +168,10 @@ $("sj").addEventListener("click", async ev => {
   if (t.closest("#sj-x")) return sjToggle(false);
   if (d) return sjDecide({ act: d.dataset.a, emd: d.dataset.e, fam: d.dataset.f, stage: d.dataset.s, pct: d.dataset.p === "" ? null : +d.dataset.p, eta: d.dataset.t || null });
   if (t.closest("#sj-more")) { SJ.more = !SJ.more; return sjRender(); }
+  const cto = t.closest("[data-cto]");
+  if (cto) { SJ.ctOpen.has(cto.dataset.cto) ? SJ.ctOpen.delete(cto.dataset.cto) : SJ.ctOpen.add(cto.dataset.cto); return sjRender(); }
+  const ct = t.closest("[data-ct]");                       // 전화 · 문자를 누르면 기록에 '연락' — 이름 · 번호는 남기지 않는다
+  if (ct) { const [emd, name, who, how] = ct.dataset.ct.split("|"); sjDecide({ act: "메모", emd, note: `연락(${how}) — ${name} ${who}` }); return; }
   const del = t.closest("[data-del]");
   if (del) {
     await fetch(`/api/ai/decisions/${del.dataset.del}`, { method: "DELETE" });
@@ -167,6 +197,7 @@ $("sj").addEventListener("submit", ev => {
   const inp = ev.target.querySelector("input"), v = inp.value.trim();
   if (!v) return;
   inp.value = "";
+  if (ev.target.classList.contains("sj-pin")) { try { localStorage.setItem("gn-ct-pin", v); } catch {} sjContacts().then(sjRender); return; }
   if (ev.target.id === "sj-note") sjDecide({ act: "메모", note: v });
   else sjAsk({ text: v }, v);
 });
