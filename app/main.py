@@ -509,6 +509,13 @@ async def api_contacts(sigun: str, x_pin: str | None = Header(None)):
     return JSONResponse(await asyncio.to_thread(contacts.of_sigun, sigun), headers={"Cache-Control": "no-store"})
 
 
+@app.get("/api/districts")
+async def api_districts(sigun: str):
+    """상황판단 모드 — 시군 우려지역 지구 이름 · 리 · 지번 · 유형(위키 공개 자료, 잠금 없이). 담당자는 /api/contacts."""
+    from . import contacts
+    return await asyncio.to_thread(contacts.districts, sigun)
+
+
 @app.get("/api/settings/contacts-pin")
 async def api_contacts_pin_get():
     from . import contacts

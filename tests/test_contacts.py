@@ -26,8 +26,8 @@ def test_contacts_by_sigun_and_pin(tdb, tmp_path, monkeypatch):
     main._PIN_FAIL.clear()
     c = TestClient(main.app)
     j = c.get("/api/contacts?sigun=창원").json()
-    assert list(j["emd"]) == ["북면"] and j["emd"]["북면"][0]["people"][0]["tel"] == "010-0000-0001"
-    assert len(j["emd"]["북면"][0]["people"]) == 2                     # 번호 없는 이장도 이름은 보인다
+    assert list(j["people"]) == ["48125-3.2-001"] and j["people"]["48125-3.2-001"][0]["tel"] == "010-0000-0001"
+    assert len(j["people"]["48125-3.2-001"]) == 2                     # 번호 없는 이장도 이름은 보인다
     assert c.put("/api/settings/contacts-pin", json={"new": "12"}).status_code == 400
     assert c.put("/api/settings/contacts-pin", json={"new": "4821"}).json()["locked"]
     assert c.get("/api/contacts?sigun=창원").status_code == 401
@@ -37,3 +37,16 @@ def test_contacts_by_sigun_and_pin(tdb, tmp_path, monkeypatch):
     assert c.get("/api/contacts?sigun=창원", headers={"x-pin": "4821"}).status_code == 429   # 많이 틀리면 잠시 막는다
     main._PIN_FAIL.clear()
     assert c.put("/api/settings/contacts-pin", json={"old": "0000", "new": ""}).status_code == 401
+
+
+def test_districts_from_wiki_without_pin(tdb, tmp_path, monkeypatch):
+    """지구 이름 · 주소는 위키 공개 자료 — 연락처 파일 · 잠금과 상관없이 보인다."""
+    from app import ai
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "인명피해 우려지역.csv").write_text(
+        "﻿유형,원문구분,시군,지구명,읍면동,리,지번,가구,인원,대피기준,대피장소,안전취약계층,지역ID\n"
+        "산사태,x,창원시,가지구,진동면,교동리,12,1,1,누적강우 250mm이상,교동마을회관,,48120-3.2-001\n", "utf-8")
+    monkeypatch.setattr(ai, "wiki", lambda: tmp_path)
+    tdb.put_setting("contacts_pin", "x")                                 # 잠겨 있어도
+    d = TestClient(main.app).get("/api/districts?sigun=창원").json()["emd"]["진동면"][0]
+    assert (d["name"], d["ri"], d["jibun"], d["fam"], d["shelter"], d["rule"]) == ("가지구", "교동리", "12", "산사태", "교동마을회관", "누적강우 250mm이상")

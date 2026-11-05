@@ -51,27 +51,35 @@ def set_pin(old: str, new: str) -> None:
     db.put_setting("contacts_pin", _h(new) if new else "")
 
 
-def of_sigun(sigun: str) -> dict:
-    """시군 하나 — 읍면동 → [{지구 · 유형 · 담당1/2 · 번호 · 확인}]. 유형 · 대피장소는 위키 CSV 에서(같은 지역ID)."""
-    rows = _rows()
-    if not rows:
-        return {"on": False, "emd": {}}
+def districts(sigun: str) -> dict:
+    """시군 우려지역 지구 — 읍면동 → [{id · 지구명 · 리 · 지번 · 유형 · 줄(fam) · 대피장소 · 지구 대피기준(원문)}]. 위키 공개 자료라 잠금 없이(연락처 파일이 없어도)."""
     full = ai.SIGUN_FULL.get(sigun, sigun)
-    wiki = {}
+    out: dict[str, list] = {}
     try:
         with open(ai.wiki() / "data" / "인명피해 우려지역.csv", encoding="utf-8-sig", newline="") as f:
-            wiki = {r["지역ID"]: r for r in csv.DictReader(f) if r.get("시군") == full}
-    except (OSError, KeyError):
+            for w in csv.DictReader(f):
+                if w.get("시군") == full and w.get("지역ID"):
+                    out.setdefault(w.get("읍면동") or "", []).append({
+                        "id": w["지역ID"], "name": w.get("지구명") or "", "ri": w.get("리") or "", "jibun": w.get("지번") or "",
+                        "kind": w.get("유형") or "", "fam": ai.FAMILY_OF.get(w.get("유형") or "", "야외·기타"),   # 상황판단 모드의 유형 줄
+                        "shelter": w.get("대피장소") or "", "rule": (w.get("대피기준") or "").strip()})
+    except OSError:
         pass
-    out: dict[str, list] = {}
+    return {"emd": out}
+
+
+def of_sigun(sigun: str) -> dict:
+    """시군 하나의 담당자 — 지역ID → [{who, tel}] · 확인 표시. 지구 이름 · 주소는 districts() 가(위키), 여기는 사람만(잠금 뒤)."""
+    rows = _rows()
+    if not rows:
+        return {"on": False, "people": {}, "check": {}}
+    full = ai.SIGUN_FULL.get(sigun, sigun)
+    people, check = {}, {}
     for rid, r in rows.items():
         if r.get("시군") != full:
             continue
-        w = wiki.get(rid, {})
-        people = [{"who": r.get(f"담당{i}") or "", "tel": r.get(f"담당{i}_연락처_정규화") or r.get(f"담당{i}_연락처") or ""}
-                  for i in (1, 2) if r.get(f"담당{i}_연락처") or r.get(f"담당{i}")]
-        out.setdefault(r.get("읍면동") or "", []).append({
-            "id": rid, "name": r.get("지구명") or "", "ri": r.get("리") or "", "jibun": r.get("지번") or "", "kind": w.get("유형", ""),
-            "fam": ai.FAMILY_OF.get(w.get("유형", ""), "야외·기타"),         # 상황판단 모드의 유형 줄(산사태 · 하천 · 지하공간)에 붙인다
-            "shelter": w.get("대피장소", ""), "people": people, "check": r.get("연락처확인") or ""})
-    return {"on": True, "emd": out, "n": sum(len(v) for v in out.values())}
+        people[rid] = [{"who": r.get(f"담당{i}") or "", "tel": r.get(f"담당{i}_연락처_정규화") or r.get(f"담당{i}_연락처") or ""}
+                       for i in (1, 2) if r.get(f"담당{i}_연락처") or r.get(f"담당{i}")]
+        if r.get("연락처확인"):
+            check[rid] = r["연락처확인"]
+    return {"on": True, "people": people, "check": check, "n": len(people)}

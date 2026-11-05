@@ -2,8 +2,11 @@
 /* ── 상황판단 모드(X) — 시군 하나의 판단 자료만 한 화면에: 기준이 얼마나 찼나 · 몇 시에 닿나 · 지금 무엇을 결정할까 ──────────
    전략 시뮬레이션의 지휘판처럼 — 읍면동 카드(통제 · 사전대피 · 긴급대피, 결정 단추) + 오른쪽 ① 단계 조정 ② 만약에(예보 배수) ③ 판단 기록 ④ 물어보기.
    도달 시각은 초단기 6시간 + 단기예보(내일 24시까지)로 본다(/api/ai/situation). 결정 단추는 기록만 남긴다(문자 · 보고를 보내지 않는다). */
-const SJ = { open: false, sg: null, k: 1, s: null, alt: null, log: [], st: null, seq: 0, more: false, q: [], llm: null, ct: null, ctOpen: new Set() };
-/* 연락처 — 이 화면에서만(/api/contacts, 잠금 번호는 이 브라우저에만 기억). AI 물어보기에는 넘기지 않는다 */
+const SJ = { open: false, sg: null, k: 1, s: null, alt: null, log: [], st: null, seq: 0, more: false, q: [], llm: null, ct: null, dist: {}, ctOpen: new Set(),
+  cut: { on: false, pct: 70 } };
+try { Object.assign(SJ.cut, JSON.parse(localStorage.getItem("gn-sj-cut") || "{}")); } catch {}
+/* 연락처 — 이 화면에서만(/api/contacts, 잠금 번호는 이 브라우저에만 기억). AI 물어보기에는 넘기지 않는다.
+   지구 이름 · 주소 · 대피기준은 위키 공개 자료(/api/districts)라 잠금 · 연락처 파일과 상관없이 보인다 */
 const sjPin = () => { try { return localStorage.getItem("gn-ct-pin") || ""; } catch { return ""; } };
 async function sjContacts() {
   try {
@@ -11,31 +14,45 @@ async function sjContacts() {
     SJ.ct = r.status === 401 ? { pin: true } : r.status === 429 ? { err: "잠금 번호를 여러 번 틀렸다 — 5분 뒤" } : await r.json();
   } catch (e) { SJ.ct = { err: e.message }; }
 }
-/* 지구 담당자 — 유형 줄(fam)마다 그 유형 지구만, fam 이 없으면 유형 줄이 없는 지구(침수 · 해안 · 야외 등). 지구마다 담당1 · 2,
-   전화 · 문자 링크(문자는 문안을 채워 폰 문자 앱을 연다 — 보내기는 사람이) */
-const sjCtList = (r, fam) => (SJ.ct?.emd?.[r.emd] || []).filter(d => (fam ? d.fam === fam : !r.ladders[d.fam]));
+/* 지구 — 유형 줄(fam)마다 그 유형 지구만, fam 이 없으면 유형 줄이 없는 지구(침수 · 해안 · 야외 등) */
+const sjCtList = (r, fam) => (SJ.dist[r.emd] || []).filter(d => (fam ? d.fam === fam : !r.ladders[d.fam]))
+  .map(d => ({ ...d, people: SJ.ct?.people?.[d.id] || [], check: SJ.ct?.check?.[d.id] || "" }));
+const sjName = d => (d.name && !/[구군시]$/.test(d.name) ? d.name : d.ri || d.name);       // 창원은 지구명 칸이 구 이름이라 리로
+const sjAddr = d => (sjName(d) === d.ri ? [d.jibun] : [d.ri, d.jibun]).filter(Boolean).join(" ");
+/* 그 지구 대피기준이 지금 몇 % 찼나 — 산사태 지구 기준(ai.situation 의 sites, 같은 원문)에서 */
+const sjRulePct = (r, d) => (r.sites || []).find(s => (s.rule || "").trim() === d.rule)?.max_pct;
+/* 펼친 목록 — 지구마다 기준 · 대피장소 · 담당1 · 2 전화 · 문자(문자는 문안을 채워 폰 문자 앱을 연다 — 보내기는 사람이) */
 function sjCt(r, fam) {
-  const c = SJ.ct;
-  if (!c) return `<div class="sj-ct"><div class="hint">읽는 중…</div></div>`;
-  if (c.pin) return `<div class="sj-ct"><form class="sj-pin"><input type="password" inputmode="numeric" autocomplete="off" placeholder="연락처 잠금 번호"><button>열기</button></form></div>`;
-  if (c.err) return `<div class="sj-ct"><div class="hint">${escH(c.err)}</div></div>`;
-  if (!c.on) return `<div class="sj-ct"><div class="hint">연락처 파일이 없다 — 서버 상태 폴더에 contacts.csv(위키 지역ID 로 맞춘 것)를 둔다.</div></div>`;
-  const list = sjCtList(r, fam);
-  if (!list.length) return `<div class="sj-ct"><div class="hint">${fam ? `이 읍면동 ${fam} 지구는` : "이 읍면동은"} 연락처 표에 없다</div></div>`;
+  const list = sjCtList(r, fam), c = SJ.ct;
+  if (!list.length) return `<div class="sj-ct"><div class="hint">${fam ? `이 읍면동 ${fam} 지구는` : "이 읍면동은"} 위키 우려지역 표에 없다</div></div>`;
   const msg = encodeURIComponent(`${SJ.s?.tm ? `${SJ.s.tm.slice(8, 10)}:${SJ.s.tm.slice(10, 12)}` : ""} ${SJ.sg} ${r.emd}${fam ? ` ${fam}` : ""} 강우 기준 근접 — 통제 · 사전대피 여부 판단 바랍니다. (경남 재난안전상황실)`);
-  return `<div class="sj-ct">${list.map(d => `<div class="ct"><b>${escH(d.name || d.ri)}</b><em>${escH([d.kind, d.ri, d.shelter && "대피 " + d.shelter].filter(Boolean).join(" · "))}</em>`
-    + d.people.map((p, i) => `<span class="p">${escH(p.who || `담당${i + 1}`)}${p.tel ? ` <a href="tel:${escH(p.tel.replace(/[^0-9-]/g, ""))}" data-ct="${escH(r.emd)}|${escH(d.name)}|담당${i + 1}|전화">📞 ${escH(p.tel)}</a>`
-      + (/^01/.test(p.tel) ? ` <a href="sms:${escH(p.tel.replace(/[^0-9]/g, ""))}?body=${msg}" data-ct="${escH(r.emd)}|${escH(d.name)}|담당${i + 1}|문자">✉ 문자</a>` : "") : " · 번호 없음"}</span>`).join("")
-    + (d.check ? `<i class="ck" title="${escH(d.check)}">번호 확인 필요</i>` : "") + `</div>`).join("")}</div>`;
+  const top = !c ? `<div class="hint">담당자 읽는 중…</div>`
+    : c.pin ? `<form class="sj-pin"><input type="password" inputmode="numeric" autocomplete="off" placeholder="연락처 잠금 번호"><button>담당자 열기</button></form>`
+    : c.err ? `<div class="hint">${escH(c.err)}</div>`
+    : !c.on ? `<div class="hint">담당자 연락처 파일이 없다 — 서버 상태 폴더에 contacts.csv 를 둔다(지구 · 기준은 위키에서 보인다)</div>` : "";
+  return `<div class="sj-ct">${top}${list.map(d => {
+    const pc = sjRulePct(r, d);
+    return `<div class="ct"><b>${escH(sjName(d))}</b><em>${escH([d.kind, sjAddr(d), d.shelter && "대피 " + d.shelter].filter(Boolean).join(" · "))}</em>`
+      + (d.rule ? `<div class="rl">기준 ${escH(d.rule)}${pc != null ? ` · <b>지금 ${pc}%</b>` : ""}</div>` : "")
+      + d.people.map((p, i) => `<span class="p">${escH(p.who || `담당${i + 1}`)}${p.tel ? ` <a href="tel:${escH(p.tel.replace(/[^0-9-]/g, ""))}" data-ct="${escH(r.emd)}|${escH(sjName(d))}|담당${i + 1}|전화">📞 ${escH(p.tel)}</a>`
+        + (/^01/.test(p.tel) ? ` <a href="sms:${escH(p.tel.replace(/[^0-9]/g, ""))}?body=${msg}" data-ct="${escH(r.emd)}|${escH(sjName(d))}|담당${i + 1}|문자">✉ 문자</a>` : "") : " · 번호 없음"}</span>`).join("")
+      + (d.check ? `<i class="ck" title="${escH(d.check)}">번호 확인 필요</i>` : "") + `</div>`;
+  }).join("")}</div>`;
 }
-/* 칸 안 — 이 유형 지구의 이름 · 주소(리 지번) · 담당자 이름(번호는 📞 펼치면). 셋까지, 나머지는 '외 n곳' */
+/* 칸 안 — 이 유형 지구의 이름 · 주소(리 지번) · 기준(%) · 담당자 이름. 셋까지, 나머지는 '외 n곳' */
 function sjWho(r, fam) {
-  const list = SJ.ct?.on ? sjCtList(r, fam) : [];
+  const list = sjCtList(r, fam);
   if (!list.length) return "";
-  return `<div class="who">${list.slice(0, 3).map(d => `<div><b>${escH(d.name || d.ri)}</b> <span>${escH([d.ri, d.jibun].filter(Boolean).join(" "))}</span>`
-    + `<em>${escH(d.people.map(p => p.who).filter(Boolean).join(" · "))}</em></div>`).join("")}`
-    + (list.length > 3 ? `<button class="more" data-cto="${escH(r.emd)}|${fam}">외 ${list.length - 3}곳 · 📞 펼치기</button>` : "") + `</div>`;
+  return `<div class="who">${list.slice(0, 3).map(d => {
+    const pc = sjRulePct(r, d), who = d.people.map(p => p.who).filter(Boolean).join(" · ");
+    return `<div><b>${escH(sjName(d))}</b> <span>${escH(sjAddr(d))}</span>`
+      + (d.rule ? `<i class="rl">기준 ${escH(d.rule.replace(/\s*※.*$/, ""))}${pc != null ? ` · ${pc}%` : ""}</i>` : "")
+      + (who ? `<em>${escH(who)}</em>` : "") + `</div>`;
+  }).join("")}`
+    + (list.length > 3 ? `<button class="more" data-cto="${escH(r.emd)}|${fam}">외 ${list.length - 3}곳 · 펼치기</button>` : "") + `</div>`;
 }
+/* % 이상만 — 읍면동 카드 가운데 가장 많이 찬 칸(충족은 100 이상)이 기준 이상인 것만 */
+const sjTop = r => Math.max(0, ...Object.values(r.ladders).flat().map(c => (c.st === "met" ? Math.max(100, c.gap?.pct || 0) : c.gap?.pct || 0)), r.max_pct || 0);
 const SJ_ACT = { 통제: "통제 지시", 사전대피: "사전대피 권고", 긴급대피: "대피명령 요청" };
 const SJ_FAM = ["산사태", "하천", "지하공간"];
 const sjEta = l => (l ? `${l}시` : "");
@@ -58,10 +75,10 @@ async function sjLoad(onlyAlt) {
   if (!onlyAlt) {
     $("sj-bd").innerHTML = `<div class="sj-ld">${escH(sg)} 판단 자료를 모으는 중… (읍면동 · 우려지역 · 기준 대조 · 단기예보)</div>`;
     try {
-      const [s, st, lg, rp] = await Promise.all([q(1), getJson("/api/ai/sigunstage"), getJson(`/api/ai/decisions?sigun=${encodeURIComponent(sg)}`),
-        getJson(`/api/ai/report?sigun=${encodeURIComponent(sg)}`).catch(() => null)]);
+      const [s, st, lg, rp, ds] = await Promise.all([q(1), getJson("/api/ai/sigunstage"), getJson(`/api/ai/decisions?sigun=${encodeURIComponent(sg)}`),
+        getJson(`/api/ai/report?sigun=${encodeURIComponent(sg)}`).catch(() => null), getJson(`/api/districts?sigun=${encodeURIComponent(sg)}`).catch(() => ({ emd: {} }))]);
       if (my !== SJ.seq) return;
-      Object.assign(SJ, { s, st, log: lg.rows, q: rp?.questions || [], llm: rp?.llm ?? null });
+      Object.assign(SJ, { s, st, log: lg.rows, q: rp?.questions || [], llm: rp?.llm ?? null, dist: ds.emd || {} });
       await sjContacts();
     } catch (e) { if (my === SJ.seq) $("sj-bd").innerHTML = `<div class="sj-ld">못 모았다 — ${escH(e.message)}</div>`; return; }
   }
@@ -94,13 +111,14 @@ function sjRender() {
   const s = SJ.s;
   if (!s) return;
   const altBy = Object.fromEntries((SJ.alt?.emd || []).map(r => [r.emd, r]));
-  const rows = s.emd.filter(r => Object.keys(r.ladders).length);
+  const all = s.emd.filter(r => Object.keys(r.ladders).length);
+  const rows = SJ.cut.on ? all.filter(r => sjTop(r) >= SJ.cut.pct) : all;
   const show = SJ.more ? rows : rows.slice(0, 8);
   const cards = show.map(r => {
     const rn = r.rain, alt = altBy[r.emd];
     const fams = SJ_FAM.filter(f => r.ladders[f]).map(f => {
       const n = sjCtList(r, f).length, k = `${r.emd}|${f}`, on = SJ.ctOpen.has(k);
-      return `<div class="fam"><div class="fn">${f}<em>우려 ${r.risk[f] || 0}곳</em>${SJ.ct && (n || !SJ.ct.on) ? `<button class="ctb${on ? " on" : ""}" data-cto="${escH(k)}">📞 ${n || "담당"}</button>` : ""}</div>`
+      return `<div class="fam"><div class="fn">${f}<em>우려 ${r.risk[f] || 0}곳</em>${n ? `<button class="ctb${on ? " on" : ""}" data-cto="${escH(k)}">📞 지구 ${n}</button>` : ""}</div>`
         + `${["통제", "사전대피", "긴급대피"].map(stg => sjCell(r, f, stg, alt)).join("")}</div>${on ? sjCt(r, f) : ""}`;
     }).join("");
     const later = r.later ? ` · 그 뒤 오늘 ${r.later.today}㎜ · 내일 ${r.later.tomorrow}㎜` : "";
@@ -122,7 +140,9 @@ function sjRender() {
     ["앞으로 6시간 최대", `${fc6}㎜`, "c"], ...(lt.length ? [["오늘 · 내일 더(단기)", `${Math.max(...lt.map(x => x.today))} · ${Math.max(...lt.map(x => x.tomorrow))}㎜`, "c"]] : [])]
     .map(([k, v, c]) => `<div class="res ${c}"><em>${escH(k)}</em><b>${escH(String(v))}</b></div>`).join("")
     + `<div class="clk"><b>${s.tm ? `${s.tm.slice(8, 10)}:${s.tm.slice(10, 12)}` : ""}</b><span>${s.tm ? `${+s.tm.slice(4, 6)}.${+s.tm.slice(6, 8)}. 실황` : ""}${window.GN_SNAP?.fake ? " · 가상" : ""}</span></div>`;
-  $("sj-bd").innerHTML = `<div class="sj-main"><div class="sj-hint">읍면동마다 — 기준이 얼마나 찼나 · 몇 시에 닿나(초단기 6시간 + 단기예보, 내일 24시까지) · <b>지금 무엇을 결정할까</b>. 단추는 판단 기록에만 남긴다.</div>${cards || `<div class="sj-ld">우려지역이 있는 읍면동이 없다</div>`}</div>
+  const cut = `<label class="sj-cut"><input type="checkbox" id="sj-cut"${SJ.cut.on ? " checked" : ""}> <input type="number" id="sj-cutp" min="10" max="100" step="5" value="${SJ.cut.pct}">% 이상만 보기</label>`
+    + (SJ.cut.on ? `<span class="sj-cutn">${rows.length} / ${all.length}곳</span>` : "");
+  $("sj-bd").innerHTML = `<div class="sj-main"><div class="sj-bar">${cut}</div><div class="sj-hint">읍면동마다 — 기준이 얼마나 찼나 · 몇 시에 닿나(초단기 6시간 + 단기예보, 내일 24시까지) · <b>지금 무엇을 결정할까</b>. 단추는 판단 기록에만 남긴다.</div>${cards || `<div class="sj-ld">${SJ.cut.on ? `${SJ.cut.pct}% 이상인 읍면동이 없다` : "우려지역이 있는 읍면동이 없다"}</div>`}</div>
   <aside class="sj-side">
     <div class="box"><h4>① 단계 조정 — 도 비상단계</h4><div class="seg" id="sj-stg">${order.map(x => `<button data-st="${x}" class="${x === do_?.stage ? "on" : ""}">${x}</button>`).join("")}</div>
       <div class="hint">특보 기준이면 '${escH(do_?.auto || "")}'${do_?.set ? ` · 사람이 바꿈 ${escH((do_.set_at || "").slice(11, 16))} — <a href="#" id="sj-stg0">특보 기준으로</a>` : ""}. 24시간 뒤 특보 기준으로 돌아간다.</div></div>
@@ -217,6 +237,12 @@ $("sj").addEventListener("submit", ev => {
   else sjAsk({ text: v }, v);
 });
 let SJ_KT = 0;
+$("sj").addEventListener("change", ev => {
+  if (ev.target.id !== "sj-cut" && ev.target.id !== "sj-cutp") return;
+  SJ.cut = { on: $("sj-cut").checked, pct: Math.max(10, Math.min(100, +$("sj-cutp").value || 70)) };
+  try { localStorage.setItem("gn-sj-cut", JSON.stringify(SJ.cut)); } catch {}
+  sjRender();
+});
 $("sj").addEventListener("input", ev => {
   if (ev.target.id !== "sj-k") return;
   SJ.k = +ev.target.value / 100;
