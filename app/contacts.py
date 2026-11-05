@@ -76,7 +76,7 @@ def of_sigun(sigun: str) -> dict:
     full = ai.SIGUN_FULL.get(sigun, sigun)
     people, check = {}, {}
     for rid, r in rows.items():
-        if r.get("시군") != full:
+        if sigun != "all" and r.get("시군") != full:          # all = 경남 전체(상황판단 모드 경남 목록)
             continue
         people[rid] = [{"who": r.get(f"담당{i}") or "", "tel": r.get(f"담당{i}_연락처_정규화") or r.get(f"담당{i}_연락처") or ""}
                        for i in (1, 2) if r.get(f"담당{i}_연락처") or r.get(f"담당{i}")]

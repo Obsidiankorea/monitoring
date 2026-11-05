@@ -726,12 +726,14 @@ def short_of(base: str) -> dict:
     return out
 
 
-def situation(sigun: str, base: str = "http://127.0.0.1:8000", k: float = 1.0) -> dict:
+def situation(sigun: str, base: str = "http://127.0.0.1:8000", k: float = 1.0, basis: str = "grid",
+              add_h: float = 0.0, add_24: float = 0.0) -> dict:
     """시군 하나 — 읍면동별 지금 수치 · 우려지역(유형별) · 3대 유형 단계 대조 · 지구 대피기준까지 % ·
     상황전파 기준 · 특보 · 비상단계 · 재난문자 기준. 판정하지 않는다(st 는 '그 조건에 닿았나'일 뿐).
-    k = 상황판단 모드의 '만약에' — 예보 시우량(초단기 · 단기)에 곱한다."""
+    k = 상황판단 모드의 '만약에' — 예보 시우량(초단기 · 단기)에 곱한다. add_h = 앞으로 24시간 매시간 더하는 ㎜,
+    add_24 = 앞으로 24시간에 고루 나눠 더하는 총 ㎜(곱한 뒤 더한다)."""
     base = base.rstrip("/")
-    w = _get(base, "/api/ai/emdwin")                       # 읍면동 × 1·3·12·24·48시간 · 15분 — 한 번에
+    w = _get(base, "/api/ai/emdwin", basis=basis)          # 읍면동 × 1·3·12·24·48시간 · 15분 — 한 번에(basis=aws 면 AWS 면)
     mine_rows = [r for r in w["rows"] if r["sig"] == sigun]
     acc = {h: {r["emd"]: r.get(f"{h}h") for r in mine_rows} for h in WINDOWS}
     m15 = {r["emd"]: r.get("15m") for r in mine_rows}
@@ -767,6 +769,11 @@ def situation(sigun: str, base: str = "http://127.0.0.1:8000", k: float = 1.0) -
         f = fce.get(name) or {}
         d = [round(v * k, 1) for v in f.get("d") or []]
         sd = [round(v * k, 1) for v in sh["emd"].get(name) or []]
+        if (add_h or add_24) and d:                          # 만약에 — 앞으로 24시간(있는 만큼) 매시간 더하기
+            al = d + sd
+            n = min(24, len(al))
+            al = [round(v + (add_h + add_24 / n if i < n else 0), 1) for i, v in enumerate(al)]
+            d, sd = al[:len(d)], al[len(d):]
         run, best = 0, 0
         for v in d:
             run = run + 1 if v >= R("하천_통제_시우량") else 0
@@ -802,7 +809,7 @@ def situation(sigun: str, base: str = "http://127.0.0.1:8000", k: float = 1.0) -
                  max((r["rain"]["3h"] or 0 for r in emds), default=0), max((r["fc6h"] or 0 for r in emds), default=0),
                  max((r["fc_peak"] or 0 for r in emds), default=0), now)
     return {
-        "sigun": sigun, "tm": tm, "night": night, "rain_src": src, "fc_tmfc": fc.get("tmfc"), "k": k, "shrt_tmfc": sh.get("tmfc"),
+        "sigun": sigun, "tm": tm, "night": night, "rain_src": src, "basis": basis, "fc_tmfc": fc.get("tmfc"), "k": k, "shrt_tmfc": sh.get("tmfc"),
         "ante": {k: an.get(k) for k in ("ok", "have", "want", "missing", "from", "to")},
         "alerts": mine, "pending": pend, "stage": do_stage(groups), "river": rv, "flood": fld, "outlook": ol,
         "tide": tide.text(tide.of_sigun(sigun), max((r["fc6h"] or 0 for r in emds), default=0)),

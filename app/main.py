@@ -509,6 +509,18 @@ async def api_contacts(sigun: str, x_pin: str | None = Header(None)):
     return JSONResponse(await asyncio.to_thread(contacts.of_sigun, sigun), headers={"Cache-Control": "no-store"})
 
 
+@app.get("/api/wiki/page")
+async def api_wiki_page(name: str):
+    """상황판단 모드 매뉴얼 칸 — 위키 문서 하나의 본문(머리말 뺀 마크다운). 이름은 위키 목록에 있는 것만(경로를 받지 않는다)."""
+    from . import aireport
+    p = aireport._index().get(name)
+    if not p:
+        raise HTTPException(404, f"위키에 없는 문서: {name}")
+    t = await asyncio.to_thread(p.read_text, "utf-8")
+    body = t.split("---", 2)[2] if t.startswith("---") else t
+    return {**aireport.page(name), "text": body.strip()}
+
+
 @app.get("/api/districts")
 async def api_districts(sigun: str):
     """상황판단 모드 — 시군 우려지역 지구 이름 · 리 · 지번 · 유형(위키 공개 자료, 잠금 없이). 담당자는 /api/contacts."""
@@ -535,6 +547,18 @@ async def api_contacts_pin_put(body: dict):
     return await api_contacts_pin_get()
 
 
+@app.get("/api/judge")
+async def api_judge(sigun: str = "all", k: float = 1.0, add_h: float = 0.0, add_24: float = 0.0):
+    """상황판단 모드 — 지구 한 줄씩(위키 지구 × 기상청 격자 · AWS 면 두 기준의 강수 · 통제 · 사전대피 · 긴급대피 %).
+    sigun=all 이면 경남 전체(시군 차트 + 지구 목록). 연락처는 넣지 않는다(/api/contacts)."""
+    from . import judge
+    me = f"http://127.0.0.1:{os.environ.get('PORT', '8000')}"
+    try:
+        return await asyncio.to_thread(judge.build, sigun, me, max(0.5, min(3.0, k)), max(0.0, min(100.0, add_h)), max(0.0, min(500.0, add_24)))
+    except FileNotFoundError as e:
+        raise HTTPException(503, f"LLM 위키를 못 찾았다(설정 › AI 위키): {e}")
+
+
 @app.get("/api/ai/situation")
 async def api_ai_situation(sigun: str, base: str | None = None, k: float = 1.0):
     """AI 상황판단 — 시군 하나의 지금 수치(이 서버 API)와 LLM 위키 기준(산사태 지구 대피기준까지 %)을 맞대 놓는다.
@@ -550,10 +574,10 @@ async def api_ai_situation(sigun: str, base: str | None = None, k: float = 1.0):
 
 
 @app.get("/api/ai/emdwin")
-async def api_grid_emdwin():
+async def api_grid_emdwin(basis: str = "grid"):
     """경남 읍면동마다 1 · 3 · 12 · 24 · 48시간 누적 · 15분 최대 칸(격자 500m) — 한 번에. AI 상황판단 · Hermes 도구용."""
     try:
-        return await asyncio.to_thread(gridview.emd_windows)
+        return await asyncio.to_thread(gridview.emd_windows, (1, 3, 12, 24, 48), None, "aws" if basis == "aws" else "grid")
     except LookupError as e:
         raise HTTPException(404, str(e)) from e
 

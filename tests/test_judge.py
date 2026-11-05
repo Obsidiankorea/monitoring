@@ -24,3 +24,25 @@ def test_eta_runs_into_short_forecast():
     assert pick(r)["gap"]["eta"]["at"] is None                     # 245 + 24 = 269
     r |= {"eta_hours": [4] * 6 + [10, 10], "eta_labels": r["fc_labels"] + ["내일 01", "내일 02"]}
     assert pick(r)["gap"]["eta"]["at"] == "내일 01"
+
+
+def test_judge_pack_picks_best_per_stage_and_site_rule():
+    """지구 한 줄 — 단계마다 가장 많이 찬 조건, 충족은 100 이상으로, 그 지구 대피기준 % 는 원문이 같은 sites 에서."""
+    from app import judge
+    e = {"rain": {"1h": 50, "3h": 90, "24h": 120}, "sites": [{"rule": "누적강우 250mm이상", "max_pct": 48}],
+         "ladders": {"산사태": [{"stage": "통제", "st": "met", "rule": "a", "gap": {"pct": 92}},
+                               {"stage": "통제", "st": "no", "rule": "b", "gap": {"pct": 99}},
+                               {"stage": "긴급대피", "st": "no", "rule": "c", "gap": {"pct": 62, "eta": {"at": "02"}}}]}}
+    p = judge.pack(e, "산사태", "누적강우 250mm이상")
+    assert p["st"]["통제"] == {"pct": 100, "met": True, "unk": False, "eta": None, "rule": "a"}
+    assert p["st"]["긴급대피"]["eta"] == "02" and "사전대피" not in p["st"]
+    assert p["site"] == 48 and p["top"] == 100
+
+
+def test_slide_rule_sites_follow_landslide_forecast():
+    """'산사태 경보 발령 시' 지구는 강수가 아니라 발령으로 — 경보면 100, 주의보뿐이면 0. '예보 발령 시'는 주의보도."""
+    from app import judge
+    warn, watch, none = {"fcst": {"lv": 2}, "pred": None}, {"fcst": None, "pred": {"lv": 1}}, {"fcst": None, "pred": None}
+    assert judge.slide_site("산사태 경보 발령 시", warn) == 100 and judge.slide_site("산사태 경보 발령 시", watch) == 0
+    assert judge.slide_site("산사태예보 발령 시", watch) == 100 and judge.slide_site("산사태예보 발령 시", none) == 0
+    assert judge.slide_site("누적강우 250mm이상", warn) is None
