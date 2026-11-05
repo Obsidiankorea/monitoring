@@ -81,3 +81,13 @@ def test_series_adds_forecast_hour_by_hour():
     assert sr["t"] == ["19", "20"] and len(sr["v"]) == 2            # 예보 끝 시각은 뺀다(뒤 예보가 없어 % 가 튄다)
     assert sr["v"][0] <= sr["v"][1]                                 # 비가 계속 오면 % 는 내려가지 않는다
     assert judge.series_of({**e, "fc_hours": []}, s, "산사태", "") is None
+
+
+def test_plane_splits_accumulated_and_hourly():
+    from app import judge
+    lad = [{"stage": "긴급대피", "rule": "r", "gap": {"parts": [{"label": "1시간", "pct": 111}, {"label": "24시간", "pct": 60}]}},
+           {"stage": "통제", "rule": "w", "gap": {"parts": [{"label": "수위", "pct": 126}]}},
+           {"stage": "사전대피", "rule": "u", "gap": {"parts": [{"label": "예보 시우량", "pct": None}]}}]
+    assert judge.plane(lad, "긴급대피", "r") == ([60, 111], ["24시간", "1시간"])        # 가로 누적 · 세로 시간당
+    assert judge.plane(lad, "통제", "w")[0] == [126, 126]                                 # 조건 하나면 대각선
+    assert judge.plane(lad, "사전대피", "u") is None and judge.plane(lad, "통제", "x") is None

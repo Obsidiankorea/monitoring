@@ -103,6 +103,24 @@ def at_point(e: dict, p: dict | None, s: dict, fam: str, rule: str) -> dict:
     return row
 
 
+_ACC = re.compile(r"누적|일|12시간|24시간|48시간|선행")
+
+
+def plane(lad: list[dict], stage: str, rule: str | None) -> tuple[list, list] | None:
+    """조건 평면 한 점 — 그 단계 기준(rule)의 조건들을 쌓이는 것(가로) · 시간당 · 예보 · 수위(세로)로 나눠 각 % 중 큰 것.
+    한쪽 조건이 없는 기준은 대각선(그 조건 하나로 오른쪽 위 칸이 갈린다). 모르는 조건만 있으면 None."""
+    c = next((x for x in lad if x["stage"] == stage and x["rule"] == rule), None)
+    parts = [q for q in ((c or {}).get("gap") or {}).get("parts") or [] if q.get("pct") is not None]
+    if not parts:
+        return None
+    a = [q for q in parts if _ACC.search(q.get("label") or "")]
+    h = [q for q in parts if q not in a]
+    x = max((q["pct"] for q in a), default=None)
+    y = max((q["pct"] for q in h), default=None)
+    lab = [" · ".join(q["label"] for q in a), " · ".join(q["label"] for q in h)]
+    return [x if x is not None else y, y if y is not None else x], lab
+
+
 def series_of(e: dict, s: dict, fam: str, rule: str) -> dict | None:
     """앞으로 시간마다 그 지구의 가장 높은 단계 % — 차트 줄 · 재생. e 는 지구 자리로 바꾼 줄(at_point 뒤).
     t 시각의 비 = 지금 누적 + 그때까지 예보 합(창에서 빠지는 옛 비는 빼지 않는다 — 도달 시각과 같은 가정),
@@ -113,6 +131,16 @@ def series_of(e: dict, s: dict, fam: str, rule: str) -> dict | None:
         return None
     r0, cut30 = e["rain"], ai.R("하천_통제_시우량")
     out, cum = [], 0.0
+    # 조건 평면 — 단계마다 '지금 가장 많이 찬 기준'을 끝까지 같은 축으로(시각마다 기준이 바뀌면 점이 다른 축으로 튄다)
+    now = pack(e, fam, rule)["st"]
+    rule0 = {st: v["rule"] for st, v in now.items()}
+    xy = {st: [] for st in rule0}
+    ax = {}
+    for st in rule0:
+        pt = plane(e["ladders"].get(fam, []), st, rule0[st])
+        xy[st].append(pt[0] if pt else None)
+        if pt:
+            ax[st] = pt[1]
     for i, v in enumerate(fh[:-1]):
         v = v or 0
         cum += v
@@ -128,8 +156,12 @@ def series_of(e: dict, s: dict, fam: str, rule: str) -> dict | None:
         night = s["night"] if not hh else int(hh.group(1)) >= 21 or int(hh.group(1)) < 6
         row = {**e, "fc_hours": nxt, "fc_labels": fl[i + 1:i + 7], "eta_hours": fh[i + 1:], "eta_labels": fl[i + 1:],
                "fc_peak": max(nxt) if nxt else None, "fc_run30": best}
-        out.append(pack(at_point(row, {**rain, "15m": None}, {**s, "night": night}, fam, rule), fam, rule)["top"])
-    return {"t": list(fl[:len(out)]), "v": out}
+        p = at_point(row, {**rain, "15m": None}, {**s, "night": night}, fam, rule)
+        out.append(pack(p, fam, rule)["top"])
+        for st in rule0:
+            pt = plane(p["ladders"].get(fam, []), st, rule0[st])
+            xy[st].append(pt[0] if pt else None)
+    return {"t": list(fl[:len(out)]), "v": out, "xy": xy, "ax": ax, "rule": rule0}
 
 
 def rows_of(sg: str, base: str, k: float, add: tuple = (0.0, 0.0), series: bool = False) -> tuple[list[dict], dict]:

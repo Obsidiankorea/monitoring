@@ -1669,3 +1669,11 @@ body.sj-on > header, body.sj-on #stage, body.sj-on #tl, body.sj-on #rail { displ
 #sj .sjp-svg .lb { font: 600 11.5px var(--sans); fill: var(--ink-2); }
 #sj .sjp-svg .lb.t50 { fill: var(--t50); } #sj .sjp-svg .lb.t70 { fill: var(--t70); } #sj .sjp-svg .lb.t80 { fill: var(--t80); }
 #sj .sjp-svg .lb.t90 { fill: var(--t90); } #sj .sjp-svg .lb.t100 { fill: var(--t100); }
+#sj .sjp-bar .seg.md { margin-left: 0; }
+#sj .sjp-bar .seg.md button { padding: 3px 10px; font-size: 12.5px; }
+#sj .sjp-svg .q11 { fill: var(--t100); opacity: .1; }
+#sj .sjp-svg .q01 { fill: var(--t70); opacity: .05; }
+#sj .sjp-svg .qt { fill: var(--t100); font: 700 12.5px var(--sans); }
+#sj .sjp-svg .qn { fill: var(--ink-3); font: 500 11.5px var(--sans); }
+#sj .sjp-svg .at { fill: var(--ink-3); font: 500 12px var(--sans); }
+#sj .sjp-svg .tr { fill: none; stroke-width: 1.3; stroke-dasharray: 2 3; stroke-opacity: .7; }
