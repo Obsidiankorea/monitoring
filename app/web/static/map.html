@@ -24,6 +24,7 @@
   끌면 지도가 따라오고, 지도가 넘어가면 타임라인의 세로선·점·값이 따라온다.
   ⚠️ 예측은 1시간 간격뿐이다(초단기 격자에 10분 대상시각을 주면 가까운 정시가 온다 — 실측).
 -->
+<link rel="stylesheet" href="vendor/maplibre-gl.css">
 <link rel="stylesheet" href="css/map.css?v={{V}}">
 
 <main id="stage">
@@ -31,9 +32,7 @@
   <div class="rng-pop" id="lg-pop" hidden role="menu"></div>
   <div class="rng-pop" id="sw-ctx" hidden role="menu"></div>
   <div id="mapwrap">
-    <svg id="under"></svg>
-    <canvas id="cv"></canvas>
-    <canvas id="ghost"></canvas>
+    <div id="gl"></div>
     <svg id="over"></svg>
   </div>
   <div id="camgrab" hidden title="끌어서 옮기기 · 휠로 키우기 · 줄이기"></div>
@@ -196,7 +195,9 @@
 <script src="vendor/d3-array.min.js"></script>
 <script src="vendor/d3-geo.min.js"></script>
 <script src="vendor/topojson-client.min.js"></script>
+<script src="vendor/maplibre-gl.js"></script><!-- maplibre-gl 5.24.0 (6.x 는 ES 모듈 전용이라 이 구조에 안 맞는다) -->
 <script src="js/01-core.js?v={{V}}"></script>
+<script src="js/01b-gl.js?v={{V}}"></script>
 <script src="js/02-data.js?v={{V}}"></script>
 <script src="js/03-cards.js?v={{V}}"></script>
 <script src="js/04-case.js?v={{V}}"></script>

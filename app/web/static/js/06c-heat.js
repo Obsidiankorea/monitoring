@@ -62,16 +62,16 @@ function setHeat(on, save = true) {
 }
 /* 지도 — 폭염 화면이면 시군 면 + 큰 숫자, 호우 화면에서 '기온'을 켰으면 시군 이름 밑에 작은 숫자 */
 function drawHeat() {
-  const f = $("heatg"), t = $("tempg");
-  if (!f || !t) return;
+  const t = $("tempg");
+  if (!t) return;
   const D = htData(), by = Object.fromEntries((D?.rows || []).map(r => [r.sigun, r]));
   const gn = FEAT.filter(ft => ft.properties.kind !== "nb" && by[ft.properties.sigun]);
   const lvOf = {};                                        // 시군 → 가장 높은 폭염특보(주의보 뒤에 경보가 덮는다)
   for (const g of [...htAlerts()].sort((a, b) => HT_LV.indexOf(a.lv) - HT_LV.indexOf(b.lv)))
     for (const s of g.regs?.map(r => r[0]) ?? g.where) lvOf[s] = g.lv;
-  // 특보 시군을 뒤에 그려 둘레가 옆 시군 면에 묻히지 않게
-  f.innerHTML = HEAT ? [...gn].sort((a, b) => !!lvOf[a.properties.sigun] - !!lvOf[b.properties.sigun])
-    .map(ft => `<path class="${lvOf[ft.properties.sigun] || ""}" d="${PATH(ft)}" style="fill:${htCol(by[ft.properties.sigun].ta)}"/>`).join("") : "";
+  // 면 · 특보 둘레는 GL 층 'heat*'(01b) — 둘레는 면 위 층이라 옆 시군 면에 묻히지 않는다
+  const fill = HEAT ? gn.map(ft => [ft, htCol(by[ft.properties.sigun].ta), lvOf[ft.properties.sigun] || ""]) : [];
+  glData("heat", fill.map(([ft, c, lv]) => ft.properties.sigun + c + lv).join(), () => fill.map(([ft, col, lv]) => glF(ft.geometry, { col, lv })));
   t.innerHTML = !(HEAT || OV.has("temp")) ? "" : gn.map(ft => {
     const p = ft.properties, r = by[p.sigun], fs = FSN * (HEAT ? .78 : .52), x = V.toX(p.lx), y = V.toY(p.ly) + FSN * .62 + fs * .62;
     return `<text class="${HEAT ? "b" : ""}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" style="font-size:${fs.toFixed(1)}px;stroke-width:${(fs * .2).toFixed(1)}px${HEAT ? "" : `;fill:${r.ta >= HT_ST[3] ? htCol(r.ta) : "var(--ink)"}`}">${r.ta.toFixed(1)}°</text>`;

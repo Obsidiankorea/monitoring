@@ -29,9 +29,10 @@ function drawSafety() {
   const g = $("safg");
   if (!g) return;
   SAF_HIT = [];
+  // 침수흔적 면은 GL 층 'flood'(01b) — 고리 첫째가 바깥, 나머지는 구멍
+  const fl = safAny() && SAF && !SAF.fail && OV.has("flood") ? SAF_FL || null : null;
+  glData("flood", fl, () => (fl || []).map((f, i) => glF(glPoly(f.r.map(ring => ring.map(p => LCCF(p[0], p[1])))), { i })));
   if (!safAny() || !V || !V.s || !SAF || SAF.fail) { g.innerHTML = ""; return; }
-  const P = (lon, lat) => { const [c, r] = LCCF(lon, lat); return `${V.toX(c).toFixed(1)},${V.toY(r).toFixed(1)}`; };
-  const fl = OV.has("flood") ? (SAF_FL || []).map((f, i) => `<path class="sff" data-i="${i}" d="${f.r.map(ring => "M" + ring.map(p => P(p[0], p[1])).join("L") + "Z").join("")}"/>`) : [];
   const out = [], badges = [], pts = [];
   if (OV.has("slide")) for (const [sig, r] of Object.entries(safSlide())) {
     const ft = FEAT.find(f => f.properties.sigun === sig);
@@ -52,7 +53,7 @@ function drawSafety() {
       SAF_HIT.push({ x, y, rr: Math.max(r, 7), s });
     }
   }
-  g.innerHTML = `<g class="sffl">${fl.join("")}</g>` + out.join("") + pts.join("") + badges.join("");
+  g.innerHTML = out.join("") + pts.join("") + badges.join("");
 }
 /* 마우스 — 저수지 계측기가 먼저, 아니면 침수흔적 면 */
 function safetyAt(mx, my) {
@@ -63,9 +64,8 @@ function safetyAt(mx, my) {
     if (dd <= (h.rr * 1.5) ** 2 && dd < bd) { bd = dd; best = { res: h.s }; }
   }
   if (best) return best;
-  const pt = new DOMPoint(mx, my);
-  for (const p of $("safg")?.querySelectorAll(".sff") || []) if (p.isPointInFill(pt)) return { flood: SAF_FL[+p.dataset.i] };
-  return null;
+  const f = OV.has("flood") && GL_OK ? GL.queryRenderedFeatures([mx, my], { layers: ["flood"] })[0] : null;
+  return f ? { flood: SAF_FL[f.properties.i] } : null;
 }
 function safetyTip(h) {
   if (h.res) {

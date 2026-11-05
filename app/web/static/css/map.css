@@ -265,20 +265,13 @@ body.tools-auto.moving #tools { opacity: 1; pointer-events: auto; }
 #stage { position: relative; flex: 1; min-height: 0; background: var(--sea); overflow: hidden; }
 /* 지도 세 겹(땅·격자·선)을 한 덩어리로 움직인다 — 타임라인이 나오면 왼쪽으로 비켜선다 */
 #mapwrap { position: absolute; inset: 0; transform-origin: 0 0; transition: transform .55s var(--ease); }
-#mapwrap > svg, #mapwrap > canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
-#cv, #ghost { transition: opacity .3s; }
-#ghost { pointer-events: none; opacity: 0; }
-#stage.late #cv { opacity: .4; }
-#over { pointer-events: none; }
-/* 경계 — 선 밑에 반대색 테두리(halo)를 깐다. ⚠️ 시군 경계색이 강수 청색과 명도가 비슷해 단기·누적처럼 넓게
-   칠해지면 묻혔다. 비 없는 땅 위에서는 테두리가 바탕과 같은 색이라 예전 모양 그대로다 */
-/* 경계 — 강수 칸 위에서도 또렷이(10-25 굵게 · 밝게). 밑에 어두운 테두리(bh)를 깔고 위에 밝은 선 */
-#over .bh { fill: none; stroke: var(--bd-halo); stroke-width: 4; stroke-linejoin: round; }
-#over .bh.z { stroke-width: 5.5; }
-#over .sg { fill: none; stroke: var(--bd); stroke-width: 1.6; stroke-linejoin: round; }
-#over .cs { fill: none; stroke: var(--coast); stroke-width: 1.5; stroke-linejoin: round; }
-#over .zn { fill: none; stroke: var(--zone); stroke-width: 2.6; stroke-dasharray: 9 6; stroke-linecap: round; }
-#over .sb { fill: none; stroke: var(--zone); stroke-width: 1.5; stroke-dasharray: 3 5; opacity: .8; }
+#mapwrap > svg, #gl { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* 땅 · 경계 · 격자는 #gl(MapLibre, js/01b-gl.js) — 자료 지연 때 격자를 옅게 하는 것도 거기서(glLate) */
+#gl { pointer-events: none; }
+/* 날거나 끄는 동안 통째로 옮긴다(camFrame) — 판 밖에 그린 것도 보이게 */
+#over { pointer-events: none; transform-origin: 0 0; overflow: visible; }
+#stage:is(.zooming, .panning) #over { will-change: transform; }
+/* 시군 · 권역 경계선은 GL(js/01b-gl.js GL_LAYERS) — 굵기 · 점선도 거기 */
 #over #hl { fill: color-mix(in oklab, var(--accent) 12%, transparent); stroke: var(--accent); stroke-width: 3;
   opacity: 0; transition: opacity .2s; }
 #over #hl.on { opacity: 1; }
@@ -289,8 +282,6 @@ body.tools-auto.moving #tools { opacity: 1; pointer-events: auto; }
 #over .mxw { font-weight: 500; fill: var(--ink-2); }
 #over .pin { fill: var(--ink); stroke: var(--halo); }
 #over .lead { stroke: var(--ink-2); stroke-width: 1; }
-#under .ld { fill: var(--land); }
-#under .ld.nb { fill: var(--land-nb); }
 
 /* 범례 — 상자는 색 띠에만 두른다(README '예측 분포 범례'). 글자는 지도 위에 그대로. */
 #legend { position: absolute; left: 22px; bottom: 22px; display: flex; flex-direction: column; gap: 8px;
@@ -958,17 +949,13 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 #over .st.dim { opacity: .3; }
 /* 고른 시군 — 밖을 바다색으로 가라앉히고(스포트라이트) 밝은 겹선을 두른다.
    ⚠️ 강조색(파랑) 선 하나는 청색 강수 면에 묻혀 안 보였다 */
-#over #selmask { fill: var(--sea); opacity: .5; fill-rule: evenodd; }
 #over #selh { fill: none; stroke: var(--halo); stroke-width: 7; stroke-linejoin: round; opacity: .85; }
 #over #sel { fill: none; stroke: var(--ink); stroke-width: 2.8; stroke-linejoin: round; }
 #over #hot circle { fill: none; stroke: var(--accent); stroke-width: 2.5; }
 /* 시군 확대(설정 '시군 누르면 확대') — 읍면동 경계(안쪽 선만)·이름. 확대해 들어가며 선이 서서히 나온다 */
-#over #emd { opacity: 0; transition: opacity .5s; }
-#stage.zoomed #over #emd { opacity: 1; }
-#over #emd path { fill: none; stroke: var(--ink-2); stroke-width: 1.1; stroke-linejoin: round; opacity: .55; }
 #over .en { font-weight: 600; fill: var(--ink-2); text-anchor: middle; dominant-baseline: central; }
 #over .en .pc { fill: var(--lv-warn); font-weight: 700; }
-/* 날아가는 동안 — 선은 viewBox 로 같이 커지되 굵기는 그대로, 글자·점은 잠깐 감췄다가 다 오면 새로 그린다 */
+/* 날아가는 동안 — 선은 transform 으로 같이 커지되 굵기는 그대로, 글자·점은 잠깐 감췄다가 다 오면 새로 그린다 */
 #stage.zooming #mapwrap path { vector-effect: non-scaling-stroke; }
 #over :is(#names, #labels, #stns, #rivr, #tidr, #wbadge, #ranks, #hot, #emdn) { transition: opacity .25s; }
 #stage.zooming #over :is(#names, #labels, #stns, #rivr, #tidr, #wbadge, #ranks, #hot, #emdn) { opacity: 0; transition: opacity .1s; }
@@ -1408,10 +1395,6 @@ body.heat #cv { visibility: hidden; }
 body.heat :is(#labels, #ranks, #stns, #walerts, #wbadge) { display: none; }   /* 호우 특보 선 · 딱지까지 비운다 — 폭염특보는 시군 둘레로 */
 body.heat .hc { display: flex; }
 #c-ht { flex: 1 1 auto; container-type: inline-size; } #c-hf, #c-ha { flex: none; }
-#heatg path { fill-opacity: .62; stroke: none; }
-#heatg path.watch { stroke: var(--lv-watch); stroke-width: 2; stroke-dasharray: 5 3; }
-#heatg path.warn { stroke: var(--lv-warn); stroke-width: 2.5; }
-#heatg path.severe { stroke: var(--lv-severe); stroke-width: 3; }
 #tempg text { font-family: var(--mono); font-weight: 700; text-anchor: middle; fill: var(--ink); stroke: var(--halo); paint-order: stroke; stroke-linejoin: round; pointer-events: none; }
 #tempg text.b { fill: #fff; stroke: rgba(10, 8, 6, .72); }
 body.heat #ht-lg { position: absolute; left: 22px; bottom: 22px; z-index: 5; display: flex; flex-direction: column; gap: 3px; zoom: var(--k, 1);
@@ -1474,7 +1457,6 @@ body.heat #ht-lg { position: absolute; left: 22px; bottom: 22px; z-index: 5; dis
 /* 산사태 · 저수지 · 침수흔적(06d-safety.js) */
 #ly-slide .sfm { margin: 6px 0 2px; }
 :root { --sf-flood: #3E9BD9; --sf-slide: #A0622D; }
-#safg .sff { fill: var(--sf-flood); fill-opacity: .22; fill-rule: evenodd; stroke: var(--sf-flood); stroke-opacity: .5; stroke-width: .6; }
 #safg .sfs { fill: none; stroke: var(--sf-slide); stroke-width: 3; stroke-dasharray: 7 4; }
 #safg .sfs.l2 { stroke-width: 4.5; stroke-dasharray: none; }
 #safg .sfr { fill: var(--ink-3); fill-opacity: .55; stroke: var(--halo); stroke-width: 1; }

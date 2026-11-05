@@ -223,8 +223,8 @@ let V = null;                           // 화면 틀(지도 칸 좌표 → 화�
 let MT = { tx: 0, ty: 0, sc: 1 };       // 타임라인이 나와 지도를 옮긴 만큼
 let CAM = null;                         // 시군을 확대해 둔 틀 { s, ox, oy } — null 이면 경남 전체(MT 로 비켜선다)
 let CAMU = null;                        // 사람이 옮긴 경남 전체 틀(지도 위치 C) — V 에 얹혀 있으면 그 틀, 아니면 null
-let ZA = null;                          // 확대 애니메이션 중 { gen, T, raf }
-let GEN = null;                         // SVG 경계를 마지막으로 그린 틀 — 날아가는 동안 viewBox 로 이 틀을 옮긴다
+let ZA = null;                          // 확대 애니메이션 중 { T, raf }
+let GEN = null;                         // 위 SVG 를 마지막으로 그린 틀 — 날아가는 동안 CSS transform 으로 이 틀을 옮긴다(camFrame)
 let NAMEBOX = [];
 let FEAT = null;                        // 시군 GeoJSON(강조용)
 
@@ -255,8 +255,8 @@ function applyTheme(t) {
 function setTheme(th) {
   applyTheme(th);
   try { localStorage.setItem("gn-theme", th); } catch {}
-  LUTS.clear(); OFF.clear(); PATTERN = null;
-  draw(); buildLegend(); buildPlay(); buildTL();
+  LUTS.clear(); OFF.clear();
+  glTheme(); draw(); buildLegend(); buildPlay(); buildTL();
 }
 
 /* ── 투영(칸 → 경위도). 마우스를 올렸을 때 좌표만 쓴다 — 그리기에는 쓰지 않는다.
@@ -310,41 +310,20 @@ function layout() {
   if (ZA) { cancelAnimationFrame(ZA.raf); ZA = null; }
   CAM = null; CAMU = null;
   $("stage").classList.remove("zooming", "zoomed");
-  for (const id of ["cv", "ghost"]) {
-    const c = $(id);
-    c.width = Math.round(W * dpr); c.height = Math.round(H * dpr);
-  }
-  for (const id of ["under", "over"]) $(id).setAttribute("viewBox", `0 0 ${W} ${H}`);
+  $("over").setAttribute("viewBox", `0 0 ${W} ${H}`);
+  $("over").style.transform = "";
+  glCam();
   buildBase();
   applyTL(false);
 }
 
-/* 격자 Canvas 의 픽셀 (px, py) → 화면. 픽셀 (c, r) 은 [c, c+1] × [r, r+1] 이고 행은 북→남으로
-   뒤집어 담았다. 5km 는 아핀(dfs_to_hr)을, 500m 는 항등을 거친다 — 식은 하나다. */
-function pixelTransform(grid, h) {
-  const g = META.grids, b = g[grid];
-  const [A, B, C] = grid === "hr" ? [1, 0, 0] : g.dfs_to_hr.col;
-  const [Dd, E, F] = grid === "hr" ? [0, 1, 0] : g.dfs_to_hr.row;
-  const x0 = b.i0 - 0.5, y0 = b.j0 + h - 0.5;           // 픽셀 (0,0) 모서리의 칸 좌표
-  const c0 = A * x0 + B * y0 + C, r0 = Dd * x0 + E * y0 + F;
-  const s = V.s;
-  return [s * A, -s * Dd, -s * B, s * E, V.ox + (c0 - V.X0) * s, V.oy + (V.Y1 - r0) * s];
-}
-
-/* ── 경계(아래: 땅 칠, 위: 선·이름) ───────────────────────────────────── */
+/* ── 경계(땅 · 선은 GL, 위 SVG 는 이름 · 강조 · 표식) ───────────────────────────────────── */
 let PATH = null;
 function buildBase() {
   const G = GEN = { s: V.s, ox: V.ox, oy: V.oy };
   PATH = d3.geoPath(d3.geoTransform({ point(x, y) { this.stream.point(G.ox + (x - V.X0) * G.s, G.oy + (V.Y1 - y) * G.s); } }));
-  const obj = TOPO.objects.sigun;
   const P = g => g.properties;
-  $("under").innerHTML = FEAT.map(ft => `<path class="ld ${P(ft).kind === "nb" ? "nb" : ""}" d="${PATH(ft)}"/>`).join("");
-
-  const mesh = fn => PATH(topojson.mesh(TOPO, obj, fn)) || "";
-  const sg = mesh((a, b) => a !== b);                                   // 시군 사이
-  const cs = mesh((a, b) => a === b);                                   // 해안·바깥
-  const zn = mesh((a, b) => a !== b && P(a).zone !== P(b).zone);        // 권역이 바뀌는 곳
-  const sb = mesh((a, b) => a !== b && P(a).zone === P(b).zone && P(a).sub !== P(b).sub);
+  glBase();                                                             // 땅 · 경계선은 GL(01b) — 한 번만 올린다
   const fs = Math.max(15, Math.min(64, V.u * 7));
   FSN = fs;
   NAMEBOX = [];
@@ -357,9 +336,7 @@ function buildBase() {
       style="font-size:${f.toFixed(1)}px;stroke-width:${(f * 0.16).toFixed(1)}px">${p.sigun}</text>`;
   }).join("");
   $("over").innerHTML =
-    `<path class="bh" d="${sg}${cs}"/><path class="bh z" d="${zn}${sb}"/>`
-    + `<path class="sg" d="${sg}"/><path class="cs" d="${cs}"/><path class="sb" d="${sb}"/><path class="zn" d="${zn}"/><g id="heatg"></g><g id="emd"></g>`
-    + `<path id="selmask"/><g id="walerts"></g><path id="hl"/><path id="selh"/><path id="sel"/><g id="emdn"></g><g id="stns"></g><g id="safg"></g><g id="rivr"></g><g id="tidr"></g><g id="labels"></g><g id="names">${names}</g><g id="tempg"></g>`
+    `<g id="walerts"></g><path id="hl"/><path id="selh"/><path id="sel"/><g id="emdn"></g><g id="stns"></g><g id="safg"></g><g id="rivr"></g><g id="tidr"></g><g id="labels"></g><g id="names">${names}</g><g id="tempg"></g>`
     + `<g id="wbadge"></g><g id="ranks"></g><g id="hot"></g>`;
   HL = null;
   drawAlerts();
@@ -475,53 +452,12 @@ function offscreen(gr) {
   return o;
 }
 
-let PATTERN = null, HATCH = null;
-function hatchPattern(ctx) {
-  if (PATTERN) return PATTERN;
-  const d = Math.max(1, V.dpr), n = Math.round(7 * d);
-  const p = document.createElement("canvas"); p.width = p.height = n;
-  const c = p.getContext("2d");
-  const [r, g, b] = cssColor("--hatch");
-  c.strokeStyle = `rgb(${r},${g},${b})`; c.lineWidth = 1.4 * d;
-  c.beginPath(); c.moveTo(-1, n + 1); c.lineTo(n + 1, -1); c.stroke();
-  PATTERN = ctx.createPattern(p, "repeat");
-  return PATTERN;
-}
-
 let RENDER_MS = 0;
-/* fade: 재생·끌기로 프레임이 넘어갈 때 앞 그림을 잠깐 남겨 겹쳐 사라지게 한다(뚝뚝 끊기지 않게). */
-function draw(fade = false, raster = false) {
-  const cv = $("cv"), ctx = cv.getContext("2d");
+/* 격자를 GL 캔버스 소스로(01b glRain), 위에 시군 최대 라벨. 카메라만 움직일 때는 부르지 않는다 — GL 이 알아서 따라간다.
+   fade: 재생·끌기로 프레임이 넘어갈 때 앞 그림을 잠깐 남겨 겹쳐 사라지게 한다(뚝뚝 끊기지 않게). */
+function draw(fade = false) {
   const t0 = performance.now();
-  if (fade && cv.width && cv.height) {
-    const g = $("ghost"), gc = g.getContext("2d");
-    g.style.transition = "none"; g.style.opacity = "1";
-    gc.setTransform(1, 0, 0, 1, 0, 0); gc.clearRect(0, 0, g.width, g.height); gc.drawImage(cv, 0, 0);
-    requestAnimationFrame(() => { g.style.transition = ""; g.style.opacity = "0"; });
-  }
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.clearRect(0, 0, cv.width, cv.height);
-  // ⚠️ 판 크기가 0 이면(창이 가려진 채 열림 등) 그리지 않는다. 0×0 캔버스를 drawImage 하면
-  //    예외가 나 머리글까지 안 그려졌다. 크기가 잡히면 ResizeObserver 가 다시 부른다.
-  if (!CUR || !V || !cv.width || !cv.height || !V.s) { if (!raster) drawLabels(); return; }
-  const o = offscreen(CUR);
-  const T = pixelTransform(CUR.grid, CUR.h).map(x => x * V.dpr);
-  ctx.imageSmoothingEnabled = false;                         // 칸 그대로 — 번지게 하지 않는다
-  ctx.setTransform(...T);
-  ctx.drawImage(o.img, 0, 0);
-  if (o.miss) {
-    // 빗금을 화면 크기로 깔고, 결측 칸 모양으로 도려낸다(destination-in)
-    HATCH = HATCH || document.createElement("canvas");
-    if (HATCH.width !== cv.width || HATCH.height !== cv.height) { HATCH.width = cv.width; HATCH.height = cv.height; }
-    const hc = HATCH.getContext("2d");
-    hc.setTransform(1, 0, 0, 1, 0, 0); hc.globalCompositeOperation = "source-over";
-    hc.clearRect(0, 0, HATCH.width, HATCH.height);
-    hc.fillStyle = hatchPattern(hc); hc.fillRect(0, 0, HATCH.width, HATCH.height);
-    hc.globalCompositeOperation = "destination-in"; hc.imageSmoothingEnabled = false;
-    hc.setTransform(...T); hc.drawImage(o.miss, 0, 0);
-    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(HATCH, 0, 0);
-  }
-  if (raster) return;
+  glRain(CUR && V?.s ? offscreen(CUR) : null, CUR, fade);
   drawLabels();
   RENDER_MS = performance.now() - t0;
 }
@@ -738,6 +674,7 @@ function paintHead() {
   const lb = $("badges").querySelector('[data-a="live"]');
   if (lb) lb.onclick = () => setLive(false);
   $("stage").classList.toggle("late", !test && !past && !!L.stale);
+  glLate();
   $("testrib").hidden = !test;
   $("stage").classList.toggle("test", test);
   $("b-tl").classList.toggle("on", tlOn);

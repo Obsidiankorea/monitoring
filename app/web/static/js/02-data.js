@@ -316,8 +316,9 @@ function tlFit() {
 /* ── 시군 확대(설정 '시군 누르면 확대') ───────────────────────────────────
    고른 시군이 지도 빈자리(범례 오른쪽 ~ 패널 왼쪽, 레이어 단추 아래 ~ 재생 막대 위)에 차게 카메라가 날아간다.
    틀은 MT(CSS 이동) 대신 V 자체를 바꾼다 — 격자는 칸 그대로 또렷하고, 선 굵기·글자 크기는 그대로다.
-   ⚠️ 경계를 다시 그리는 데 26ms 라 매 장 다시 그릴 수 없다. 날아가는 동안은 SVG viewBox 만 옮기고(선 굵기는
-      non-scaling-stroke) 격자 Canvas 만 다시 그린다(0.2ms). 글자·점은 잠깐 감췄다가 다 온 뒤 새로 그린다. */
+   날아가는 동안 땅 · 경계 · 격자는 GL 이 매 장 그리고(glCam), 위 SVG 는 CSS transform 으로 통째로 옮긴다(camFrame).
+   ⚠️ 예전에는 SVG 두 장의 viewBox 를 바꾸고 격자 Canvas 를 매 장 다시 그려 윈도 PC 에서 버벅였다(11-06 GL 로 옮김).
+   글자·점은 잠깐 감췄다가 다 온 뒤 새로 그린다. */
 const ZMAX = 9;                          // 경남 전체의 몇 배까지
 const zoomOn = () => !!(selOn() && SET.sel_zoom !== false && FEAT && V);
 function mapArea() {
@@ -384,7 +385,8 @@ function camSet(T) {
   MT = T.mt;
   Object.assign(V, T.zoom || T.user ? T.cam : V.b);
   setWrap(MT, false);
-  for (const id of ["under", "over"]) $(id).setAttribute("viewBox", `0 0 ${V.W} ${V.H}`);
+  $("over").style.transform = "";
+  glCam();
   const st = $("stage");
   st.classList.toggle("zoomed", !!CAM);
   if (CAM) ensureEmd();                  // ?sig= 로 연 때처럼 날지 않고 바로 확대한 경우
@@ -414,14 +416,17 @@ function ucFrom(cam) {                   // 원하는 틀 → UC(휠 — 커서 
 }
 const ucClamp = () => { UC.z = Math.max(0.6, Math.min(4, UC.z)); UC.dx = Math.max(-0.9, Math.min(0.9, UC.dx)); UC.dy = Math.max(-0.9, Math.min(0.9, UC.dy)); };
 function ucSave() { try { ucOn() || CAM_EDIT ? localStorage.setItem("gn-map-cam", JSON.stringify(UC)) : localStorage.removeItem("gn-map-cam"); } catch {} }
-function camLive() {                     // 끄는 동안 — 경계 · 글자는 viewBox 로 옮기고 격자만 다시
+/* 날거나 끄는 동안 — 지도(GL)는 V 를 따라가고, 위 SVG 는 마지막으로 그린 틀 GEN 에서 V 로 통째로 옮긴다(GPU 합성, 다시 그리지 않는다) */
+function camFrame() {
+  glCam();
+  const g = GEN, k = V.s / g.s;
+  $("over").style.transform = `translate(${(V.ox - g.ox * k).toFixed(2)}px, ${(V.oy - g.oy * k).toFixed(2)}px) scale(${k.toFixed(5)})`;
+}
+function camLive() {                     // 끄는 동안 — 손을 떼면 camSettle 이 새로 그린다
   if (!V || !GEN) return;
   Object.assign(V, camTarget().cam);
-  const g = GEN, k = V.s / g.s;
-  const vb = `${(g.ox - V.ox / k).toFixed(2)} ${(g.oy - V.oy / k).toFixed(2)} ${(V.W / k).toFixed(2)} ${(V.H / k).toFixed(2)}`;
-  $("under").setAttribute("viewBox", vb); $("over").setAttribute("viewBox", vb);
   $("stage").classList.add("panning");
-  draw(false, true);
+  camFrame();
   clearTimeout(UC_T); UC_T = setTimeout(camSettle, 260);
 }
 function camSettle() {                   // 손을 뗐다 — 이 틀로 경계 · 글자를 새로
@@ -492,8 +497,7 @@ function zoomPath(a, b, rho = 1.25) {
 }
 function fly(T) {
   const st = $("stage"), mw = $("mapwrap");
-  let gen = GEN;
-  if (ZA) { cancelAnimationFrame(ZA.raf); gen = ZA.gen; }
+  if (ZA) cancelAnimationFrame(ZA.raf);
   else {
     // 지금 보이는 틀 = V 에 지도 덩어리의 CSS 이동을 접은 것(타임라인이 비켜서는 중이면 그 중간값)
     const m = new DOMMatrix(getComputedStyle(mw).transform === "none" ? undefined : getComputedStyle(mw).transform);
@@ -508,7 +512,7 @@ function fly(T) {
   const ctr = c => [V.X0 + (V.W / 2 - c.ox) / c.s, V.Y1 - (V.H / 2 - c.oy) / c.s, V.W / c.s];
   const path = zoomPath(ctr(V), ctr(T.cam));
   const dur = Math.min(950, Math.max(450, path.S * 600)), t0 = performance.now();
-  const za = ZA = { gen, T, raf: 0 };
+  const za = ZA = { T, raf: 0 };
   // 창이 가려지면 requestAnimationFrame 이 멈춘다 — 그래도 끝 상태로는 가 있게
   setTimeout(() => { if (ZA === za) camSet(T); }, dur + 400);
   const step = now => {
@@ -516,10 +520,7 @@ function fly(T) {
     if (p >= 1) { camSet(T); return; }
     const [cx, cy, w] = path(e), s = V.W / w;
     Object.assign(V, { s, ox: V.W / 2 - (cx - V.X0) * s, oy: V.H / 2 - (V.Y1 - cy) * s });
-    const k = V.s / gen.s;
-    const vb = `${(gen.ox - V.ox / k).toFixed(2)} ${(gen.oy - V.oy / k).toFixed(2)} ${(V.W / k).toFixed(2)} ${(V.H / k).toFixed(2)}`;
-    $("under").setAttribute("viewBox", vb); $("over").setAttribute("viewBox", vb);
-    draw(false, true);
+    camFrame();
     ZA.raf = requestAnimationFrame(step);
   };
   ZA.raf = requestAnimationFrame(step);
@@ -537,16 +538,14 @@ function ensureEmd() {
   }).catch(() => { EMDP = null; });
   return EMDP;
 }
+/* GL 층 'emd'(01b). shortcut: 예전에는 시군 모양으로 잘라(clipPath) 둘레에서 삐져나온 끝(수십 m)을 감췄다 — GL 은 자르지 않는다.
+   확대 화면에서 1~2px 이라 그냥 둔다. 눈에 띄면 서버(build_geo.py)에서 시군 모양으로 잘라 둔다 */
 function drawEmd() {
-  const g = $("emd");
-  if (!g) return;
-  if (!selOn() || !ETOPO || !$("stage").classList.contains("zoomed")) { g.innerHTML = ""; return; }
-  const fts = FEAT.filter(f => isSel(f.properties.sigun));
-  for (const sg of SELS) if (!EMESH.has(sg))
+  const on = selOn() && !!ETOPO && $("stage").classList.contains("zoomed");
+  if (on) for (const sg of SELS) if (!EMESH.has(sg))
     EMESH.set(sg, topojson.mesh(ETOPO, ETOPO.objects.emd,
       (a, b) => a !== b && a.properties.sigun === sg && b.properties.sigun === sg));
-  const d = SELS.map(sg => PATH(EMESH.get(sg)) || "").join("");
-  g.innerHTML = fts.length && d ? `<clipPath id="emdclip">${fts.map(ft => `<path d="${PATH(ft)}"/>`).join("")}</clipPath><path clip-path="url(#emdclip)" d="${d}"/>` : "";
+  glData("emd", on ? SELS.join() : "", () => on ? SELS.map(sg => glF(EMESH.get(sg))) : []);
 }
 /* 읍면동 이름 — 큰 곳부터, 시군명·최대 라벨·관측소와 겹치지 않는 자리에만(가장 덜 중요한 글자) */
 function drawEmdNames(taken) {

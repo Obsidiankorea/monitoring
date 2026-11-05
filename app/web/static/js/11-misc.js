@@ -676,7 +676,7 @@ document.addEventListener("keydown", ev => {
 let rsz = null;
 const relayout = () => {
   clearTimeout(rsz);
-  rsz = setTimeout(() => { if (!GNB) return; PATTERN = null; layout(); draw(); buildTL(); }, 120);
+  rsz = setTimeout(() => { if (!GNB) return; layout(); draw(); buildTL(); }, 120);
 };
 window.addEventListener("resize", relayout);
 new ResizeObserver(relayout).observe($("stage"));
@@ -708,6 +708,7 @@ async function boot() {
       getJson("/api/grid/geo/stations.json").catch(() => null)]);    // 없어도 지도는 뜬다(관측소 층만 빈다)
     SITEBY = new Map((SITES?.stations || []).map(s => [s.stn, s]));
     MSIG = new Uint8Array(await (await fetch("/api/grid/geo/mask_sigun.u8.gz")).arrayBuffer());
+    glInit();                            // 지도(WebGL) — 못 쓰는 PC 면 여기서 까닭을 띄운다
   } catch (e) {
     $("empty").innerHTML = `지도를 띄울 수 없다<small>${e.message}</small>`;
     $("empty").className = "fail"; $("empty").hidden = false;
