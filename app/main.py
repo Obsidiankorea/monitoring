@@ -32,7 +32,7 @@ from fastapi import Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import aiwatch, apikeys, heat, its, lawwatch, river, safety, tide, clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, serverupdate, sites, snaps, update
+from . import aiwatch, apikeys, geocode, heat, its, lawwatch, river, safety, tide, clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, serverupdate, sites, snaps, update
 from .collectors import alerts, bangjae_rain, forecast, grid_rain, qpf, rain, shortfc
 from .config import CACHE, INTERVALS, POLL_DEFAULT
 
@@ -126,6 +126,8 @@ async def _nightly() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.init()
+    # 지구 좌표 — 켤 때마다 브이월드에 묻고 메모리에만(약관: 저장 금지, app/geocode.py). 수집기와 상관없이
+    asyncio.create_task(geocode.run())
     if config.DEMO and config.SNAP:
         snaps.add_bangjae(config.DB_PATH, config.SNAP)   # 서버 시연에 없는 경남 AWS(내부망에서 받아 둔 것)
         snaps.add_scene(config.SNAP)
@@ -526,6 +528,19 @@ async def api_districts(sigun: str):
     """상황판단 모드 — 시군 우려지역 지구 이름 · 리 · 지번 · 유형(위키 공개 자료, 잠금 없이). 담당자는 /api/contacts."""
     from . import contacts
     return await asyncio.to_thread(contacts.districts, sigun)
+
+
+@app.get("/api/geocode")
+async def api_geocode():
+    """지구 좌표 받기 진행 — 받는 중 · 끝 · 키 없음, 찾은 곳 수, 못 찾은 이유 묶음. 좌표 값은 /api/districts 에."""
+    return geocode.status()
+
+
+@app.post("/api/geocode")
+async def api_geocode_run():
+    """다시 받기(키를 넣은 뒤 등) — 이미 받는 중이면 그대로."""
+    asyncio.create_task(geocode.run())
+    return geocode.status()
 
 
 @app.get("/api/settings/contacts-pin")

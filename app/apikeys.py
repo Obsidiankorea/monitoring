@@ -22,6 +22,7 @@ EDITABLE = [
     ("SD_SLIDE_PRED_KEY", "재난안전데이터 · 산사태 예측", "산림청 예측정보 — 레이어 '산사태'(J), 호우 · 태풍 특보 때만", "safetydata"),
     ("SD_RESERVOIR_KEY", "재난안전데이터 · 위험저수지", "저수지 계측기 경보 — 레이어 '위험저수지'(K)", "safetydata"),
     ("SD_FLOODMAP_KEY", "재난안전데이터 · 침수흔적도", "과거 침수 구역 — 레이어 '침수흔적'(N), 7일마다", "safetydata"),
+    ("VWORLD_KEY", "브이월드 지오코더", "지구 주소 → 좌표(서버가 켜질 때, 메모리에만) — 지구별 강수 · 산점도", "vworld"),
     ("TELEGRAM_BOT_TOKEN", "텔레그램 봇 토큰", "AI 알림 · 법령 알림", "telegram"),
     ("TELEGRAM_CHAT_ID", "텔레그램 채팅 번호", "알림 받을 곳", "telegram"),
 ]

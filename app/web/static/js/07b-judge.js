@@ -45,6 +45,7 @@ async function sjLoad(onlyData) {
       onlyData ? null : getJson(`/api/ai/report${one}`).catch(() => null)]);
     if (my !== SJ.seq) return;
     Object.assign(SJ, { d, log: lg.rows });
+    SJ.geo = await getJson("/api/geocode").catch(() => null);
     if (ct) SJ.ct = ct.status === 401 ? { pin: true } : ct.status === 429 ? { err: "잠금 번호를 여러 번 틀렸다 — 5분 뒤" } : await ct.json();
     if (rp) Object.assign(SJ, { q: rp.questions || [], llm: rp.llm ?? null, rep: rp });
   } catch (e) { if (my === SJ.seq) $("sj-c").innerHTML = `<div class="sj-ld">못 모았다 — ${escH(e.message)}</div>`; $("sj").classList.remove("busy"); return; }
@@ -135,6 +136,8 @@ function sjDetail() {
   const sl = r.slide && (r.slide.fcst || r.slide.pred);
   return `<div class="dt"><div class="dh"><b>${escH(sjName(r))}</b><span>${escH(r.sigun)} ${escH(sjAddr(r))}</span><span>${escH(r.kind || r.fam)}${r.shelter && r.shelter !== "–" ? ` · 대피 ${escH(r.shelter)}` : ""}</span>
       ${sl ? `<span class="slb">산사태${escH((r.slide.fcst || r.slide.pred).kind)} ${r.slide.fcst ? "예보" : "예측"} 발령 중</span>` : ""}</div>
+    <div class="dsec"><h5>위치</h5>${r.pos ? `<p>${r.pos[0].toFixed(5)}, ${r.pos[1].toFixed(5)} <span class="mute">— 지번으로 찾음(대표 필지 한 점)</span></p>`
+      : `<p class="mute">${SJ.geo?.state === "받는 중" ? `지구 위치 받는 중(${SJ.geo.done}/${SJ.geo.total})` : "지구 위치 없음"} — 읍면동 기준으로 계산</p>`}</div>
     <div class="dsec"><h5>결정 — 판단 기록에 남는다</h5><div class="acs">${acts}</div></div>
     <div class="dsec"><h5>담당</h5>${who}</div>
     <div class="dsec"><h5>판정 · ${SJ_BN[SJ.basis]} 기준 <span class="mute">(조건이 '그리고'면 가장 덜 찬 것이 그 기준의 %)</span></h5>${stg}
