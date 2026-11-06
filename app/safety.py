@@ -232,7 +232,7 @@ async def run() -> None:
 
 
 def status() -> dict:
-    keys = {n: bool(_key(n)) for n in SETS}
+    keys = {n: bool(_key(n)) or (config.DEMO and bool(_LIVE["at"].get(n))) for n in SETS}   # 시연은 가상 장면이 넣은 것
     return {"on": any(keys.values()), "demo": config.DEMO, "keys": keys, "at": _LIVE["at"], "err": _LIVE["err"],
             "slide": {"mode": slide_mode(), "why": slide_why()},
             "fcst": _LIVE["fcst"], "pred": _LIVE["pred"], "res": _LIVE["res"],

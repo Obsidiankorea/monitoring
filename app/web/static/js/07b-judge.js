@@ -8,6 +8,14 @@ const SJ_SOLO = new URLSearchParams(location.search).has("sj");
 const SJ = { open: false, sg: "all", k: 1, addH: 0, add24: 0, basis: "grid", cut: { on: true, pct: 70 }, d: null, log: [], st: null,
   ct: null, q: [], llm: null, rep: null, seq: 0, sel: new URLSearchParams(location.search).get("r"), tab: "지금 할 일", more: false, wopen: false, msgs: [] };
 try { Object.assign(SJ.cut, JSON.parse(localStorage.getItem("gn-sj-cut") || "{}")); SJ.basis = localStorage.getItem("gn-sj-basis") || "grid"; } catch {}
+SJ.pane = { l: true, r: true };                          // 왼쪽(매뉴얼) · 오른쪽(상세) 패널 — [ · ] 키
+try { Object.assign(SJ.pane, JSON.parse(localStorage.getItem("gn-sj-pane") || "{}")); } catch {}
+function sjPane(k, on = !SJ.pane[k]) {
+  SJ.pane[k] = on;
+  try { localStorage.setItem("gn-sj-pane", JSON.stringify(SJ.pane)); } catch {}
+  $("sj").classList.toggle("nol", !SJ.pane.l); $("sj").classList.toggle("nor", !SJ.pane.r);
+  document.querySelectorAll("#sj [data-pane]").forEach(b => b.classList.toggle("on", SJ.pane[b.dataset.pane]));
+}
 const SJ_STG = ["통제", "사전대피", "긴급대피"];
 const SJ_ACT = { 통제: "통제 지시", 사전대피: "사전대피 권고", 긴급대피: "대피명령 요청" };
 const SJ_BN = { grid: "기상청 격자", aws: "AWS" };
@@ -217,7 +225,9 @@ function sjRender() {
       <div class="pop" id="sj-wpop"${SJ.wopen ? "" : " hidden"}><div class="kn"><span>매시간 더</span><input type="number" id="sj-addh" min="0" max="100" step="5" value="${SJ.addH}"><span>㎜ · 앞으로 24시간</span></div>
         <div class="kn"><span>24시간 안에 더</span><input type="number" id="sj-add24" min="0" max="500" step="10" value="${SJ.add24}"><span>㎜ · 고루 나눠</span></div>
         <div class="kn"><span></span><button id="sj-k0" class="g">처음대로</button><button id="sj-wok" class="g">닫기</button></div></div></div>
+    <span class="pn"><button data-pane="l" class="${SJ.pane.l ? "on" : ""}" title="왼쪽 패널(매뉴얼 · 물어보기) 열기 · 닫기 — [" aria-label="왼쪽 패널 열기 · 닫기">◧</button><button data-pane="r" class="${SJ.pane.r ? "on" : ""}" title="오른쪽 패널(지구 상세) 열기 · 닫기 — ]" aria-label="오른쪽 패널 열기 · 닫기">◨</button></span>
     ${SJ_SOLO ? "" : `<button class="x" id="sj-x" aria-label="닫기 (Esc)">✕</button>`}`;
+  sjPane("l", SJ.pane.l); sjPane("r", SJ.pane.r);
   let cur = -1, body = "";
   const shown = SJ.more ? gs : gs.filter((g, i) => g.sec < 3 || i < 60);
   for (const g of shown) {
@@ -274,6 +284,8 @@ if (SJ_BC) SJ_BC.onmessage = ev => {
 $("sj").addEventListener("click", async ev => {
   const t = ev.target;
   if (t.closest("#sj-x")) return sjToggle(false);
+  const pn = t.closest("[data-pane]");
+  if (pn) return sjPane(pn.dataset.pane);
   const bs = t.closest("[data-bs]");
   if (bs) { SJ.basis = bs.dataset.bs; try { localStorage.setItem("gn-sj-basis", SJ.basis); } catch {} return sjRender(); }
   const cr = t.closest("[data-sg]");
@@ -330,4 +342,9 @@ $("sj").addEventListener("input", ev => {
   SJ_KT = setTimeout(() => sjLoad(true), 450);
 });
 $("b-sj").onclick = () => sjToggle(true);
+document.addEventListener("keydown", ev => {
+  if ($("sj").hidden || ev.ctrlKey || ev.metaKey || ev.altKey || ev.target.closest?.("input, textarea, select")) return;
+  if (ev.key === "[") { ev.preventDefault(); sjPane("l"); }
+  if (ev.key === "]") { ev.preventDefault(); sjPane("r"); }
+});
 if (SJ_SOLO) { document.title = "상황판단 — 경남"; setTimeout(() => sjToggle(true), 1200); }

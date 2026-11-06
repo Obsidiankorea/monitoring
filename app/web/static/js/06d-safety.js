@@ -100,7 +100,7 @@ function safLegend(id) {
   let body;
   if (!SAF) body = `<div class="nt">읽는 중…</div>`;
   else if (SAF.fail) body = `<div class="nt w">불러오지 못했다 — ${escH(SAF.fail)}</div>`;
-  else if (SAF.demo) body = `<div class="nt w">시연 서버는 이 자료를 받지 않는다.</div>`;
+  else if (SAF.demo && !KEY.some(k => SAF.keys?.[k])) body = `<div class="nt w">시연 서버는 이 자료를 받지 않는다(이 시연에 가상 장면이 없다).</div>`;
   else if (!KEY.some(k => SAF.keys?.[k])) body = `<div class="nt w">키가 없다 — 설정 › 시스템 › API 키 › 재난안전데이터 · ${TITLE}.</div>`;
   else {
     const errs = KEY.filter(k => SAF.err?.[k]).map(k => `<div class="nt w">${escH(SAF.err[k])}</div>`).join("");

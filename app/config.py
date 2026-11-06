@@ -35,9 +35,10 @@ def _newest_snap() -> str | None:
             t = json.loads(m.read_text("utf-8")).get("now") or ""
         except ValueError:
             continue
-        if best is None or (t, m.parent.name) > best:
-            best = (t, m.parent.name)
-    return best[1] if best else None
+        pin = bool(json.loads(m.read_text("utf-8")).get("pin"))   # pin = 시연 서버 기본(tools/scene_extra.py)
+        if best is None or (pin, t, m.parent.name) > best:
+            best = (pin, t, m.parent.name)
+    return best[2] if best else None
 
 
 if DEMO and not SNAP:

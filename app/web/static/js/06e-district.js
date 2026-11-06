@@ -62,14 +62,48 @@ async function loadDistrict() {
   drawDistrict(); districtLegend(); renderLyIcons();
   try {                                                  // 위험도 — 경남 전체 판정은 몇 초 걸린다(뒤에 칠한다)
     const j = await getJson("/api/judge?sigun=all&series=1");
-    DZ_PCT = Object.fromEntries(j.rows.map(r => [r.id, { grid: [r.b.grid?.top, ...(r.b.grid?.series?.v || [])],
-                                                         aws: [r.b.aws?.top, ...(r.b.aws?.series?.v || [])], where: r.where }]));
+    const one = b => b && { v: [b.top, ...(b.series?.v || [])], xy: b.series?.xy || {}, t: b.series?.t || [] };
+    DZ_PCT = Object.fromEntries(j.rows.map(r => [r.id, { grid: one(r.b.grid), aws: one(r.b.aws), where: r.where }]));
   } catch { DZ_PCT = DZ_PCT || {}; }
   drawDistrict(); districtLegend();
   DZ_T = setTimeout(loadDistrict, 5 * 60 * 1000);
 }
 const dzRows = () => (OV.has("district") && DZ?.rows ? DZ.rows.filter(r => selHas(r.sigun)) : []);
-const dzPct = r => { const v = DZ_PCT?.[r.id]?.[ACC_BASIS === "grid" ? "grid" : "aws"]; return v ? v[Math.min(DZ_TI, v.length - 1)] ?? null : null; };
+const dzSer = r => DZ_PCT?.[r.id]?.[ACC_BASIS === "grid" ? "grid" : "aws"];
+const dzPct = r => { const v = dzSer(r)?.v; return v ? v[Math.min(DZ_TI, v.length - 1)] ?? null : null; };
+/* 마우스 글의 조건 평면 — 가장 위험해지는 단계 하나. 가로 누적 % · 세로 시간당 · 예보 · 수위 %, 오른쪽 위 칸 = 그 단계 도달.
+   자취 색 = 시간: 흰색(지금) → 빨 · 주 · 노 · 초 · 파 · 남 · 보(내일 23시). 어두운 바탕이라 밝은 색으로 */
+const dzTimeCol = f => (f <= 0 ? "#FFFFFF" : `hsl(${Math.round(270 * f)} 95% 68%)`);
+function dzMiniPlane(r) {
+  const s = dzSer(r);
+  if (!s?.xy) return "";
+  const best = Object.entries(s.xy).map(([st, a]) => [st, a, Math.max(-1, ...a.filter(Boolean).map(p => Math.min(p[0] ?? 0, p[1] ?? 0)))])
+    .sort((a, b) => b[2] - a[2] || ["통제", "사전대피", "긴급대피"].indexOf(b[0]) - ["통제", "사전대피", "긴급대피"].indexOf(a[0]))[0];
+  if (!best || best[2] < 0) return "";
+  const [st, a, peak] = best, pts = a.map((p, i) => [p, i]).filter(([p]) => p), n = a.length;
+  const m = Math.min(300, Math.max(150, Math.ceil(Math.max(...pts.flatMap(([p]) => [p[0] ?? 0, p[1] ?? 0])) / 50) * 50));
+  const W = 210, H = 150, L = 26, B = 18, X = v => L + Math.min(v ?? 0, m) / m * (W - L - 6), Y = v => 6 + (1 - Math.min(v ?? 0, m) / m) * (H - 6 - B);
+  let seg = "";
+  for (let k = 1; k < pts.length; k++) {
+    const [p0] = pts[k - 1], [p1, i] = pts[k];
+    seg += `<line x1="${X(p0[0]).toFixed(1)}" y1="${Y(p0[1]).toFixed(1)}" x2="${X(p1[0]).toFixed(1)}" y2="${Y(p1[1]).toFixed(1)}" stroke="${dzTimeCol(i / (n - 1))}" stroke-width="2.4" stroke-linecap="round"/>`;
+  }
+  const [p0] = pts[0], [pe, ie] = pts[pts.length - 1], hit = a.findIndex(p => p && Math.min(p[0] ?? 0, p[1] ?? 0) >= 100);
+  const T = ["지금", ...(s.t || [])], at = i => (i <= 0 ? "지금" : `${T[i]}시`);
+  const say = hit === 0 ? `<b style="color:var(--t100)">지금 ${st} 기준 넘음</b>` : hit > 0 ? `<b style="color:var(--t90)">${at(hit)} ${st} 기준 넘음 예상</b>`
+    : `<span style="color:var(--ink-2)">${at(n - 1)}까지 ${st} 기준 안 넘음 · 최고 ${peak}%</span>`;
+  return `<div class="dzp"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+    <rect x="${X(100)}" y="6" width="${X(m) - X(100)}" height="${Y(100) - 6}" fill="var(--t100)" opacity=".16"/>
+    <line x1="${X(100)}" x2="${X(100)}" y1="6" y2="${Y(0)}" stroke="var(--t100)" stroke-dasharray="3 3"/>
+    <line x1="${L}" x2="${X(m)}" y1="${Y(100)}" y2="${Y(100)}" stroke="var(--t100)" stroke-dasharray="3 3"/>
+    <line x1="${L}" x2="${X(m)}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--line)"/><line x1="${L}" x2="${L}" y1="6" y2="${Y(0)}" stroke="var(--line)"/>
+    <text x="${X(100)}" y="${H - 5}" text-anchor="middle" fill="var(--ink-3)" font-size="10">100%</text><text x="${L - 3}" y="${Y(100) + 3}" text-anchor="end" fill="var(--ink-3)" font-size="10">100</text>
+    <text x="${X(m) - 2}" y="17" text-anchor="end" fill="var(--t100)" font-size="10" font-weight="700">${st}</text>
+    ${seg}<circle cx="${X(pe[0])}" cy="${Y(pe[1])}" r="3.5" fill="${dzTimeCol(ie / (n - 1))}"/>
+    <circle cx="${X(p0[0])}" cy="${Y(p0[1])}" r="4.5" fill="#FFFFFF" stroke="#000" stroke-width="1.2"/></svg>
+    <div class="dzk"><span>지금</span><i></i><span>${escH(at(n - 1))}</span></div>
+    <div class="d">가로 쌓이는 비 · 세로 시간당 · 예보 ÷ 기준 — 오른쪽 위 칸이 ${st}</div><div class="d">${say}</div></div>`;
+}
 /* 상황판단 창이 재생 위치를 보냈다 — 배지 색을 그 시각으로(0 이면 지금) */
 function dzTime(i, lab) { DZ_TI = +i || 0; DZ_TL = DZ_TI ? lab || "" : ""; drawDistrict(); districtLegend(); }
 function drawDistrict() {
@@ -99,6 +133,7 @@ function districtTip(r) {
   return `<b>${escH(name)}</b> · ${escH(r.kind || r.fam)}${p != null ? ` · <b style="color:${dzColVar(dzLv(p))}">${p}%</b>` : ""}`
     + `<div class="d">${escH(r.sigun)} ${escH(r.emd)} ${escH(where)}</div>`
     + (p != null ? `<div class="d">기준 대비 가장 높은 단계 — ${ACC_BASIS === "grid" ? "격자" : "AWS"} 기준${w === "읍면동" ? " · 좌표 없이 읍면동 값" : ""}</div>` : "")
+    + dzMiniPlane(r)
     + (r.approx ? `<div class="d">위치는 근사 — 지번으로 못 찾아 그 리 · 읍면동 가운데(판정은 읍면동 기준)</div>` : "")
     + (r.rule ? `<div class="d">대피기준 ${escH(r.rule)}</div>` : "")
     + (r.shelter && r.shelter !== "–" ? `<div class="d">대피장소 ${escH(r.shelter)}</div>` : "")

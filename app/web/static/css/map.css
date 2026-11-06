@@ -706,12 +706,6 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 @keyframes riskpulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,120,70,.65), 0 8px 24px rgba(0,0,0,.25); }
   50% { box-shadow: 0 0 0 9px rgba(255,120,70,0), 0 8px 24px rgba(0,0,0,.25); } }
 /* 스크롤바 — 가늘고 테마 색, 평소엔 숨겼다가 마우스를 올리면 나타난다(큼직한 기본 흰 막대가 판을 가리던 것) */
-.rpop, #ly-alerts, #prefs .panes, #aiw .bd, #help .bd, #showdlg .rows, #showdlg .cat { scrollbar-width: thin; scrollbar-color: transparent transparent; transition: scrollbar-color .2s; }
-.rpop:hover, #ly-alerts:hover, #prefs .panes:hover, #aiw .bd:hover, #help .bd:hover, #showdlg .rows:hover, #showdlg .cat:hover { scrollbar-color: color-mix(in oklab, var(--ink-3) 70%, transparent) transparent; }
-.rpop::-webkit-scrollbar, #ly-alerts::-webkit-scrollbar, #prefs .panes::-webkit-scrollbar, #aiw .bd::-webkit-scrollbar, #help .bd::-webkit-scrollbar, #showdlg .rows::-webkit-scrollbar, #showdlg .cat::-webkit-scrollbar { width: 8px; }
-.rpop::-webkit-scrollbar-track, #ly-alerts::-webkit-scrollbar-track, #prefs .panes::-webkit-scrollbar-track, #aiw .bd::-webkit-scrollbar-track, #help .bd::-webkit-scrollbar-track { background: transparent; }
-.rpop::-webkit-scrollbar-thumb, #ly-alerts::-webkit-scrollbar-thumb, #prefs .panes::-webkit-scrollbar-thumb, #aiw .bd::-webkit-scrollbar-thumb, #help .bd::-webkit-scrollbar-thumb, #showdlg .rows::-webkit-scrollbar-thumb, #showdlg .cat::-webkit-scrollbar-thumb { background: transparent; border-radius: 6px; }
-.rpop:hover::-webkit-scrollbar-thumb, #ly-alerts:hover::-webkit-scrollbar-thumb, #prefs .panes:hover::-webkit-scrollbar-thumb, #aiw .bd:hover::-webkit-scrollbar-thumb, #help .bd:hover::-webkit-scrollbar-thumb, #showdlg .rows:hover::-webkit-scrollbar-thumb, #showdlg .cat:hover::-webkit-scrollbar-thumb { background: color-mix(in oklab, var(--ink-3) 70%, transparent); }
 .rpop { z-index: 8; width: 340px; max-height: min(66vh, 540px); overflow-y: auto; overscroll-behavior: contain; padding: 10px 12px 12px;
   background: var(--panel); backdrop-filter: none; border-color: #c8321f; }
 .rpop.ct { border-color: #b7860f; }
@@ -1018,7 +1012,7 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
   background: color-mix(in oklab, var(--accent) 22%, transparent); border: 1px solid color-mix(in oklab, var(--accent) 60%, var(--line)); }
 .selchip:hover { background: color-mix(in oklab, var(--accent) 34%, transparent); }
 .ar.det { cursor: default; }
-.cb.scroll { overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--ink-3) transparent; }
+.cb.scroll { overflow-y: auto; }
 /* 도움말(?) — 용어·자료 출처 */
 #help { position: fixed; inset: 0; z-index: 21; display: flex; align-items: center; justify-content: center;
   background: rgba(4, 8, 14, .55); }
@@ -1677,3 +1671,29 @@ body.sj-on > header, body.sj-on #stage, body.sj-on #tl, body.sj-on #rail { displ
 #sj .sjp-svg .qn { fill: var(--ink-3); font: 500 11.5px var(--sans); }
 #sj .sjp-svg .at { fill: var(--ink-3); font: 500 12px var(--sans); }
 #sj .sjp-svg .tr { fill: none; stroke-width: 1.3; stroke-dasharray: 2 3; stroke-opacity: .7; }
+/* 스크롤 막대 — 화면 전체 한 규칙: 평소엔 안 보이고, 상자에 마우스를 올리면 얇은 각진 막대, 잡으면 강조색.
+   ⚠️ 크롬은 scrollbar-color 를 걸면 ::-webkit-scrollbar 를 무시한다 — 크롬엔 webkit 만, 파이어폭스엔 표준만 */
+::-webkit-scrollbar { width: 7px; height: 7px; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-button { display: none; }
+::-webkit-scrollbar-thumb { background: transparent; border-radius: 0; border: 2px solid transparent; border-width: 0 0 0 2px; background-clip: padding-box; }
+:hover::-webkit-scrollbar-thumb { background-color: color-mix(in oklab, var(--ink-3) 60%, transparent); }
+::-webkit-scrollbar-thumb:hover, ::-webkit-scrollbar-thumb:active { background-color: var(--accent); border-width: 0; }
+@supports not selector(::-webkit-scrollbar) {
+  * { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+  *:hover { scrollbar-color: color-mix(in oklab, var(--ink-3) 60%, transparent) transparent; }
+}
+/* 상황판단 왼쪽 · 오른쪽 패널 접기 — [ · ] 키, 머리 단추 */
+#sj.nol .sj-l, #sj.nor .sj-d { display: none; }
+#sj.nol { grid-template-columns: minmax(0, 1fr) 400px; }
+#sj.nor { grid-template-columns: 330px minmax(0, 1fr); }
+#sj.nol.nor { grid-template-columns: minmax(0, 1fr); }
+#sj .pn { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+#sj .pn button { background: transparent; border: 0; border-right: 1px solid var(--line); color: var(--ink-3); padding: 4px 9px; font-size: 13px; line-height: 1; }
+#sj .pn button:last-child { border-right: 0; }
+#sj .pn button.on { color: var(--ink); background: var(--raised); }
+/* 지구 배지 마우스 글의 조건 평면(06e-district.js) — 자취 색 = 시간(흰 지금 → 보라 내일) */
+#tip .dzp { margin: 6px 0 2px; }
+#tip .dzp svg { display: block; background: color-mix(in oklab, var(--ground) 70%, transparent); border: 1px solid var(--line); }
+#tip .dzk { display: flex; align-items: center; gap: 6px; font: 600 11px var(--mono); color: var(--ink-3); margin: 4px 0 2px; width: 210px; }
+#tip .dzk i { flex: 1; height: 5px; background: linear-gradient(90deg, #fff 0%, hsl(0 95% 68%) 6%, hsl(30 95% 68%) 20%, hsl(60 95% 68%) 34%, hsl(120 95% 68%) 50%, hsl(210 95% 68%) 68%, hsl(240 95% 68%) 82%, hsl(270 95% 68%) 100%); }

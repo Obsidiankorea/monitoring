@@ -37,14 +37,21 @@ def root() -> Path:
 
 
 def add_scene(name: str) -> None:
-    """가상 시연의 하천 · 조위 · 도로 값(tools/make_scene.py). 시연은 수집하지 않으므로 띄울 때 그 값을 넣어 둔다."""
-    from . import its, river, tide
+    """가상 시연의 하천 · 조위 · 도로 값(tools/make_scene.py)과 재난안전데이터(tools/scene_extra.py).
+    시연은 수집하지 않으므로 띄울 때 그 값을 넣어 둔다. 침수흔적은 스냅숏 폴더 flood.json 을 사본 상태 폴더로."""
+    from . import its, river, safety, tide
     f = root() / name / "scene.json"
     if f.exists():
         d = json.loads(f.read_text("utf-8"))
         river._LIVE.update(d["river"])
         tide._LIVE.update(d["tide"])
         its._LIVE.update(d["road"])
+        if d.get("safety"):
+            safety._LIVE.update(d["safety"])
+    fl = root() / name / "flood.json"
+    if fl.exists():
+        safety.FLOOD_FILE.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(fl, safety.FLOOD_FILE)
 
 
 def check_name(name: str) -> str:

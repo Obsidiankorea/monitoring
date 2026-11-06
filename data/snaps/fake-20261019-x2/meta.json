@@ -55,5 +55,6 @@
  "warn": [],
  "mb": 9.8,
  "fake": true,
- "factor": 2.0
+ "factor": 2.0,
+ "pin": true
 }
