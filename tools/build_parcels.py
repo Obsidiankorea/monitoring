@@ -3,7 +3,7 @@
     .venv/Scripts/python.exe -X utf8 tools/build_parcels.py <지적도 .shp(확장자 빼도 됨)> <법정동코드 전체자료.txt>
     .venv/Scripts/python.exe -X utf8 tools/build_parcels.py --selftest
 
-쓰는 곳: 위키 data/지구좌표.csv(지역ID · 위도 · 경도 · PNU · 지번 · 방법 · 메모) · data/지구필지.geojson(필지 모양).
+쓰는 곳: 위키 data/지구좌표.csv(지역ID · 위도 · 경도 · PNU · 지번 · 방법 · 메모) · data/지구필지.geojson.gz(필지 모양, gzip — 3MB 한 줄이 위키 글자 검색에 걸리지 않게).
 방법: 정확 = 지번 그대로 · 대시복원 = 위키 지번에 '-' 가 빠져(84939) 나눠 보니 하나만 있음 · 본번근사 = 부번 필지가 없어(분할 · 합병) 같은 본번의 가장 큰 필지.
       리중심 · 읍면동중심 = 지번이 없거나(○○리 일원) 못 찾아 그 리(읍면동) 필지들의 가운데 — 지도 표시용 근사, 판정은 읍면동 최대 칸(app/geocode.py APPROX).
       리 이름이 위키에 틀리게(용탸라) 적혔으면 같은 읍면동에서 가장 비슷한 이름으로 — 메모에 남긴다.
@@ -243,7 +243,9 @@ def main(shp: str, code_txt: str) -> int:
         wr = csv.DictWriter(f, cols, extrasaction="ignore")
         wr.writeheader()
         wr.writerows(out.get(w["지역ID"], {"지역ID": w["지역ID"]}) for w in rows)
-    (d / "지구필지.geojson").write_text(json.dumps({"type": "FeatureCollection", "features": feats}, ensure_ascii=False), "utf-8")
+    import gzip
+    (d / "지구필지.geojson.gz").write_bytes(gzip.compress(json.dumps({"type": "FeatureCollection", "features": feats}, ensure_ascii=False).encode("utf-8")))
+    (d / "지구필지.geojson").unlink(missing_ok=True)
     from collections import Counter
     c = Counter(v.get("방법") or v.get("메모", "?") for v in out.values())
     print("결과:", " · ".join(f"{k} {n}" for k, n in c.most_common()))

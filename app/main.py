@@ -582,10 +582,13 @@ async def api_districts_geo_put(body: dict):
 
 @app.get("/api/districts/shapes")
 async def api_districts_shapes():
-    """지구 필지 모양(위키 data/지구필지.geojson, 경위도) — 없으면 빈 묶음."""
+    """지구 필지 모양(위키 data/지구필지.geojson.gz, 경위도) — 압축은 위키 글자 검색(Hermes)에 3MB 한 줄이 걸리지 않게. 없으면 옛 .geojson, 그것도 없으면 빈 묶음."""
     from . import ai
     try:
-        return PlainTextResponse((ai.wiki() / "data" / "지구필지.geojson").read_text("utf-8"), media_type="application/json")
+        d = ai.wiki() / "data"
+        gz = d / "지구필지.geojson.gz"
+        body = gzip.decompress(gz.read_bytes()) if gz.exists() else (d / "지구필지.geojson").read_bytes()
+        return Response(body, media_type="application/json")
     except OSError:
         return {"type": "FeatureCollection", "features": []}
 
