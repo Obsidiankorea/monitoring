@@ -1743,3 +1743,42 @@ body.sj-on > header, body.sj-on #stage, body.sj-on #tl, body.sj-on #rail { displ
 #dzdlg tr.on td { background: color-mix(in oklab, var(--accent) 12%, transparent); }
 #dzdlg tr.ed td input.la, #dzdlg tr.ed td input.lo { border-color: var(--accent); }
 #dzdlg td:nth-child(-n+2), #dzdlg th { white-space: nowrap; }
+#tip .dzs { display: flex; gap: 3px; margin: 2px 0 6px; }
+#tip .dzs span { font: 600 11px var(--sans); padding: 2px 6px; border: 1px solid var(--line); border-radius: 4px; color: var(--ink-3); }
+#tip .dzs span.on { color: var(--ink); background: var(--raised); border-color: var(--ink-3); }
+#tip .dzs span.on.s0 { background: color-mix(in oklab, var(--st-ctl) 45%, transparent); }
+#tip .dzs span.on.s1 { background: color-mix(in oklab, var(--st-pre) 45%, transparent); }
+#tip .dzs span.on.s2 { background: color-mix(in oklab, var(--st-emg) 55%, transparent); }
+#tip .dzs span.nx { border-style: dashed; color: var(--ink-2); }
+#tip .dzb { display: flex; align-items: center; gap: 6px; font-size: 11.5px; margin: 2px 0; }
+#tip .dzb > span { width: 52px; color: var(--ink-2); }
+#tip .dzb svg { display: block; }
+#tip .dzb em { font: 700 11.5px var(--mono); font-style: normal; width: 38px; text-align: right; }
+#tip .dzb small { color: var(--ink-3); font-size: 11px; }
+#sj .sjp-svg .q07 { fill: var(--t70); opacity: .06; }
+#sj .sjp-svg .g70 { stroke: var(--t70); stroke-width: 1; stroke-dasharray: 2 4; }
+#tip .dzp { display: grid; grid-template-columns: auto 232px; gap: 12px; align-items: start; white-space: normal; }
+#tip .dzl { min-width: 250px; max-width: 290px; }
+#tip .dzr svg { background: color-mix(in oklab, var(--ground) 70%, transparent); border: 1px solid var(--line); }
+#tip .dzr .dzk { width: 230px; }
+#sj .ppw { display: grid; gap: 8px; }
+#sj .ppw .sjp-svg.pp { width: 100%; min-width: 0; }
+.ppk { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 11px; color: var(--ink-2); margin: 2px 0 4px; }
+.ppk.big { font-size: 12px; margin-left: 44px; }
+.ppk span { display: inline-flex; align-items: center; gap: 4px; }
+.ppk i { width: 10px; height: 10px; display: inline-block; opacity: .85; }
+.ppk i.sk { background: none !important; border: 1.4px dashed #E8EDF5; }
+.ppk i.nk { background: none !important; border: 1.2px dashed var(--t70); }
+:root { --st-ctl: #F2C94C; --st-pre: #4C8DF6; --st-emg: #F04848; }   /* 통제 · 사전대피 · 긴급대피 영역 색(06e STG_COL) */
+/* 단계 영역 평면 — 밝은 카드(11-07 가독성) */
+#tip .ppbox { background: #F2F4F7; border-radius: 8px; padding: 6px; }
+#tip .ppbox .ppk { color: #1F2430; }
+#tip .dzr svg { background: none; border: 0; }
+#tip .dzk.lt { color: #374151; width: 230px; }
+#tip .dzk.lt i { background: linear-gradient(90deg, #111827 0%, hsl(0 90% 40%) 6%, hsl(30 90% 40%) 20%, hsl(60 90% 40%) 34%, hsl(120 90% 40%) 50%, hsl(210 90% 40%) 68%, hsl(240 90% 40%) 82%, hsl(270 90% 40%) 100%); }
+.ppk i.sk { border-color: #1F2430 !important; }
+.ppcs { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.ppc { font: 600 12px var(--sans); padding: 2px 10px; border-radius: 6px; border: 2px solid var(--c); background: transparent; color: var(--ink-3); cursor: pointer; }
+.ppc.on { background: var(--f); color: #1F2430; }
+#sj .sjp-svg .lb2 { font: 700 11.5px var(--sans); fill: #1F2430; paint-order: stroke; stroke: #F2F4F7; stroke-width: 3px; }
+#sj .ppw .sjp-svg.pp { border-radius: 8px; }

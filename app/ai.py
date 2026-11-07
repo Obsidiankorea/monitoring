@@ -92,8 +92,12 @@ _RULES: dict = {}
 
 
 def rules() -> dict:
-    """{v: {항목: 값}, err: [...], src: 위키|기본값} — CSV 가 바뀌면(mtime) 다시 읽는다."""
+    """{v: {항목: 값}, err: [...], src: 위키|기본값} — CSV 가 바뀌면(mtime) 다시 읽는다. mtime 은 5초에 한 번만 본다(판정 한 번에 수천 번 불린다)."""
     import csv
+    import time as _t
+    if _RULES.get("out") and _t.time() - _RULES.get("seen", 0) < 5:
+        return _RULES["out"]
+    _RULES["seen"] = _t.time()
     try:
         p = wiki() / RULES_CSV
         key = (str(p), p.stat().st_mtime)
@@ -118,7 +122,8 @@ def rules() -> dict:
             err.append("단계가 겹친다 — 전부 기본값으로")
             v = dict(RULE_DEFAULT)
         _RULES.update(key=key, val={"v": v, "err": err, "src": "위키" if not err else "위키(일부 기본값)"})
-    return _RULES["val"]
+    _RULES["out"] = _RULES["val"]
+    return _RULES["out"]
 
 
 def R(k: str) -> int:
@@ -928,6 +933,7 @@ def set_wiki(path: str) -> dict:
 
 def reset_wiki_cache() -> None:
     _WS[1] = None
+    _RULES.pop("out", None)
     _lookup_fn.cache_clear()
     _LK.clear()
     _GET.clear()
@@ -957,3 +963,42 @@ def ladder_list() -> list[dict]:
             out.append({"fam": fam, "stage": c["stage"], "rule": c["rule"], "src": src(c["rule"])})
     order = {"통제": 0, "사전대피": 1, "긴급대피": 2}
     return sorted(out, key=lambda r: (list(FAMILY).index(r["fam"]) if r["fam"] in FAMILY else 9, order.get(r["stage"], 9)))
+
+
+def regions() -> dict:
+    """단계 영역 평면 — 유형마다 가로(누적 ㎜ 또는 15분 ㎜) × 세로(시우량 ㎜/h) 위의 통제 · 사전대피 · 긴급대피 영역(위키 판정값).
+    rect = 그 점에서 오른쪽 위(그리고), band = 세로 그 값 위 전부(가로 상관없음), vband = 가로 그 값 오른쪽 전부.
+    같은 단계에 영역이 여럿이면 '또는' — 합치면 의자(ㄱ) 모양. 비가 아닌 조건(특보 · 수위 · 산림청)은 texts 로(평면에 못 그린다)."""
+    v = rules()["v"]
+    L, H, U = ({k.split("_", 1)[1]: x for k, x in v.items() if k.startswith(f"{t}_")} for t in ("산사태", "하천", "지하공간"))
+    nonrain = lambda fam: [{"stage": r["stage"], "text": r["rule"]} for r in ladder_list()  # noqa: E731
+                           if r["fam"] == fam and not r["src"].startswith(("실황", "초단기"))]
+    return {
+        "산사태": {"x": "누적", "xu": "㎜", "areas": [
+            {"stage": "통제", "kind": "rect", "x": L["통제_누적"], "y": L["통제_예보시우량"], "note": "예보"},
+            {"stage": "사전대피", "kind": "rect", "x": L["사전대피_누적"], "y": L["사전대피_예보시우량"], "note": "예보"},
+            {"stage": "사전대피", "kind": "band", "y": L["사전대피_야간예보시우량"], "night": True, "note": "취약시간(21~06시) 예보"},
+            {"stage": "긴급대피", "kind": "rect", "x": L["긴급대피_일"], "y": L["긴급대피_시우량"], "note": "실황 · 가로는 일강우"},
+            {"stage": "긴급대피", "kind": "vband", "x": L["긴급대피_누적"], "note": "실황"}], "texts": nonrain("산사태")},
+        "하천": {"x": "누적", "xu": "㎜", "areas": [
+            {"stage": "통제", "kind": "band", "y": H["통제_시우량"], "note": f"{H['통제_지속시간']}시간 이상 지속 예보"},
+            {"stage": "사전대피", "kind": "rect", "x": H["사전대피_누적"], "y": H["사전대피_예보시우량"], "note": "예보"},
+            {"stage": "긴급대피", "kind": "rect", "x": H["긴급대피_누적"], "y": H["긴급대피_시우량"], "note": "실황"}], "texts": nonrain("하천")},
+        "지하공간": {"x": "15분", "xu": "㎜", "areas": [
+            {"stage": "사전대피", "kind": "rect", "x": U["사전대피_15분"], "y": U["사전대피_예보시우량"], "note": "예보"},
+            {"stage": "긴급대피", "kind": "rect", "x": U["긴급대피_15분"], "y": U["긴급대피_시우량"], "note": "실황"}], "texts": nonrain("지하공간")},
+    }
+
+
+def site_area(rule: str) -> list[dict]:
+    """지구 원문 대피기준 → 평면의 영역. 쉼표 · 띄어쓰기는 '그리고'(2026-11 결정) → 네모 하나, 원문에 '또는'이 있으면 두 영역(의자 모양).
+    1시간 조건은 세로, 나머지(누적 · 일 · 3 · 12시간)는 가로 — 가로 조건이 여럿이면 큰 값(한 축에 둘을 못 그린다)."""
+    cs = conditions(rule)
+    if not cs:
+        return []
+    y = max((c["mm"] for c in cs if c["win"] == 1), default=None)
+    x = max((c["mm"] for c in cs if c["win"] != 1), default=None)
+    base = {"stage": "지구 기준", "note": rule}
+    if "또는" in rule and x and y:
+        return [{**base, "kind": "vband", "x": x}, {**base, "kind": "band", "y": y}]
+    return [{**base, "kind": "rect" if x and y else "vband" if x else "band", "x": x, "y": y}]

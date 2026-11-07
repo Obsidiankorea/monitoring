@@ -43,7 +43,7 @@ function sjToggle(on = !SJ.open) {
   sjLoad();
 }
 async function sjLoad(onlyData) {
-  const my = ++SJ.seq, sg = SJ.sg, qs = new URLSearchParams({ sigun: sg, k: SJ.k, add_h: SJ.addH, add_24: SJ.add24, series: 1 });
+  const my = ++SJ.seq, sg = SJ.sg, qs = new URLSearchParams({ sigun: sg, k: SJ.k, add_h: SJ.addH, add_24: SJ.add24, series: 1, sb: SJ.basis });
   if (!onlyData) $("sj-c").innerHTML = `<div class="sj-ld">${sg === "all" ? "경남 전체 18개 시군" : escH(sg)} 지구 판정을 모으는 중…</div>`;
   $("sj").classList.add("busy");
   try {
@@ -287,7 +287,7 @@ $("sj").addEventListener("click", async ev => {
   const pn = t.closest("[data-pane]");
   if (pn) return sjPane(pn.dataset.pane);
   const bs = t.closest("[data-bs]");
-  if (bs) { SJ.basis = bs.dataset.bs; try { localStorage.setItem("gn-sj-basis", SJ.basis); } catch {} return sjRender(); }
+  if (bs) { SJ.basis = bs.dataset.bs; try { localStorage.setItem("gn-sj-basis", SJ.basis); } catch {} return sjLoad(true); }   // 시간별 줄은 그 기준만 받는다
   const cr = t.closest("[data-sg]");
   if (cr) return sjPick(cr.dataset.sg);
   const rr = t.closest("[data-r]");

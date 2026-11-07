@@ -131,6 +131,9 @@ def series_of(e: dict, s: dict, fam: str, rule: str) -> dict | None:
         return None
     r0, cut30 = e["rain"], ai.R("하천_통제_시우량")
     out, cum = [], 0.0
+    # 단계 영역 평면 — 시각마다 (누적 = 24 · 48시간 중 큰 것, 시우량, 15분). 앞으로의 15분은 예보가 없어 None
+    acc = lambda rn: max((rn.get(h) for h in ("24h", "48h") if rn.get(h) is not None), default=None)  # noqa: E731
+    pl = [[acc(r0), r0.get("1h"), e.get("m15")]]
     # 조건 평면 — 단계마다 '지금 가장 많이 찬 기준'을 끝까지 같은 축으로(시각마다 기준이 바뀌면 점이 다른 축으로 튄다)
     now = pack(e, fam, rule)["st"]
     rule0 = {st: v["rule"] for st, v in now.items()}
@@ -156,15 +159,16 @@ def series_of(e: dict, s: dict, fam: str, rule: str) -> dict | None:
         night = s["night"] if not hh else int(hh.group(1)) >= 21 or int(hh.group(1)) < 6
         row = {**e, "fc_hours": nxt, "fc_labels": fl[i + 1:i + 7], "eta_hours": fh[i + 1:], "eta_labels": fl[i + 1:],
                "fc_peak": max(nxt) if nxt else None, "fc_run30": best}
+        pl.append([acc(rain), v, None])
         p = at_point(row, {**rain, "15m": None}, {**s, "night": night}, fam, rule)
         out.append(pack(p, fam, rule)["top"])
         for st in rule0:
             pt = plane(p["ladders"].get(fam, []), st, rule0[st])
             xy[st].append(pt[0] if pt else None)
-    return {"t": list(fl[:len(out)]), "v": out, "xy": xy, "ax": ax, "rule": rule0}
+    return {"t": list(fl[:len(out)]), "v": out, "xy": xy, "ax": ax, "rule": rule0, "pl": pl, "site": ai.site_area(rule)}
 
 
-def rows_of(sg: str, base: str, k: float, add: tuple = (0.0, 0.0), series: bool = False) -> tuple[list[dict], dict]:
+def rows_of(sg: str, base: str, k: float, add: tuple = (0.0, 0.0), series: bool = False, sb: str | None = None) -> tuple[list[dict], dict]:
     g, a = _sit(sg, base, k, "grid", add), _sit(sg, base, k, "aws", add)
     ga = {e["emd"]: e for e in a["emd"]}
     pg, pa = _pts(base, "grid"), _pts(base, "aws")
@@ -178,10 +182,10 @@ def rows_of(sg: str, base: str, k: float, add: tuple = (0.0, 0.0), series: bool 
             ea = ga.get(e["emd"])
             eg, ea2 = at_point(e, pg.get(d["id"]), g, d["fam"], d["rule"]), ea and at_point(ea, pa.get(d["id"]), a, d["fam"], d["rule"])
             b = {"grid": pack(eg, d["fam"], d["rule"]), "aws": pack(ea2, d["fam"], d["rule"]) if ea else None}
-            if series:
+            if series and sb != "aws":
                 b["grid"]["series"] = series_of(eg, g, d["fam"], d["rule"])
-                if ea:
-                    b["aws"]["series"] = series_of(ea2, a, d["fam"], d["rule"])
+            if series and sb != "grid" and ea:
+                b["aws"]["series"] = series_of(ea2, a, d["fam"], d["rule"])
             ss = slide_site(d["rule"], sl) if d["fam"] == "산사태" else None
             for v in b.values():                             # 산사태 예보 발령이 기준인 지구 — 강수가 아니라 발령으로
                 if v and ss is not None:
@@ -192,10 +196,10 @@ def rows_of(sg: str, base: str, k: float, add: tuple = (0.0, 0.0), series: bool 
     return out, g
 
 
-def build(sigun: str, base: str, k: float = 1.0, add_h: float = 0.0, add_24: float = 0.0, series: bool = False) -> dict:
+def build(sigun: str, base: str, k: float = 1.0, add_h: float = 0.0, add_24: float = 0.0, series: bool = False, sb: str | None = None) -> dict:
     sgs = list(ai.SIGUN_FULL) if sigun == "all" else [sigun]
     with ThreadPoolExecutor(max_workers=4) as ex:
-        got = list(ex.map(lambda s: (s, *rows_of(s, base, k, (add_h, add_24), series)), sgs))
+        got = list(ex.map(lambda s: (s, *rows_of(s, base, k, (add_h, add_24), series, sb)), sgs))
     rows, chart, head = [], [], None
     for sg, rs, g in got:
         rows += rs
@@ -216,4 +220,5 @@ def build(sigun: str, base: str, k: float = 1.0, add_h: float = 0.0, add_24: flo
     rows.sort(key=lambda r: -r["b"]["grid"]["top"])
     st = safety.status()
     slide = {"keys": st["keys"]["fcst"] or st["keys"]["pred"], "why": st["slide"]["why"], "at": st["at"].get("fcst")}
-    return {"slide": slide, "sigun": sigun, "k": k, "add_h": add_h, "add_24": add_24, "tm": tm, "rows": rows, "chart": chart, "head": head}
+    return {"slide": slide, "sigun": sigun, "k": k, "add_h": add_h, "add_24": add_24, "tm": tm, "rows": rows, "chart": chart, "head": head,
+            "regions": ai.regions() if series else None}

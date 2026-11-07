@@ -85,8 +85,16 @@ async function loadDistrict() {
   if (!DZ_SH && !DZ.fail) { try { DZ_SH = await getJson("/api/districts/shapes"); } catch { DZ_SH = { features: [] }; } }
   drawDistrict(); districtLegend(); renderLyIcons();
   try {                                                  // 위험도 — 경남 전체 판정은 몇 초 걸린다(뒤에 칠한다)
-    const j = await getJson("/api/judge?sigun=all&series=1");
-    const one = b => b && { v: [b.top, ...(b.series?.v || [])], xy: b.series?.xy || {}, t: b.series?.t || [] };
+    // 경남 전체는 지금 % 만(빠르다), 시군을 골랐으면 그 시군은 시간별 줄까지(마우스 글 그래프 · 재생) — 경남 전체 시간별은 수십 초 걸렸다
+    const sb = ACC_BASIS === "grid" ? "grid" : "aws";
+    const [j, ...sj] = await Promise.all([getJson("/api/judge?sigun=all"), ...SELS.map(sg => getJson(`/api/judge?sigun=${encodeURIComponent(sg)}&series=1&sb=${sb}`).catch(() => null))]);
+    for (const x of sj.filter(Boolean)) {
+      const by = new Map(x.rows.map(r => [r.id, r]));
+      j.rows = j.rows.map(r => by.get(r.id) || r);
+      j.regions = x.regions;
+    }
+    const one = b => b && { v: [b.top, ...(b.series?.v || [])], xy: b.series?.xy || {}, t: b.series?.t || [], pl: b.series?.pl || [], site: b.series?.site || [] };
+    DZ_REG = j.regions || DZ_REG;
     DZ_PCT = Object.fromEntries(j.rows.map(r => [r.id, { grid: one(r.b.grid), aws: one(r.b.aws), where: r.where }]));
   } catch { DZ_PCT = DZ_PCT || {}; }
   drawDistrict(); districtLegend();
@@ -95,38 +103,121 @@ async function loadDistrict() {
 const dzRows = () => (OV.has("district") && DZ?.rows ? DZ.rows.filter(r => selHas(r.sigun)) : []);
 const dzSer = r => DZ_PCT?.[r.id]?.[ACC_BASIS === "grid" ? "grid" : "aws"];
 const dzPct = r => { const v = dzSer(r)?.v; return v ? v[Math.min(DZ_TI, v.length - 1)] ?? null : null; };
-/* 마우스 글의 조건 평면 — 가장 위험해지는 단계 하나. 가로 누적 % · 세로 시간당 · 예보 · 수위 %, 오른쪽 위 칸 = 그 단계 도달.
+/* ── 단계 영역 평면(06e · 07c 같이 쓴다) — 가로 누적(지하공간은 15분) ㎜ × 세로 시우량 ㎜/h 위에 통제 · 사전대피 · 긴급대피 영역.
+   '그리고' = 그 점에서 오른쪽 위 네모, '또는' = 영역을 합친 의자(ㄱ) 모양(서버 ai.regions). 70% 자리에 옅은 점선 테두리(근접).
+   지구 원문 기준(흰 점선)도 같은 평면에. 지구의 비는 한 줄 — 시간색(흰 지금 → 보라 내일). 축 끝을 넘는 값은 끝에 붙인다.
+   앞으로의 15분은 예보가 없다 — 지하공간은 시우량 ÷ 4 로 어림(점선) */
+let DZ_REG = null;
+// 평면은 밝은 회색 바탕(불투명) — 어두운 지도 위에서도 또렷하게(11-07). 단계 색: 통제 노랑 · 사전대피 파랑 · 긴급대피 빨강.
+// 면은 불투명한 연한 색, 높은 단계가 위에 덮는다(겹친 곳 = 더 높은 단계). 테두리는 진한 같은 색.
+const STG_COL = { 통제: "#C99A00", 사전대피: "#1F63D6", 긴급대피: "#D21F1F", "지구 기준": "#1F2430" };
+const STG_FILL = { 통제: "#FFF0B3", 사전대피: "#CFE1FF", 긴급대피: "#FFCFCF" };
+const PP_BG = "#F2F4F7", PP_INK = "#1F2430", PP_INK3 = "#6B7280", PP_LINE = "#C5CBD5";
+/* 평면에 보일 단계 — 지도 범례 · 상황판단 창이 같이 쓴다(이 브라우저 기억) */
+let PP_SHOW = new Set(["통제", "사전대피", "긴급대피"]);
+try { const v = JSON.parse(localStorage.getItem("gn-pp-st") || "null"); if (Array.isArray(v)) PP_SHOW = new Set(v); } catch {}
+function ppToggle(st) {
+  PP_SHOW.has(st) ? PP_SHOW.delete(st) : PP_SHOW.add(st);
+  try { localStorage.setItem("gn-pp-st", JSON.stringify([...PP_SHOW])); } catch {}
+}
+const ppChips = () => ["통제", "사전대피", "긴급대피"].map(st => `<button data-pps="${st}" class="ppc${PP_SHOW.has(st) ? " on" : ""}" style="--c:${STG_COL[st]};--f:${STG_FILL[st]}">${st}</button>`).join("");
+function ppScale(reg, W, H, L = 34, B = 20, T = 8, R = 8) {
+  const xs = reg.areas.map(a => a.x).filter(v => v != null), ys = reg.areas.map(a => a.y).filter(v => v != null);
+  const xm = Math.ceil(Math.max(...xs, 10) * 1.3 / 10) * 10, ym = Math.ceil(Math.max(...ys, 10) * 1.4 / 5) * 5;
+  return { xm, ym, L, B, T, R, W, H, X: v => L + Math.min(Math.max(v ?? 0, 0), xm) / xm * (W - L - R), Y: v => T + (1 - Math.min(Math.max(v ?? 0, 0), ym) / ym) * (H - T - B) };
+}
+const STG_ORD = { 통제: 0, 사전대피: 1, 긴급대피: 2 };
+function ppAreas(reg, S, o = {}) {
+  const { X, Y, xm, ym, L, T, W, H, B } = S, x1 = X(xm), y0 = Y(0);
+  const shape = (a, k = 1) => a.kind === "rect" ? `M${X(a.x * k)},${Y(ym)}H${x1}V${Y(a.y * k)}H${X(a.x * k)}Z`
+    : a.kind === "band" ? `M${L},${Y(ym)}H${x1}V${Y(a.y * k)}H${L}Z` : `M${X(a.x * k)},${Y(ym)}H${x1}V${y0}H${X(a.x * k)}Z`;
+  const shown = reg.areas.filter(a => PP_SHOW.has(a.stage)).sort((p, q) => STG_ORD[p.stage] - STG_ORD[q.stage]);
+  let s = `<rect x="0" y="0" width="${W}" height="${H}" fill="${PP_BG}"/>`;
+  // 면(낮은 단계부터 — 높은 단계가 위에 덮는다). 취약시간 띠는 면 없이 점선만
+  for (const a of shown) if (!a.night) s += `<path d="${shape(a)}" fill="${STG_FILL[a.stage]}"/>`;
+  for (const a of shown) {
+    const c = STG_COL[a.stage];
+    s += `<path d="${shape(a)}" fill="none" stroke="${c}" stroke-width="${a.night ? 1.4 : 1.8}"${a.night ? ' stroke-dasharray="5 3"' : ""}/>`
+      + (a.night ? "" : `<path d="${shape(a, 0.7)}" fill="none" stroke="${c}" stroke-opacity=".55" stroke-dasharray="2 4"/>`);
+  }
+  for (const a of o.site || []) s += `<path d="${shape(a)}" fill="none" stroke="${PP_INK}" stroke-width="1.6" stroke-dasharray="6 3"/>`;
+  const all = [...shown, ...(o.site || [])];
+  const tx = [...new Set(all.map(a => a.x).filter(v => v != null))].sort((a, b) => a - b), ty = [...new Set(all.map(a => a.y).filter(v => v != null))].sort((a, b) => a - b);
+  s += `<line x1="${L}" x2="${x1}" y1="${y0}" y2="${y0}" stroke="${PP_INK3}"/><line x1="${L}" x2="${L}" y1="${T}" y2="${y0}" stroke="${PP_INK3}"/>`
+    + tx.map(v => `<text x="${X(v)}" y="${H - B + 13}" text-anchor="middle" fill="${PP_INK}" font-size="${o.fs || 10}" font-weight="600">${v}</text>`).join("")
+    + ty.map(v => `<text x="${L - 3}" y="${Y(v) + 3}" text-anchor="end" fill="${PP_INK}" font-size="${o.fs || 10}" font-weight="600">${v}</text>`).join("");
+  return s;
+}
+/* 영역 색 범례 한 줄 */
+const ppKey = (reg, site) => [...new Set(reg.areas.map(a => a.stage))].filter(st => PP_SHOW.has(st)).map(st => `<span><i style="background:${STG_FILL[st]};border:2px solid ${STG_COL[st]}"></i>${st}</span>`).join("")
+  + (site?.length ? `<span><i class="sk"></i>지구 기준</span>` : "") + (reg.areas.some(a => a.night && PP_SHOW.has(a.stage)) ? `<span><i class="nk"></i>취약시간</span>` : "");
+const ppPt = (reg, p) => (p ? [reg.x === "15분" ? (p[2] ?? (p[1] != null ? p[1] / 4 : null)) : p[0], p[1]] : null);
+/* 밝은 바탕용 시간색 — 진한 검정(지금) → 빨 · 주 · 노 · 초 · 파 · 남 · 보(내일), 명도를 낮춰 흰 바탕에서도 보이게 */
+const ppTimeCol = f => (f <= 0 ? "#111827" : `hsl(${Math.round(270 * f)} 90% 40%)`);
+/* 한 지구 자취 — full 이면 끝까지 시간색, 아니면 ti 까지 옅은 선. 15분 어림 구간은 점선 */
+function ppTrail(reg, S, pl, ti, full, col) {
+  const pts = pl.map((p, i) => [ppPt(reg, p), i]).filter(([p]) => p && p[0] != null && p[1] != null), n = pl.length, end = full ? n - 1 : ti;
+  let s = "";
+  for (let k = 1; k < pts.length; k++) {
+    const [a] = pts[k - 1], [b, i] = pts[k];
+    if (i > end) break;
+    const dash = reg.x === "15분" && pl[i]?.[2] == null ? ' stroke-dasharray="3 3"' : "";
+    s += `<line x1="${S.X(a[0]).toFixed(1)}" y1="${S.Y(a[1]).toFixed(1)}" x2="${S.X(b[0]).toFixed(1)}" y2="${S.Y(b[1]).toFixed(1)}" stroke="${col || ppTimeCol(i / (n - 1))}" stroke-width="${col ? 1.4 : 2.6}" stroke-opacity="${col ? 0.6 : 1}" stroke-linecap="round"${dash}/>`;
+  }
+  return s;
+}
+/* 마우스 글 — 단계 사다리. 위키 [[통제·대피 기준]]: 통제 → 사전대피 → 긴급대피 순으로 올라간다(사전대피는 예보, 긴급대피는 실황).
+   ① 지금 단계 줄(평시 · 통제 · 사전대피 · 긴급대피 — 지금 칸 채움, 다음 칸 점선) ② 세 단계 막대(70 근접 · 100 도달 눈금, 도달 시각)
+   ③ 다음 단계 하나의 조건 평면. 국지성 폭우는 단계를 건너뛸 수 있어 — 뒤 단계가 다음 단계보다 많이 찼으면 경고를 붙이고 그 평면을.
+   축 끝은 PLANE_MAX(143%) — 100% 가 축의 70% 자리. 넘으면 끝에 붙인다(100 넘은 뒤는 의미가 적다).
    자취 색 = 시간: 흰색(지금) → 빨 · 주 · 노 · 초 · 파 · 남 · 보(내일 23시). 어두운 바탕이라 밝은 색으로 */
 const dzTimeCol = f => (f <= 0 ? "#FFFFFF" : `hsl(${Math.round(270 * f)} 95% 68%)`);
+const DZ_STG = ["통제", "사전대피", "긴급대피"], PLANE_MAX = 143;
+const dzStageP = p => (p ? Math.round(Math.min(p[0] ?? 0, p[1] ?? 0)) : null);
+function dzPhase(s, ti) {
+  const st = DZ_STG.filter(x => s?.xy?.[x]), at = (x, i) => dzStageP(s.xy[x][Math.min(i, s.xy[x].length - 1)]);
+  const met = st.filter(x => (at(x, ti) ?? 0) >= 100), cur = met.length ? met[met.length - 1] : null;
+  const next = st.find(x => DZ_STG.indexOf(x) > DZ_STG.indexOf(cur) && (at(x, ti) ?? 0) < 100) || null;
+  const skip = next && st.find(x => DZ_STG.indexOf(x) > DZ_STG.indexOf(next) && (at(x, ti) ?? 0) >= 70 && (at(x, ti) ?? 0) > (at(next, ti) ?? 0));   // 뒤 단계가 근접(70↑)이면서 더 찼을 때만
+  const eta = x => { const j = s.xy[x].findIndex((p, k) => k >= ti && (dzStageP(p) ?? 0) >= 100); return j < 0 ? null : j; };
+  return { st, at, cur, next, skip, eta, plane: skip || next || cur };
+}
 function dzMiniPlane(r) {
   const s = dzSer(r);
   if (!s?.xy) return "";
-  const best = Object.entries(s.xy).map(([st, a]) => [st, a, Math.max(-1, ...a.filter(Boolean).map(p => Math.min(p[0] ?? 0, p[1] ?? 0)))])
-    .sort((a, b) => b[2] - a[2] || ["통제", "사전대피", "긴급대피"].indexOf(b[0]) - ["통제", "사전대피", "긴급대피"].indexOf(a[0]))[0];
-  if (!best || best[2] < 0) return "";
-  const [st, a, peak] = best, pts = a.map((p, i) => [p, i]).filter(([p]) => p), n = a.length;
-  const m = Math.min(300, Math.max(150, Math.ceil(Math.max(...pts.flatMap(([p]) => [p[0] ?? 0, p[1] ?? 0])) / 50) * 50));
-  const W = 210, H = 150, L = 26, B = 18, X = v => L + Math.min(v ?? 0, m) / m * (W - L - 6), Y = v => 6 + (1 - Math.min(v ?? 0, m) / m) * (H - 6 - B);
-  let seg = "";
-  for (let k = 1; k < pts.length; k++) {
-    const [p0] = pts[k - 1], [p1, i] = pts[k];
-    seg += `<line x1="${X(p0[0]).toFixed(1)}" y1="${Y(p0[1]).toFixed(1)}" x2="${X(p1[0]).toFixed(1)}" y2="${Y(p1[1]).toFixed(1)}" stroke="${dzTimeCol(i / (n - 1))}" stroke-width="2.4" stroke-linecap="round"/>`;
-  }
-  const [p0] = pts[0], [pe, ie] = pts[pts.length - 1], hit = a.findIndex(p => p && Math.min(p[0] ?? 0, p[1] ?? 0) >= 100);
+  const ph = dzPhase(s, DZ_TI);
+  if (!ph.st.length) return "";
   const T = ["지금", ...(s.t || [])], at = i => (i <= 0 ? "지금" : `${T[i]}시`);
-  const say = hit === 0 ? `<b style="color:var(--t100)">지금 ${st} 기준 넘음</b>` : hit > 0 ? `<b style="color:var(--t90)">${at(hit)} ${st} 기준 넘음 예상</b>`
-    : `<span style="color:var(--ink-2)">${at(n - 1)}까지 ${st} 기준 안 넘음 · 최고 ${peak}%</span>`;
-  return `<div class="dzp"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
-    <rect x="${X(100)}" y="6" width="${X(m) - X(100)}" height="${Y(100) - 6}" fill="var(--t100)" opacity=".16"/>
-    <line x1="${X(100)}" x2="${X(100)}" y1="6" y2="${Y(0)}" stroke="var(--t100)" stroke-dasharray="3 3"/>
-    <line x1="${L}" x2="${X(m)}" y1="${Y(100)}" y2="${Y(100)}" stroke="var(--t100)" stroke-dasharray="3 3"/>
-    <line x1="${L}" x2="${X(m)}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--line)"/><line x1="${L}" x2="${L}" y1="6" y2="${Y(0)}" stroke="var(--line)"/>
-    <text x="${X(100)}" y="${H - 5}" text-anchor="middle" fill="var(--ink-3)" font-size="10">100%</text><text x="${L - 3}" y="${Y(100) + 3}" text-anchor="end" fill="var(--ink-3)" font-size="10">100</text>
-    <text x="${X(m) - 2}" y="17" text-anchor="end" fill="var(--t100)" font-size="10" font-weight="700">${st}</text>
-    ${seg}<circle cx="${X(pe[0])}" cy="${Y(pe[1])}" r="3.5" fill="${dzTimeCol(ie / (n - 1))}"/>
-    <circle cx="${X(p0[0])}" cy="${Y(p0[1])}" r="4.5" fill="#FFFFFF" stroke="#000" stroke-width="1.2"/></svg>
-    <div class="dzk"><span>지금</span><i></i><span>${escH(at(n - 1))}</span></div>
-    <div class="d">가로 쌓이는 비 · 세로 시간당 · 예보 ÷ 기준 — 오른쪽 위 칸이 ${st}</div><div class="d">${say}</div></div>`;
+  // ① 지금 단계 줄
+  const strip = ["평시", ...DZ_STG].map(x => {
+    const on = (ph.cur || "평시") === x, nx = ph.next === x;
+    return `<span class="${on ? "on" : nx ? "nx" : ""}${on && x !== "평시" ? ` s${DZ_STG.indexOf(x)}` : ""}">${on ? "▶ " : ""}${x}</span>`;
+  }).join("");
+  // ② 세 단계 막대 — 0~143% 를 막대 너비로, 70 · 100 눈금
+  const BW = 150, bx = v => Math.min(v ?? 0, PLANE_MAX) / PLANE_MAX * BW;
+  const bars = ph.st.map(x => {
+    const v = ph.at(x, DZ_TI), j = ph.eta(x), lv = dzLv(v);
+    return `<div class="dzb"><span>${x}</span><svg width="${BW}" height="10"><rect width="${BW}" height="10" fill="var(--line)"/>`
+      + `<rect width="${bx(v).toFixed(1)}" height="10" fill="${dzColVar(lv)}"/><line x1="${bx(70)}" x2="${bx(70)}" y1="0" y2="10" stroke="var(--t70)"/>`
+      + `<line x1="${bx(100)}" x2="${bx(100)}" y1="0" y2="10" stroke="var(--t100)" stroke-width="1.5"/></svg>`
+      + `<em style="color:${dzColVar(lv)}">${v ?? "—"}%</em><small>${v >= 100 ? "넘음" : j != null ? `${at(j)} 도달` : "안 닿음"}</small></div>`;
+  }).join("");
+  // ③ 오른쪽 — 단계 영역 평면(셋을 한 평면에, 지금 다음 단계를 진하게) · 지구 원문 기준 흰 점선 · 비가 아닌 조건은 글로
+  const reg = DZ_REG?.[r.fam], n = (s.pl || []).length;
+  let plane = "";
+  if (reg && n) {
+    const S = ppScale(reg, 230, 190, 30, 22, 8, 8), cur = Math.min(DZ_TI, n - 1), pn = ppPt(reg, s.pl[cur]);
+    plane = `<div class="ppbox"><div class="ppk">${ppKey(reg, s.site)}</div><svg width="230" height="190" viewBox="0 0 230 190">${ppAreas(reg, S, { site: s.site })}${ppTrail(reg, S, s.pl, cur, true)}`
+      + (pn && pn[0] != null && pn[1] != null ? `<circle cx="${S.X(pn[0])}" cy="${S.Y(pn[1])}" r="5" fill="#111827" stroke="#fff" stroke-width="1.5"/>` : "")
+      + `<text x="225" y="${190 - 4}" text-anchor="end" fill="${PP_INK3}" font-size="9.5">${reg.x}(㎜) →</text></svg>`
+      + `<div class="dzk lt"><span>지금</span><i></i><span>${escH(at(n - 1))}</span></div></div>`;
+  }
+  const texts = (reg?.texts || []).map(x => `<div class="d">· ${escH(x.stage)}: ${escH(x.text)}</div>`).join("");
+  const head = ph.skip ? `<b style="color:var(--t100)">⚠ ${ph.skip}가 ${ph.next}보다 더 찼다 — 단계를 건너뛸 수 있음(국지성 폭우)</b>`
+    : ph.next ? `다음 단계 <b>${ph.next}</b>${ph.eta(ph.next) != null ? ` · ${at(ph.eta(ph.next))} 도달 예상` : " · 내일까지 안 닿음"}` : `<b style="color:var(--t100)">${ph.cur} 기준까지 넘음</b>`;
+  return `<div class="dzp"><div class="dzl"><div class="dzs">${strip}</div>${bars}<div class="d" style="margin-top:6px">${head}</div>
+      ${texts ? `<div class="d" style="margin-top:4px;color:var(--ink-2)">비가 아닌 조건</div>${texts}` : ""}</div>
+    <div class="dzr">${plane}<div class="d">세로 시우량 ㎜/h · 검은 점선 = 지구 원문 기준 · 옅은 점선 = 70% · 보일 단계는 범례에서</div></div></div>`;
 }
 /* 상황판단 창이 재생 위치를 보냈다 — 배지 색을 그 시각으로(0 이면 지금) */
 function dzTime(i, lab) { DZ_TI = +i || 0; DZ_TL = DZ_TI ? lab || "" : ""; drawDistrict(); districtLegend(); }
@@ -157,7 +248,7 @@ function districtTip(r) {
   return `<b>${escH(name)}</b> · ${escH(r.kind || r.fam)}${p != null ? ` · <b style="color:${dzColVar(dzLv(p))}">${p}%</b>` : ""}`
     + `<div class="d">${escH(r.sigun)} ${escH(r.emd)} ${escH(where)}</div>`
     + (p != null ? `<div class="d">기준 대비 가장 높은 단계 — ${ACC_BASIS === "grid" ? "격자" : "AWS"} 기준${w === "읍면동" ? " · 좌표 없이 읍면동 값" : ""}</div>` : "")
-    + dzMiniPlane(r)
+    + (dzMiniPlane(r) || `<div class="d">시군을 눌러 고르면 단계 그래프가 나온다</div>`)
     + (r.approx ? `<div class="d">위치는 근사 — 지번으로 못 찾아 그 리 · 읍면동 가운데(판정은 읍면동 기준)</div>` : "")
     + (r.rule ? `<div class="d">대피기준 ${escH(r.rule)}</div>` : "")
     + (r.shelter && r.shelter !== "–" ? `<div class="d">대피장소 ${escH(r.shelter)}</div>` : "")
@@ -207,10 +298,12 @@ function districtLegend() {
       + `<div class="nt">필지 모양 보기: 시군을 누르고 → 그 안 읍면동을 누르면 확대 · 오른쪽 클릭 → 상황판단</div>`
       + `<div class="nt"><button class="lk" data-crit>유형별 판정 기준표 ↗</button> · <button class="lk" data-dzg>좌표 확인 · 고치기${g ? ` (없음 ${g.total - g.found})` : ""} ↗</button></div>`
       + (DZ_STYLE === "off" ? `<div class="nt">표시 끔 — 필지 면만 남긴다(시군 · 읍면동을 확대하면 보인다)</div>` : "");
+      + `<div class="sec">마우스 글 단계 그래프에 보일 단계</div><div class="ppcs">${ppChips()}</div>`;
   box.innerHTML = `<div class="hd2" title="눌러서 닫기"><b>우려지역 지구</b><i class="inf" data-tip="district-now">i</i></div>` + body;
   box.querySelector(".hd2").onclick = ev => { if (!ev.target.closest(".inf")) setLyOpen(null); };
   box.querySelector("[data-crit]")?.addEventListener("click", () => openHelp("crit"));
   box.querySelector("[data-dzg]")?.addEventListener("click", () => dzDlg(true));
+  for (const b of box.querySelectorAll("[data-pps]")) b.onclick = () => { ppToggle(b.dataset.pps); districtLegend(); };
   for (const b of box.querySelectorAll("[data-dzs]")) b.onclick = () => {
     DZ_STYLE = b.dataset.dzs;
     try { localStorage.setItem("gn-dz-style", DZ_STYLE); } catch {}
@@ -307,4 +400,23 @@ function dzPicked(gx, gy) {
   DZ_PICK = null;
   DZ_EDIT[id] = { lat, lon };
   dzDlg(true, id);
+}
+
+/* 고른 시군 · 기준(AWS · 격자)이 바뀌었다 — 그 시군 시간별 줄만 다시 받아 붙인다(경남 전체는 그대로) */
+let DZ_ST = 0;
+function dzSeries() {
+  clearTimeout(DZ_ST);
+  DZ_ST = setTimeout(async () => {
+    if (!OV.has("district") || !DZ_PCT || !SELS.length) return;
+    const sb = ACC_BASIS === "grid" ? "grid" : "aws";
+    const one = b => b && { v: [b.top, ...(b.series?.v || [])], xy: b.series?.xy || {}, t: b.series?.t || [], pl: b.series?.pl || [], site: b.series?.site || [] };
+    for (const sg of SELS) {
+      try {
+        const j = await getJson(`/api/judge?sigun=${encodeURIComponent(sg)}&series=1&sb=${sb}`);
+        DZ_REG = j.regions || DZ_REG;
+        for (const r of j.rows) DZ_PCT[r.id] = { grid: one(r.b.grid), aws: one(r.b.aws), where: r.where };
+      } catch {}
+    }
+    drawDistrict(); districtLegend();
+  }, 400);
 }

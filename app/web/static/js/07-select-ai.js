@@ -157,6 +157,7 @@ function setSel(list) {
   if (list.join() !== SELS.join()) ESEL = [];             // 시군이 바뀌면 고른 읍면동은 푼다
   SELS = list.slice(0, SEL_MAX);
   sjSync(SELS);                                           // 상황판단 창(또는 지도 창)도 같은 시군으로
+  dzSeries();                                             // 우려지역 지구 — 고른 시군 시간별 줄(마우스 글 그래프)
   if (AIW.open && AIW.scope !== (list[0] || null)) setTimeout(aiLoad, 0);   // 시군을 바꾸면 그 시군 보고로
   drawSel(); drawStations(); hot(null); link(null);
   watchBadges(); renderAlertLegend(); renderRiverLegend(); renderTideLegend();   // 왼쪽 아이콘 · 목록도 고른 시군으로
@@ -173,6 +174,7 @@ function toggleBasis() {
   ACC_BASIS = ACC_BASIS === "aws" ? "grid" : "aws";
   if (!CASE) { SET.acc_basis = ACC_BASIS; saveSetting({ acc_basis: ACC_BASIS }); }
   for (const b of $("acc-h").querySelectorAll(".bs b")) b.classList.toggle("on", b.dataset.b === ACC_BASIS);
+  dzSeries();
   // 지도도 같은 자료로 — 1시간 · 누적 층이면 짝 층으로(격자 ↔ AWS). 다른 층은 그대로, 재생 흐름만 그 자료로
   if (!CASE) {
     const nk = normKind(kind);

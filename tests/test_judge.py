@@ -91,3 +91,18 @@ def test_plane_splits_accumulated_and_hourly():
     assert judge.plane(lad, "긴급대피", "r") == ([60, 111], ["24시간", "1시간"])        # 가로 누적 · 세로 시간당
     assert judge.plane(lad, "통제", "w")[0] == [126, 126]                                 # 조건 하나면 대각선
     assert judge.plane(lad, "사전대피", "u") is None and judge.plane(lad, "통제", "x") is None
+
+
+def test_regions_and_site_area():
+    r = ai.regions()
+    assert set(r) == {"산사태", "하천", "지하공간"} and r["지하공간"]["x"] == "15분"
+    kinds = [(a["stage"], a["kind"]) for a in r["산사태"]["areas"]]
+    assert ("긴급대피", "rect") in kinds and ("긴급대피", "vband") in kinds          # '또는' — 의자 모양
+    assert any("발령" in t["text"] for t in r["하천"]["texts"])                         # 비가 아닌 조건은 글로
+    a = ai.site_area("누적강우 250mm이상, 일강우 200mm이상")
+    assert len(a) == 1 and a[0]["kind"] == "vband" and a[0]["x"] == 250                 # 둘 다 가로 — 큰 값
+    a = ai.site_area("누적강우 250mm 이상 관측 시간당 50mm 이상 예상")
+    assert len(a) == 1 and a[0]["kind"] == "rect" and (a[0]["x"], a[0]["y"]) == (250, 50)   # 띄어쓰기 = 그리고
+    a = ai.site_area("누적강우 200mm 이상 또는 시간당 50mm 이상")
+    assert [x["kind"] for x in a] == ["vband", "band"]                                    # 또는 = 의자 모양
+    assert ai.site_area("") == []
