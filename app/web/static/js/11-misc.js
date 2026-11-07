@@ -52,6 +52,7 @@ function mapMenu(ev, dz, sg) {
   pop.innerHTML = `<div class="g">상황판단 모드</div>`
     + (dz ? `<button data-a="dz">이 지구 — ${escH(nm || dz.emd)} <small>${escH(dz.kind || dz.fam)}</small></button>` : "")
     + (sg ? `<button data-a="sg">${escH(sg)} 전체</button>` : "")
+    + (dz ? `<div class="g">지구 좌표</div><button data-a="fix">이 지구 좌표 확인 · 고치기</button>` : "")
     + `<div class="note">별도 창으로 연다(듀얼 모니터). 창이 열려 있으면 그 창이 바뀐다.</div>`;
   pop.hidden = false;
   pop.style.left = Math.max(4, Math.min(ev.clientX - rc.left, rc.width - pop.offsetWidth - 8)) + "px";
@@ -59,6 +60,7 @@ function mapMenu(ev, dz, sg) {
   void pop.offsetWidth; pop.classList.add("open");
   for (const b of pop.querySelectorAll("button")) b.onclick = e => {
     e.stopPropagation(); stnPop(null);
+    if (b.dataset.a === "fix") return dzDlg(true, dz.id);
     if (b.dataset.a === "dz") districtOpen(dz);
     else if (!window.open(`/map.html?sj=1&sig=${encodeURIComponent(sg)}`, "gn-judge", "popup=1,width=1680,height=1000")) toast("팝업이 막혔다 — 이 사이트의 팝업을 허용한다");
   };
@@ -182,6 +184,7 @@ $("stage").addEventListener("click", ev => {
   if (!V || !GEO || ev.composedPath().some(e => e.matches?.("#tl, #play, #legend, #rail, #layers, #hud, #tip, #sw, #camgrab, #cambar, #tools, #aiw, #showdots, #td-pop"))) return;
   const rc = $("stage").getBoundingClientRect();
   const mx = (ev.clientX - rc.left - MT.tx) / MT.sc, my = (ev.clientY - rc.top - MT.ty) / MT.sc;
+  if (DZ_PICK) { dzPicked(V.fromX(mx), V.fromY(my)); return; }      // 좌표 고치기 — 지도에서 찍기
   const td = tideAt(mx, my);
   if (td) { tidePop(td, ev.clientX - rc.left, ev.clientY - rc.top); return; }
   const gx = V.fromX(mx), gy = V.fromY(my), sg = sigunAt(gx, gy), add = ev.ctrlKey || ev.metaKey;
@@ -650,6 +653,8 @@ document.addEventListener("keydown", ev => {
   if (CAM_EDIT && (ev.key === "Escape" || ev.key === "Enter")) { camEdit(false); return; }
   if (CAM_EDIT && ev.key === "0") { camReset(); return; }
   if (ev.key === "Escape") {
+    if (DZ_PICK) { const id = DZ_PICK; DZ_PICK = null; dzDlg(true, id); return; }
+    if (dzDlgOpen()) { dzDlg(false); return; }
     if (!$("acc-ctx").hidden) { accCtx(null); return; }
     if (!$("lg-pop").hidden) { lgPop(null); return; }
     if (!$("sw-ctx").hidden) { $("sw-ctx").classList.remove("open"); $("sw-ctx").hidden = true; return; }

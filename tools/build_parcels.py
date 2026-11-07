@@ -92,7 +92,7 @@ def dong_fuzzy(w: dict, cd: dict[str, str]) -> tuple[str, str]:
         got = difflib.get_close_matches(ri, names, n=1, cutoff=0.5) or [x for x in difflib.get_close_matches(ri, names, n=3, cutoff=0.3) if x[0] == ri[0]][:1]
         if got:
             n = next(x for x in pre if x.split()[-1] == got[0])
-            return cd[n], f"리 이름 비슷 — 위키 '{ri}' → '{got[0]}'"
+            return cd[n], f"리 이름 비슷(오타 의심) — 위키 '{ri}' · 가까운 리 '{got[0]}'"   # 확정 표현은 쓰지 않는다(위키 검토 11-07)
     return "", ""
 
 

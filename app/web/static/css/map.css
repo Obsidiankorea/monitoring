@@ -1714,3 +1714,32 @@ body.sj-on > header, body.sj-on #stage, body.sj-on #tl, body.sj-on #rail { displ
 #help .critk h4 { margin: 16px 0 6px; }
 #help .critk .md table { font-size: 12.5px; }
 #ly-district .lk { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font: inherit; text-decoration: underline; }
+/* 지구 좌표 확인 · 고치기(06e-district.js dzDlg) */
+#dzdlg { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.45); }
+#dzdlg[hidden] { display: none; }
+#dzdlg .box { width: min(1240px, calc(100vw - 32px)); max-height: calc(100vh - 48px); display: flex; flex-direction: column; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 18px 50px rgba(0,0,0,.5); padding: 14px 18px; color: var(--ink); font-size: 13px; }
+#dzdlg .top { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+#dzdlg .top b { font-size: 16px; } #dzdlg .sp { flex: 1; }
+#dzdlg .top button { background: none; border: 0; color: var(--ink-2); font-size: 16px; cursor: pointer; }
+#dzdlg .bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
+#dzdlg .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+#dzdlg .seg button { background: transparent; border: 0; border-right: 1px solid var(--line); color: var(--ink-2); padding: 5px 10px; cursor: pointer; font: inherit; }
+#dzdlg .seg button.on { background: var(--raised); color: var(--ink); }
+#dzdlg select, #dzdlg input { font: inherit; color: var(--ink); background: var(--panel-2, var(--raised)); border: 1px solid var(--line); border-radius: 6px; padding: 4px 7px; }
+#dzdlg #dzg-q { flex: 1; min-width: 200px; }
+#dzdlg .mute { color: var(--ink-3); margin: 4px 0 8px; }
+#dzdlg .list { overflow: auto; min-height: 0; }
+#dzdlg table { width: 100%; border-collapse: collapse; }
+#dzdlg th { position: sticky; top: 0; background: var(--panel); text-align: left; color: var(--ink-3); font-weight: 600; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+#dzdlg td { padding: 4px 6px; border-bottom: 1px solid var(--line-soft, var(--line)); vertical-align: middle; }
+#dzdlg td small { display: block; color: var(--ink-3); font-size: 11px; }
+#dzdlg td.w { color: var(--t90); } #dzdlg td.a { color: var(--t50); }
+#dzdlg td input.la, #dzdlg td input.lo { width: 98px; font-family: var(--mono); }
+#dzdlg td input.nt2 { width: 130px; }
+#dzdlg td.ac { white-space: nowrap; }
+#dzdlg td.ac button { font: inherit; font-size: 12px; padding: 3px 8px; margin-left: 4px; border-radius: 6px; border: 1px solid var(--line); background: transparent; color: var(--ink-2); cursor: pointer; }
+#dzdlg td.ac button.pri { color: var(--ink); background: var(--raised); }
+#dzdlg tr.on td { background: color-mix(in oklab, var(--accent) 12%, transparent); }
+#dzdlg tr.ed td input.la, #dzdlg tr.ed td input.lo { border-color: var(--accent); }
+#dzdlg td:nth-child(-n+2), #dzdlg th { white-space: nowrap; }

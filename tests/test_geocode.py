@@ -16,3 +16,13 @@ def test_parse_vworld_reply():
     assert p({"response": {"status": "ERROR", "error": {"text": "등록되지 않은 인증키입니다."}}}) == "등록되지 않은 인증키입니다."
     assert p({"response": {"status": "OK", "result": {"point": {"x": "126.9", "y": "37.5"}}}}).startswith("경남 밖")
     assert geocode._key_error("등록되지 않은 인증키입니다.") and not geocode._key_error("NOT_FOUND")
+
+
+def test_set_manual_validates_and_clears(tdb):
+    import pytest
+    geocode.APPROX.add("x1")
+    assert geocode.set_manual("x1", "35.2", "128.6", "시군 확인") == (35.2, 128.6)
+    assert "x1" not in geocode.APPROX and geocode.SRC["x1"] == "직접 입력" and geocode.db_pos()["x1"]["note"] == "시군 확인"
+    with pytest.raises(ValueError):
+        geocode.set_manual("x1", "37.5", "126.9")                # 경남 밖
+    assert geocode.set_manual("x1", "", "") is None and "x1" not in geocode.db_pos() and "x1" not in geocode.POS

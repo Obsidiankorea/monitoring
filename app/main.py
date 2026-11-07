@@ -546,6 +546,40 @@ async def api_districts_all():
     return {"rows": rows, "geo": geocode.status()}
 
 
+@app.get("/api/districts/geo")
+async def api_districts_geo():
+    """'좌표 확인 · 고치기' 목록 — 지구 전부(좌표 · 출처 · 근사인가 · 화면에서 넣은 메모). 위키 공개 자료라 잠금 없이."""
+    from . import ai, contacts
+    dbp = geocode.db_pos()
+
+    def one():
+        out = []
+        for sg in ai.SIGUN_FULL:
+            for emd, ds in contacts.districts(sg)["emd"].items():
+                out += [{"sigun": sg, "emd": emd, **{k: d[k] for k in ("id", "name", "ri", "jibun", "kind", "fam", "pos", "approx")},
+                         "src": geocode.SRC.get(d["id"]) or ("" if d["pos"] else "없음"), "note": (dbp.get(d["id"]) or {}).get("note", "")}
+                        for d in ds]
+        return out
+    return {"rows": await asyncio.to_thread(one), "demo": config.DEMO}
+
+
+@app.put("/api/districts/geo")
+async def api_districts_geo_put(body: dict):
+    """좌표 직접 넣기 — {id, lat, lon, note}. lat · lon 이 비면 지우고 원래(지적도 · 브이월드)로 되돌린다. 시연 서버는 바꾸지 않는다."""
+    if config.DEMO:
+        raise HTTPException(403, "시연 서버에서는 좌표를 바꾸지 않는다")
+    rid = str(body.get("id") or "")
+    if not any(w["지역ID"] == rid for w in geocode._rows()):
+        raise HTTPException(404, "그런 지구가 없다")
+    try:
+        pos = geocode.set_manual(rid, body.get("lat"), body.get("lon"), str(body.get("note") or ""))
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    if pos is None:
+        asyncio.create_task(geocode.run())                    # 지웠다 — 지적도 · 브이월드 좌표로 다시
+    return {"id": rid, "pos": pos, "src": geocode.SRC.get(rid, "")}
+
+
 @app.get("/api/districts/shapes")
 async def api_districts_shapes():
     """지구 필지 모양(위키 data/지구필지.geojson, 경위도) — 없으면 빈 묶음."""

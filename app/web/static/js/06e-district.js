@@ -13,7 +13,7 @@ const dzColVar = lv => (lv ? `var(--t${lv})` : "var(--dz-etc)");
    도형 = 유형(산사태 ▲ · 하천 ● · 지하공간 ■ · 침수·해안 ◆ · 야외·기타 ✚), 색 = 위험도(50 아래는 흰색 — 청색 강수 위에서 보이게) */
 let DZ_STYLE = "icon";
 try { DZ_STYLE = localStorage.getItem("gn-dz-style") || "icon"; } catch {}
-if (["icon", "shape"].includes(new URLSearchParams(location.search).get("dz"))) DZ_STYLE = new URLSearchParams(location.search).get("dz");   // ?dz=shape — 벽면 화면용
+if (["icon", "shape", "off"].includes(new URLSearchParams(location.search).get("dz"))) DZ_STYLE = new URLSearchParams(location.search).get("dz");   // ?dz=shape — 벽면 화면용
 const DZ_SHAPE_LOW = "#F2F5FA";
 function dzShape(c, fam, col) {
   c.fillStyle = col; c.strokeStyle = "#0B0F17"; c.lineWidth = 2.6; c.lineJoin = "round";
@@ -136,7 +136,7 @@ function drawDistrict() {
   if (on) dzIcons();
   const key = on ? `${DZ.rows.length}|${SELS.join()}|${ACC_BASIS}|${DZ_PCT ? Object.keys(DZ_PCT).length : 0}|${DZ_T}|${DZ_TI}|${DZ_STYLE}` : "";
   const lv = new Map(rows.map(r => [r.id, dzLv(dzPct(r))]));
-  glData("dz", key, () => rows.map(r => glF({ type: "Point", coordinates: LCCF(r.pos[1], r.pos[0]) },
+  glData("dz", key, () => DZ_STYLE === "off" ? [] : rows.map(r => glF({ type: "Point", coordinates: LCCF(r.pos[1], r.pos[0]) },
     { id: r.id, lv: lv.get(r.id), ic: `${DZ_STYLE === "shape" ? "dzs" : "dz"}-${DZ_FAM.includes(r.fam) ? r.fam : "야외·기타"}-${lv.get(r.id)}` })));
   glData("dzshape", key && DZ_SH ? key : "", () => (DZ_SH?.features || []).filter(f => lv.has(f.properties.id))
     .map(f => glF(glPoly(f.geometry.coordinates.map(ring => ring.map(p => LCCF(p[0], p[1])))),
@@ -199,19 +199,112 @@ function districtLegend() {
   const rows = dzRows(), g = DZ?.geo;
   const hot = rows.filter(r => (dzPct(r) ?? 0) >= 70).length;
   const body = !DZ ? `<div class="nt">읽는 중…</div>` : DZ.fail ? `<div class="nt w">불러오지 못했다 — ${escH(DZ.fail)}</div>`
-    : `<div class="seg dzst">${[["icon", "아이콘"], ["shape", "도형"]].map(([k, l]) => `<button data-dzs="${k}" class="${DZ_STYLE === k ? "on" : ""}">${l}</button>`).join("")}</div>`
+    : `<div class="seg dzst">${[["icon", "아이콘"], ["shape", "도형"], ["off", "끔"]].map(([k, l]) => `<button data-dzs="${k}" class="${DZ_STYLE === k ? "on" : ""}">${l}</button>`).join("")}</div>`
       + DZ_FAM.map(f => `<div class="rr">${dzBadge(f, 0)}<b>${f}</b><span>${rows.filter(r => r.fam === f).length}곳</span></div>`).join("")
       + `<div class="sec">색 = 기준 대비 % (${ACC_BASIS === "grid" ? "격자" : "AWS"})${DZ_TI ? ` · <b>${escH(DZ_TL)} 예상</b>(상황판단 재생)` : ""}</div>`
       + `<div class="keys2">${DZ_LV.map(lv => `<span><i class="dt" style="background:${dzColVar(lv)}"></i>${lv ? `${lv}%↑` : "50 아래"}</span>`).join("")}</div>`
       + `<div class="nt">${DZ_PCT ? `70% 넘은 지구 ${hot}곳` : "위험도 계산 중…"} · ${selOn() ? `고른 시군 ${rows.length}곳` : `경남 ${rows.length}곳`}${g ? ` · 좌표 ${g.found}/${g.total}` : ""}</div>`
       + `<div class="nt">필지 모양 보기: 시군을 누르고 → 그 안 읍면동을 누르면 확대 · 오른쪽 클릭 → 상황판단</div>`
-      + `<div class="nt"><button class="lk" data-crit>유형별 판정 기준표 ↗</button></div>`;
+      + `<div class="nt"><button class="lk" data-crit>유형별 판정 기준표 ↗</button> · <button class="lk" data-dzg>좌표 확인 · 고치기${g ? ` (없음 ${g.total - g.found})` : ""} ↗</button></div>`
+      + (DZ_STYLE === "off" ? `<div class="nt">표시 끔 — 필지 면만 남긴다(시군 · 읍면동을 확대하면 보인다)</div>` : "");
   box.innerHTML = `<div class="hd2" title="눌러서 닫기"><b>우려지역 지구</b><i class="inf" data-tip="district-now">i</i></div>` + body;
   box.querySelector(".hd2").onclick = ev => { if (!ev.target.closest(".inf")) setLyOpen(null); };
   box.querySelector("[data-crit]")?.addEventListener("click", () => openHelp("crit"));
+  box.querySelector("[data-dzg]")?.addEventListener("click", () => dzDlg(true));
   for (const b of box.querySelectorAll("[data-dzs]")) b.onclick = () => {
     DZ_STYLE = b.dataset.dzs;
     try { localStorage.setItem("gn-dz-style", DZ_STYLE); } catch {}
     drawDistrict(); districtLegend();
   };
+}
+
+/* ── 좌표 확인 · 고치기 — 근사(리 · 읍면동 가운데) · 좌표 없는 지구를 목록으로, 위도 · 경도를 넣거나 지도에서 찍는다 ──
+   넣은 값은 서버 DB(dz_pos)에 — 가장 먼저 쓰인다(위키 파일은 PC 에서 보내면 덮어써져서). 지우면 원래(지적도 · 브이월드)로.
+   시군 담당자에게 확인한 자리를 넣는 용도. 시연 서버는 바꾸지 않는다 */
+let DZG = null, DZ_PICK = null;
+const DZ_DLG = { f: "need", q: "", sg: "", focus: null }, DZ_EDIT = {};
+const dzDlgOpen = () => !!$("dzdlg") && !$("dzdlg").hidden;
+async function dzDlg(open = true, focus = null) {
+  let el = $("dzdlg");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "dzdlg"; el.hidden = true;
+    document.body.appendChild(el);
+    el.addEventListener("click", dzDlgClick);
+    el.addEventListener("input", ev => { if (ev.target.id === "dzg-q") { DZ_DLG.q = ev.target.value; dzDlgList(); } });
+    el.addEventListener("change", ev => { if (ev.target.id === "dzg-sg") { DZ_DLG.sg = ev.target.value; dzDlgList(); } });
+  }
+  el.hidden = !open;
+  if (!open) return;
+  if (focus) Object.assign(DZ_DLG, { focus, f: "all", q: "", sg: "" });
+  if (!DZG) {
+    el.innerHTML = `<div class="box"><p class="mute">읽는 중…</p></div>`;
+    try { DZG = await getJson("/api/districts/geo"); } catch (e) { el.innerHTML = `<div class="box"><p>못 읽었다 — ${escH(e.message)}</p></div>`; return; }
+  }
+  const need = DZG.rows.filter(r => !r.pos || r.approx).length, sgs = [...new Set(DZG.rows.map(r => r.sigun))];
+  el.innerHTML = `<div class="box" role="dialog" aria-label="지구 좌표 확인 · 고치기">
+    <div class="top"><b>지구 좌표 확인 · 고치기</b><span class="mute">확인 필요 ${need}곳 / ${DZG.rows.length}곳</span><span class="sp"></span><button data-x title="닫기 (Esc)">✕</button></div>
+    <div class="bar"><span class="seg">${[["need", "확인 필요(근사 · 없음)"], ["all", "전체"]].map(([k, l]) => `<button data-f="${k}" class="${DZ_DLG.f === k ? "on" : ""}">${l}</button>`).join("")}</span>
+      <select id="dzg-sg"><option value="">시군 전체</option>${sgs.map(s => `<option${s === DZ_DLG.sg ? " selected" : ""}>${escH(s)}</option>`).join("")}</select>
+      <input id="dzg-q" type="search" placeholder="지구 · 읍면동 · 리 · 지번 찾기" value="${escH(DZ_DLG.q)}" autocomplete="off"></div>
+    <p class="mute">시군 담당자에게 확인한 자리를 넣는다 — 위도 · 경도(예: 35.12345 · 128.12345)를 적거나 '지도에서 찍기' 뒤 지도에서 그 자리를 누른다.
+      넣은 값이 가장 먼저 쓰이고(지도 · 지구별 비 판정), '지우기'를 누르면 원래 좌표로 돌아간다.${DZG.demo ? " <b>시연 서버에서는 저장되지 않는다.</b>" : ""}</p>
+    <div class="list" id="dzg-list"></div></div>`;
+  dzDlgList();
+}
+function dzDlgList() {
+  const box = $("dzg-list");
+  if (!box || !DZG) return;
+  const q = DZ_DLG.q.trim();
+  let rows = DZG.rows.filter(r => (DZ_DLG.f === "all" || !r.pos || r.approx) && (!DZ_DLG.sg || r.sigun === DZ_DLG.sg)
+    && (!q || [r.name, r.emd, r.ri, r.jibun, r.kind].some(x => (x || "").includes(q))));
+  if (DZ_DLG.focus) rows = [...rows.filter(r => r.id === DZ_DLG.focus), ...rows.filter(r => r.id !== DZ_DLG.focus)];
+  const more = rows.length > 200;
+  const nm = r => (r.name && !/구$/.test(r.name) && r.name !== "–" ? r.name : "");
+  box.innerHTML = `<table><thead><tr><th>시군</th><th>읍면동</th><th>지구</th><th>리 · 지번</th><th>유형</th><th>지금 좌표</th><th>위도</th><th>경도</th><th>메모</th><th></th></tr></thead><tbody>`
+    + rows.slice(0, 200).map(r => {
+      const e = DZ_EDIT[r.id], p = e ? [e.lat, e.lon] : r.pos || ["", ""];
+      return `<tr data-id="${escH(r.id)}" class="${r.id === DZ_DLG.focus ? "on" : ""}${e ? " ed" : ""}"><td>${escH(r.sigun)}</td><td>${escH(r.emd)}</td><td>${escH(nm(r))}</td>
+        <td>${escH([r.ri, r.jibun].filter(x => x && x !== "–").join(" "))}</td><td>${escH(r.kind || r.fam)}</td>
+        <td class="${!r.pos ? "w" : r.approx ? "a" : ""}">${r.pos ? `${(+r.pos[0]).toFixed(5)}, ${(+r.pos[1]).toFixed(5)}` : "없음"}<small>${escH(r.src || "")}${r.approx ? " · 근사" : ""}</small></td>
+        <td><input class="la" value="${p[0] === "" ? "" : (+p[0]).toFixed(6)}" inputmode="decimal" aria-label="위도"></td>
+        <td><input class="lo" value="${p[1] === "" ? "" : (+p[1]).toFixed(6)}" inputmode="decimal" aria-label="경도"></td>
+        <td><input class="nt2" value="${escH(r.note || "")}" placeholder="확인한 사람 · 날짜" aria-label="메모"></td>
+        <td class="ac"><button data-pick title="지도에서 그 자리를 눌러 위도 · 경도를 채운다">지도에서 찍기</button><button data-save class="pri">저장</button>${r.src === "직접 입력" ? `<button data-del title="넣은 값을 지우고 원래 좌표로">지우기</button>` : ""}</td></tr>`;
+    }).join("") + `</tbody></table>` + (more ? `<p class="mute">${rows.length}곳 중 200곳만 — 시군 · 찾기로 좁힌다</p>` : rows.length ? "" : `<p class="mute">해당하는 지구가 없다</p>`);
+}
+async function dzDlgClick(ev) {
+  const t = ev.target, tr = t.closest("tr[data-id]"), id = tr?.dataset.id;
+  if (t.closest("[data-x]") || t === $("dzdlg")) return dzDlg(false);
+  const f = t.closest("[data-f]");
+  if (f) { DZ_DLG.f = f.dataset.f; DZ_DLG.focus = null; return dzDlg(true); }
+  if (!id) return;
+  if (t.closest("[data-pick]")) {
+    DZ_PICK = id; dzDlg(false);
+    toast("지도에서 그 지구 자리를 누른다 — 확대해서 누르면 정확하다 · Esc 취소");
+    return;
+  }
+  const save = t.closest("[data-save]"), del = t.closest("[data-del]");
+  if (!save && !del) return;
+  const body = del ? { id, lat: "", lon: "" } : { id, lat: tr.querySelector(".la").value.trim(), lon: tr.querySelector(".lo").value.trim(), note: tr.querySelector(".nt2").value.trim() };
+  if (save && (!body.lat || !body.lon)) { toast("위도 · 경도를 둘 다 넣는다"); return; }
+  try {
+    const r = await fetch("/api/districts/geo", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.detail || r.status);
+    const row = DZG.rows.find(x => x.id === id);
+    Object.assign(row, { pos: j.pos, src: del ? "되돌리는 중" : "직접 입력", approx: false, note: del ? "" : body.note });
+    delete DZ_EDIT[id];
+    toast(del ? "지웠다 — 원래 좌표로 되돌린다(몇 초)" : "저장했다 — 지도 · 판정에 바로 쓰인다");
+    dzDlgList();
+    loadDistrict();
+    if (del) setTimeout(async () => { try { DZG = await getJson("/api/districts/geo"); if (dzDlgOpen()) dzDlgList(); } catch {} loadDistrict(); }, 4000);
+  } catch (e) { toast(`저장하지 못했다 — ${e.message}`); }
+}
+/* 지도에서 찍기 — 다음 지도 클릭 자리(경위도)를 그 줄 입력 칸에 넣고 창을 다시 연다(저장은 사람이 누른다) */
+function dzPicked(gx, gy) {
+  const [lon, lat] = LCC(gx, gy), id = DZ_PICK;
+  DZ_PICK = null;
+  DZ_EDIT[id] = { lat, lon };
+  dzDlg(true, id);
 }
