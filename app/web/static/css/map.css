@@ -1782,3 +1782,5 @@ body.sj-on > header, body.sj-on #stage, body.sj-on #tl, body.sj-on #rail { displ
 .ppc.on { background: var(--f); color: #1F2430; }
 #sj .sjp-svg .lb2 { font: 700 11.5px var(--sans); fill: #1F2430; paint-order: stroke; stroke: #F2F4F7; stroke-width: 3px; }
 #sj .ppw .sjp-svg.pp { border-radius: 8px; }
+#sj .ppk.sgk { gap: 4px 10px; }
+#sj .ppk.sgk i { width: 10px; height: 10px; border-radius: 50%; }

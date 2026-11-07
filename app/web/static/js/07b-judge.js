@@ -136,6 +136,7 @@ function sjDetail() {
     <div class="dsec"><h5>판정 · ${SJ_BN[SJ.basis]} 기준 <span class="mute">(조건이 '그리고'면 가장 덜 찬 것이 그 기준의 %)</span></h5>${stg}
       ${o ? `<p class="mute">${SJ_BN[SJ.basis === "grid" ? "aws" : "grid"]} 기준이면 ${SJ_STG.map(s => o.st[s] ? `${s} ${o.st[s].pct}%` : "").filter(Boolean).join(" · ")}</p>` : ""}</div>
     ${r.rule ? `<div class="dsec"><h5>지구 기준 (원문) ${b.site != null ? sjPct({ pct: b.site }) : ""}</h5><div class="rl">${escH(r.rule)}</div>
+      ${b.series?.site?.length ? `<p><b>${escH(siteText(b.series.site, SJ.d?.regions?.[r.fam]).replace("이 지구 자체 기준: ", "숫자로: "))}</b></p>` : ""}
       ${b.site_slide ? `<p class="mute">산사태 예보 발령이 기준 — ${b.site >= 100 ? "발령 중" : "발령 없음"}</p>` : sjParts(b.site_parts || [])}
       <p class="mute">원문 조건 중 가장 많이 찬 것을 % 로 — 토양함수 등 자료 없는 조건은 빼고</p></div>` : ""}
     <div class="dsec"><h5>강수 (누적 · 시간당)</h5>${["grid", "aws"].map(k => r.b[k] ? `<div class="rn${k === SJ.basis ? " on" : ""}"><span>${SJ_BN[k]}</span><b>${r.b[k].rain["24h"] ?? "—"}㎜ · ${r.b[k].rain["1h"] ?? "—"}㎜/h</b><em>3시간 ${r.b[k].rain["3h"] ?? "—"}㎜</em></div>` : "").join("")}

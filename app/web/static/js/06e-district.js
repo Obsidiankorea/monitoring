@@ -155,6 +155,20 @@ const ppPt = (reg, p) => (p ? [reg.x === "15분" ? (p[2] ?? (p[1] != null ? p[1]
 /* 밝은 바탕용 시간색 — 진한 검정(지금) → 빨 · 주 · 노 · 초 · 파 · 남 · 보(내일), 명도를 낮춰 흰 바탕에서도 보이게 */
 const ppTimeCol = f => (f <= 0 ? "#111827" : `hsl(${Math.round(270 * f)} 90% 40%)`);
 /* 한 지구 자취 — full 이면 끝까지 시간색, 아니면 ti 까지 옅은 선. 15분 어림 구간은 점선 */
+/* 지구 자체 기준 한 줄 — 평면은 도(행안부) 공통 영역, 지구 원문 숫자는 글로. 누적(가로)을 도 단계 값과 견준다(이름 = 더 엄격) */
+function siteText(site, reg) {
+  if (!site?.length) return "";
+  const xs = site.map(a => a.x).filter(v => v != null), ys = site.map(a => a.y).filter(v => v != null), or = site.length > 1;
+  const parts = [xs.length ? `${reg?.x || "누적"} ${Math.max(...xs)}㎜` : "", ys.length ? `시간당 ${Math.max(...ys)}㎜` : ""].filter(Boolean);
+  let cmp = "";
+  const st = (reg?.areas || []).filter(a => a.x != null && !a.night).sort((a, b) => a.x - b.x);
+  if (xs.length && st.length) {
+    const x = Math.max(...xs), lo = st.filter(a => a.x <= x).pop(), hi = st.find(a => a.x > x);
+    cmp = lo?.x === x ? `도 ${lo.stage}(${lo.x})와 같음` : !lo ? `도 ${hi.stage}(${hi.x})보다 이름 — 더 엄격`
+      : hi ? `도 ${lo.stage}(${lo.x})보다 늦고 ${hi.stage}(${hi.x})보다 이름` : `도 ${lo.stage}(${lo.x})보다 늦음`;
+  }
+  return `이 지구 자체 기준: ${parts.join(or ? " 또는 " : " 그리고 ")}${cmp ? ` — ${cmp}` : ""}`;
+}
 function ppTrail(reg, S, pl, ti, full, col) {
   const pts = pl.map((p, i) => [ppPt(reg, p), i]).filter(([p]) => p && p[0] != null && p[1] != null), n = pl.length, end = full ? n - 1 : ti;
   let s = "";
@@ -217,7 +231,7 @@ function dzMiniPlane(r) {
     : ph.next ? `다음 단계 <b>${ph.next}</b>${ph.eta(ph.next) != null ? ` · ${at(ph.eta(ph.next))} 도달 예상` : " · 내일까지 안 닿음"}` : `<b style="color:var(--t100)">${ph.cur} 기준까지 넘음</b>`;
   return `<div class="dzp"><div class="dzl"><div class="dzs">${strip}</div>${bars}<div class="d" style="margin-top:6px">${head}</div>
       ${texts ? `<div class="d" style="margin-top:4px;color:var(--ink-2)">비가 아닌 조건</div>${texts}` : ""}</div>
-    <div class="dzr">${plane}<div class="d">세로 시우량 ㎜/h · 검은 점선 = 지구 원문 기준 · 옅은 점선 = 70% · 보일 단계는 범례에서</div></div></div>`;
+    <div class="dzr">${plane}${s.site?.length ? `<div class="d"><b>${escH(siteText(s.site, reg))}</b></div>` : ""}<div class="d">영역 = 도(행안부) 공통 기준 · 세로 시우량 ㎜/h · 검은 점선 = 지구 원문 기준 · 옅은 점선 = 70% · 보일 단계는 범례에서</div></div></div>`;
 }
 /* 상황판단 창이 재생 위치를 보냈다 — 배지 색을 그 시각으로(0 이면 지금) */
 function dzTime(i, lab) { DZ_TI = +i || 0; DZ_TL = DZ_TI ? lab || "" : ""; drawDistrict(); districtLegend(); }

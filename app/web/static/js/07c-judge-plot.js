@@ -8,6 +8,11 @@ const SJP = { t: 0, play: 0, lines: true, by: "max", fam: new Set(SJP_FAM), off:
 /* 유형이 둘 이상 보일 때는 배지 · 줄 색 = 유형(위험도는 자리 · 오른쪽 위 칸이 말한다). 밝은 색 — 어두운 바탕 */
 const SJP_FC = { 산사태: "#FF9F43", 하천: "#2ED6F5", 지하공간: "#C084FC", "침수·해안": "#60A5FA", "야외·기타": "#E5E7EB" };
 const sjpMany = rows => new Set(rows.map(x => x.r.fam)).size > 1;
+/* 시군 색 — 평면에 여러 시군 지구를 한꺼번에 넣을 때. 밝은 바탕에서 보이고 노랑 · 파랑 · 빨강 영역 색과 떨어진 18색 */
+const SG_COL = ["#0F766E", "#7C3AED", "#EA580C", "#15803D", "#BE185D", "#0369A1", "#854D0E", "#4338CA", "#65A30D",
+  "#9D174D", "#0E7490", "#C2410C", "#6D28D9", "#047857", "#A16207", "#1E3A8A", "#B91C1C", "#374151"];
+const SG_ORD = ["창원시", "진주시", "통영시", "사천시", "김해시", "밀양시", "거제시", "양산시", "의령군", "함안군", "창녕군", "고성군", "남해군", "하동군", "산청군", "함양군", "거창군", "합천군"];
+const sgCol = sg => SG_COL[Math.max(0, SG_ORD.findIndex(x => x.startsWith(sg)))];   // 자료는 '창원' · '창원시' 둘 다
 const sjpBadge = (r, p, many) => (many ? dzBadgeUrl(r.fam, 0, SJP_FC[r.fam] || SJP_FC["야외·기타"]) : dzBadgeUrl(r.fam, dzLv(p)));
 try { const o = JSON.parse(localStorage.getItem("gn-sj-plot") || "{}"); for (const k of ["by", "lines", "mode", "stage", "tc"]) if (o[k] != null) SJP[k] = o[k]; } catch {}
 { const q = new URLSearchParams(location.search); if (q.get("pm") === "plane" || q.get("pm") === "line") SJP.mode = q.get("pm"); if (SJ_STG.includes(q.get("pg"))) SJP.stage = q.get("pg"); }   // ?pm=plane&pg=통제 — 바로 그 그림으로
@@ -30,18 +35,19 @@ function sjpPlane(T, rows) {
   if (!reg) return `<p class="mute">영역 자료를 받는 중…</p>`;
   const fams = SJP_FAM.filter(f => SJP.fam.has(f) && rows.some(x => x.r.fam === f));
   if (!fams.length) return `<p class="mute">고른 유형에 지구가 없다</p>`;
-  const t = Math.min(SJP.t, T.length - 1), many = sjpMany(rows), name = r => `${SJ.sg === "all" ? `${r.sigun} ` : ""}${sjName(r)}`;
+  const t = Math.min(SJP.t, T.length - 1), name = r => `${SJ.sg === "all" ? `${r.sigun} ` : ""}${sjName(r)}`;
+  const sgs = [...new Set(rows.map(x => x.r.sigun))].sort(), multi = sgs.length > 1, col = r => (multi ? sgCol(r.sigun) : "#374151");
   const W = fams.length > 1 ? Math.floor(1000 / fams.length) - 8 : 760, H = 340;
   const panels = fams.map(f => {
     const rg = reg[f], S = ppScale(rg, W, H, 40, 26, 22, 10), rs = rows.filter(x => x.r.fam === f && sjB(x.r)?.series?.pl?.length);
     const sel = rs.find(x => x.r.id === SJ.sel);
     let s = ppAreas(rg, S, { site: sel ? sjB(sel.r).series.site : [], fs: 11 });
-    if (SJP.lines) s += rs.filter(x => x !== sel).map(x => ppTrail(rg, S, sjB(x.r).series.pl, t, SJP.tc, SJP.tc ? null : (many ? SJP_FC[f] : "var(--ink-3)"))).join("");
+    if (SJP.lines) s += rs.filter(x => x !== sel).map(x => ppTrail(rg, S, sjB(x.r).series.pl, t, SJP.tc, SJP.tc ? null : col(x.r))).join("");
     if (sel) s += ppTrail(rg, S, sjB(sel.r).series.pl, t, true);
     const at = rs.map(x => ({ ...x, p: x.v[Math.min(t, x.v.length - 1)], q: ppPt(rg, sjB(x.r).series.pl[Math.min(t, sjB(x.r).series.pl.length - 1)]) }))
       .filter(x => x.q && x.q[0] != null && x.q[1] != null).sort((a, b) => a.p - b.p);
     s += at.map(({ r, p, q }) => `<g class="pm${r.id === SJ.sel ? " on" : ""}" data-r="${escH(r.id)}"><title>${escH(name(r))} — ${rg.x} ${Math.round(q[0])}㎜ · 시우량 ${Math.round(q[1])}㎜/h · ${p}%</title>`
-      + `<image href="${sjpBadge(r, p, many)}" x="${(S.X(q[0]) - 8).toFixed(1)}" y="${(S.Y(q[1]) - 8).toFixed(1)}" width="16" height="16"/></g>`).join("");
+      + `<circle cx="${S.X(q[0]).toFixed(1)}" cy="${S.Y(q[1]).toFixed(1)}" r="${r.id === SJ.sel ? 7 : 5}" fill="${col(r)}" stroke="#fff" stroke-width="1.5"/></g>`).join("");
     const taken = [];                                       // 이름 — 높은 6곳, 앞 이름과 겹치면 건너뛴다
     for (const { r, p, q } of at.slice(-6).reverse()) {
       const x = S.X(q[0]) + 10, y = S.Y(q[1]) + 4, w = name(r).length * 11;
@@ -54,7 +60,10 @@ function sjpPlane(T, rows) {
     return `<svg class="sjp-svg pp" viewBox="0 0 ${W} ${H}" role="img" aria-label="${escH(f)} 단계 영역 평면">${s}</svg>`;
   });
   const sel = rows.find(x => x.r.id === SJ.sel), tx = sel ? (reg[sel.r.fam]?.texts || []) : [];
-  return `<div class="ppk big">${ppKey(reg[fams[0]], sel ? sjB(sel.r).series.site : [])}</div><div class="ppw" style="grid-template-columns:repeat(${fams.length}, minmax(0, 1fr))">${panels.join("")}</div>`
+  const st = sel ? siteText(sjB(sel.r).series.site, reg[sel.r.fam]) : "";
+  const sk = multi ? `<div class="ppk big sgk">${sgs.map(g => `<span><i style="background:${sgCol(g)}"></i>${escH(g)}</span>`).join("")}</div>` : "";
+  return `<div class="ppk big">${ppKey(reg[fams[0]], sel ? sjB(sel.r).series.site : [])}<span class="mute">영역 = 도(행안부) 공통 기준</span></div>${sk}<div class="ppw" style="grid-template-columns:repeat(${fams.length}, minmax(0, 1fr))">${panels.join("")}</div>`
+    + (st ? `<p><b>${escH(sjName(sel.r))}</b> — ${escH(st)}</p>` : "")
     + (tx.length ? `<p class="mute">${escH(sjName(sel.r))} — 비가 아닌 조건: ${tx.map(x => `${escH(x.stage)} ${escH(x.text)}`).join(" · ")}</p>` : "");
 }
 function sjpSvg(T, rows) {
@@ -102,7 +111,7 @@ const sjpCt = rows => SJP.mode === "plane"
 /* 그림 밑 한 줄 — 유형 색 · 시간 색이 무엇인지 */
 function sjpKey(T, rows) {
   const out = [];
-  if (sjpMany(rows)) out.push([...new Set(rows.map(x => x.r.fam))].map(f => `<span><i style="background:${SJP_FC[f]}"></i>${escH(f)}</span>`).join(""));
+  if (SJP.mode !== "plane" && sjpMany(rows)) out.push([...new Set(rows.map(x => x.r.fam))].map(f => `<span><i style="background:${SJP_FC[f]}"></i>${escH(f)}</span>`).join(""));
   if (SJP.mode === "plane" && SJP.tc) out.push(`<span class="tk">지금<b></b>${escH(T[T.length - 1] || "")}</span>`);
   return out.length ? `<div class="sjp-key">${out.join("")}</div>` : "";
 }
