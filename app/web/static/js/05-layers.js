@@ -285,9 +285,18 @@ const LCCF = (() => {
   };
 })();
 
+/* 시군 이름 밑 한 줄 쌓기 — 특보 딱지 → 산사태 딱지 → 기온. 딱지가 둘 이상이면 모두 작게(글자가 겹쳤다, 11-07)
+   BADGE_N = drawAlerts 가 센 시군별 특보 딱지 수. 산사태 딱지(06d) · 기온(06c)은 이것으로 제 자리를 잡는다 */
+const BADGE_N = {};
+function nameStack(sig) {
+  const n = (BADGE_N[sig] || 0) + (typeof safSlideOn === "function" && safSlideOn(sig) ? 1 : 0), sc = n >= 2 ? 0.78 : 1;
+  const fs = FSN * 0.6 * sc, bh = fs * 1.5;
+  return { n, sc, fs, bh, y0: ly => V.toY(ly) + FSN * 0.62 + 3, below: ly => V.toY(ly) + FSN * 0.62 + 3 + n * (bh + 3) };
+}
 function drawAlerts() {
   const gl = $("walerts"), gb = $("wbadge");
   ALERTBOX = [];
+  for (const k in BADGE_N) delete BADGE_N[k];
   if (!gl || !gb) return;
   if (!OV.has("alerts") || !ALERTS || ALERTS.err || !V || !V.s) { gl.innerHTML = gb.innerHTML = ""; return; }
   const sc = V.u / 3.3, w = Math.max(3.5, 4.6 * sc);      // 보이는 선 굵기(안쪽 절반)
@@ -311,8 +320,6 @@ function drawAlerts() {
     else if (top.lv === "warn") lines.push(L("warn", w));
     else lines.push(L("watch", w, `${(10 * sc).toFixed(1)} ${(6 * sc).toFixed(1)}`));
     // 딱지 — 시군명 밑에 쌓는다(센 것부터)
-    const fs = FSN * 0.6, bh = fs * 1.5, x = V.toX(ft.properties.lx);
-    let y = V.toY(ft.properties.ly) + FSN * 0.62 + 3;
     // 같은 특보는 딱지 하나 — 세부구역을 모아 '· 북·남', 군의 세부가 다 들면 시군 전체(10-27 거창 북부 · 남부가 딱지 둘이었다)
     const items = [];
     for (const it of list.slice().sort((a, b) => LVRANK[b.lv] - LVRANK[a.lv])) {
@@ -320,6 +327,9 @@ function drawAlerts() {
       if (!m) items.push(m = { name: it.name, lv: it.lv, subs: new Set() });
       m.subs.add(it.sub || "");
     }
+    BADGE_N[sig] = items.length;
+    const { fs, bh, y0 } = nameStack(sig), x = V.toX(ft.properties.lx);
+    let y = y0(ft.properties.ly);
     for (const it of items) {
       const whole = it.subs.has("") || (!!SUBZ[sig] && SUBZ[sig].every(x => it.subs.has(x)));
       const txt = it.name + (whole ? "" : ` · ${[...new Set([...(SUBZ[sig] || []), ...it.subs])].filter(x => x && it.subs.has(x)).join("·")}`);
@@ -329,6 +339,8 @@ function drawAlerts() {
       ALERTBOX.push({ x0: x - bw / 2, x1: x + bw / 2, y0: y, y1: y + bh });
       y += bh + 3;
     }
+    const sl = typeof safSlideOn === "function" && safSlideOn(sig) ? safSlide()[sig] : null;   // 산사태 딱지(06d)가 올 자리 — 지점 값 글자가 피해 가게
+    if (sl) { const bw = `산사태${sl.kind}(${sl.src})`.length * fs * 0.95 + fs * 0.9; ALERTBOX.push({ x0: x - bw / 2, x1: x + bw / 2, y0: y, y1: y + bh }); }
   }
   // 바다 특보 — 경남 바다(남해동부 먼바다 · 거제 · 경남 앞바다)만, 땅에 긋지 않고 바다 위(거제 남쪽)에 글로.
   // 둘째 줄에 구역(줄인 이름) — 어느 바다인지. 시군 경계 · 이름과 겹치지 않게 땅에서 떨어진 자리
@@ -353,6 +365,7 @@ function drawAlerts() {
   }
   gl.innerHTML = `<defs>${defs.join("")}</defs>${lines.join("")}`;
   gb.innerHTML = badges.join("");
+  drawHeat();                                  // 기온은 이름 밑 딱지들 다음 줄(nameStack)
 }
 
 const seaShort = r => r.replace(/^남해동부/, "").replace(/시동부앞바다$/, "앞바다").replace(/(먼바다|앞바다)$/, " $1").trim();

@@ -319,7 +319,9 @@ function tlFit() {
    날아가는 동안 땅 · 경계 · 격자는 GL 이 매 장 그리고(glCam), 위 SVG 는 CSS transform 으로 통째로 옮긴다(camFrame).
    ⚠️ 예전에는 SVG 두 장의 viewBox 를 바꾸고 격자 Canvas 를 매 장 다시 그려 윈도 PC 에서 버벅였다(11-06 GL 로 옮김).
    글자·점은 잠깐 감췄다가 다 온 뒤 새로 그린다. */
-const ZMAX = 9;                          // 경남 전체의 몇 배까지
+const ZMAX = 9;                          // 경남 전체의 몇 배까지(읍면동을 고르면 4배 더 — 필지가 보이게)
+/* 고른 읍면동(GEO.emd id) — 시군을 확대한 뒤 그 안 읍면동을 누르면(Ctrl 은 더하기 · 빼기). 비면 시군 확대 */
+let ESEL = [];
 const zoomOn = () => !!(selOn() && SET.sel_zoom !== false && FEAT && V);
 function mapArea() {
   const st = $("stage").getBoundingClientRect(), lg = $("legend").getBoundingClientRect();
@@ -331,7 +333,8 @@ function mapArea() {
   return { x0, y0, x1, y1 };
 }
 function zoomCam(sigs) {
-  const fts = FEAT.filter(f => sigs.includes(f.properties.sigun));
+  const emd = ESEL.length && EFEAT ? EFEAT.filter(f => ESEL.includes(f.properties.id)) : [];
+  const fts = emd.length ? emd : FEAT.filter(f => sigs.includes(f.properties.sigun));
   if (!fts.length) return null;
   let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
   for (const ft of fts) {
@@ -343,7 +346,7 @@ function zoomCam(sigs) {
   const A = mapArea(), pad = 24 * V.k;
   const aw = A.x1 - A.x0 - 2 * pad, ah = A.y1 - A.y0 - 2 * pad;
   if (aw < 80 || ah < 80) return null;
-  const s = Math.max(V.b.s, Math.min(aw / (x1 - x0), ah / (y1 - y0), V.b.s * ZMAX));
+  const s = Math.max(V.b.s, Math.min(aw / (x1 - x0), ah / (y1 - y0), V.b.s * ZMAX * (emd.length ? 4 : 1)));
   const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
   return { s, ox: (A.x0 + A.x1) / 2 - (cx - V.X0) * s, oy: (A.y0 + A.y1) / 2 - (V.Y1 - cy) * s };
 }
@@ -535,6 +538,11 @@ function ensureEmd() {
   if (!EMDP) EMDP = getJson("/api/grid/geo/emd.topo.json").then(t => {
     ETOPO = t; EFEAT = topojson.feature(t, t.objects.emd).features;
     if (zoomOn()) { drawEmd(); if (!ZA) drawStations(); }
+    const qe = new URLSearchParams(location.search).get("emd");   // ?sig=창원&emd=진동면,진북면 — 그 읍면동으로 바로
+    if (qe && !ESEL.length) {
+      ESEL = qe.split(",").map(n => GEO.emd.find(e => e.name === n.trim() && isSel(e.sigun))?.id).filter(Boolean);
+      if (ESEL.length) { drawSel(); camGo(false); loadEmd().then(selLabel); }
+    }
   }).catch(() => { EMDP = null; });
   return EMDP;
 }

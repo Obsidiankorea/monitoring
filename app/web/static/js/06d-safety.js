@@ -9,10 +9,10 @@ const SAF_C = ["var(--ink-3)", "var(--rv-1)", "var(--rv-2)", "var(--rv-3)", "var
 const safAny = () => SAF_IDS.some(id => OV.has(id));
 async function loadSafety() {
   clearTimeout(SAF_T);
-  if (!safAny() || CASE) { SAF = null; drawSafety(); renderSafetyLegend(); renderLyIcons(); return; }
+  if (!safAny() || CASE) { SAF = null; drawAlerts(); drawSafety(); renderSafetyLegend(); renderLyIcons(); return; }
   try { SAF = await getJson("/api/safety"); } catch (e) { SAF = { fail: e.message }; }
   if (OV.has("flood") && !SAF_FL && SAF?.flood) { try { SAF_FL = await getJson("/api/safety/flood"); } catch { SAF_FL = []; } }
-  drawSafety(); renderSafetyLegend(); renderLyIcons();
+  drawAlerts(); drawSafety(); renderSafetyLegend(); renderLyIcons();   // 산사태 딱지가 생기면 특보 딱지 크기 · 기온 자리가 바뀐다
   SAF_T = setTimeout(loadSafety, 5 * 60 * 1000);
 }
 /* 시군마다 지금 걸린 산사태 예보 · 예측 중 센 것 */
@@ -23,6 +23,7 @@ function safSlide() {
   return by;
 }
 const safOn = () => (SAF?.res || []).filter(r => r.on && selHas(r.sigun));
+const safSlideOn = sig => safAny() && OV.has("slide") && !!SAF && !SAF.fail && !!safSlide()[sig];   // 이름 밑 쌓기(05 nameStack)
 /* 레이어 아이콘 숫자 — 산사태는 걸린 시군 수, 저수지는 발령 중 계측기 수 */
 const safCount = id => (id === "slide" ? Object.keys(safSlide()).filter(selHas).length : id === "reservoir" ? safOn().length : 0);
 function drawSafety() {
@@ -38,8 +39,9 @@ function drawSafety() {
     const ft = FEAT.find(f => f.properties.sigun === sig);
     if (!ft) continue;
     out.push(`<path class="sfs l${r.lv}" d="${PATH(ft)}"/>`);
-    const fs = FSN * 0.55, t = `산사태${r.kind}(${r.src})`, bw = t.length * fs * 0.95 + fs * 0.9, bh = fs * 1.5;
-    const x = V.toX(ft.properties.lx), y = V.toY(ft.properties.ly) - FSN * 0.62 - bh - 3;
+    // 시군 이름 밑 — 특보 딱지 다음 줄(05 nameStack). 예전엔 이름 위라 호우특보 딱지 · 이름과 겹쳤다
+    const st = nameStack(sig), fs = st.fs, bh = st.bh, t = `산사태${r.kind}(${r.src})`, bw = t.length * fs * 0.95 + fs * 0.9;
+    const x = V.toX(ft.properties.lx), y = st.y0(ft.properties.ly) + (BADGE_N[sig] || 0) * (bh + 3);
     badges.push(`<g class="sfb l${r.lv}"><rect x="${(x - bw / 2).toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="${(bh / 3).toFixed(1)}"/>`
       + `<text x="${x.toFixed(1)}" y="${(y + bh / 2).toFixed(1)}" text-anchor="middle" style="font-size:${fs.toFixed(1)}px">${t}</text></g>`);
   }
@@ -54,6 +56,7 @@ function drawSafety() {
     }
   }
   g.innerHTML = out.join("") + pts.join("") + badges.join("");
+  drawHeat();                                  // 기온은 이름 밑 딱지들 다음 줄(05 nameStack)
 }
 /* 마우스 — 저수지 계측기가 먼저, 아니면 침수흔적 면 */
 function safetyAt(mx, my) {

@@ -166,8 +166,12 @@ $("stage").addEventListener("click", ev => {
   if (td) { tidePop(td, ev.clientX - rc.left, ev.clientY - rc.top); return; }
   const dz = districtAt(mx, my);
   if (dz) { districtOpen(dz.dz); return; }
-  const sg = sigunAt(V.fromX(mx), V.fromY(my));
-  pickSig(sg, ev.ctrlKey || ev.metaKey);
+  const gx = V.fromX(mx), gy = V.fromY(my), sg = sigunAt(gx, gy), add = ev.ctrlKey || ev.metaKey;
+  if (CAM && sg && isSel(sg) && EFEAT) {                 // 확대한 시군 안 — 읍면동 고르기(Esc 로 하나씩 물러난다)
+    loadEmd().then(() => { const id = emdIdAt(gx, gy); if (id && EMDN.get(id)?.sigun === sg) pickEmd(id, add); });
+    return;
+  }
+  pickSig(sg, add);
 });
 
 $("b-tl").onclick = () => setTL(!tlOn);
@@ -636,7 +640,7 @@ document.addEventListener("keydown", ev => {
     if (!$("showdlg").hidden) { closeShowDlg(); return; }
     if (AIW.open) { aiToggle(false); return; }
     if (SJ.open) { sjToggle(false); return; }
-    if (!$("prefs").hidden) closePrefs(); else if (!$("help").hidden) closeHelp(); else if (selOn()) selectSig(null); else if (SHOW.on) stopShow();
+    if (!$("prefs").hidden) closePrefs(); else if (!$("help").hidden) closeHelp(); else if (ESEL.length) pickEmd(null); else if (selOn()) selectSig(null); else if (SHOW.on) stopShow();
     return;
   }
   if (ev.key === "?") { $("help").hidden ? openHelp() : closeHelp(); return; }

@@ -13,12 +13,14 @@ function sigunAt(gx, gy) {
 function drawSel() {
   const p = $("sel");
   if (!p || !PATH || !V) return;
-  const d = FEAT.filter(f => isSel(f.properties.sigun)).map(f => PATH(f)).join("");
+  // 읍면동을 골랐으면 그 읍면동 둘레 · 바깥을 어둡게, 아니면 시군
+  const selF = () => (ESEL.length && EFEAT ? EFEAT.filter(f => ESEL.includes(f.properties.id)) : FEAT.filter(f => isSel(f.properties.sigun)));
+  const d = selF().map(f => PATH(f)).join("");
   p.setAttribute("d", d);
   $("selh").setAttribute("d", d);
-  // 고른 시군 밖을 어둡게(GL 층 'selmask') — 아주 큰 네모에 고른 시군 바깥 둘레를 구멍으로
-  glData("selmask", SELS.join(), () => {
-    const sel = FEAT.filter(f => isSel(f.properties.sigun)), B = 1e4;
+  // 고른 시군(읍면동) 밖을 어둡게(GL 층 'selmask') — 아주 큰 네모에 고른 곳 바깥 둘레를 구멍으로
+  glData("selmask", SELS.join() + "|" + ESEL.join(), () => {
+    const sel = selF(), B = 1e4;
     if (!sel.length) return [];
     const holes = sel.flatMap(f => (f.geometry.type === "Polygon" ? [f.geometry.coordinates] : f.geometry.coordinates).map(p => p[0]));
     return [glF(glPoly([[[GC[0] - B, GC[1] - B], [GC[0] + B, GC[1] - B], [GC[0] + B, GC[1] + B], [GC[0] - B, GC[1] + B], [GC[0] - B, GC[1] - B]], ...holes]))];
@@ -35,6 +37,23 @@ function pickSig(sg, add) {
   setSel(sg && !(SELS.length === 1 && SELS[0] === sg) ? [sg] : []);
 }
 function selectSig(name) { setSel(name ? [name] : []); }
+/* 시군을 확대한 채 그 안 읍면동을 눌렀다 — 그냥 누르면 그 읍면동 하나(이미 그것 하나면 시군으로), Ctrl 이면 더하거나 뺀다 */
+function pickEmd(id, add) {
+  ESEL = id == null ? [] : add ? (ESEL.includes(id) ? ESEL.filter(x => x !== id) : [...ESEL, id])
+    : ESEL.length === 1 && ESEL[0] === id ? [] : [id];
+  drawSel(); selLabel(); camGo(true);
+}
+function emdIdAt(gx, gy) {
+  if (!(MEMD instanceof Uint16Array)) return null;
+  const hb = META.grids.hr, c = Math.round(gx) - hb.i0, r = Math.round(gy) - hb.j0;
+  return c < 0 || r < 0 || c >= hb.w || r >= hb.h ? null : MEMD[r * hb.w + c] || null;
+}
+function selLabel() {
+  const en = ESEL.map(id => EMDN?.get(id)?.name).filter(Boolean);
+  $("acc-sel").hidden = !selOn();
+  $("acc-sel").textContent = selOn() ? `${selName()}${en.length ? ` ${en.length > 2 ? `${en[0]} 외 ${en.length - 1}` : en.join("·")}` : ""} ✕` : "";
+  $("acc-sel").title = selOn() ? `${SELS.join("·")}${en.length ? ` ${en.join("·")}` : ""} — 경남 전체로 (Esc)` : "경남 전체로 (Esc)";
+}
 let TOASTT = null;
 function toast(msg) {
   const t = $("toast");
@@ -135,6 +154,7 @@ function aiToggle(on = !AIW.open) {
 }
 
 function setSel(list) {
+  if (list.join() !== SELS.join()) ESEL = [];             // 시군이 바뀌면 고른 읍면동은 푼다
   SELS = list.slice(0, SEL_MAX);
   sjSync(SELS);                                           // 상황판단 창(또는 지도 창)도 같은 시군으로
   if (AIW.open && AIW.scope !== (list[0] || null)) setTimeout(aiLoad, 0);   // 시군을 바꾸면 그 시군 보고로
@@ -142,9 +162,7 @@ function setSel(list) {
   watchBadges(); renderAlertLegend(); renderRiverLegend(); renderTideLegend();   // 왼쪽 아이콘 · 목록도 고른 시군으로
   if (WATCH_OPEN) watchOpen(WATCH_OPEN);
   if (!$("ly-fc-pop").hidden) fcLoad();
-  $("acc-sel").hidden = !selOn();
-  $("acc-sel").textContent = selOn() ? `${selName()} ✕` : "";
-  $("acc-sel").title = selOn() ? `${SELS.join("·")} — 경남 전체로 (Esc)` : "경남 전체로 (Esc)";
+  selLabel();
   if (zoomOn()) ensureEmd();
   if (SET.panel === "timeline") { camGo(true); return; }  // 타임라인 패널은 시군 줄이 이미 다 있다 — 테두리(·확대)만
   if (!tlOn) { CARDS = null; if (selOn()) setTL(true, false); else camGo(true); return; }   // 닫혀 있으면 연다(설정에는 안 남긴다)

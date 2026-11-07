@@ -9,6 +9,24 @@ const DZ_FAM = ["산사태", "하천", "지하공간", "침수·해안", "야외
 const DZ_LV = [0, 50, 70, 80, 90, 100];
 const dzLv = p => (p == null ? 0 : p >= 100 ? 100 : p >= 90 ? 90 : p >= 80 ? 80 : p >= 70 ? 70 : p >= 50 ? 50 : 0);
 const dzColVar = lv => (lv ? `var(--t${lv})` : "var(--dz-etc)");
+/* 표시 방식 — icon: 동그라미 배지 + 그림(가까이서) / shape: 작은 도형 + 색(경남 전체에서 덜 겹친다). 범례에서 바꾼다(이 브라우저 기억)
+   도형 = 유형(산사태 ▲ · 하천 ● · 지하공간 ■ · 침수·해안 ◆ · 야외·기타 ✚), 색 = 위험도(50 아래는 흰색 — 청색 강수 위에서 보이게) */
+let DZ_STYLE = "icon";
+try { DZ_STYLE = localStorage.getItem("gn-dz-style") || "icon"; } catch {}
+if (["icon", "shape"].includes(new URLSearchParams(location.search).get("dz"))) DZ_STYLE = new URLSearchParams(location.search).get("dz");   // ?dz=shape — 벽면 화면용
+const DZ_SHAPE_LOW = "#F2F5FA";
+function dzShape(c, fam, col) {
+  c.fillStyle = col; c.strokeStyle = "#0B0F17"; c.lineWidth = 2.6; c.lineJoin = "round";
+  c.beginPath();
+  if (fam === "산사태") { c.moveTo(14, 3); c.lineTo(25, 23); c.lineTo(3, 23); c.closePath(); }
+  else if (fam === "하천") c.arc(14, 14, 9.5, 0, 7);
+  else if (fam === "지하공간") c.rect(5, 5, 18, 18);
+  else if (fam === "침수·해안") { c.moveTo(14, 2); c.lineTo(26, 14); c.lineTo(14, 26); c.lineTo(2, 14); c.closePath(); }
+  else { c.moveTo(10, 3); c.lineTo(18, 3); c.lineTo(18, 10); c.lineTo(25, 10); c.lineTo(25, 18); c.lineTo(18, 18); c.lineTo(18, 25);
+    c.lineTo(10, 25); c.lineTo(10, 18); c.lineTo(3, 18); c.lineTo(3, 10); c.lineTo(10, 10); c.closePath(); }
+  c.stroke(); c.fill();
+}
+const dzShapeCol = lv => (lv ? cssVal(`var(--t${lv})`) : DZ_SHAPE_LOW);
 GL_LAYERS.push(
   // 필지 모양 — 경남 전체에선 너무 작아 안 보이고, 시군을 확대하면 드러난다(위험도 색)
   { id: "dz-shape", type: "fill", source: "dzshape", paint: { "fill-color": ["get", "col"], "fill-opacity": 0.3 } },
@@ -41,6 +59,12 @@ function dzGlyph(c, fam) {
 }
 function dzIcons() {
   for (const fam of DZ_FAM) for (const lv of DZ_LV) {
+    const sid = `dzs-${fam}-${lv}`;
+    if (!GL.hasImage(sid)) {
+      const cv = document.createElement("canvas"); cv.width = cv.height = 28;
+      dzShape(cv.getContext("2d"), fam, dzShapeCol(lv));
+      GL.addImage(sid, cv.getContext("2d").getImageData(0, 0, 28, 28), { pixelRatio: 2 });
+    }
     const id = `dz-${fam}-${lv}`;
     if (GL.hasImage(id)) continue;
     const cv = document.createElement("canvas"); cv.width = cv.height = 40;
@@ -110,10 +134,10 @@ function drawDistrict() {
   if (!GL_OK) return;
   const rows = dzRows(), on = OV.has("district") && DZ?.rows;
   if (on) dzIcons();
-  const key = on ? `${DZ.rows.length}|${SELS.join()}|${ACC_BASIS}|${DZ_PCT ? Object.keys(DZ_PCT).length : 0}|${DZ_T}|${DZ_TI}` : "";
+  const key = on ? `${DZ.rows.length}|${SELS.join()}|${ACC_BASIS}|${DZ_PCT ? Object.keys(DZ_PCT).length : 0}|${DZ_T}|${DZ_TI}|${DZ_STYLE}` : "";
   const lv = new Map(rows.map(r => [r.id, dzLv(dzPct(r))]));
   glData("dz", key, () => rows.map(r => glF({ type: "Point", coordinates: LCCF(r.pos[1], r.pos[0]) },
-    { id: r.id, lv: lv.get(r.id), ic: `dz-${DZ_FAM.includes(r.fam) ? r.fam : "야외·기타"}-${lv.get(r.id)}` })));
+    { id: r.id, lv: lv.get(r.id), ic: `${DZ_STYLE === "shape" ? "dzs" : "dz"}-${DZ_FAM.includes(r.fam) ? r.fam : "야외·기타"}-${lv.get(r.id)}` })));
   glData("dzshape", key && DZ_SH ? key : "", () => (DZ_SH?.features || []).filter(f => lv.has(f.properties.id))
     .map(f => glF(glPoly(f.geometry.coordinates.map(ring => ring.map(p => LCCF(p[0], p[1])))),
       { id: f.properties.id, col: cssVal(dzColVar(lv.get(f.properties.id))) })));
@@ -147,18 +171,25 @@ TIPS.set("district-now", `위키 인명피해 우려지역 지구. 동그라미 
   좌표는 연속지적도(국가공간정보포털) 필지 중심, 못 찾은 곳은 브이월드. 넓은 필지(하천 · 도로 · 임야)는 중심 한 점이라 실제 위험 지점과 다를 수 있다 — 위키 data/지구좌표_수동.csv 에 적으면 그것을 쓴다.`);
 /* 배지 그림 한 장(data URL) — 범례 · 상황판단 차트가 같은 그림을 쓴다 */
 const DZ_URL = {};
-function dzBadgeUrl(fam, lv) {
+function dzBadgeUrl(fam, lv, col) {                     // col 을 주면 위험도 대신 그 색(상황판단 차트의 유형 색)
   fam = DZ_FAM.includes(fam) ? fam : "야외·기타";
-  const k = `${fam}-${lv}`;
+  const k = `${fam}-${lv}-${col || ""}`;
   if (DZ_URL[k]) return DZ_URL[k];
   const cv = document.createElement("canvas"); cv.width = cv.height = 40;
   const c = cv.getContext("2d");
-  c.beginPath(); c.arc(20, 20, 17.5, 0, 7); c.fillStyle = cssVal(dzColVar(lv)); c.fill();
+  c.beginPath(); c.arc(20, 20, 17.5, 0, 7); c.fillStyle = col || cssVal(dzColVar(lv)); c.fill();
   c.lineWidth = 2.5; c.strokeStyle = cssVal("var(--dz-ring)"); c.stroke();
   const g = document.createElement("canvas"); g.width = g.height = 40; dzGlyph(g.getContext("2d"), fam); c.drawImage(g, 0, 0);
   return (DZ_URL[k] = cv.toDataURL());
 }
-const dzBadge = (fam, lv) => `<img src="${dzBadgeUrl(fam, lv)}" width="20" height="20" alt="" style="flex:none">`;
+function dzShapeUrl(fam, lv) {
+  const k = `s-${fam}-${lv}`;
+  if (DZ_URL[k]) return DZ_URL[k];
+  const cv = document.createElement("canvas"); cv.width = cv.height = 28;
+  dzShape(cv.getContext("2d"), DZ_FAM.includes(fam) ? fam : "야외·기타", dzShapeCol(lv));
+  return (DZ_URL[k] = cv.toDataURL());
+}
+const dzBadge = (fam, lv) => `<img src="${DZ_STYLE === "shape" ? dzShapeUrl(fam, lv) : dzBadgeUrl(fam, lv)}" width="${DZ_STYLE === "shape" ? 14 : 20}" height="${DZ_STYLE === "shape" ? 14 : 20}" alt="" style="flex:none">`;
 function districtLegend() {
   const box = $("ly-district");
   if (!box) return;
@@ -168,10 +199,16 @@ function districtLegend() {
   const rows = dzRows(), g = DZ?.geo;
   const hot = rows.filter(r => (dzPct(r) ?? 0) >= 70).length;
   const body = !DZ ? `<div class="nt">읽는 중…</div>` : DZ.fail ? `<div class="nt w">불러오지 못했다 — ${escH(DZ.fail)}</div>`
-    : DZ_FAM.map(f => `<div class="rr">${dzBadge(f, 0)}<b>${f}</b><span>${rows.filter(r => r.fam === f).length}곳</span></div>`).join("")
+    : `<div class="seg dzst">${[["icon", "아이콘"], ["shape", "도형"]].map(([k, l]) => `<button data-dzs="${k}" class="${DZ_STYLE === k ? "on" : ""}">${l}</button>`).join("")}</div>`
+      + DZ_FAM.map(f => `<div class="rr">${dzBadge(f, 0)}<b>${f}</b><span>${rows.filter(r => r.fam === f).length}곳</span></div>`).join("")
       + `<div class="sec">색 = 기준 대비 % (${ACC_BASIS === "grid" ? "격자" : "AWS"})${DZ_TI ? ` · <b>${escH(DZ_TL)} 예상</b>(상황판단 재생)` : ""}</div>`
       + `<div class="keys2">${DZ_LV.map(lv => `<span><i class="dt" style="background:${dzColVar(lv)}"></i>${lv ? `${lv}%↑` : "50 아래"}</span>`).join("")}</div>`
       + `<div class="nt">${DZ_PCT ? `70% 넘은 지구 ${hot}곳` : "위험도 계산 중…"} · ${selOn() ? `고른 시군 ${rows.length}곳` : `경남 ${rows.length}곳`}${g ? ` · 좌표 ${g.found}/${g.total}` : ""} — 확대하면 필지 모양</div>`;
   box.innerHTML = `<div class="hd2" title="눌러서 닫기"><b>우려지역 지구</b><i class="inf" data-tip="district-now">i</i></div>` + body;
   box.querySelector(".hd2").onclick = ev => { if (!ev.target.closest(".inf")) setLyOpen(null); };
+  for (const b of box.querySelectorAll("[data-dzs]")) b.onclick = () => {
+    DZ_STYLE = b.dataset.dzs;
+    try { localStorage.setItem("gn-dz-style", DZ_STYLE); } catch {}
+    drawDistrict(); districtLegend();
+  };
 }

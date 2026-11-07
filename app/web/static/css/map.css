@@ -1151,11 +1151,11 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 #prefs h4 { margin: 16px 0 6px; font-size: 12px; color: var(--ink-3); letter-spacing: .12em; }
 #prefs .row { display: flex; align-items: center; gap: 12px; padding: 6px 0; }
 #prefs .row .k { width: 92px; color: var(--ink-2); flex: none; }
-:is(#prefs, #ly-slide) .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
-:is(#prefs, #ly-slide) .seg button { font: 600 13px var(--sans); color: var(--ink-2); background: transparent; border: 0;
+:is(#prefs, #ly-slide, #ly-district) .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+:is(#prefs, #ly-slide, #ly-district) .seg button { font: 600 13px var(--sans); color: var(--ink-2); background: transparent; border: 0;
   border-right: 1px solid var(--line); padding: 6px 12px; cursor: pointer; }
-:is(#prefs, #ly-slide) .seg button:last-child { border-right: 0; }
-:is(#prefs, #ly-slide) .seg button.on { color: var(--ink); background: color-mix(in oklab, var(--accent) 24%, transparent); }
+:is(#prefs, #ly-slide, #ly-district) .seg button:last-child { border-right: 0; }
+:is(#prefs, #ly-slide, #ly-district) .seg button.on { color: var(--ink); background: color-mix(in oklab, var(--accent) 24%, transparent); }
 #prefs .grid2 { display: grid; grid-template-columns: 1fr 1fr; column-gap: 24px; }
 #prefs .grid2 .row.wide { grid-column: 1 / -1; }
 #prefs .grid2 .row { min-width: 0; flex-wrap: wrap; }
@@ -1697,3 +1697,9 @@ body.sj-on > header, body.sj-on #stage, body.sj-on #tl, body.sj-on #rail { displ
 #tip .dzp svg { display: block; background: color-mix(in oklab, var(--ground) 70%, transparent); border: 1px solid var(--line); }
 #tip .dzk { display: flex; align-items: center; gap: 6px; font: 600 11px var(--mono); color: var(--ink-3); margin: 4px 0 2px; width: 210px; }
 #tip .dzk i { flex: 1; height: 5px; background: linear-gradient(90deg, #fff 0%, hsl(0 95% 68%) 6%, hsl(30 95% 68%) 20%, hsl(60 95% 68%) 34%, hsl(120 95% 68%) 50%, hsl(210 95% 68%) 68%, hsl(240 95% 68%) 82%, hsl(270 95% 68%) 100%); }
+#ly-district .dzst { display: inline-flex; margin: 0 0 6px; }
+#sj .sjp-svg .tc { stroke-width: 2.2; stroke-linecap: round; stroke-opacity: .9; }
+#sj .sjp-key { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--ink-2); margin: 2px 0 0 44px; }
+#sj .sjp-key span { display: inline-flex; align-items: center; gap: 5px; }
+#sj .sjp-key i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+#sj .sjp-key .tk b { width: 160px; height: 6px; display: inline-block; background: linear-gradient(90deg, #fff 0%, hsl(0 95% 68%) 6%, hsl(30 95% 68%) 20%, hsl(60 95% 68%) 34%, hsl(120 95% 68%) 50%, hsl(210 95% 68%) 68%, hsl(240 95% 68%) 82%, hsl(270 95% 68%) 100%); }

@@ -73,7 +73,8 @@ function drawHeat() {
   const fill = HEAT ? gn.map(ft => [ft, htCol(by[ft.properties.sigun].ta), lvOf[ft.properties.sigun] || ""]) : [];
   glData("heat", fill.map(([ft, c, lv]) => ft.properties.sigun + c + lv).join(), () => fill.map(([ft, col, lv]) => glF(ft.geometry, { col, lv })));
   t.innerHTML = !(HEAT || OV.has("temp")) ? "" : gn.map(ft => {
-    const p = ft.properties, r = by[p.sigun], fs = FSN * (HEAT ? .78 : .52), x = V.toX(p.lx), y = V.toY(p.ly) + FSN * .62 + fs * .62;
+    const p = ft.properties, r = by[p.sigun], st = nameStack(p.sigun), fs = FSN * (HEAT ? .78 : .52) * (st.n ? 0.85 : 1), x = V.toX(p.lx);
+    const y = (HEAT || !st.n ? V.toY(p.ly) + FSN * .62 : st.below(p.ly)) + fs * .62;   // 호우 화면이면 딱지들 밑(05 nameStack)
     return `<text class="${HEAT ? "b" : ""}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" style="font-size:${fs.toFixed(1)}px;stroke-width:${(fs * .2).toFixed(1)}px${HEAT ? "" : `;fill:${r.ta >= HT_ST[3] ? htCol(r.ta) : "var(--ink)"}`}">${r.ta.toFixed(1)}°</text>`;
   }).join("");
 }
