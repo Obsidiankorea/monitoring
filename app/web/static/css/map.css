@@ -1703,3 +1703,14 @@ body.sj-on > header, body.sj-on #stage, body.sj-on #tl, body.sj-on #rail { displ
 #sj .sjp-key span { display: inline-flex; align-items: center; gap: 5px; }
 #sj .sjp-key i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
 #sj .sjp-key .tk b { width: 160px; height: 6px; display: inline-block; background: linear-gradient(90deg, #fff 0%, hsl(0 95% 68%) 6%, hsl(30 95% 68%) 20%, hsl(60 95% 68%) 34%, hsl(120 95% 68%) 50%, hsl(210 95% 68%) 68%, hsl(240 95% 68%) 82%, hsl(270 95% 68%) 100%); }
+/* 도움말 '판정 기준'(08-help.js critLoad) */
+#help .critk table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 13px; }
+#help .critk th, #help .critk td { border: 1px solid var(--line); padding: 6px 8px; vertical-align: top; text-align: left; }
+#help .critk thead th { background: var(--raised); }
+#help .critk tbody th { white-space: nowrap; background: var(--raised); }
+#help .critk .cr small { display: block; color: var(--ink-3); font-size: 11.5px; margin-top: 2px; }
+#help .critk .cr.no { opacity: .5; }
+#help .critk .or { font-size: 11px; color: var(--accent); margin: 3px 0; font-weight: 700; }
+#help .critk h4 { margin: 16px 0 6px; }
+#help .critk .md table { font-size: 12.5px; }
+#ly-district .lk { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font: inherit; text-decoration: underline; }

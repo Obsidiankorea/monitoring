@@ -38,11 +38,31 @@ $("stage").addEventListener("contextmenu", ev => {
   const rc = $("stage").getBoundingClientRect();
   const mx = (ev.clientX - rc.left - MT.tx) / MT.sc, my = (ev.clientY - rc.top - MT.ty) / MT.sc;
   const st = stationAt(mx, my);
-  if (!st || !st.key) return;
+  if (st && st.key) { ev.preventDefault(); $("tip").hidden = true; stnMenu(ev, st); return; }
+  // 지구 · 시군 위 — 상황판단 창으로(왼쪽 클릭은 시군 · 읍면동 고르기라 여기로 옮겼다)
+  const dz = districtAt(mx, my)?.dz, sg = sigunAt(V.fromX(mx), V.fromY(my));
+  if (!dz && !sg) return;
   ev.preventDefault();
   $("tip").hidden = true;
-  stnMenu(ev, st);
+  mapMenu(ev, dz, sg);
 });
+function mapMenu(ev, dz, sg) {
+  const pop = $("stn-pop"), rc = $("stage").getBoundingClientRect();
+  const nm = dz && (dz.name && !/구$/.test(dz.name) && dz.name !== "–" ? dz.name : [dz.ri, dz.jibun].filter(x => x && x !== "–").join(" "));
+  pop.innerHTML = `<div class="g">상황판단 모드</div>`
+    + (dz ? `<button data-a="dz">이 지구 — ${escH(nm || dz.emd)} <small>${escH(dz.kind || dz.fam)}</small></button>` : "")
+    + (sg ? `<button data-a="sg">${escH(sg)} 전체</button>` : "")
+    + `<div class="note">별도 창으로 연다(듀얼 모니터). 창이 열려 있으면 그 창이 바뀐다.</div>`;
+  pop.hidden = false;
+  pop.style.left = Math.max(4, Math.min(ev.clientX - rc.left, rc.width - pop.offsetWidth - 8)) + "px";
+  pop.style.top = Math.max(4, Math.min(ev.clientY - rc.top, rc.height - pop.offsetHeight - 8)) + "px";
+  void pop.offsetWidth; pop.classList.add("open");
+  for (const b of pop.querySelectorAll("button")) b.onclick = e => {
+    e.stopPropagation(); stnPop(null);
+    if (b.dataset.a === "dz") districtOpen(dz);
+    else if (!window.open(`/map.html?sj=1&sig=${encodeURIComponent(sg)}`, "gn-judge", "popup=1,width=1680,height=1000")) toast("팝업이 막혔다 — 이 사이트의 팝업을 허용한다");
+  };
+}
 document.addEventListener("pointerdown", ev => {
   if (!$("stn-pop").hidden && !ev.target.closest?.("#stn-pop")) stnPop(null);
 });
@@ -164,8 +184,6 @@ $("stage").addEventListener("click", ev => {
   const mx = (ev.clientX - rc.left - MT.tx) / MT.sc, my = (ev.clientY - rc.top - MT.ty) / MT.sc;
   const td = tideAt(mx, my);
   if (td) { tidePop(td, ev.clientX - rc.left, ev.clientY - rc.top); return; }
-  const dz = districtAt(mx, my);
-  if (dz) { districtOpen(dz.dz); return; }
   const gx = V.fromX(mx), gy = V.fromY(my), sg = sigunAt(gx, gy), add = ev.ctrlKey || ev.metaKey;
   if (CAM && sg && isSel(sg) && EFEAT) {                 // 확대한 시군 안 — 읍면동 고르기(Esc 로 하나씩 물러난다)
     loadEmd().then(() => { const id = emdIdAt(gx, gy); if (id && EMDN.get(id)?.sigun === sg) pickEmd(id, add); });

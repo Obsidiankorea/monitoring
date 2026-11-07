@@ -7,6 +7,12 @@ let SAF = null, SAF_FL = null, SAF_T = 0, SAF_HIT = [];
 const SAF_IDS = ["slide", "reservoir", "flood"];
 const SAF_C = ["var(--ink-3)", "var(--rv-1)", "var(--rv-2)", "var(--rv-3)", "var(--rv-4)", "var(--rv-4)"];   // 저수지 관심 · 주의 · 경계 · 심각 · 대피
 const safAny = () => SAF_IDS.some(id => OV.has(id));
+/* 침수흔적 깊이 색(범례 토글, 이 브라우저 기억) — 침수심(m) 다섯 단계. 청색 강수 위라 하늘 → 노랑 → 주황 → 빨강 → 자주 */
+let SAF_DEP = false;
+try { SAF_DEP = localStorage.getItem("gn-flood-dep") === "1"; } catch {}
+const FL_DEP = [[0.5, "#7FE3F0", "0.5m 미만"], [1, "#F5E663", "0.5~1m"], [2, "#F5A142", "1~2m"], [3, "#EF5B4C", "2~3m"], [99, "#D05BE6", "3m 이상"]];
+const flDepExpr = () => ["case", ["<", ["get", "dep"], 0], "#9AA3B2",
+  ["step", ["get", "dep"], FL_DEP[0][1], ...FL_DEP.slice(0, -1).flatMap(([v], k) => [v, FL_DEP[k + 1][1]])]];
 async function loadSafety() {
   clearTimeout(SAF_T);
   if (!safAny() || CASE) { SAF = null; drawAlerts(); drawSafety(); renderSafetyLegend(); renderLyIcons(); return; }
@@ -32,7 +38,12 @@ function drawSafety() {
   SAF_HIT = [];
   // 침수흔적 면은 GL 층 'flood'(01b) — 고리 첫째가 바깥, 나머지는 구멍
   const fl = safAny() && SAF && !SAF.fail && OV.has("flood") ? SAF_FL || null : null;
-  glData("flood", fl, () => (fl || []).map((f, i) => glF(glPoly(f.r.map(ring => ring.map(p => LCCF(p[0], p[1])))), { i })));
+  glData("flood", fl, () => (fl || []).map((f, i) => glF(glPoly(f.r.map(ring => ring.map(p => LCCF(p[0], p[1])))), { i, dep: isFinite(parseFloat(f.dep)) ? parseFloat(f.dep) : -1 })));
+  if (GL_OK) {
+    GL.setPaintProperty("flood", "fill-color", SAF_DEP ? flDepExpr() : cssVal("var(--sf-flood)"));
+    GL.setPaintProperty("flood", "fill-opacity", SAF_DEP ? 0.5 : 0.22);
+    GL.setPaintProperty("flood-line", "line-color", SAF_DEP ? flDepExpr() : cssVal("var(--sf-flood)"));
+  }
   if (!safAny() || !V || !V.s || !SAF || SAF.fail) { g.innerHTML = ""; return; }
   const out = [], badges = [], pts = [];
   if (OV.has("slide")) for (const [sig, r] of Object.entries(safSlide())) {
@@ -130,11 +141,19 @@ function safLegend(id) {
     } else {
       const fl = SAF_FL || [], yrs = fl.map(f => +f.yr).filter(Boolean);
       body = errs + `<div class="nt">${fl.length ? `${dot("var(--sf-flood)")}과거 침수 구역 ${fl.length}곳 · ${Math.min(...yrs)}~${Math.max(...yrs)}년${SAF.at?.flood ? ` · ${SAF.at.flood.slice(0, 10)} 받음` : ""}`
-        : SAF.flood ? "읽는 중…" : "아직 받지 않았다(키를 넣으면 첫 수집에 몇 분)"}</div>`;
+        : SAF.flood ? "읽는 중…" : "아직 받지 않았다(키를 넣으면 첫 수집에 몇 분)"}</div>`
+        + (fl.length ? `<div class="seg sfm"><button data-fd="0" class="${SAF_DEP ? "" : "on"}">한 색</button><button data-fd="1" class="${SAF_DEP ? "on" : ""}">깊이 색</button></div>`
+          + (SAF_DEP ? `<div class="keys2">${FL_DEP.map(([, c, n]) => `<span>${dot(c)}${n}</span>`).join("")}<span>${dot("#9AA3B2")}모름</span></div>`
+            + `<div class="nt">침수심 = 그때 실제로 잠긴 깊이(침수흔적도). 같은 곳이 여러 해 겹치면 깊은 것이 위로 보이지 않을 수 있다.</div>` : "") : "");
     }
   }
   box.innerHTML = `<div class="hd2" title="눌러서 닫기"><b>${TITLE}</b><i class="inf" data-tip="${id}-now">i</i></div>` + body;
   box.querySelector(".hd2").onclick = ev => { if (!ev.target.closest(".inf")) setLyOpen(null); };
+  for (const b of box.querySelectorAll("[data-fd]")) b.onclick = () => {
+    SAF_DEP = b.dataset.fd === "1";
+    try { localStorage.setItem("gn-flood-dep", SAF_DEP ? "1" : "0"); } catch {}
+    drawSafety(); safLegend("flood");
+  };
   for (const b of box.querySelectorAll("[data-sm]")) b.onclick = async () => {
     b.disabled = true;
     try {

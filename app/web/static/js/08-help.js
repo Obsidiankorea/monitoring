@@ -189,12 +189,12 @@ function helpHtml(tab) {
       AWS 로 재생하면 지난 시간은 AWS 1시간 면(정시마다), 지금 뒤는 초단기</dd>
     <dt>주소로 고정</dt><dd><code>?layer=obs60</code> · <code>?ov=alerts,stations</code> · <code>?sig=창원</code> · <code>?basis=grid</code> · <code>?pal=kma</code> · <code>?case=geoje-20260816</code> — 벽면 화면을 한 상태로 둘 때</dd>
     <dt>설정 · 도움말</dt><dd><code>Ctrl</code>+<code>,</code> 설정 · <code>?</code> 이 창</dd></dl>`;
-  return tab === "enc" ? encHtml() : tab === "terms" ? terms : tab === "how" ? how : src;
+  return tab === "crit" ? `<div id="hp-crit"><p class="mute">읽는 중…</p></div>` : tab === "enc" ? encHtml() : tab === "terms" ? terms : tab === "how" ? how : src;
 }
 function openHelp(tab = HELP_TAB) {
   HELP_TAB = tab;
   stopPlay();
-  const tabs = [["enc", "백과"], ["src", "자료 출처"], ["terms", "용어"], ["how", "조작"]];
+  const tabs = [["enc", "백과"], ["crit", "판정 기준"], ["src", "자료 출처"], ["terms", "용어"], ["how", "조작"]];
   $("help").innerHTML = `<div class="box" role="dialog" aria-label="도움말">
     <div class="top"><b>도움말 — 경남 지도</b><span class="sp"></span><button id="hp-x" title="닫기 (Esc)">✕</button></div>
     <nav>${tabs.map(([k, l]) => `<button data-t="${k}" class="${k === tab ? "on" : ""}">${l}</button>`).join("")}</nav>
@@ -203,6 +203,7 @@ function openHelp(tab = HELP_TAB) {
   $("hp-x").onclick = closeHelp;
   for (const b of $("help").querySelectorAll("nav button")) b.onclick = () => openHelp(b.dataset.t);
   if (tab === "enc") encWire();
+  if (tab === "crit") critLoad();
   if (!RULES) loadRules();
 }
 /* 백과 — 검색 · 분류는 목록만 다시 그린다(입력 칸을 새로 만들지 않아 글자를 치는 중에도 안 끊긴다) */
@@ -264,4 +265,25 @@ $("acc-src").addEventListener("click", ev => {
   const v = b.dataset.v === "kma";
   if (v !== !!SET.gn_off) setGnOff(v);
 });
-
+/* 판정 기준 — 우려지역 유형마다 통제 · 사전대피 · 긴급대피 조건을 한 표로. 위 표 = 대시보드가 대조하는 것(숫자는 위키 판정값),
+   아래 = 위키 [[통제·대피 기준]] 원문 표(도 상황대응계획). 지구마다 따로 적힌 '지구 대피기준'은 그 지구 상세에서 */
+async function critLoad() {
+  const box = $("hp-crit");
+  if (!box) return;
+  const [L, W] = await Promise.all([getJson("/api/ai/ladder-list").catch(() => null), getJson(`/api/wiki/page?name=${encodeURIComponent("통제·대피 기준")}`).catch(() => null)]);
+  if (!$("hp-crit")) return;
+  const rows = L?.rows || [], fams = [...new Set(rows.map(r => r.fam))], stg = ["통제", "사전대피", "긴급대피"];
+  const cell = (f, s) => rows.filter(r => r.fam === f && r.stage === s)
+    .map(r => `<div class="cr${/없음/.test(r.src) ? " no" : ""}">${escH(r.rule)}<small>${escH(r.src)}</small></div>`).join(`<div class="or">또는</div>`) || `<span class="mute">—</span>`;
+  box.innerHTML = `<div class="critk">
+    <p>우려지역은 <b>유형마다 기준이 다르다</b>. 한 칸 안에서 <b>+ 는 모두 만족</b>(그리고), 조건이 여러 줄이면 <b>그중 하나만 만족</b>(또는)해도 그 단계다.
+      사전대피는 예보, 긴급대피는 실황이 기준이다. 대시보드는 지구 자리의 비(좌표가 있으면) 또는 읍면동에서 가장 많이 온 칸으로 견준다.</p>
+    <table><thead><tr><th>유형</th>${stg.map(s => `<th>${s}</th>`).join("")}</tr></thead>
+      <tbody>${fams.map(f => `<tr><th>${escH(f)}</th>${stg.map(s => `<td>${cell(f, s)}</td>`).join("")}</tr>`).join("")}</tbody></table>
+    <p class="mute">작은 글씨 = 쓰는 자료. 흐린 칸은 자료가 없어 '모름'으로 두는 조건. 하천 · 홍수주의보처럼 비가 아닌 조건(수위 · 특보)도 그 유형의 기준이다.</p>
+    <h4>지구 대피기준(원문)</h4>
+    <p>위 표와 별도로 <b>지구마다 시군이 적은 대피기준</b>이 있다(예: 누적강우 250mm 이상, 일강우 200mm 이상). 상황판단 창에서 지구를 고르면 원문과 % 가 나온다 —
+      원문 조건 중 가장 많이 찬 것을 % 로 본다(쉼표 · 띄어쓰기의 '그리고 / 또는'은 시군 담당자에게 확인 중).</p>
+    <h4>위키 원문 — 통제·대피 기준(도 상황대응계획)</h4>
+    ${W?.text ? `<div class="md">${sjMd(W.text.replace(/^# .*$/m, ""))}</div>` : `<p class="mute">위키 문서를 못 읽었다</p>`}</div>`;
+}

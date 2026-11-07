@@ -822,6 +822,13 @@ async def api_ai_wiki_put(body: dict):
     return {**r, "source": ai.wiki_source()[1], "default": ai.DEFAULT_WIKI}
 
 
+@app.get("/api/ai/ladder-list")
+async def api_ai_ladder_list():
+    """도움말 '판정 기준' — 대시보드가 우려지역 유형마다 대조하는 조건(숫자는 위키 판정값). 자료가 없어 '모름'으로 두는 것도."""
+    from . import ai
+    return {"rows": ai.ladder_list()}
+
+
 @app.get("/api/ai/rules")
 async def api_ai_rules():
     """위키 판정값(data/판정값.csv) — 도움말이 숫자를 채운다. 못 읽으면 기본값 + err."""

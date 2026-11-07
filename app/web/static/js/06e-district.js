@@ -161,14 +161,14 @@ function districtTip(r) {
     + (r.approx ? `<div class="d">위치는 근사 — 지번으로 못 찾아 그 리 · 읍면동 가운데(판정은 읍면동 기준)</div>` : "")
     + (r.rule ? `<div class="d">대피기준 ${escH(r.rule)}</div>` : "")
     + (r.shelter && r.shelter !== "–" ? `<div class="d">대피장소 ${escH(r.shelter)}</div>` : "")
-    + `<div class="d">누르면 상황판단 창에서 이 지구</div>`;
+    + `<div class="d">오른쪽 클릭 → 상황판단 모드</div>`;
 }
 function districtOpen(r) {
   const u = `/map.html?sj=1&sig=${encodeURIComponent(r.sigun)}&r=${encodeURIComponent(r.id)}`;
   if (!window.open(u, "gn-judge", "popup=1,width=1680,height=1000")) toast("팝업이 막혔다 — 이 사이트의 팝업을 허용한다");
 }
 TIPS.set("district-now", `위키 인명피해 우려지역 지구. 동그라미 색은 상황판단의 기준 % 중 가장 높은 단계(지도 기준 AWS · 격자를 따른다, 5분마다), 안의 그림은 유형.<br>
-  좌표는 연속지적도(국가공간정보포털) 필지 중심, 못 찾은 곳은 브이월드. 넓은 필지(하천 · 도로 · 임야)는 중심 한 점이라 실제 위험 지점과 다를 수 있다 — 위키 data/지구좌표_수동.csv 에 적으면 그것을 쓴다.`);
+  좌표는 연속지적도(국가공간정보포털) 필지 중심, 못 찾은 곳은 브이월드. 넓은 필지(하천 · 도로 · 임야)는 중심 한 점이라 실제 위험 지점과 다를 수 있다 — 위키 data/지구좌표_수동.csv 에 적으면 그것을 쓴다.<br>필지 모양: 시군을 눌러 확대한 뒤 그 안 읍면동을 누르면 더 확대되어 필지가 면으로 보인다(Ctrl+클릭 여러 곳, Esc 로 한 단계씩).`);
 /* 배지 그림 한 장(data URL) — 범례 · 상황판단 차트가 같은 그림을 쓴다 */
 const DZ_URL = {};
 function dzBadgeUrl(fam, lv, col) {                     // col 을 주면 위험도 대신 그 색(상황판단 차트의 유형 색)
@@ -203,9 +203,12 @@ function districtLegend() {
       + DZ_FAM.map(f => `<div class="rr">${dzBadge(f, 0)}<b>${f}</b><span>${rows.filter(r => r.fam === f).length}곳</span></div>`).join("")
       + `<div class="sec">색 = 기준 대비 % (${ACC_BASIS === "grid" ? "격자" : "AWS"})${DZ_TI ? ` · <b>${escH(DZ_TL)} 예상</b>(상황판단 재생)` : ""}</div>`
       + `<div class="keys2">${DZ_LV.map(lv => `<span><i class="dt" style="background:${dzColVar(lv)}"></i>${lv ? `${lv}%↑` : "50 아래"}</span>`).join("")}</div>`
-      + `<div class="nt">${DZ_PCT ? `70% 넘은 지구 ${hot}곳` : "위험도 계산 중…"} · ${selOn() ? `고른 시군 ${rows.length}곳` : `경남 ${rows.length}곳`}${g ? ` · 좌표 ${g.found}/${g.total}` : ""} — 확대하면 필지 모양</div>`;
+      + `<div class="nt">${DZ_PCT ? `70% 넘은 지구 ${hot}곳` : "위험도 계산 중…"} · ${selOn() ? `고른 시군 ${rows.length}곳` : `경남 ${rows.length}곳`}${g ? ` · 좌표 ${g.found}/${g.total}` : ""}</div>`
+      + `<div class="nt">필지 모양 보기: 시군을 누르고 → 그 안 읍면동을 누르면 확대 · 오른쪽 클릭 → 상황판단</div>`
+      + `<div class="nt"><button class="lk" data-crit>유형별 판정 기준표 ↗</button></div>`;
   box.innerHTML = `<div class="hd2" title="눌러서 닫기"><b>우려지역 지구</b><i class="inf" data-tip="district-now">i</i></div>` + body;
   box.querySelector(".hd2").onclick = ev => { if (!ev.target.closest(".inf")) setLyOpen(null); };
+  box.querySelector("[data-crit]")?.addEventListener("click", () => openHelp("crit"));
   for (const b of box.querySelectorAll("[data-dzs]")) b.onclick = () => {
     DZ_STYLE = b.dataset.dzs;
     try { localStorage.setItem("gn-dz-style", DZ_STYLE); } catch {}

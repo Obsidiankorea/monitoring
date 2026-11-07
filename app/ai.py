@@ -934,3 +934,26 @@ def reset_wiki_cache() -> None:
     _RULES.clear()
     from . import aireport
     aireport.reset_cache()
+
+
+def ladder_list() -> list[dict]:
+    """도움말 표 — 유형 · 단계 · 조건(ladders 의 규칙 글) · 쓰는 자료. 빈 줄 하나를 대조해 규칙 글만 꺼낸다(값은 안 본다)."""
+    row = {"rain": {"1h": 0, "3h": 0, "12h": 0, "24h": 0, "48h": 0}, "m15": 0, "fc_peak": 0, "fc_run30": 0, "ante": 0,
+           "fc_hours": [0] * 6, "fc_labels": [str(i) for i in range(6)]}
+
+    def src(rule: str) -> str:
+        if "홍수통제소" in rule:
+            return "하천 수위 · 홍수예보(홍수통제소)"
+        if "산림청" in rule:
+            return "산림청 산사태 예보 — 대시보드에 없음(모름)"
+        if "발령" in rule:
+            return "기상특보"
+        if "예보" in rule:
+            return "초단기 · 단기예보"
+        return "실황(AWS · 격자)"
+    out = []
+    for fam, cs in ladders(row, False, []).items():
+        for c in cs:
+            out.append({"fam": fam, "stage": c["stage"], "rule": c["rule"], "src": src(c["rule"])})
+    order = {"통제": 0, "사전대피": 1, "긴급대피": 2}
+    return sorted(out, key=lambda r: (list(FAMILY).index(r["fam"]) if r["fam"] in FAMILY else 9, order.get(r["stage"], 9)))
