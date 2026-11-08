@@ -11,6 +11,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 import re
+from datetime import datetime
 
 from . import ai, contacts, safety
 
@@ -69,6 +70,32 @@ def slide_site(rule: str, sl: dict) -> int | None:
     need = 2 if m.group(1) == "경보" else 1
     lv = max((sl[k]["lv"] for k in ("fcst", "pred") if sl.get(k)), default=0)
     return 100 if lv >= need else 0
+
+
+_SOIL = re.compile(r"토양\s*함수[^%]{0,30}?(\d+)\s*%")
+
+
+def soil_site(rule: str, pred_lv: int | None) -> dict | None:
+    """지구 기준의 '토양함수율 90%' — 산림청 예측정보(시군 단위)로 명백한 것만. 주의보 = 지수 80% · 경보 = 100%(위키 [[산사태 예측정보와 토양함수지수]]).
+    pred_lv: 2 경보 · 1 주의보 · 0 없음(받았는데 발령 없음 = 80% 미만) · None 받지 못함. 기준이 아니면 None.
+    st: met(충족) · check(80~100 사이라 산사태정보시스템에서 확인) · no(80% 미만) · unknown"""
+    m = _SOIL.search(rule or "")
+    if not m:
+        return None
+    need = int(m.group(1))
+    lo, hi = {2: (100, None), 1: (80, 100), 0: (None, 80)}.get(pred_lv, (None, None))
+    st = ("unknown" if pred_lv is None else "met" if lo is not None and lo >= need
+          else "no" if hi is not None and hi <= need and pred_lv == 0 else "check")
+    return {"need": need, "st": st, "lv": pred_lv,
+            "now": {2: "100%↑(경보)", 1: "80~100%(주의보)", 0: "80% 미만(발령 없음)"}.get(pred_lv)}
+
+
+def _pred_lv(sl: dict) -> int | None:
+    """산림청 예측정보 — 2시간 안에 받았으면 그 시군 단계(없으면 0), 못 받았으면 None(산사태는 호우 · 태풍 특보 때만 받는다)."""
+    at = safety._LIVE["at"].get("pred")
+    if not at or time.time() - datetime.fromisoformat(at).timestamp() > 2 * 3600:
+        return None
+    return (sl.get("pred") or {}).get("lv") or 0
 
 
 def _sit(sg: str, base: str, k: float, basis: str, add: tuple = (0.0, 0.0)) -> dict:
@@ -174,6 +201,7 @@ def rows_of(sg: str, base: str, k: float, add: tuple = (0.0, 0.0), series: bool 
     pg, pa = _pts(base, "grid"), _pts(base, "aws")
     dist = contacts.districts(sg)["emd"]
     sl = slide_of(sg)
+    plv = _pred_lv(sl)
     out = []
     for e in g["emd"]:
         for d in dist.get(e["emd"], []):
@@ -191,6 +219,7 @@ def rows_of(sg: str, base: str, k: float, add: tuple = (0.0, 0.0), series: bool 
                 if v and ss is not None:
                     v.update(site=ss, site_slide=True, top=max(v["top"], ss))
             out.append({"sigun": sg, "emd": e["emd"], **d, "b": b, "slide": sl if d["fam"] == "산사태" else None,
+                        "soil": soil_site(d["rule"], plv),
                         "where": "지구" if d["id"] in pg else "읍면동",
                         "fc6h": e.get("fc6h"), "later": e.get("later")})
     return out, g

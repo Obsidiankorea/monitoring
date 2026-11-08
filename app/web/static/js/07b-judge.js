@@ -6,7 +6,7 @@
    연락처는 /api/contacts(잠금 뒤) — AI 물어보기에는 넘기지 않는다. */
 const SJ_SOLO = new URLSearchParams(location.search).has("sj");
 const SJ = { open: false, sg: "all", k: 1, addH: 0, add24: 0, basis: "grid", cut: { on: true, pct: 70 }, d: null, log: [], st: null,
-  ct: null, q: [], llm: null, rep: null, seq: 0, sel: new URLSearchParams(location.search).get("r"), tab: "지금 할 일", more: false, wopen: false, msgs: [] };
+  ct: null, q: [], llm: null, rep: null, seq: 0, sel: new URLSearchParams(location.search).get("r"), tab: "단계판", more: false, ai: false, wopen: false, msgs: [] };
 try { Object.assign(SJ.cut, JSON.parse(localStorage.getItem("gn-sj-cut") || "{}")); SJ.basis = localStorage.getItem("gn-sj-basis") || "grid"; } catch {}
 SJ.pane = { l: true, r: true };                          // 왼쪽(매뉴얼) · 오른쪽(상세) 패널 — [ · ] 키
 try { Object.assign(SJ.pane, JSON.parse(localStorage.getItem("gn-sj-pane") || "{}")); } catch {}
@@ -85,6 +85,7 @@ function sjGroups() {
   }
   return out.sort((a, b) => a.sec - b.sec || b.top - a.top || a.soon - b.soon);
 }
+const SJ_SOIL = { met: "충족", check: "확인 필요", no: "미충족", unknown: "모름" };
 const SJ_SEC = ["결정 필요 — 기준을 넘었는데 아직 기록이 없다", "곧 넘음 — 3시간 안", "결정함", "지켜볼 곳"];
 function sjPct(c) { return c ? `<b class="pc t${sjLv(c.pct)}">${c.unk ? "모름" : `${c.pct}%`}</b>` : `<b class="pc">—</b>`; }
 function sjGroup(g) {
@@ -93,6 +94,7 @@ function sjGroup(g) {
     const b = sjB(r), p0 = SJ.ct?.people?.[r.id]?.[0];
     return `<button class="sb${r.id === SJ.sel ? " on" : ""}" data-r="${escH(r.id)}"><b>${escH(sjName(r))}</b><span>${escH(sjAddr(r).replace(`${r.emd} `, ""))}</span>`
       + `<em><i class="t${sjLv(b.top)}" title="${r.where === "지구" ? "이 지구 자리 비로 판정" : "읍면동 기준"}">${b.top}%${r.where === "지구" ? "" : "*"}</i> ${b.site != null ? `지구 기준 <i class="t${sjLv(b.site)}">${b.site_slide ? (b.site >= 100 ? "발령 중" : "발령 없음") : `${b.site}%`}</i>` : ""}</em>`
+      + (r.soil ? `<em class="soil s-${r.soil.st}" title="지구 기준의 토양함수 ${r.soil.need}% — 산림청 예측정보(시군)로">토양 ${SJ_SOIL[r.soil.st]}</em>` : "")
       + `<small>${p0 ? escH((p0.who || "").replace(/담당부서\s*/g, "")) : ""}</small></button>`;
   }).join("") + (!sel && g.rows.length > 4 ? `<button class="sb mr" data-r="${escH(g.rows[4].id)}">외 ${g.rows.length - 4}곳</button>` : "");
   const done = g.dec.length ? `<span class="dn">✔ ${escH(g.dec[0].act)} ${g.dec[0].at.slice(11, 16)}</span>` : "";
@@ -106,8 +108,7 @@ const sjParts = ps => ps.map(p => `<div class="pt"><span>${escH(p.label || "")}<
   <b>${p.now == null ? "모름" : `${p.now}`}<small>/${p.need}${escH(p.unit || "")}</small></b><em class="t${sjLv(p.pct ?? 0)}">${p.pct == null ? "" : `${p.pct}%`}</em></div>`).join("");
 function sjDetail() {
   const r = (SJ.d?.rows || []).find(x => x.id === SJ.sel);
-  if (!r) return `<div class="ph"><b>지구를 고르면</b><p>조건마다 지금 · 필요, 두 강수 기준, 담당 전화 · 문자, 결정이 여기 나온다.</p>
-    <p class="mute">가운데 묶음은 읍면동 · 유형별 — 좌표가 있는 지구는 그 자리 비로 따로 판정한다(좌표 없는 지구는 읍면동 기준).</p></div>`;
+  if (!r) return sjTimeline();                           // 지구를 안 골랐으면 단계 시간표(07d)
   const b = sjB(r), o = r.b[SJ.basis === "grid" ? "aws" : "grid"], recs = SJ.log.filter(x => x.sigun === r.sigun && x.emd === r.emd && x.fam === r.fam);
   const stg = SJ_STG.map(s => {
     const c = b.st[s];
@@ -126,7 +127,7 @@ function sjDetail() {
     return `<button class="ac${on ? " on" : ""}" data-act="${a}" data-s="${s}">${on ? "✔ " : ""}${a}</button>`;
   }).join("");
   const sl = r.slide && (r.slide.fcst || r.slide.pred);
-  return `<div class="dt"><div class="dh"><b>${escH(sjName(r))}</b><span>${escH(r.sigun)} ${escH(sjAddr(r))}</span><span>${escH(r.kind || r.fam)}${r.shelter && r.shelter !== "–" ? ` · 대피 ${escH(r.shelter)}` : ""}</span>
+  return `<button class="bk" data-unsel>← 단계 시간표</button><div class="dt"><div class="dh"><b>${escH(sjName(r))}</b><span>${escH(r.sigun)} ${escH(sjAddr(r))}</span><span>${escH(r.kind || r.fam)}${r.shelter && r.shelter !== "–" ? ` · 대피 ${escH(r.shelter)}` : ""}</span>
       ${sl ? `<span class="slb">산사태${escH((r.slide.fcst || r.slide.pred).kind)} ${r.slide.fcst ? "예보" : "예측"} 발령 중</span>` : ""}</div>
     <div class="dsec"><h5>위치</h5>${r.pos ? `<p>${r.pos[0].toFixed(5)}, ${r.pos[1].toFixed(5)} <span class="mute">— 지번 필지 중심</span></p>` : ""}
       <p class="mute">${r.where === "지구" ? "판정 비 = 이 지구 자리(둘레 1.5km 가장 많이 온 칸) · 예보는 읍면동"
@@ -138,15 +139,27 @@ function sjDetail() {
     ${r.rule ? `<div class="dsec"><h5>지구 기준 (원문) ${b.site != null ? sjPct({ pct: b.site }) : ""}</h5><div class="rl">${escH(r.rule)}</div>
       ${b.series?.site?.length ? `<p><b>${escH(siteText(b.series.site, SJ.d?.regions?.[r.fam]).replace("이 지구 자체 기준: ", "숫자로: "))}</b></p>` : ""}
       ${b.site_slide ? `<p class="mute">산사태 예보 발령이 기준 — ${b.site >= 100 ? "발령 중" : "발령 없음"}</p>` : sjParts(b.site_parts || [])}
-      <p class="mute">원문 조건 중 가장 많이 찬 것을 % 로 — 토양함수 등 자료 없는 조건은 빼고</p></div>` : ""}
+      ${r.soil ? `<div class="soilx s-${r.soil.st}"><b>토양함수 ${r.soil.need}% — ${SJ_SOIL[r.soil.st]}</b><span>${r.soil.now ? `산림청 예측정보(${escH(r.sigun)} 시군 단위): 지수 ${escH(r.soil.now)}` : "산림청 예측정보를 받지 못함(호우 · 태풍 특보 때만 받는다)"}</span>
+        ${r.soil.st === "check" ? `<span>80~100% 사이라 이 숫자로는 못 가린다 — 산사태정보시스템에서 이 읍면동 지수 확인</span>` : ""}</div>` : ""}
+      <p class="mute">원문 조건 중 가장 많이 찬 것을 % 로 — 토양함수는 산림청 예측정보(주의보 80% · 경보 100%)로 명백한 것만</p></div>` : ""}
     <div class="dsec"><h5>강수 (누적 · 시간당)</h5>${["grid", "aws"].map(k => r.b[k] ? `<div class="rn${k === SJ.basis ? " on" : ""}"><span>${SJ_BN[k]}</span><b>${r.b[k].rain["24h"] ?? "—"}㎜ · ${r.b[k].rain["1h"] ?? "—"}㎜/h</b><em>3시간 ${r.b[k].rain["3h"] ?? "—"}㎜</em></div>` : "").join("")}
       ${r.fc6h != null ? `<div class="rn"><span>앞으로</span><b>6시간 ${r.fc6h}㎜</b><em>${r.later ? `그 뒤 오늘 ${r.later.today} · 내일 ${r.later.tomorrow}㎜` : ""}</em></div>` : ""}</div>
     ${recs.length ? `<div class="dsec"><h5>이 묶음 기록</h5>${recs.slice(0, 6).map(x => `<div class="lg"><time>${x.at.slice(11, 16)}</time><b>${escH(x.act)}</b> ${escH(x.stage || "")} ${escH(x.note || "")}<i data-del="${x.id}">✕</i></div>`).join("")}</div>` : ""}</div>`;
 }
 /* 왼쪽 탭 — 지금 할 일(규칙 보고) · 위키 문서(문서 서식) · 물어보기 · 판단 기록 */
 const SJ_PG = {};
-const sjTabs = () => ["지금 할 일", "위기경보와 비상단계", "통제·대피 기준", "시군 상황관리반 행동매뉴얼",
-  ...(SJ.sg === "거제" ? ["거제시 단계별 업무"] : SJ.sg === "통영" ? ["통영시 단계별 업무"] : []), "물어보기", "판단 기록"];
+const sjTabs = () => ["단계판", "지금 할 일", "위기경보와 비상단계", "통제·대피 기준", "시군 상황관리반 행동매뉴얼",
+  ...(SJ.sg === "거제" ? ["거제시 단계별 업무"] : SJ.sg === "통영" ? ["통영시 단계별 업무"] : []), "판단 기록"];   // 물어보기는 떠 있는 AI 창(07d)
+/* 왼쪽 탭 아이콘 — 한 줄에 다 들어가게. 고른 탭만 이름까지, 마우스를 대면 전체 이름 */
+const SJ_TI = {
+  단계판: '<rect x="1.5" y="2" width="3.5" height="12" rx="1"/><rect x="6.25" y="2" width="3.5" height="8" rx="1"/><rect x="11" y="2" width="3.5" height="5" rx="1"/>',
+  "지금 할 일": '<path d="M2 4l1.3 1.3L5.6 3M2 8.5l1.3 1.3 2.3-2.3M2 13l1.3 1.3 2.3-2.3M8 4.2h6M8 8.7h6M8 13.2h6"/>',
+  "위기경보와 비상단계": '<path d="M8 1.8L15 14H1z"/><path d="M8 6.2v3.6M8 11.6v.4"/>',
+  "통제·대피 기준": '<path d="M6 2h7v12H6M9 8H1.5M4 5.5L1.5 8 4 10.5"/>',
+  "시군 상황관리반 행동매뉴얼": '<circle cx="5.5" cy="5" r="2.2"/><circle cx="11" cy="5.6" r="1.8"/><path d="M1.5 13.5c0-2.4 1.8-4 4-4s4 1.6 4 4M10 9.6c2.4-.4 4.5 1 4.5 3.9"/>',
+  "판단 기록": '<circle cx="8" cy="8" r="6.2"/><path d="M8 4.5V8l2.5 1.6"/>',
+  book: '<path d="M2 2.5h4.5A1.5 1.5 0 018 4v10a1.5 1.5 0 00-1.5-1.5H2zM14 2.5H9.5A1.5 1.5 0 008 4v10a1.5 1.5 0 011.5-1.5H14z"/>',
+};
 const SJ_TN = { "위기경보와 비상단계": "비상단계", "통제·대피 기준": "통제·대피", "시군 상황관리반 행동매뉴얼": "상황관리반", "거제시 단계별 업무": "거제 매뉴얼", "통영시 단계별 업무": "통영 매뉴얼" };
 const sjIn = s => escH(s).replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '<span class="wk">$2</span>').replace(/\[\[([^\]]+)\]\]/g, '<span class="wk">$1</span>')
   .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`([^`]+)`/g, "<code>$1</code>").replace(/&lt;br\s*\/?(&gt;|>)/g, "<br>");
@@ -183,16 +196,11 @@ async function sjTab(name) {
   const box = $("sj-l");
   box.querySelectorAll("[data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === name));
   const bd = box.querySelector(".mbd");
+  if (name === "단계판") { bd.innerHTML = sjBoard(); return; }
   if (name === "지금 할 일") {
     const r = SJ.rep;
     bd.innerHTML = r ? `${r.flash ? `<div class="co warning"><b class="ct">속보</b><p>${sjIn(r.flash.text)}</p></div>` : ""}` + (r.sections || []).map(s => `<h4>${sjIn(s.h)}</h4>`
       + s.items.map(x => `<div class="li"><i>·</i><span>${sjIn(x)}</span></div>`).join("")).join("") : `<p class="mute">보고를 만드는 중…</p>`;
-    return;
-  }
-  if (name === "물어보기") {
-    bd.innerHTML = `<div class="chips">${SJ.q.map(q => `<button data-q="${q.id}">${escH(q.label)}</button>`).join("")}</div><div id="sj-msgs">${SJ.msgs.join("")}</div>
-      <form id="sj-ask"><input maxlength="300" placeholder="${SJ.llm ? "AI 에게 묻기 — 지금 수치 · 위키 · 판단 기록을 보고 답한다" : "AI 꺼짐 — 설정 › AI 답변"}"><button>묻기</button></form>
-      <p class="mute">단추는 규칙이라 바로 답한다 · 입력 칸은 AI(연락처는 넘기지 않는다)</p>`;
     return;
   }
   if (name === "판단 기록") {
@@ -226,7 +234,8 @@ function sjRender() {
       <div class="pop" id="sj-wpop"${SJ.wopen ? "" : " hidden"}><div class="kn"><span>매시간 더</span><input type="number" id="sj-addh" min="0" max="100" step="5" value="${SJ.addH}"><span>㎜ · 앞으로 24시간</span></div>
         <div class="kn"><span>24시간 안에 더</span><input type="number" id="sj-add24" min="0" max="500" step="10" value="${SJ.add24}"><span>㎜ · 고루 나눠</span></div>
         <div class="kn"><span></span><button id="sj-k0" class="g">처음대로</button><button id="sj-wok" class="g">닫기</button></div></div></div>
-    <span class="pn"><button data-pane="l" class="${SJ.pane.l ? "on" : ""}" title="왼쪽 패널(매뉴얼 · 물어보기) 열기 · 닫기 — [" aria-label="왼쪽 패널 열기 · 닫기">◧</button><button data-pane="r" class="${SJ.pane.r ? "on" : ""}" title="오른쪽 패널(지구 상세) 열기 · 닫기 — ]" aria-label="오른쪽 패널 열기 · 닫기">◨</button></span>
+    <button class="aib${SJ.ai ? " on" : ""}" id="sj-aib" title="AI 묻기 — 떠 있는 창">AI 묻기</button>
+    <span class="pn"><button data-pane="l" class="${SJ.pane.l ? "on" : ""}" title="왼쪽 패널(단계판 · 매뉴얼) 열기 · 닫기 — [" aria-label="왼쪽 패널 열기 · 닫기">◧</button><button data-pane="r" class="${SJ.pane.r ? "on" : ""}" title="오른쪽 패널(시간표 · 지구 상세) 열기 · 닫기 — ]" aria-label="오른쪽 패널 열기 · 닫기">◨</button></span>
     ${SJ_SOLO ? "" : `<button class="x" id="sj-x" aria-label="닫기 (Esc)">✕</button>`}`;
   sjPane("l", SJ.pane.l); sjPane("r", SJ.pane.r);
   let cur = -1, body = "";
@@ -241,8 +250,10 @@ function sjRender() {
     + `<p class="mute foot">좌표가 있는 지구는 그 자리 비, 없으면(*) 읍면동 최대 칸 · 예보는 읍면동 · 색: 50 · 70 · 80 · 90 · 100% 이상</p>`;
   $("sj-d").innerHTML = sjDetail();
   if (!$("sj-l").querySelector(".mtab")) $("sj-l").innerHTML = `<div class="mtab"></div><div class="mbd"></div>`;
-  $("sj-l").querySelector(".mtab").innerHTML = sjTabs().map(n => `<button data-tab="${escH(n)}">${escH(SJ_TN[n] || n)}</button>`).join("");
-  sjTab(sjTabs().includes(SJ.tab) ? SJ.tab : "지금 할 일");
+  $("sj-l").querySelector(".mtab").innerHTML = sjTabs().map(n => `<button data-tab="${escH(n)}" data-tip="${escH(n)}" aria-label="${escH(n)}">`
+    + `<svg viewBox="0 0 16 16" aria-hidden="true">${SJ_TI[n] || SJ_TI.book}</svg><span>${escH(SJ_TN[n] || n)}</span></button>`).join("");
+  sjTab(sjTabs().includes(SJ.tab) ? SJ.tab : "단계판");
+  if (SJ.ai) sjAiDraw();
 }
 async function sjDecide(body) {
   try {
@@ -256,7 +267,7 @@ async function sjDecide(body) {
 }
 async function sjAsk(body, label) {
   const i = SJ.msgs.push(`<div class="msg me">${escH(label)}</div><div class="msg ai"><span class="mute">답을 찾는 중…${body.text ? " (AI — 로컬이면 1분쯤)" : ""}</span></div>`) - 1;
-  if (SJ.tab === "물어보기") sjTab("물어보기");
+  SJ.ai = true; sjAiDraw(); $("sj-aib")?.classList.add("on");
   let a;
   try {
     const res = await fetch("/api/ai/ask", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sigun: SJ.sg === "all" ? null : SJ.sg, ...body }) });
@@ -264,7 +275,7 @@ async function sjAsk(body, label) {
     if (!res.ok) throw new Error(a.detail || res.status);
   } catch (e) { a = { sections: [{ h: "답", items: ["못 받았다 — " + e.message] }] }; }
   SJ.msgs[i] = `<div class="msg me">${escH(label)}</div><div class="msg ai">${a.text ? `<div class="mdt">${aiMd(a.text)}</div>` : aiSections(a.sections || [])}<div class="mute">${escH(a.source || "")}</div></div>`;
-  if (SJ.tab === "물어보기") { sjTab("물어보기"); $("sj-msgs").lastElementChild?.scrollIntoView({ block: "end" }); }
+  if (SJ.ai) sjAiDraw();
 }
 function sjPick(sg, remote) {
   SJ.sg = sg; SJ.more = false; SJ.sel = null;

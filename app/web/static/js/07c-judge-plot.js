@@ -62,7 +62,7 @@ function sjpPlane(T, rows) {
   const sel = rows.find(x => x.r.id === SJ.sel), tx = sel ? (reg[sel.r.fam]?.texts || []) : [];
   const st = sel ? siteText(sjB(sel.r).series.site, reg[sel.r.fam]) : "";
   const sk = multi ? `<div class="ppk big sgk">${sgs.map(g => `<span><i style="background:${sgCol(g)}"></i>${escH(g)}</span>`).join("")}</div>` : "";
-  return `<div class="ppk big">${ppKey(reg[fams[0]], sel ? sjB(sel.r).series.site : [])}<span class="mute">영역 = 도(행안부) 공통 기준</span></div>${sk}<div class="ppw" style="grid-template-columns:repeat(${fams.length}, minmax(0, 1fr))">${panels.join("")}</div>`
+  return `<div class="ppk big">${ppKey(reg[fams[0]], sel ? sjB(sel.r).series.site : [])}<span class="mute">영역 = 도(행안부) 공통 기준</span>${SJP.tc || sel ? sjpTimeKey(T) : ""}</div>${sk}<div class="ppw" style="grid-template-columns:repeat(${fams.length}, minmax(0, 1fr))">${panels.join("")}</div>`
     + (st ? `<p><b>${escH(sjName(sel.r))}</b> — ${escH(st)}</p>` : "")
     + (tx.length ? `<p class="mute">${escH(sjName(sel.r))} — 비가 아닌 조건: ${tx.map(x => `${escH(x.stage)} ${escH(x.text)}`).join(" · ")}</p>` : "");
 }
@@ -108,11 +108,23 @@ function sjPlotInner() {
 const sjpCt = rows => SJP.mode === "plane"
   ? `${rows.length}곳 · 그때 ${["통제", "사전대피", "긴급대피"].filter(st => PP_SHOW.has(st)).map(st => `${st} <b style="color:${STG_COL[st]}">${rows.filter(x => { const a = sjB(x.r)?.series?.xy?.[st]; return a && (sjpStageP(a[Math.min(SJP.t, a.length - 1)]) ?? 0) >= 100; }).length}</b>`).join(" · ")}`
   : `${rows.length}곳 · 그때 100%↑ <i class="t100">${rows.filter(x => x.v[Math.min(SJP.t, x.v.length - 1)] >= 100).length}</i>`;
+/* 시간 색 막대 — 자취와 같은 색(ppTimeCol)을 칸마다, 6시간마다 눈금 + '몇 시간 뒤'. 평면 오른쪽 위 */
+function sjpTimeKey(T) {
+  const n = T.length;
+  if (n < 2) return "";
+  const W = 300, L = 4, R = 16, w = (W - L - R) / (n - 1), X = i => L + i * w;
+  let s = Array.from({ length: n - 1 }, (_, i) => `<rect x="${X(i).toFixed(1)}" y="4" width="${(w + 0.5).toFixed(1)}" height="8" fill="${ppTimeCol((i + 1) / (n - 1))}"/>`).join("");
+  const st = n > 30 ? 6 : 3;
+  for (let i = 0; i < n; i += st) {
+    s += `<line x1="${X(i).toFixed(1)}" x2="${X(i).toFixed(1)}" y1="2" y2="15" stroke="var(--ink)" stroke-width="1"/>`
+      + `<text x="${X(i).toFixed(1)}" y="26" text-anchor="${i ? "middle" : "start"}" font-size="10" fill="var(--ink-2)">${i ? `+${i}h` : "지금"}</text>`;
+  }
+  return `<span class="tkey" title="자취 색 = 시각 — 진한 회색(지금) → 빨강 → 노랑 → 초록 → 파랑 → 보라(${escH(T[n - 1] || "")})"><svg viewBox="0 0 ${W} 30" width="${W}" height="30" role="img" aria-label="시간 색 눈금">${s}</svg></span>`;
+}
 /* 그림 밑 한 줄 — 유형 색 · 시간 색이 무엇인지 */
 function sjpKey(T, rows) {
   const out = [];
   if (SJP.mode !== "plane" && sjpMany(rows)) out.push([...new Set(rows.map(x => x.r.fam))].map(f => `<span><i style="background:${SJP_FC[f]}"></i>${escH(f)}</span>`).join(""));
-  if (SJP.mode === "plane" && SJP.tc) out.push(`<span class="tk">지금<b></b>${escH(T[T.length - 1] || "")}</span>`);
   return out.length ? `<div class="sjp-key">${out.join("")}</div>` : "";
 }
 const sjpGraph = (T, rows) => T.length < 2 ? `<p class="mute">예보가 아직 없어 그리지 못한다</p>` : !rows.length ? `<p class="mute">거른 조건에 맞는 지구가 없다</p>`
@@ -125,6 +137,7 @@ function sjpMove() {
   $("sjp-g").innerHTML = sjpGraph(T, rows);
   $("sjp-ct").innerHTML = sjpCt(rows);
   $("sjp-t").value = SJP.t;
+  sjbTick();
   $("sjp-t").nextElementSibling.textContent = T[SJP.t] || "지금";
   document.querySelector("#sj-plot [data-pp]").textContent = SJP.play ? "❚❚" : "▶";
 }

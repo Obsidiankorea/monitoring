@@ -18,6 +18,7 @@ import json
 import os
 import re
 import sys
+import threading
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 from functools import lru_cache
@@ -342,11 +343,10 @@ def ladders(r: dict, night: bool, alerts: list[str], rv: dict | None = None, fld
             {"stage": "사전대피", "rule": f"취약시간대(21~06시) {L['사전대피_야간예보시우량']}㎜/h↑ 예보",
              "st": ("no" if not night else _st(fpk, L["사전대피_야간예보시우량"])),
              "gap": _gap(one("예보 시우량", fpk, L["사전대피_야간예보시우량"], "㎜/h")) if night else None},
-            {"stage": "긴급대피", "rule": f"{L['긴급대피_시우량']}㎜/h↑ + 일 {L['긴급대피_일']}㎜↑(실황)",
-             "st": _all(_st(o1, L["긴급대피_시우량"]), _st(o24, L["긴급대피_일"])),
-             "gap": _gap(one("1시간", o1, L["긴급대피_시우량"], "㎜/h"), cum("24시간", o24, L["긴급대피_일"]))},
-            {"stage": "긴급대피", "rule": f"누적 {L['긴급대피_누적']}㎜↑(실황)", "st": _st(o48, L["긴급대피_누적"]),
-             "gap": _gap(cum("48시간", o48, L["긴급대피_누적"]))},
+            # 위키 표는 두 줄('또는')이지만 하나로 묶는다(2026-11 결정) — '또는'이면 누적 270 만으로, 시간당 비 없이도 긴급대피가 됐다
+            {"stage": "긴급대피", "rule": f"누적 {L['긴급대피_누적']}㎜↑ + {L['긴급대피_시우량']}㎜/h↑ + 일 {L['긴급대피_일']}㎜↑(실황)",
+             "st": _all(_st(o48, L["긴급대피_누적"]), _st(o1, L["긴급대피_시우량"]), _st(o24, L["긴급대피_일"])),
+             "gap": _gap(cum("48시간", o48, L["긴급대피_누적"]), one("1시간", o1, L["긴급대피_시우량"], "㎜/h"), cum("24시간", o24, L["긴급대피_일"]))},
         ],
         "하천": [
             {"stage": "통제", "rule": f"{H['통제_시우량']}㎜/h↑ {H['통제_지속시간']}시간 이상 지속 예보", "st": _st(f3, H["통제_지속시간"]),
@@ -385,9 +385,18 @@ def _no_wiki(vault, sigun, emd=None, kind="all"):
     return NO_WIKI
 
 
-@lru_cache(maxsize=1)
+_LK_LOCK = threading.Lock()
+
+
 def _lookup_fn():
-    """위키 tools/lookup.py. 위키가 없는 PC(행정 PC 등)면 빈 결과 — 보고는 수치만으로 돌아간다(deploy.sh 의 경고와 같다)."""
+    """위키 tools/lookup.py. 위키가 없는 PC(행정 PC 등)면 빈 결과 — 보고는 수치만으로 돌아간다(deploy.sh 의 경고와 같다).
+    잠금 — 판정은 시군 18곳을 스레드로 돈다. 처음에 여럿이 동시에 import 하면 한쪽이 sys.modules 를 지워 KeyError('lookup') 가 났다."""
+    with _LK_LOCK:
+        return _lookup_load()
+
+
+@lru_cache(maxsize=1)
+def _lookup_load():
     sys.modules.pop("lookup", None)                     # 위키를 바꿨으면 그 쪽 도구로
     if not (wiki() / "tools" / "lookup.py").is_file():
         return _no_wiki
@@ -934,7 +943,7 @@ def set_wiki(path: str) -> dict:
 def reset_wiki_cache() -> None:
     _WS[1] = None
     _RULES.pop("out", None)
-    _lookup_fn.cache_clear()
+    _lookup_load.cache_clear()
     _LK.clear()
     _GET.clear()
     _RULES.clear()
@@ -978,8 +987,8 @@ def regions() -> dict:
             {"stage": "통제", "kind": "rect", "x": L["통제_누적"], "y": L["통제_예보시우량"], "note": "예보"},
             {"stage": "사전대피", "kind": "rect", "x": L["사전대피_누적"], "y": L["사전대피_예보시우량"], "note": "예보"},
             {"stage": "사전대피", "kind": "band", "y": L["사전대피_야간예보시우량"], "night": True, "note": "취약시간(21~06시) 예보"},
-            {"stage": "긴급대피", "kind": "rect", "x": L["긴급대피_일"], "y": L["긴급대피_시우량"], "note": "실황 · 가로는 일강우"},
-            {"stage": "긴급대피", "kind": "vband", "x": L["긴급대피_누적"], "note": "실황"}], "texts": nonrain("산사태")},
+            {"stage": "긴급대피", "kind": "rect", "x": L["긴급대피_누적"], "y": L["긴급대피_시우량"], "note": f"실황 · 일 {L['긴급대피_일']}㎜ 도 함께"}],
+            "texts": nonrain("산사태")},
         "하천": {"x": "누적", "xu": "㎜", "areas": [
             {"stage": "통제", "kind": "band", "y": H["통제_시우량"], "note": f"{H['통제_지속시간']}시간 이상 지속 예보"},
             {"stage": "사전대피", "kind": "rect", "x": H["사전대피_누적"], "y": H["사전대피_예보시우량"], "note": "예보"},

@@ -60,7 +60,7 @@ def test_ladder_capped_forecast_makes_50mm_condition_unknown():
 
 
 def test_ladder_actual_rain_rule_mixes_hourly_and_cumulative():
-    c = _rule(ai.ladders(_row(), False, []), "산사태", "긴급대피", "50㎜/h")
+    c = _rule(ai.ladders(_row(), False, []), "산사태", "긴급대피", "누적")      # 누적 · 시간당 · 일 — 하나로(그리고)
     g = c["gap"]
     assert (g["pct"], g["by"], g["unit"]) == (10, "1시간", "㎜/h")
     assert g["eta"] is None                                    # 1시간 실황은 예보로 닿는 시각을 못 말한다
@@ -75,6 +75,13 @@ def test_ladder_rules_without_numbers_have_no_gap():
 def test_night_rule_gap_only_at_night():
     assert _rule(ai.ladders(_row(), False, []), "산사태", "사전대피", "취약시간대")["gap"] is None
     assert _rule(ai.ladders(_row(), True, []), "산사태", "사전대피", "취약시간대")["gap"]["pct"] == 83
+
+
+def test_landslide_emergency_is_one_and_rule():
+    """산사태 긴급대피 — 누적 270 · 시간당 50 · 일 170 을 '그리고'로(2026-11). 누적만 차고 시간당 비가 없으면 긴급대피 아님."""
+    lad = ai.ladders(_row(rain={"1h": 5, "3h": 20, "24h": 200, "48h": 300}), False, [])
+    ev = [c for c in lad["산사태"] if c["stage"] == "긴급대피"]
+    assert len(ev) == 1 and ev[0]["st"] == "no" and ev[0]["gap"]["by"] == "1시간"
 
 
 def _c(stage, st):

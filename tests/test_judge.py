@@ -21,9 +21,10 @@ def test_eta_runs_into_short_forecast():
     r = {"rain": {"1h": 5, "3h": 10, "24h": 245, "48h": 245}, "fc_peak": 4, "fc_run30": 0, "m15": 1, "ante": 0,
          "fc_hours": [4] * 6, "fc_labels": ["19", "20", "21", "22", "23", "00"]}
     pick = lambda r: next(x for x in ai.ladders(r, False, [])["산사태"] if x["rule"].startswith("누적"))  # noqa: E731
-    assert pick(r)["gap"]["eta"]["at"] is None                     # 245 + 24 = 269
+    acc = lambda r: next(p for p in pick(r)["gap"]["parts"] if p["label"] == "48시간")["eta"]  # noqa: E731
+    assert acc(r)["at"] is None                                    # 245 + 24 = 269
     r |= {"eta_hours": [4] * 6 + [10, 10], "eta_labels": r["fc_labels"] + ["내일 01", "내일 02"]}
-    assert pick(r)["gap"]["eta"]["at"] == "내일 01"
+    assert acc(r)["at"] == "내일 01"
 
 
 def test_judge_pack_picks_best_per_stage_and_site_rule():
@@ -60,7 +61,8 @@ def test_district_point_rain_redoes_ladder_and_site_rule():
     assert p["rain"]["24h"] == 120 and p["rain"]["12h"] == 200 and p["m15"] == 2   # 없는 창은 읍면동 값
     assert p["sites"][0]["max_pct"] == 48 and set(p["ladders"]) == {"산사태"}
     full = judge.pack({**e, "ladders": ai.ladders(e, False, [])}, "산사태", "")
-    assert judge.pack(p, "산사태", "누적강우 250mm이상")["top"] < full["top"]
+    acc = lambda x: next(q["now"] for q in x["st"]["긴급대피"]["parts"] if q["label"] == "48시간")  # noqa: E731
+    assert acc(judge.pack(p, "산사태", "누적강우 250mm이상")) == 120 and acc(full) == 270
 
 
 def test_point_max_looks_at_neighbours():
@@ -97,7 +99,7 @@ def test_regions_and_site_area():
     r = ai.regions()
     assert set(r) == {"산사태", "하천", "지하공간"} and r["지하공간"]["x"] == "15분"
     kinds = [(a["stage"], a["kind"]) for a in r["산사태"]["areas"]]
-    assert ("긴급대피", "rect") in kinds and ("긴급대피", "vband") in kinds          # '또는' — 의자 모양
+    assert ("긴급대피", "rect") in kinds and ("긴급대피", "vband") not in kinds      # 2026-11 — 긴급대피는 '그리고' 네모 하나
     assert any("발령" in t["text"] for t in r["하천"]["texts"])                         # 비가 아닌 조건은 글로
     a = ai.site_area("누적강우 250mm이상, 일강우 200mm이상")
     assert len(a) == 1 and a[0]["kind"] == "vband" and a[0]["x"] == 250                 # 둘 다 가로 — 큰 값
@@ -106,3 +108,12 @@ def test_regions_and_site_area():
     a = ai.site_area("누적강우 200mm 이상 또는 시간당 50mm 이상")
     assert [x["kind"] for x in a] == ["vband", "band"]                                    # 또는 = 의자 모양
     assert ai.site_area("") == []
+
+
+def test_soil_site_only_obvious():
+    """토양함수율 90% — 산림청 경보면 충족, 주의보면 확인 필요, 발령 없음이면 미충족(80% 미만), 못 받았으면 모름. 75% 는 주의보면 충족."""
+    from app import judge
+    r90, r75 = "누적 250mm ※ 토양함수율 90% 이상 적용", "산사태정보시스템토양함수지수실황및1시간예측75%이상유지될경우"
+    assert [judge.soil_site(r90, lv)["st"] for lv in (2, 1, 0, None)] == ["met", "check", "no", "unknown"]
+    assert judge.soil_site(r75, 0)["need"] == 75 and [judge.soil_site(r75, lv)["st"] for lv in (1, 0)] == ["met", "check"]
+    assert judge.soil_site("토양함수량 100% 도달 시", 1)["st"] == "check" and judge.soil_site("누적 250mm", 2) is None

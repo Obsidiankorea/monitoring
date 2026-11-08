@@ -1522,9 +1522,19 @@ body.sj-on > header, body.sj-on #stage, body.sj-on #tl, body.sj-on #rail { displ
 #sj .x { background: transparent; border: 0; color: var(--ink-3); font-size: 18px; }
 /* 왼쪽 — 매뉴얼 탭 */
 #sj .sj-l { min-height: 0; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
-#sj .mtab { display: flex; flex-wrap: wrap; gap: 0 2px; padding: 4px 6px 0; border-bottom: 1px solid var(--line); }
-#sj .mtab button { font-size: 12px; background: transparent; border: 0; border-bottom: 2px solid transparent; color: var(--ink-3); padding: 5px 7px; }
+#sj .mtab { display: flex; flex-wrap: nowrap; gap: 0 2px; padding: 4px 6px 0; border-bottom: 1px solid var(--line); position: relative; z-index: 2; }
+#sj .mtab button { position: relative; display: flex; align-items: center; gap: 5px; min-width: 32px; height: 32px; justify-content: center; font-size: 12px; white-space: nowrap;
+  background: transparent; border: 0; border-bottom: 2px solid transparent; color: var(--ink-3); padding: 0 7px; cursor: pointer; }
+#sj .mtab button svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+#sj .mtab button span { display: none; }
+#sj .mtab button.on span { display: inline; }                         /* 고른 탭만 이름까지 */
+#sj .mtab button:hover { color: var(--ink); background: var(--panel-2); }
+#sj .mtab button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 #sj .mtab button.on { color: var(--ink); border-bottom-color: var(--accent); }
+#sj .mtab button[data-tip]:hover::after, #sj .mtab button[data-tip]:focus-visible::after { content: attr(data-tip); position: absolute; top: calc(100% + 4px); left: 0;
+  padding: 4px 8px; border-radius: 6px; background: var(--raised); border: 1px solid var(--line); color: var(--ink); font-size: 11.5px; white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, .35); pointer-events: none; z-index: 3; }
+#sj .mtab button.on[data-tip]:hover::after { display: none; }            /* 이름이 이미 보인다 */
 #sj .mbd { flex: 1; overflow-y: auto; padding: 10px 14px 14px; font-size: 13px; line-height: 1.6; color: var(--ink-2); }
 #sj .mbd .src { font-size: 11px; color: var(--ink-3); margin-bottom: 6px; }
 #sj .mbd h3 { font-size: 16px; color: var(--ink); margin: 4px 0 8px; }
@@ -1784,3 +1794,57 @@ body.sj-on > header, body.sj-on #stage, body.sj-on #tl, body.sj-on #rail { displ
 #sj .ppw .sjp-svg.pp { border-radius: 8px; }
 #sj .ppk.sgk { gap: 4px 10px; }
 #sj .ppk.sgk i { width: 10px; height: 10px; border-radius: 50%; }
+/* 상황판단 — 단계판(07d) */
+#sj .kbh { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-bottom: 10px; position: sticky; top: -12px; background: var(--panel); padding: 4px 0; z-index: 1; }
+#sj .kbh div { border-radius: 6px; padding: 4px 6px; background: color-mix(in oklab, var(--kc) 22%, var(--panel)); border-top: 3px solid var(--kc); }
+#sj .kbh em { display: block; font: 600 10.5px var(--sans); font-style: normal; color: var(--ink-2); white-space: nowrap; }
+#sj .kbh b { font: 700 18px/1.1 var(--mono, var(--sans)); font-variant-numeric: tabular-nums; }
+#sj .kb { margin: 0 0 12px; }
+#sj .kb h5 { display: flex; justify-content: space-between; margin: 0 0 5px; padding-left: 7px; border-left: 3px solid var(--kc); font-size: 12px; color: var(--ink); }
+#sj .kb h5 span { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+#sj .kc { display: block; width: 100%; text-align: left; margin: 0 0 4px; padding: 6px 8px 6px 10px; border: 1px solid var(--line); border-left: 3px solid var(--kc);
+  border-radius: 6px; background: var(--panel-2); color: var(--ink); cursor: pointer; }
+#sj .kc:hover, #sj .kc.on { background: color-mix(in oklab, var(--kc) 14%, var(--panel-2)); }
+#sj .kc.on { outline: 1px solid var(--kc); }
+#sj .kc.need { border-style: dashed; border-left-style: solid; }
+#sj .kc b { display: block; font-size: 12.5px; }
+#sj .kc b i { font-style: normal; color: var(--ink-3); font-weight: 500; }
+#sj .kc b small { color: var(--ink-3); font-weight: 500; }
+#sj .kc span { display: flex; gap: 8px; font-size: 11.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+#sj .kc em { font-style: normal; font-size: 11px; }
+#sj .kc em.w { color: #F59E0B; }
+#sj .kc em.sl { color: #F59E0B; } #sj .kc em.sl.ok { color: var(--ink-2); }
+/* 단계 시간표 — 오른쪽 */
+#sj .tl h4 { margin: 0 0 6px; font-size: 13px; display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+#sj .tl h4 .mute { font-weight: 400; font-size: 11px; }
+#sj .tls { width: 100%; height: auto; display: block; }
+#sj .tls .tlr { cursor: pointer; }
+#sj .tls .tlr:hover rect:first-child, #sj .tls .tlr.on rect:first-child { fill: var(--panel-2); }
+#sj .tlk { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 6px 0; font-size: 11px; color: var(--ink-2); }
+#sj .tlk i { display: inline-block; width: 12px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: 0; }
+#sj .tlk i.nt { background: rgba(59, 130, 246, .25); }
+#sj .tlk i.ss { width: 12px; height: 0; border-top: 2px dashed #F59E0B; border-radius: 0; vertical-align: 3px; }
+#sj .tlk i.dc { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--ink); }
+#sj .tlw { margin: 4px 0; padding: 6px 8px; border-radius: 6px; font-size: 12px; background: color-mix(in oklab, #F59E0B 14%, var(--panel)); color: var(--ink); }
+#sj .bk { margin: 0 0 8px; padding: 3px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-2); color: var(--ink-2); font-size: 12px; cursor: pointer; }
+/* 토양 */
+#sj .soil { font-style: normal; font-size: 10.5px; padding: 0 5px; border-radius: 4px; margin-left: 4px; border: 1px solid var(--line); color: var(--ink-2); }
+#sj .soil.s-met { border-color: var(--t100); color: var(--t100); } #sj .soil.s-check { border-color: #F59E0B; color: #F59E0B; }
+#sj .soilx { display: grid; gap: 2px; margin: 6px 0; padding: 6px 8px; border-radius: 6px; background: var(--panel-2); border-left: 3px solid var(--line); font-size: 12px; }
+#sj .soilx.s-met { border-left-color: var(--t100); } #sj .soilx.s-check { border-left-color: #F59E0B; }
+#sj .soilx span { color: var(--ink-2); }
+/* AI 묻기 — 떠 있는 창 */
+#sj .aib { padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-2); color: var(--ink); font-size: 12px; cursor: pointer; }
+#sj .aib.on { border-color: #60A5FA; color: #60A5FA; }
+#sj .sj-ai { position: fixed; right: 16px; bottom: 16px; width: min(440px, calc(100vw - 32px)); max-height: min(620px, calc(100vh - 90px)); z-index: 30;
+  display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, .45); }
+#sj .sj-ai[hidden] { display: none; }
+#sj .sj-ai header { display: flex; align-items: baseline; gap: 8px; }
+#sj .sj-ai header .mute { flex: 1; font-size: 11px; }
+#sj .sj-ai header button { border: 0; background: none; color: var(--ink-2); cursor: pointer; font-size: 14px; }
+#sj .sj-ai #sj-msgs { flex: 1; min-height: 80px; overflow-y: auto; }
+#sj .sj-ai form { display: flex; gap: 6px; }
+#sj .sj-ai form input { flex: 1; }
+#sj .mtab button:nth-last-child(-n+3)::after { left: auto !important; right: 0; }   /* 오른쪽 탭은 패널 밖으로 안 나가게 */
+#sj .ppk.big .tkey { margin-left: auto; display: inline-flex; align-items: center; }   /* 시간 색 — 평면 오른쪽 위 */
