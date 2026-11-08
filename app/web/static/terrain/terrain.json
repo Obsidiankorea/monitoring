@@ -1,0 +1,15 @@
+{
+ "S": 4,
+ "bbox": {
+  "i0": 1121,
+  "i1": 1536,
+  "j0": 754,
+  "j1": 1131,
+  "w": 416,
+  "h": 378
+ },
+ "low_m": 10.0,
+ "zoom": 11,
+ "built": "2026-11-09",
+ "source": "AWS Terrain Tiles (Terrarium) — Mapzen/SRTM 등"
+}

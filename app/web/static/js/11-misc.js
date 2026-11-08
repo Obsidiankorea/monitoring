@@ -687,6 +687,8 @@ document.addEventListener("keydown", ev => {
   else if (ev.key === "n" || ev.key === "N") setOverlay("flood", !OV.has("flood"));
   else if (ev.key === "o" || ev.key === "O") setOverlay("tide", !OV.has("tide"));
   else if (ev.key === "e" || ev.key === "E") setOverlay("temp", !OV.has("temp"));
+  else if (ev.key === "y" || ev.key === "Y") setOverlay("relief", !OV.has("relief"));
+  else if (ev.key === "z" || ev.key === "Z") setOverlay("low", !OV.has("low"));
   else if ((ev.key === "m" || ev.key === "M") && !CASE) setHeat(!HEAT);
   else if (ev.key === "b" || ev.key === "B") toggleBasis();
   else if (ev.key === "f" || ev.key === "F") toggleAccFc();
@@ -766,6 +768,7 @@ async function boot() {
   if (SAF_IDS.some(id => OV.has(id))) loadSafety();
   if (OV.has("district")) loadDistrict();
   if (OV.has("tide")) loadTide();
+  glTerrain();
   vsrtN = +SET.vsrt_n || 1; x4 = !!SET.x4;
   applyAccFull(); applyHdrPin();
   // 색 — ?pal=kma|blue 가 서버 설정보다 먼저(벽면 화면 고정용). 기상청 색은 서버가 뽑아 둔 범례를 받아 와야 쓴다

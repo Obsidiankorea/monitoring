@@ -32,6 +32,9 @@ const GL_LAYERS = [
   { id: "rain", type: "raster", source: "rain", paint: { "raster-resampling": "nearest", "raster-fade-duration": 0, "raster-opacity-transition": { duration: 300 } } },
   { id: "ghost", type: "raster", source: "ghost", paint: { "raster-resampling": "nearest", "raster-fade-duration": 0, "raster-opacity": 0 } },
   { id: "hatch", type: "raster", source: "hatch", paint: { "raster-fade-duration": 0 } },
+  // 지형(레이어 relief · low) — 강수 위 · 경계 밑. 미리 만든 그림 한 장씩(tools/build_terrain.py)
+  { id: "low", type: "raster", source: "low", layout: { visibility: "none" }, paint: { "raster-fade-duration": 0 } },
+  { id: "relief", type: "raster", source: "relief", layout: { visibility: "none" }, paint: { "raster-fade-duration": 0 } },
   { id: "bd-halo", type: "line", source: "bd", filter: ["in", ["get", "t"], ["literal", ["sg", "cs"]]],
     layout: { "line-join": "round" }, paint: { "line-color": "var(--bd-halo)", "line-width": 4 } },
   { id: "bd-halo-z", type: "line", source: "bd", filter: ["in", ["get", "t"], ["literal", ["zn", "sb"]]],
@@ -62,7 +65,7 @@ GL_LAYERS.push(
   { id: "flood", type: "fill", source: "flood", paint: { "fill-color": "var(--sf-flood)", "fill-opacity": 0.22 } },
   { id: "flood-line", type: "line", source: "flood", paint: { "line-color": "var(--sf-flood)", "line-opacity": 0.5, "line-width": 0.6 } },
 );
-const CANVAS_SRC = ["rain", "ghost", "hatch"];          // 격자 그림 — 2D 캔버스에 그려 이미지(PNG)로 올린다
+const CANVAS_SRC = ["rain", "ghost", "hatch", "low", "relief"];   // 격자 그림 — 이미지 소스(low · relief 는 파일 그림)
 const BLANK_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
 
 /* "var(--x)" → 지금 테마의 값. 식(배열) 안도 찾아 바꾼다 */
@@ -86,7 +89,23 @@ function glInit() {
     center: gll(...GC), zoom: 8, maxZoom: 22,
     style: { version: 8, sources, layers: GL_LAYERS.map(L => ({ ...L, paint: glPaint(L) })) },
   });
-  GL.once("style.load", () => { GL_OK = true; if (V) { buildBase(); glCam(); draw(); } });
+  GL.once("style.load", () => { GL_OK = true; if (V) { buildBase(); glCam(); draw(); } glTerrain(); });
+}
+/* 지형 그림 — 켜진 것만 보인다. 처음 켤 때 terrain.json(bbox)을 읽고 그림을 한 번 올린다 */
+let TERRAIN = null;
+async function glTerrain() {
+  if (!GL_OK) return;
+  const want = ["relief", "low"].filter(id => OV.has(id));
+  if (want.length && !TERRAIN) {
+    TERRAIN = {};
+    try {
+      const b = (await getJson("terrain/terrain.json")).bbox;
+      const c = [gll(b.i0 - 0.5, b.j1 + 0.5), gll(b.i1 + 0.5, b.j1 + 0.5), gll(b.i1 + 0.5, b.j0 - 0.5), gll(b.i0 - 0.5, b.j0 - 0.5)];
+      for (const id of ["relief", "low"]) GL.getSource(id).updateImage({ url: `terrain/${id}.png`, coordinates: c });
+      TERRAIN.ok = true;
+    } catch (e) { TERRAIN = null; console.warn("지형 그림을 못 읽었다", e); return; }
+  }
+  for (const id of ["relief", "low"]) GL.setLayoutProperty(id, "visibility", OV.has(id) && TERRAIN?.ok ? "visible" : "none");
 }
 /* 테마가 바뀌었다 — CSS 변수를 다시 읽어 칠한다 */
 function glTheme() {
