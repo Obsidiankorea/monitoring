@@ -74,7 +74,8 @@ def test_ladder_rules_without_numbers_have_no_gap():
 
 def test_night_rule_gap_only_at_night():
     assert _rule(ai.ladders(_row(), False, []), "산사태", "사전대피", "취약시간대")["gap"] is None
-    assert _rule(ai.ladders(_row(), True, []), "산사태", "사전대피", "취약시간대")["gap"]["pct"] == 83
+    g = _rule(ai.ladders(_row(), True, []), "산사태", "사전대피", "취약시간대")["gap"]
+    assert (g["pct"], g["by"]) == (80, "일/누적")                    # 예보 25/30 = 83 이지만 누적(48시간 80)/100 이 병목(그리고)
 
 
 def test_landslide_emergency_is_one_and_rule():

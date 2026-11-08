@@ -22,6 +22,12 @@ async function loadSafety() {
   SAF_T = setTimeout(loadSafety, 5 * 60 * 1000);
 }
 /* 시군마다 지금 걸린 산사태 예보 · 예측 중 센 것 */
+/* 예보(시장 · 군수 발령)와 예측(산림청)을 따로 — 예보는 이름 테두리, 예측은 이름 옆 산 그림 */
+function safSlideOf(list) {
+  const by = {};
+  for (const r of list || []) if (r.on && (!by[r.sigun] || r.lv > by[r.sigun].lv)) by[r.sigun] = r;
+  return by;
+}
 function safSlide() {
   const by = {};
   for (const [src, list] of [["예보", SAF?.fcst], ["예측", SAF?.pred]])
@@ -29,7 +35,6 @@ function safSlide() {
   return by;
 }
 const safOn = () => (SAF?.res || []).filter(r => r.on && selHas(r.sigun));
-const safSlideOn = sig => safAny() && OV.has("slide") && !!SAF && !SAF.fail && !!safSlide()[sig];   // 이름 밑 쌓기(05 nameStack)
 /* 레이어 아이콘 숫자 — 산사태는 걸린 시군 수, 저수지는 발령 중 계측기 수 */
 const safCount = id => (id === "slide" ? Object.keys(safSlide()).filter(selHas).length : id === "reservoir" ? safOn().length : 0);
 function drawSafety() {
@@ -46,15 +51,22 @@ function drawSafety() {
   }
   if (!safAny() || !V || !V.s || !SAF || SAF.fail) { g.innerHTML = ""; return; }
   const out = [], badges = [], pts = [];
-  if (OV.has("slide")) for (const [sig, r] of Object.entries(safSlide())) {
-    const ft = FEAT.find(f => f.properties.sigun === sig);
-    if (!ft) continue;
-    out.push(`<path class="sfs l${r.lv}" d="${PATH(ft)}"/>`);
-    // 시군 이름 밑 — 특보 딱지 다음 줄(05 nameStack). 예전엔 이름 위라 호우특보 딱지 · 이름과 겹쳤다
-    const st = nameStack(sig), fs = st.fs, bh = st.bh, t = `산사태${r.kind}(${r.src})`, bw = t.length * fs * 0.95 + fs * 0.9;
-    const x = V.toX(ft.properties.lx), y = st.y0(ft.properties.ly) + (BADGE_N[sig] || 0) * (bh + 3);
-    badges.push(`<g class="sfb l${r.lv}"><rect x="${(x - bw / 2).toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="${(bh / 3).toFixed(1)}"/>`
-      + `<text x="${x.toFixed(1)}" y="${(y + bh / 2).toFixed(1)}" text-anchor="middle" style="font-size:${fs.toFixed(1)}px">${t}</text></g>`);
+  if (OV.has("slide")) {
+    // 예보(발령) — 이름 테두리(시군 경계 갈색 테두리는 호우특보 경계와 헷갈려 뺐다, 11-08). 예측(산림청) — 이름 오른쪽 산 그림. 예전 '산사태주의보(예측)' 글 딱지는 특보 딱지와 겹쳐 뺐다(11-08)
+    const fc = safSlideOf(SAF.fcst), pr = safSlideOf(SAF.pred);
+    for (const sig of new Set([...Object.keys(fc), ...Object.keys(pr)])) {
+      const ft = FEAT.find(f => f.properties.sigun === sig);
+      if (!ft) continue;
+      const cx = V.toX(ft.properties.lx), cy = V.toY(ft.properties.ly), hw = sig.length * FSN * 0.52 + 4, hh = FSN * 0.74;   // 이름 글자 테두리(halo)보다 바깥
+      if (fc[sig]) {
+        badges.push(`<rect class="sfn l${fc[sig].lv}" x="${(cx - hw).toFixed(1)}" y="${(cy - hh).toFixed(1)}" width="${(hw * 2).toFixed(1)}" height="${(hh * 2).toFixed(1)}" rx="4"><title>산사태${fc[sig].kind} 발령(시장 · 군수) ${fc[sig].at || ""}</title></rect>`);
+      }
+      if (pr[sig]) {
+        const s = FSN * 0.95 / 24, x = cx + hw + (fc[sig] ? 5 : 1), y = cy - FSN * 0.5;
+        badges.push(`<g class="sfm l${pr[sig].lv}" transform="translate(${x.toFixed(1)},${y.toFixed(1)}) scale(${s.toFixed(3)})"><title>산림청 산사태 예측 — ${pr[sig].kind} ${pr[sig].at || ""}</title>`
+          + `<rect x="0" y="2" width="24" height="20" rx="4"/><path d="M3 19 9.5 8l3.5 6 2-3 6 8z"/></g>`);
+      }
+    }
   }
   if (OV.has("reservoir")) {
     const r0 = Math.max(4.5, Math.min(9, V.u));
