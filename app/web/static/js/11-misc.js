@@ -79,7 +79,8 @@ function kakaoBtns(name, lon, lat, q) {
   return `<div class="g">카카오맵 · ${escH(name || `${lat.toFixed(4)}°N ${lon.toFixed(4)}°E`)}</div>`
     + `<button data-u="https://map.kakao.com/link/map/${encodeURIComponent(n)},${ll}">이 자리 지도로 보기</button>`
     + `<button data-u="https://map.kakao.com/link/roadview/${ll}">이 자리 거리뷰(로드뷰)</button>`
-    + (q ? `<button data-u="https://map.kakao.com/link/search/${encodeURIComponent(q)}">주소로 찾기 <small>${escH(q.replace(/^경남 /, ""))}</small></button>` : "");
+    + (q ? `<button data-u="https://map.kakao.com/link/search/${encodeURIComponent(q)}">주소로 찾기 <small>${escH(q.replace(/^경남 /, ""))}</small></button>`
+         + `<button data-u="https://map.kakao.com/link/map/${encodeURIComponent(ll.replace(",", " "))},${ll}">좌표로 찾기 <small>${ll.replace(",", " ")}</small></button>` : "");   // 주소가 엉성한 지구 대비 — 지구 좌표 그대로
 }
 function kakaoBind(pop) {
   for (const b of pop.querySelectorAll("button[data-u]")) b.onclick = e => { e.stopPropagation(); stnPop(null); window.open(b.dataset.u, "_blank", "noopener"); };
