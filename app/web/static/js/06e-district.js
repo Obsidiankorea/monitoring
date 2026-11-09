@@ -140,9 +140,9 @@ function ppAreas(reg, S, o = {}) {
     s += `<path d="${shape(a)}" fill="none" stroke="${c}" stroke-width="${a.night ? 1.4 : 1.8}"${a.night ? ' stroke-dasharray="5 3"' : ""}/>`
       + (a.night ? "" : `<path d="${shape(a, 0.7)}" fill="none" stroke="${c}" stroke-opacity=".55" stroke-dasharray="2 4"/>`);
   }
-  // 지구 자체 기준 — 단계 색(노 · 파 · 빨)과 겹치지 않는 자홍 굵은 선 + 흰 테두리, 점선이 천천히 흐른다(.pp-site, 동작 줄이기 설정이면 멈춤)
+  // 지구 자체 기준 — 단계 색(노 · 파 · 빨)과 겹치지 않는 자홍 굵은 점선 + 흰 테두리(움직이면 눈이 아프다 해서 멈춘 선)
   for (const a of o.site || []) s += `<path d="${shape(a)}" fill="none" stroke="#fff" stroke-width="5" stroke-opacity=".9"/>`
-    + `<path class="pp-site" d="${shape(a)}" fill="none" stroke="${PP_SITE}" stroke-width="2.6" stroke-dasharray="9 5" stroke-linecap="round"/>`;
+    + `<path d="${shape(a)}" fill="none" stroke="${PP_SITE}" stroke-width="2.6" stroke-dasharray="9 5" stroke-linecap="round"/>`;
   const all = [...shown, ...(o.site || [])];
   // 눈금 글자가 붙으면(250 · 270) 겹쳐 읽히지 않는다 — 앞 글자와 가로 22px · 세로 11px 안이면 뺀다(선은 그대로)
   const thin = (vs, P, gap) => { let last = -1e9; return vs.filter(v => { const ok = Math.abs(P(v) - last) >= gap; if (ok) last = P(v); return ok; }); };

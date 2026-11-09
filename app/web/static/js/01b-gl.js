@@ -52,10 +52,11 @@ const GL_LAYERS = [
     paint: { "line-color": ["case", ["has", "o"], "#8A97A6", "#7DDCFF"], "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.8, 11, 1.4], "line-opacity": ["case", ["has", "o"], 0.3, 0.9] } },
   { id: "river-s", type: "line", source: "water", minzoom: 9.4, filter: ["all", ["==", ["get", "k"], "river"], ["==", ["get", "g"], 3]], layout: { visibility: "none", "line-join": "round", "line-cap": "round" },
     paint: { "line-color": ["case", ["has", "o"], "#8A97A6", "#7DDCFF"], "line-width": ["interpolate", ["linear"], ["zoom"], 9.4, 0.4, 11, 0.9], "line-opacity": ["case", ["has", "o"], 0.2, 0.55] } },
-  { id: "river", type: "line", source: "water", filter: ["all", ["==", ["get", "k"], "river"], ["<", ["get", "g"], 3]], layout: { visibility: "none", "line-join": "round", "line-cap": "round" },
-    paint: { "line-color": ["case", ["has", "o"], "#8A97A6", "#7DDCFF"],
-             "line-width": ["interpolate", ["linear"], ["zoom"], 8, ["case", ["==", ["get", "g"], 1], 1.8, 0.7], 11, ["case", ["==", ["get", "g"], 1], 3.2, 1.6]],
-             "line-opacity": ["case", ["has", "o"], 0.3, 0.9] } },
+  // 지방하천 — 시군 확대에서만(경남 전체에서는 화면을 덮는다). 레이어 옵션 '지방하천 늘 보기'(waterall)면 glWater 가 minzoom 을 0 으로
+  { id: "river-l", type: "line", source: "water", minzoom: 9.4, filter: ["all", ["==", ["get", "k"], "river"], ["==", ["get", "g"], 2]], layout: { visibility: "none", "line-join": "round", "line-cap": "round" },
+    paint: { "line-color": ["case", ["has", "o"], "#8A97A6", "#7DDCFF"], "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.7, 11, 1.6], "line-opacity": ["case", ["has", "o"], 0.3, 0.85] } },
+  { id: "river", type: "line", source: "water", filter: ["all", ["==", ["get", "k"], "river"], ["==", ["get", "g"], 1]], layout: { visibility: "none", "line-join": "round", "line-cap": "round" },
+    paint: { "line-color": ["case", ["has", "o"], "#8A97A6", "#7DDCFF"], "line-width": ["interpolate", ["linear"], ["zoom"], 8, 1.8, 11, 3.2], "line-opacity": ["case", ["has", "o"], 0.3, 0.9] } },
   { id: "bd-halo", type: "line", source: "bd", filter: ["in", ["get", "t"], ["literal", ["sg", "cs"]]],
     layout: { "line-join": "round" }, paint: { "line-color": "var(--bd-halo)", "line-width": 4 } },
   { id: "bd-halo-z", type: "line", source: "bd", filter: ["in", ["get", "t"], ["literal", ["zn", "sb"]]],
@@ -152,7 +153,8 @@ async function glWater() {
       glSet("water", glFC(WATER.map(f => glF(f.geometry, f.properties))));
     } catch (e) { WATER = null; console.warn("강 · 호수 자료를 못 읽었다", e); return; }
   }
-  for (const L of ["water", "water-ln", "water-r-ln", "river", "river-s"]) GL.setLayoutProperty(L, "visibility", OV.has("water") && Array.isArray(WATER) ? "visible" : "none");
+  for (const L of ["water", "water-ln", "water-r-ln", "river", "river-l", "river-s"]) GL.setLayoutProperty(L, "visibility", OV.has("water") && Array.isArray(WATER) ? "visible" : "none");
+  GL.setLayerZoomRange("river-l", OV.has("waterall") ? 0 : 9.4, 24);
 }
 /* 마우스 자리 표고(m) — 지형 레이어를 켰을 때만. 125m 칸 표고(elev.i16.gz, 2MB)를 처음 물을 때 받는다. 아직이면 null */
 let ELEV = null;

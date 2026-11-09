@@ -1910,10 +1910,9 @@ body.sj-on > header, body.sj-on #stage, body.sj-on #tl, body.sj-on #rail { displ
 #tip .hud dd { margin: 0; font-size: .84em; color: var(--ink-2); }
 #tip .hud .ft { padding: .45em 1em; font-size: .72em; color: var(--ink-3); border-top: 1px solid var(--line);
   background: color-mix(in oklab, var(--ground) 55%, transparent); }
-/* 조건 평면의 지구 자체 기준 선 — 점선이 천천히 흐른다(지도 카드 · 상황판단 창 같이) */
-.pp-site { animation: pp-march 1.1s linear infinite; }
-@keyframes pp-march { to { stroke-dashoffset: -28; } }
-@media (prefers-reduced-motion: reduce) { .pp-site, #tip .hud .dzs span.nx { animation: none; } }
+@media (prefers-reduced-motion: reduce) { #tip .hud .dzs span.nx { animation: none; } }
+/* 상황판단 창 — 평면(시간 줄)은 위에 고정, 그 아래 지구 목록만 스크롤. 그림자로 스크롤되는 목록을 가린다 */
+#sj .sj-c > .sjp { position: sticky; top: 0; z-index: 3; box-shadow: 0 10px 0 0 var(--ground); }
 /* 상황판단 창 조건 평면 — 지도 지구 카드(#tip .hud)와 같은 결: 머리 띠 카드 · 자홍 지구 기준 띠 · 비가 아닌 조건 상자 */
 #sj .ppcard { border: 1px solid color-mix(in oklab, var(--ink-3) 40%, var(--line)); border-radius: 10px; overflow: hidden; background: var(--panel); min-width: 0; }
 #sj .ppcard .pph { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--line);
