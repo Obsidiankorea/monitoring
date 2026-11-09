@@ -1315,8 +1315,8 @@ _BLANK_PNG = bytes.fromhex("89504e470d0a1a0a0000000d4948445200000001000000010804
 
 @app.get("/terrain/t/{layer}/{z}/{x}/{y}.png", include_in_schema=False)
 async def terrain_tile(layer: str, z: int, x: int, y: int):
-    """지형 확대용 조각 — config.TERRAIN/{relief,low}/z/x/y.png. 없으면 투명. 바뀔 일이 드물어 하루 캐시."""
-    if layer not in ("relief", "low"):
+    """지형 · 건물 확대용 조각 — config.TERRAIN/{relief,low,bldg}/z/x/y.png. 없으면 투명. 바뀔 일이 드물어 하루 캐시."""
+    if layer not in ("relief", "low", "bldg"):
         raise HTTPException(404)
     fp = config.TERRAIN / layer / str(z) / str(x) / f"{y}.png"
     hdr = {"Cache-Control": "public, max-age=86400"}

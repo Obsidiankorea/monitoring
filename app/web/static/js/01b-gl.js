@@ -38,6 +38,9 @@ const GL_LAYERS = [
   { id: "low-t", type: "raster", source: "low-t", minzoom: 10, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0 } },
   { id: "relief", type: "raster", source: "relief", maxzoom: 10, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0 } },
   { id: "relief-t", type: "raster", source: "relief-t", minzoom: 10, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0 } },
+  // 건물 밀도(레이어 bldg, 국토교통부 GIS건물통합정보 — tools/build_bldg.py). 지형과 같이 한 장 그림 → 확대하면 조각
+  { id: "bldg", type: "raster", source: "bldg", maxzoom: 10, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0 } },
+  { id: "bldg-t", type: "raster", source: "bldg-t", minzoom: 10, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0 } },
   // 강 · 호수 · 저수지(레이어 water, 오픈스트리트맵 — tools/build_water.py). 면은 옅게 — 그 위 비 색이 묻히지 않게. o = 경남 밖 — 회색으로 흐리게
   { id: "water", type: "fill", source: "water", filter: ["==", ["get", "k"], "water"], layout: { visibility: "none" },
     paint: { "fill-color": ["case", ["has", "o"], "#2A3440", "#0B2F4E"], "fill-opacity": ["case", ["has", "o"], 0.35, 0.55] } },
@@ -75,7 +78,8 @@ GL_LAYERS.push(
   { id: "flood", type: "fill", source: "flood", paint: { "fill-color": "var(--sf-flood)", "fill-opacity": 0.22 } },
   { id: "flood-line", type: "line", source: "flood", paint: { "line-color": "var(--sf-flood)", "line-opacity": 0.5, "line-width": 0.6 } },
 );
-const CANVAS_SRC = ["rain", "ghost", "hatch", "low", "relief"];   // 격자 그림 — 이미지 소스(low · relief 는 파일 그림)
+const TER_IDS = ["relief", "low", "bldg"];   // 지형 체계 그림(terrain/*.png + /terrain/t/ 조각)
+const CANVAS_SRC = ["rain", "ghost", "hatch", "low", "relief", "bldg"];   // 격자 그림 — 이미지 소스(low · relief 는 파일 그림)
 const BLANK_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
 
 /* "var(--x)" → 지금 테마의 값. 식(배열) 안도 찾아 바꾼다 */
@@ -94,7 +98,7 @@ function glInit() {
   const sources = Object.fromEntries(GL_LAYERS.map(L => [L.source, { type: "geojson", data: glFC([]) }]));
   const corner = [gll(GC[0], GC[1]), gll(GC[0] + 1, GC[1]), gll(GC[0] + 1, GC[1] - 1), gll(GC[0], GC[1] - 1)];
   for (const id of CANVAS_SRC) sources[id] = { type: "image", url: BLANK_PNG, coordinates: corner };
-  for (const id of ["relief", "low"]) sources[id + "-t"] = { type: "raster", tiles: [`/terrain/t/${id}/{z}/{x}/{y}.png`], tileSize: 256, minzoom: 11, maxzoom: 13 };
+  for (const id of TER_IDS) sources[id + "-t"] = { type: "raster", tiles: [`/terrain/t/${id}/{z}/{x}/{y}.png`], tileSize: 256, minzoom: 11, maxzoom: 13 };
   GL = new maplibregl.Map({
     container: "gl", interactive: false, attributionControl: false, fadeDuration: 0, renderWorldCopies: false,
     center: gll(...GC), zoom: 8, maxZoom: 22,
@@ -102,28 +106,36 @@ function glInit() {
   });
   GL.once("style.load", () => { GL_OK = true; if (V) { buildBase(); glCam(); draw(); } glTerrain(); glWater(); });
 }
-/* 지형 그림 — 켜진 것만 보인다. 처음 켤 때 terrain.json(bbox)을 읽고 그림을 한 번 올린다 */
+/* 지형 · 건물 그림 — 켜진 것만 보인다. 처음 켤 때 terrain.json(bbox)을 읽고 그림을 한 번 올린다 */
 let TERRAIN = null;
 async function glTerrain() {
+  srcAttr();
   if (!GL_OK) return;
-  const want = ["relief", "low"].filter(id => OV.has(id));
+  const want = TER_IDS.filter(id => OV.has(id));
   if (want.length && !TERRAIN) {
     TERRAIN = {};
     try {
       const j = await getJson("terrain/terrain.json"), b = j.bbox;
       TERRAIN.meta = j;
       const c = [gll(b.i0 - 0.5, b.j1 + 0.5), gll(b.i1 + 0.5, b.j1 + 0.5), gll(b.i1 + 0.5, b.j0 - 0.5), gll(b.i0 - 0.5, b.j0 - 0.5)];
-      for (const id of ["relief", "low"]) GL.getSource(id).updateImage({ url: `terrain/${id}.png`, coordinates: c });
+      for (const id of TER_IDS) GL.getSource(id).updateImage({ url: `terrain/${id}.png?v=${j.built || ""}`, coordinates: c });
       TERRAIN.ok = true;
     } catch (e) { TERRAIN = null; console.warn("지형 그림을 못 읽었다", e); return; }
   }
-  for (const id of ["relief", "low"]) for (const L of [id, id + "-t"]) GL.setLayoutProperty(L, "visibility", OV.has(id) && TERRAIN?.ok ? "visible" : "none");
+  for (const id of TER_IDS) for (const L of [id, id + "-t"]) GL.setLayoutProperty(L, "visibility", OV.has(id) && TERRAIN?.ok ? "visible" : "none");
+}
+/* 지도 오른쪽 아래 출처 — 켠 레이어의 자료 출처만(오픈스트리트맵 ODbL · 국토교통부 CC BY 둘 다 표시 의무) */
+function srcAttr() {
+  const a = [OV.has("water") && `강 · 호수 · 저수지 © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> 기여자`,
+             OV.has("bldg") && `건물 © 국토교통부 GIS건물통합정보(브이월드)`].filter(Boolean);
+  $("osm-attr").hidden = !a.length;
+  $("osm-attr").innerHTML = a.join(" · ");
 }
 /* 강 · 호수 · 저수지 — 처음 켤 때 water.json(칸 좌표)을 받아 올린다. 켜면 출처(#osm-attr)도 */
 let WATER = null;
 async function glWater() {
   const on = OV.has("water");
-  $("osm-attr").hidden = !on;
+  srcAttr();
   if (!GL_OK) return;
   if (on && !WATER) {
     WATER = "loading";

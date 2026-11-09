@@ -18,5 +18,10 @@
   13
  ],
  "built": "2026-11-09",
- "source": "AWS Terrain Tiles (Terrarium) — SRTM 등"
+ "source": "AWS Terrain Tiles (Terrarium) — SRTM 등",
+ "bldg": {
+  "src": "AL_D010_48_20261009.zip",
+  "n": 1651595,
+  "source": "국토교통부 GIS건물통합정보(브이월드, CC BY)"
+ }
 }

@@ -15,6 +15,7 @@ const OVL = [
   { id: "relief", label: "지형 음영(산 · 골짜기)", short: "지형", key: "Y" },
   { id: "low", label: "저지대(표고 10m 이하)", short: "저지대", key: "Z" },
   { id: "water", label: "강 · 호수 · 저수지", short: "물", key: "" },
+  { id: "bldg", label: "건물(사람 사는 곳)", short: "건물", key: "" },
 ];
 /* ⓘ 에 올리거나 누르면 뜨는 설명 — 레이어 목록·범례는 짧게 두고 긴 말은 여기에 */
 const TIPS = new Map([
@@ -41,6 +42,8 @@ const TIPS = new Map([
     실제 침수 범위는 '침수흔적'과 같이 본다. 해안선 언저리는 표고 자료가 거칠어 바다 쪽으로 조금 번진다.`],
   ["ov-water", `<b>강 · 호수 · 저수지</b> — 큰 강은 하늘색 선, 호수 · 저수지 · 댐 호수 · 강의 넓은 물은 면으로(넓이 0.03㎢ 이상).
     자료 © OpenStreetMap 기여자(ODbL) — 켜면 지도 오른쪽 아래에 출처가 뜬다.`],
+  ["ov-bldg", `<b>건물(사람 사는 곳)</b> — 경남 건물 전부(국토교통부 GIS건물통합정보, 약 160만 동)를 모래색으로. 진할수록 건물이 빽빽하다(시가지 · 아파트 단지), 옅은 점은 시골 마을.
+    시군을 고르면 더 자세한 조각으로 바뀐다. 매월 갱신 자료 — 받은 달 기준. 켜면 지도 오른쪽 아래에 출처가 뜬다.`],
   ["ov-tide", `<b>조위</b> — 경남 해안 조위관측소의 바닷물 높이(해양조사원). 표식의 숫자는 지금 실측, 괄호는 예측과의 차이.
     마우스를 올리면 요약, 누르면 게이지 · 물결 팝업. 대조기 기간에는 아이콘 옆에 표시한다.`],
   ["ov-stnval", `<b>지점 강수량 글자</b> — 관측소 옆에 값을 단다. 센 곳부터 빈자리에만, 상위 셋은 지점 이름도.
@@ -172,7 +175,7 @@ function setOverlay(id, on) {
   if (id === "temp") loadHeat();
   if (id === "district") { if (on) setLyOpen(id); loadDistrict(); }
   if (id === "stnval") drawStations();
-  if (id === "relief" || id === "low") glTerrain();
+  if (id === "relief" || id === "low" || id === "bldg") glTerrain();
   if (id === "water") glWater();
   renderLayers();
 }
