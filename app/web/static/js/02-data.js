@@ -475,6 +475,17 @@ function camReset() { UC = { ...UC0 }; if (CAM_EDIT) camSet(camTarget()); else c
     if (Math.abs(f - 1) < 1e-4) return;
     ucFrom({ s: C.s * f, ox: mx - (mx - C.ox) * f, oy: my - (my - C.oy) * f }); ucClamp(); camLive();
   }, { passive: false });
+  // 휠 단추(가운데)를 누르고 끌면 확대한 화면을 옮긴다 — 휠 확대 · 시군 확대 때만. 놓은 틀은 휠 틀(WZ)이라 Esc · 시군 고르기로 풀린다
+  $("stage").addEventListener("mousedown", ev => { if (ev.button === 1) ev.preventDefault(); });   // 브라우저 자동 스크롤 끄기
+  $("stage").addEventListener("pointerdown", ev => {
+    if (ev.button !== 1 || CAM_EDIT || !V || !GEN || !(WZ || CAM) || !ev.target.closest?.("#mapwrap")) return;
+    ev.preventDefault();
+    const st = $("stage"), C = WZ || camTarget().cam, x0 = ev.clientX, y0 = ev.clientY;
+    st.setPointerCapture(ev.pointerId); st.style.cursor = "grabbing";
+    const mv = e => { WZ = { s: C.s, ox: C.ox + e.clientX - x0, oy: C.oy + e.clientY - y0, key: wzKey() }; camLive(); };
+    const up = () => { st.removeEventListener("pointermove", mv); st.removeEventListener("pointerup", up); st.removeEventListener("pointercancel", up); st.style.cursor = ""; };
+    st.addEventListener("pointermove", mv); st.addEventListener("pointerup", up); st.addEventListener("pointercancel", up);
+  });
   cg.addEventListener("dblclick", () => camReset());
   $("stage").addEventListener("wheel", ev => {
     if (CAM_EDIT || !V || !GEN || !ev.target.closest?.("#mapwrap")) return;   // 패널 · 위젯 · 팝업 위 휠은 그대로 굴린다
