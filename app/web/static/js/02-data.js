@@ -584,10 +584,10 @@ function drawEmd() {
     EMESH.set(sg, topojson.mesh(ETOPO, ETOPO.objects.emd,
       (a, b) => a !== b && a.properties.sigun === sg && b.properties.sigun === sg));
   glData("emd", on ? SELS.join() : "", () => on ? SELS.map(sg => glF(EMESH.get(sg))) : []);
-  const ron = on && !!RTOPO;
+  const ron = on && !!RTOPO && ESEL.length > 0;          // 리는 읍면동을 골랐을 때만(시군만 고르면 선 · 글자가 너무 많다)
   if (ron) for (const sg of SELS) if (!RMESH.has(sg))
     RMESH.set(sg, topojson.mesh(RTOPO, RTOPO.objects.ri, (a, b) => a !== b && a.properties.sigun === sg && b.properties.sigun === sg));
-  glData("ri", ron ? SELS.join() : "", () => ron ? SELS.map(sg => glF(RMESH.get(sg))) : []);
+  glData("ri", ron ? SELS.join() + "|" + ESEL.join() : "", () => ron ? SELS.map(sg => glF(RMESH.get(sg))) : []);
 }
 /* 읍면동 이름 — 큰 곳부터, 시군명·최대 라벨·관측소와 겹치지 않는 자리에만(가장 덜 중요한 글자) */
 function drawEmdNames(taken) {
@@ -610,8 +610,8 @@ function drawEmdNames(taken) {
     placed.push(b);
     out.push(`<text class="en" x="${x.toFixed(1)}" y="${y.toFixed(1)}" style="font-size:${fs.toFixed(1)}px;stroke-width:${(fs * 0.2).toFixed(1)}px">${p.name}${pc == null ? "" : ` <tspan class="pc">${pc}%</tspan>`}</text>`);
   }
-  // 리 이름 — 더 키웠을 때(읍면동을 골랐거나 휠로 한 칸이 7px 넘게)만, 남은 빈자리에 작게. 고른 읍면동이 있으면 그 둘레만
-  if (RFEAT && (ESEL.length || V.s / (V.k || 1) >= 7)) {
+  // 리 이름 — 읍면동을 골랐을 때만, 그 읍면동 둘레에 · 남은 빈자리에 작게
+  if (RFEAT && ESEL.length) {
     const rs = Math.max(11, Math.min(16, V.u * 3.4)), rh = rs * 1.2;
     const eb = ESEL.length ? EFEAT.filter(f => ESEL.includes(f.properties.id)).map(f => { const c = f.geometry.coordinates.flat(3); let a = [1e9, 1e9, -1e9, -1e9]; for (let i = 0; i < c.length; i += 2) a = [Math.min(a[0], c[i]), Math.min(a[1], c[i + 1]), Math.max(a[2], c[i]), Math.max(a[3], c[i + 1])]; return a; }) : null;
     for (const f of RFEAT) {
@@ -621,7 +621,7 @@ function drawEmdNames(taken) {
       const b = { x0: x - w / 2, x1: x + w / 2, y0: y - rh / 2, y1: y + rh / 2 };
       if (b.x0 < A.x0 || b.x1 > A.x1 || b.y0 < 4 || b.y1 > V.H - 4 || hit(b)) continue;
       placed.push(b);
-      out.push(`<text class="rn" x="${x.toFixed(1)}" y="${y.toFixed(1)}" style="font-size:${rs.toFixed(1)}px;stroke-width:${(rs * 0.22).toFixed(1)}px">${p.name}</text>`);
+      out.push(`<text class="rn" x="${x.toFixed(1)}" y="${y.toFixed(1)}" style="font-size:${rs.toFixed(1)}px;stroke-width:${(rs * 0.14).toFixed(1)}px">${p.name}</text>`);
     }
   }
   g.innerHTML = out.join("");

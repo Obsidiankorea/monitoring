@@ -966,7 +966,7 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 #over #hot circle { fill: none; stroke: var(--accent); stroke-width: 2.5; }
 /* 시군 확대(설정 '시군 누르면 확대') — 읍면동 경계(안쪽 선만)·이름. 확대해 들어가며 선이 서서히 나온다 */
 #over .en { font-weight: 600; fill: var(--ink-2); text-anchor: middle; dominant-baseline: central; }
-#over .rn { font-weight: 500; fill: var(--ink-3); text-anchor: middle; dominant-baseline: central; }
+#over .rn { font-weight: 400; fill: var(--ink-3); text-anchor: middle; dominant-baseline: central; }
 #over .rvl { font-weight: 600; font-style: italic; fill: #8FE3FF; text-anchor: middle; dominant-baseline: central; paint-order: stroke; stroke: #0B1A2A; letter-spacing: .04em; }   /* 강 이름(02-data drawWaterLabels) */
 #over .en .pc { fill: var(--lv-warn); font-weight: 700; }
 /* 날아가는 동안 — 선은 transform 으로 같이 커지되 굵기는 그대로, 글자·점은 잠깐 감췄다가 다 오면 새로 그린다 */

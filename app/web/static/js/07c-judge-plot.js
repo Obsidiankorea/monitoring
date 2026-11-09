@@ -42,18 +42,20 @@ function sjpPlane(T, rows) {
     const rg = reg[f], S = ppScale(rg, W, H, 40, 26, 10, 10), rs = rows.filter(x => x.r.fam === f && sjB(x.r)?.series?.pl?.length);
     const sel = rs.find(x => x.r.id === SJ.sel);
     let s = ppAreas(rg, S, { site: sel ? sjB(sel.r).series.site : [], fs: 11 });
-    if (SJP.lines) s += rs.filter(x => x !== sel).map(x => ppTrail(rg, S, sjB(x.r).series.pl, t, SJP.tc, SJP.tc ? null : col(x.r))).join("");
+    // 지구를 고르면 나머지 자취 · 점은 회색으로 흐리게 — 고른 지구만 눈에 띄게
+    const dim = r => sel && r.id !== sel.r.id, GR = "#9CA3AF";
+    if (SJP.lines) s += `<g${sel ? ' opacity=".35"' : ""}>` + rs.filter(x => x !== sel).map(x => ppTrail(rg, S, sjB(x.r).series.pl, t, SJP.tc, sel ? GR : SJP.tc ? null : col(x.r))).join("") + `</g>`;
     if (sel) s += ppTrail(rg, S, sjB(sel.r).series.pl, t, true);
     const at = rs.map(x => ({ ...x, p: x.v[Math.min(t, x.v.length - 1)], q: ppPt(rg, sjB(x.r).series.pl[Math.min(t, sjB(x.r).series.pl.length - 1)]) }))
-      .filter(x => x.q && x.q[0] != null && x.q[1] != null).sort((a, b) => a.p - b.p);
+      .filter(x => x.q && x.q[0] != null && x.q[1] != null).sort((a, b) => (a.r.id === SJ.sel) - (b.r.id === SJ.sel) || a.p - b.p);   // 고른 지구 점은 맨 위
     s += at.map(({ r, p, q }) => `<g class="pm${r.id === SJ.sel ? " on" : ""}" data-r="${escH(r.id)}"><title>${escH(name(r))} — ${rg.x} ${Math.round(q[0])}㎜ · 시우량 ${Math.round(q[1])}㎜/h · ${p}%</title>`
-      + `<circle cx="${S.X(q[0]).toFixed(1)}" cy="${S.Y(q[1]).toFixed(1)}" r="${r.id === SJ.sel ? 7 : 5}" fill="${col(r)}" stroke="#fff" stroke-width="1.5"/></g>`).join("");
+      + `<circle cx="${S.X(q[0]).toFixed(1)}" cy="${S.Y(q[1]).toFixed(1)}" r="${r.id === SJ.sel ? 7 : 5}" fill="${dim(r) ? GR : col(r)}" stroke="#fff" stroke-width="1.5"${dim(r) ? ' opacity=".45"' : ""}/></g>`).join("");
     const taken = [];                                       // 이름 — 높은 6곳, 앞 이름과 겹치면 건너뛴다
-    for (const { r, p, q } of at.slice(-6).reverse()) {
+    for (const { r, p, q } of [...at.filter(x => x.r.id === SJ.sel), ...at.slice(-6).reverse().filter(x => x.r.id !== SJ.sel)]) {
       const x = S.X(q[0]) + 10, y = S.Y(q[1]) + 4, w = name(r).length * 11;
       if (taken.some(b => x < b.x + b.w && x + w > b.x && Math.abs(y - b.y) < 13)) continue;
       taken.push({ x, y, w });
-      s += `<text class="lb2" x="${x.toFixed(1)}" y="${y.toFixed(1)}">${escH(name(r))}</text>`;
+      s += `<text class="lb2" x="${x.toFixed(1)}" y="${y.toFixed(1)}"${dim(r) ? ' opacity=".4"' : ""}>${escH(name(r))}</text>`;
     }
     // 지도 지구 카드(06e .hud)와 같은 결 — 머리 띠(유형 배지 · 축 · 지구 수) 아래 평면
     return `<div class="ppcard"><div class="pph"><span class="bdg">${escH(f)}</span><small>가로 ${escH(rg.x)} ㎜ · 세로 시우량 ㎜/h</small><em>${rs.length}곳</em></div>`
