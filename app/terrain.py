@@ -1,20 +1,23 @@
 """우려지역 지구의 '지역 여건' — 지형(미리 계산한 data/geo/dz_terrain.json) + 과거 침수흔적(safety 가 받아 둔 다각형).
 
 판정 %(강우 기준)는 바꾸지 않는다. 위키 [[대피판단 기준 (주민대피 길라잡이 2026.5판)]]의 '지역 여건'(배수 불량 저지대 · 급경사지 인접 ·
-상습 침수 · 저수지 제방)을 숫자로 보여 주고, 눈여겨볼 것만 꼬리표(flags)로 단다. 꼬리표 문턱은 위키 근거가 있는 것만:
+상습 침수 · 저수지 제방)을 숫자로 보여 주고, 눈여겨볼 것만 꼬리표(flags)로 단다. 꼬리표 문턱 — 위키 수치가 있는 것:
   급경사 30°↑ — [[산사태 유형과 발생 원인]] '30~35°에서 가장 많이, 20° 이하는 적다'
-  저지대 10m↓ — 지도 '저지대' 레이어와 같은 문턱(해안 · 강가 저지대 침수, [[고조정보 4단계와 대조기 해안침수]])
-그 밖(국가 · 지방하천 200m 안 · 5m 안 높이, 저수지 300m 안 · 10m 낮음, 해안 500m · 5m)은 위키 수치가 없어 이 앱이 정한 눈여겨볼 범위다 — 화면에도 그렇게 적는다.
+그 밖(저지대 10m↓ — 지도 '저지대' 레이어와 같은 문턱, 위키엔 수치 없음 · 국가 · 지방하천 200m 안 · 5m 안 높이, 저수지 300m 안 · 10m 낮음, 해안 500m · 5m)은 위키 수치가 없어 이 앱이 정한 눈여겨볼 범위다 — 화면에도 그렇게 적는다.
 """
 from __future__ import annotations
 
+import gzip
 import json
 import math
+import time
 from functools import lru_cache
 
 from . import config
+from .domain.gridproj import hr_xy
 
 DZT = config.DATA / "geo" / "dz_terrain.json"
+TER = config.ROOT / "app" / "web" / "static" / "terrain"     # 지도 지형 그림과 같은 125m 표고(elev.i16.gz) — 저수지 자리 높이
 
 
 @lru_cache(maxsize=2)
@@ -71,6 +74,62 @@ def flood_at(lat: float, lon: float) -> dict | None:
     return near
 
 
+@lru_cache(maxsize=1)
+def _elev():
+    m = json.loads((TER / "terrain.json").read_text("utf-8"))
+    import array
+    a = array.array("h"); a.frombytes(gzip.decompress((TER / "elev.i16.gz").read_bytes()))
+    return m, a
+
+
+def elev_at(lon: float, lat: float) -> float | None:
+    """125m 표고(m) — 경남 bbox 밖이면 None."""
+    try:
+        m, a = _elev()
+    except OSError:
+        return None
+    b, S = m["bbox"], m["S"]
+    gx, gy = hr_xy(lon, lat)
+    c, r = int((gx - (b["i0"] - 0.5)) * S), int((b["j1"] + 0.5 - gy) * S)
+    return float(a[r * m["w"] + c]) if 0 <= c < m["w"] and 0 <= r < m["h"] else None
+
+
+@lru_cache(maxsize=2)
+def _live(tick: int) -> tuple[list, list]:
+    """지금 수위관측소(기준 수위가 있는 것) · 위험저수지 계측기 경보 — 30초마다 다시 읽는다."""
+    from . import river, safety
+    wl = [s for s in river.status()["rows"] if s["kind"] == "wl" and not s.get("up") and any(s.get("thr") or []) and "저수지" not in s["name"]]
+    return wl, list(safety._LIVE.get("res") or [])
+
+
+def live(d: dict) -> dict:
+    """지구 자리 둘레의 지금 값 — 가장 가까운 수위관측소(5km 안) 단계, 위쪽(5m↑ 높은) 위험저수지 계측기 경보(3km 안)."""
+    pos = d.get("pos")
+    if not pos:
+        return {}
+    from .river import STAGES
+    wl, res = _live(int(time.time() // 30))
+    gx, gy = hr_xy(pos[1], pos[0])
+    out = {}
+    best = min(((math.hypot(s["x"] - gx, s["y"] - gy) * 500, s) for s in wl), key=lambda x: x[0], default=None)
+    if best and best[0] <= 5000:
+        dm, s = best
+        st = s.get("stage", -1)
+        out["wl"] = {"n": s["name"], "d": round(dm), "st": st, "stn": STAGES[st] if 0 <= st < len(STAGES) else "값 없음",
+                     "v": s.get("v"), "gap": s.get("gap"), "nx": STAGES[min(st + 1, len(STAGES) - 1)] if st >= 0 else None, "stale": bool(s.get("stale"))}
+    el = d.get("_el")
+    for r in res:
+        dm = math.hypot((r["lon"] - pos[1]) * 91000, (r["lat"] - pos[0]) * 111000)
+        if dm > 3000:
+            continue
+        er = elev_at(r["lon"], r["lat"])
+        if er is None or el is None or er - el < 5:
+            continue
+        out["rs"] = {"n": r["name"], "d": round(dm), "on": r["on"], "lvn": r["lvn"], "at": r["at"], "dh": round(er - el)}
+        break                                                    # res 는 발령 중 · 높은 단계부터 — 첫 것이 가장 급하다
+    return out
+
+
 def of(d: dict) -> dict | None:
     """지구 하나(id · pos · fam)의 지형 사실 + 꼬리표. 지형 표에 없으면(좌표 없음 · 표 만든 뒤 생김) 침수흔적만."""
     t = dict(table()["rows"].get(d.get("id"), {}))
@@ -78,6 +137,7 @@ def of(d: dict) -> dict | None:
     fl = flood_at(pos[0], pos[1]) if pos else None
     if fl:
         t["fl"] = fl
+    t |= live({**d, "_el": t.get("el")})
     if not t:
         return None
     fam, F = d.get("fam"), []
@@ -99,6 +159,12 @@ def of(d: dict) -> dict | None:
         w("해안 저지대")
     if fam == "산사태" and t.get("sl") is not None:
         (w if t["sl"] >= 30 else i)(f"경사 {t['sl']}°" + (" 급경사" if t["sl"] >= 30 else " 완만" if t["sl"] < 20 else ""))
+    wl = t.get("wl")
+    if wl and wl["st"] >= 0:                                       # 수위 — 관심 이상이면 눈여겨볼 것
+        (w if wl["st"] >= 1 else i)(f"수위 {wl['n']} {wl['stn']}" + (f" · {wl['nx']}까지 {wl['gap']}m" if wl.get("gap") is not None and wl["st"] < 4 else ""))
+    rs = t.get("rs")
+    if rs:                                                         # 위쪽 위험저수지 — 발령 중이면 하류 대피 확인(위키 [[저수지 재난 시군 사전대피와 주민대피 준비 (진주시 매뉴얼)]])
+        (w if rs["on"] else i)(f"위험저수지 {rs['n']} {rs['lvn']}{' 발령' if rs['on'] else ' 해제'} · 위쪽 {rs['d']}m")
     if t.get("b300"):
         i(f"건물 {t['b300']}동(300m)")
     t["flags"] = F

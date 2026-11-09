@@ -249,5 +249,5 @@ def build(sigun: str, base: str, k: float = 1.0, add_h: float = 0.0, add_24: flo
     rows.sort(key=lambda r: -r["b"]["grid"]["top"])
     st = safety.status()
     slide = {"keys": st["keys"]["fcst"] or st["keys"]["pred"], "why": st["slide"]["why"], "at": st["at"].get("fcst")}
-    return {"slide": slide, "sigun": sigun, "k": k, "add_h": add_h, "add_24": add_24, "tm": tm, "rows": rows, "chart": chart, "head": head,
+    return {"slide": slide, "terrain_built": terrain.table().get("built"), "sigun": sigun, "k": k, "add_h": add_h, "add_24": add_24, "tm": tm, "rows": rows, "chart": chart, "head": head,
             "regions": ai.regions() if series else None}

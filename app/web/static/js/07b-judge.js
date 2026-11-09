@@ -90,13 +90,28 @@ const SJ_SEC = ["결정 필요 — 기준을 넘었는데 아직 기록이 없�
 function sjPct(c) { return c ? `<b class="pc t${sjLv(c.pct)}">${c.unk ? "모름" : `${c.pct}%`}</b>` : `<b class="pc">—</b>`; }
 /* 지역 여건 꼬리표(app/terrain.py) — 눈여겨볼 것(lv w)만 n 개. 판정 % 와 별개 */
 const sjTfChips = (t, n = 9) => (t?.flags || []).filter(f => f.lv === "w").slice(0, n).map(f => `<em class="tf" title="지역 여건 — 판정 % 와 별개">${escH(f.t)}</em>`).join("");
+TIPS.set("sj-terrain", `<b>지역 여건 — 값마다 어디서 왔나</b> (판정 % 는 이 값으로 바꾸지 않는다)<br>
+  <b>표고</b> AWS 공개 지형 타일(Terrarium · SRTM 등, 확대 12 ≈ 30m 격자)을 지구 좌표(위키 지번 필지 중심 · 서버에서 고친 좌표)에서 보간. 미리 계산(tools/build_dz_terrain.py).
+  꼬리표 <b>저지대 10m 이하</b> — 지도 '저지대' 레이어와 같은 문턱. <u>위키에 수치는 없다</u>(대피판단 기준이 '배수 불량 저지대'를 지역 여건으로 볼 뿐) — 이 앱이 정한 값.<br>
+  <b>경사</b> 같은 30m 표고, 지구 둘레 ±90m 7×7 점의 기울기 — 둘레에서 가장 가파른 곳 · 지구 자리. 꼬리표 <b>급경사 30° 이상</b>(산사태 지구만) —
+  위키 [[산사태 유형과 발생 원인]] "30~35°에서 가장 많이 발생, 20° 이하는 적다". 30m 라 축대 · 옹벽(급경사지법: 높이 5m · 34°)은 못 잡는다.<br>
+  <b>하천</b> 국토지리정보원 연속수치지형도 하천중심선(국가하천 · 지방하천) + 실폭하천 면 테두리(브이월드). 25m 간격 점 중 가장 가까운 곳까지, 높이 = 지구 표고 − 그 하천 점 표고(30m).
+  꼬리표 200m 안 · 5m 안 높이 — 이 앱이 정한 범위. 하천 유형 지구(교량 · 둔치)는 참고로만.<br>
+  <b>개울</b> 같은 하천중심선의 소하천 등(세류는 뺌) 500m 안.<br>
+  <b>저수지</b> 연속수치지형도 호수/저수지(1ha 이상) 2km 안 가장 가까운 물가, 높이 = 물가 표고 − 지구 표고. 꼬리표 300m 안 · 10m 이상 낮음 — 이 앱이 정한 범위.<br>
+  <b>해안</b> 30m 표고 0m 이하 땅까지(100m 간격으로 3km 까지 찾음).<br>
+  <b>건물</b> 국토교통부 GIS건물통합정보(브이월드, 경남 전체데이터) 건물 중심점 수 — 100m · 300m 안.<br>
+  <b>침수흔적</b> 행정안전부 침수흔적도(재난안전데이터공유플랫폼, 7일마다 받음) 다각형 — 지구 자리가 안이면 꼬리표, 100m 안이면 참고.<br>
+  <b>수위</b> 홍수통제소 수위관측소(이 앱 '하천 · 댐' 자료, 10분) 중 기준 수위가 있는 가장 가까운 곳 5km 안 — <u>같은 하천인지는 따지지 않는다</u>. 관심 수위 이상이면 꼬리표.<br>
+  <b>위험저수지</b> 재난안전데이터공유플랫폼 위험저수지 계측기 경보(30분) 3km 안, 그 자리 표고(125m 격자)가 지구보다 5m 이상 높은 것. 발령 중이면 꼬리표 —
+  위키 [[저수지 재난 시군 사전대피와 주민대피 준비 (진주시 매뉴얼)]] '저수지 하류부 · 저지대 거주자'. 경보 기록이 없으면 칸이 비어 있다.`);
 /* 상세 — 지역 여건 칸. 숫자는 지구 자리 기준(지형 30m · 하천 · 저수지 국토지리정보원 · 건물 국토교통부 · 침수흔적 행정안전부) */
 function sjTerrain(r) {
   const t = r.terrain;
   if (!t) return `<div class="dsec"><h5>지역 여건</h5><p class="mute">${r.pos ? "이 지구는 지형 표를 만든 뒤 좌표가 생겼다 — tools/build_dz_terrain.py 를 다시 돌린다" : "지구 좌표가 없어 지형을 못 본다"}</p></div>`;
   const row = (k, v) => v ? `<div class="tr"><span>${k}</span><b>${v}</b></div>` : "";
   const rv = t.rv, lk = t.lk;
-  return `<div class="dsec"><h5>지역 여건 <span class="mute">지형 · 하천 · 과거 침수 — 판정 % 와 별개, 함께 본다</span></h5>
+  return `<div class="dsec"><h5>지역 여건 <i class="inf" data-tip="sj-terrain" aria-label="값마다 출처">i</i><span class="mute">판정 % 와 별개, 함께 본다</span></h5>
     ${t.flags?.length ? `<div class="tfs">${t.flags.map(f => `<em class="tf${f.lv === "w" ? "" : " i"}">${escH(f.t)}</em>`).join("")}</div>` : ""}
     <div class="tt">${row("표고", t.el != null ? `${t.el.toFixed(0)}m${t.el <= 10 ? " · 저지대" : ""}` : "")}
       ${row("경사", t.sl != null ? `둘레 100m 가장 가파른 곳 ${t.sl}° · 지구 자리 ${t.sl0}°` : "")}
@@ -105,8 +120,10 @@ function sjTerrain(r) {
       ${row("저수지", lk ? `${escH(lk.n || "이름 없음")} ${lk.d}m · ${lk.dh >= 0 ? `물가가 ${lk.dh.toFixed(0)}m 높음` : `물가가 ${(-lk.dh).toFixed(0)}m 낮음`}` : "")}
       ${row("해안", t.cs != null ? `바다(표고 0m)까지 ${t.cs}m` : "")}
       ${row("건물", t.b300 != null ? `100m 안 ${t.b100}동 · 300m 안 ${t.b300}동` : "")}
+      ${row("수위", t.wl ? `${escH(t.wl.n)} ${t.wl.d >= 1000 ? `${(t.wl.d / 1000).toFixed(1)}km` : `${t.wl.d}m`} · 지금 ${escH(t.wl.stn)}${t.wl.v != null ? ` ${t.wl.v.toFixed(2)}m` : ""}${t.wl.gap != null ? ` · ${escH(t.wl.nx)}까지 ${t.wl.gap}m` : ""}${t.wl.stale ? " · ⚠ 오래된 값" : ""}` : "")}
+      ${row("위험저수지", t.rs ? `${escH(t.rs.n)} — 지구보다 ${t.rs.dh}m 높은 곳 ${t.rs.d}m · ${escH(t.rs.lvn)} ${t.rs.on ? "발령 중" : "해제"}(${escH(t.rs.at)})` : "")}
       ${row("침수흔적", t.fl ? `${t.fl.in ? "지구 자리가 흔적 안" : "100m 안에 흔적"} — ${escH(String(t.fl.yr || ""))} ${escH(t.fl.nm || "")}` : "")}</div>
-    <p class="mute">급경사 30°↑(위키 산사태 원인: 30~35°에서 가장 많다) · 저지대 10m↓. 하천 200m · 저수지 300m · 해안 500m 는 이 앱이 정한 눈여겨볼 범위. 지형은 30m 자료라 축대 · 옹벽 같은 작은 비탈은 못 본다</p></div>`;
+    <p class="mute">값마다 출처 · 계산 · 문턱 근거는 ⓘ — 지형 표 ${escH(SJ.d?.terrain_built || "")}</p></div>`;
 }
 function sjGroup(g) {
   const sel = g.rows.some(r => r.id === SJ.sel), all = SJ.sg === "all";
