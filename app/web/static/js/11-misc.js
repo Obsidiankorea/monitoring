@@ -218,13 +218,23 @@ $("stage").addEventListener("mousemove", ev => {
     : fac > 1 ? `${(v / 10 * fac).toFixed(1)}㎜/h 환산</b> (15분 ${(v / 10).toFixed(1)}㎜)<b>`
     : `${(v / 10).toFixed(1)}㎜`;
   const el = OV.has("relief") || OV.has("low") ? elevAt(gx, gy) : null;
-  tip.innerHTML = `<b>${val}</b>${where ? " · " + where : ""}${el != null && el > 0 ? `<div>표고 약 <b>${el}m</b>${el <= 10 ? " · 저지대" : ""}</div>` : ""}<div class="d">${lat.toFixed(4)}°N ${lon.toFixed(4)}°E · 칸 ${Math.round(gx)}, ${Math.round(gy)}</div>`;
+  const wn = waterAt(mx, my);
+  tip.innerHTML = `<b>${val}</b>${where ? " · " + where : ""}${el != null && el > 0 ? `<div>표고 약 <b>${el}m</b>${el <= 10 ? " · 저지대" : ""}</div>` : ""}${wn ? `<div>${wn}</div>` : ""}<div class="d">${lat.toFixed(4)}°N ${lon.toFixed(4)}°E · 칸 ${Math.round(gx)}, ${Math.round(gy)}</div>`;
   tip.hidden = false;
   const tw = tip.offsetWidth, th = tip.offsetHeight;
   tip.style.left = Math.min(V.W - tw - 6, x + 16) + "px";
   tip.style.top = Math.max(6, y - th - 12) + "px";
 });
 $("stage").addEventListener("mouseleave", () => { $("tip").hidden = true; highlight(null); });
+/* 마우스 자리의 강 · 호수 이름(강 · 호수 레이어를 켰을 때) — 국토지리정보원 하천중심선 · 호수/저수지의 이름 칸. 선이 면보다 먼저 */
+function waterAt(mx, my) {
+  if (!OV.has("water") || !GL_OK || !GL.getLayer("river")) return "";
+  const fs = GL.queryRenderedFeatures([[mx - 5, my - 5], [mx + 5, my + 5]], { layers: ["river", "river-l", "river-s", "water"] });
+  const f = fs.find(x => x.properties.k === "river" && x.properties.n) || fs.find(x => x.properties.n) || fs[0];
+  if (!f) return "";
+  const p = f.properties, kind = p.k === "river" ? ["", "국가하천", "지방하천", "소하천 등"][p.g] || "하천" : p.r ? "강 · 개울 물 면" : "호수 · 저수지";
+  return `${p.k === "river" ? "하천" : "물"} <b>${escH(p.n || "이름 없음")}</b> · ${kind}${p.o ? " · 경남 밖" : ""}`;
+}
 /* 시군을 누르면 고른다 — 오른쪽 패널이 그 시군 읍면동(격자)·지점(AWS)으로 바뀐다. 다시 누르거나 바다를 누르면 푼다.
    Ctrl(⌘)+클릭은 더하기·빼기 — 여러 시군 읍면동을 한 판에 견준다 */
 $("stage").addEventListener("click", ev => {

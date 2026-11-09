@@ -94,6 +94,37 @@ def elev_at(lon: float, lat: float) -> float | None:
     return float(a[r * m["w"] + c]) if 0 <= c < m["w"] and 0 <= r < m["h"] else None
 
 
+@lru_cache(maxsize=1)
+def _rivers() -> dict:
+    """하천중심선(water.json, 이름 있는 선)을 50m 간격 점으로 — {(칸 x, 칸 y): [(x, y, 이름)]}."""
+    fs = json.loads((TER.parent / "water" / "water.json").read_text("utf-8"))["features"]
+    b: dict = {}
+    for f in fs:
+        p = f["properties"]
+        if p["k"] != "river" or not p.get("n"):
+            continue
+        for line in f["geometry"]["coordinates"]:
+            for (x1, y1), (x2, y2) in zip(line[:-1], line[1:]):
+                n = max(1, int(math.hypot(x2 - x1, y2 - y1) / 0.1))
+                for k in range(n + 1):
+                    x, y = x1 + (x2 - x1) * k / n, y1 + (y2 - y1) * k / n
+                    b.setdefault((int(x), int(y)), []).append((x, y, p["n"]))
+    return b
+
+
+@lru_cache(maxsize=4096)
+def river_of(x: float, y: float, rm: int = 300) -> str:
+    """칸 좌표 자리에서 rm 안 가장 가까운 이름 있는 하천 — 수위관측소(300m) · 지구(2km)가 어느 하천인지(관측소 자료엔 하천명이 없다)."""
+    try:
+        b = _rivers()
+    except OSError:
+        return ""
+    r = int(rm / 500) + 1
+    pts = [p for i in range(-r, r + 1) for j in range(-r, r + 1) for p in b.get((int(x) + i, int(y) + j), [])]
+    best = min(((math.hypot(px - x, py - y), n) for px, py, n in pts), default=None)
+    return best[1] if best and best[0] * 500 <= rm else ""
+
+
 @lru_cache(maxsize=2)
 def _live(tick: int) -> tuple[list, list]:
     """지금 수위관측소(기준 수위가 있는 것) · 위험저수지 계측기 경보 — 30초마다 다시 읽는다."""
@@ -111,12 +142,17 @@ def live(d: dict) -> dict:
     wl, res = _live(int(time.time() // 30))
     gx, gy = hr_xy(pos[1], pos[0])
     out = {}
-    best = min(((math.hypot(s["x"] - gx, s["y"] - gy) * 500, s) for s in wl), key=lambda x: x[0], default=None)
-    if best and best[0] <= 5000:
+    # 같은 하천(지구 2km 안 이름 있는 하천 = 관측소 자리 300m 안 하천) 20km 안이 먼저, 없으면 아무 하천 5km 안
+    near = sorted(((math.hypot(s["x"] - gx, s["y"] - gy) * 500, s) for s in wl), key=lambda x: x[0])
+    rn = river_of(round(gx, 2), round(gy, 2), 2000)          # 지구에서 2km 안 가장 가까운 이름 있는 하천
+    same = next(((dm, s) for dm, s in near if dm <= 20000 and rn and river_of(round(s["x"], 2), round(s["y"], 2)) == rn), None)
+    best = same or next(((dm, s) for dm, s in near if dm <= 5000), None)
+    if best:
         dm, s = best
         st = s.get("stage", -1)
         out["wl"] = {"n": s["name"], "d": round(dm), "st": st, "stn": STAGES[st] if 0 <= st < len(STAGES) else "값 없음",
-                     "v": s.get("v"), "gap": s.get("gap"), "nx": STAGES[min(st + 1, len(STAGES) - 1)] if st >= 0 else None, "stale": bool(s.get("stale"))}
+                     "v": s.get("v"), "gap": s.get("gap"), "nx": STAGES[min(st + 1, len(STAGES) - 1)] if st >= 0 else None, "stale": bool(s.get("stale")),
+                     "rn": river_of(round(s["x"], 2), round(s["y"], 2)), "same": bool(same)}
     el = d.get("_el")
     for r in res:
         dm = math.hypot((r["lon"] - pos[1]) * 91000, (r["lat"] - pos[0]) * 111000)
