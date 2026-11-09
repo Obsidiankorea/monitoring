@@ -79,6 +79,8 @@ GL_LAYERS.push(
     paint: { "line-color": "var(--lv-warn)", "line-width": 2.5 } },
   { id: "heat-severe", type: "line", source: "heat", filter: ["==", ["get", "lv"], "severe"], layout: { "line-join": "round" },
     paint: { "line-color": "var(--lv-severe)", "line-width": 3 } },
+  // 고른 시군 리 사이 선(확대했을 때 — 읍면동 선보다 옅은 점선)
+  { id: "ri", type: "line", source: "ri", layout: { "line-join": "round" }, paint: { "line-color": "var(--ink-3)", "line-width": 0.8, "line-opacity": 0.6, "line-dasharray": [3, 2] } },
   // 고른 시군 읍면동 사이 선(확대했을 때)
   { id: "emd", type: "line", source: "emd", layout: { "line-join": "round" }, paint: { "line-color": "var(--ink-2)", "line-width": 1.1, "line-opacity": 0.55 } },
   // 고른 시군 밖을 어둡게

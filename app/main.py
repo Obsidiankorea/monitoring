@@ -364,6 +364,7 @@ async def api_grid_testrain(hours: int = Query(12, ge=1, le=48)):
 # 바뀔 일이 드물지만 저장소 갱신 뒤 새로고침 한 번에 따라오게 하루만 캐시한다.
 _GEO_FILES = {"gyeongnam.topo.json": "application/json", "grids.json": "application/json",
               "stations.json": "application/json", "emd.topo.json": "application/json",
+              "ri.topo.json": "application/json",
               "mask_sigun.u8.gz": None, "mask_emd.u16.gz": None}
 
 
@@ -532,6 +533,19 @@ async def api_districts(sigun: str):
     return await asyncio.to_thread(contacts.districts, sigun)
 
 
+def _dz_tg(t: dict) -> dict | None:
+    """지도 지구 카드의 '지형' 칸 — 표고 · 경사(등고선 둘레 최대) · 하천 · 저수지 · 해안 · 건물(app/terrain.py 값 그대로)."""
+    if not t:
+        return None
+    g = {k: t[k] for k in ("el", "cs", "b300") if t.get(k) is not None}
+    if t.get("sl50", t.get("sl")) is not None:
+        g["sl"] = t.get("sl50", t.get("sl"))
+    for k in ("rv", "lk"):
+        if t.get(k):
+            g[k] = {x: t[k].get(x) for x in ("n", "d", "dh")}
+    return g
+
+
 @app.get("/api/districts/all")
 async def api_districts_all():
     """지도 레이어 '우려지역 지구'(U) — 좌표가 있는 지구 전부(위키 공개 자료). 연락처는 없다."""
@@ -542,8 +556,8 @@ async def api_districts_all():
         for sg in ai.SIGUN_FULL:
             for emd, ds in contacts.districts(sg)["emd"].items():
                 out += [{"sigun": sg, "emd": emd, **{k: d[k] for k in ("id", "name", "ri", "jibun", "kind", "fam", "shelter", "rule", "pos", "approx")},
-                         "tf": (terrain.of(d) or {}).get("flags")}   # 지역 여건 꼬리표(지도 지구 카드)
-                        for d in ds if d["pos"]]
+                         "tf": t.get("flags"), "tg": _dz_tg(t)}   # 지역 여건 꼬리표 · 지형 값(지도 지구 카드)
+                        for d in ds if d["pos"] for t in [terrain.of(d) or {}]]
         return out
     rows = await asyncio.to_thread(one)
     return {"rows": rows, "geo": geocode.status()}

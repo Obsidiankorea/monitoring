@@ -163,7 +163,22 @@ function valueAt(gx, gy) {
   if (c < 0 || r < 0 || c >= CUR.w || r >= CUR.h) return undefined;
   return CUR.u[r * CUR.w + c];
 }
+/* 지구 카드 고정(왼쪽 클릭) — 마우스를 옮겨도 그대로, 담당 연락처를 붙인다. 밖을 누르거나 Esc · ✕ 로 닫는다 */
+let TIP_PIN = null;
+function tipPin(r, x, y) {
+  const tip = $("tip");
+  TIP_PIN = r;
+  tip.innerHTML = districtTip(r, true);
+  tip.classList.add("hudtip", "pin"); tip.hidden = false;
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  tip.style.left = (x + 24 + w < V.W - 6 ? x + 24 : Math.max(6, x - 24 - w)) + "px";
+  tip.style.top = Math.max(6, Math.min(V.H - h - 6, y - h / 2)) + "px";
+  tip.querySelector("[data-unpin]")?.addEventListener("click", tipUnpin);
+  dzContacts(r);
+}
+function tipUnpin() { TIP_PIN = null; const t = $("tip"); t.classList.remove("pin"); t.hidden = true; }
 $("stage").addEventListener("mousemove", ev => {
+  if (TIP_PIN) return;
   // 오른쪽 클릭 메뉴가 열려 있으면 툴팁을 감춘다 — 메뉴를 덮지 않게
   if (!V || !GEO || !$("stn-pop").hidden || ev.target.closest("#tl, #play, #legend, #layers, #rail, #pop, #sw, #camgrab, #cambar, #tools, #aiw, #showdots, #td-pop, .rng-pop")) { $("tip").hidden = true; $("stage").style.cursor = ""; return; }
   const rc = $("stage").getBoundingClientRect(), x = ev.clientX - rc.left, y = ev.clientY - rc.top;
@@ -243,8 +258,11 @@ $("stage").addEventListener("click", ev => {
   const rc = $("stage").getBoundingClientRect();
   const mx = (ev.clientX - rc.left - MT.tx) / MT.sc, my = (ev.clientY - rc.top - MT.ty) / MT.sc;
   if (DZ_PICK) { dzPicked(V.fromX(mx), V.fromY(my)); return; }      // 좌표 고치기 — 지도에서 찍기
+  if (TIP_PIN) { tipUnpin(); return; }                          // 고정한 지구 카드 — 밖을 누르면 닫기만
   const td = tideAt(mx, my);
   if (td) { tidePop(td, ev.clientX - rc.left, ev.clientY - rc.top); return; }
+  const dz = districtAt(mx, my);
+  if (dz) { tipPin(dz.dz, ev.clientX - rc.left, ev.clientY - rc.top); return; }
   const gx = V.fromX(mx), gy = V.fromY(my), sg = sigunAt(gx, gy), add = ev.ctrlKey || ev.metaKey;
   if (CAM && sg && isSel(sg) && EFEAT) {                 // 확대한 시군 안 — 읍면동 고르기(Esc 로 하나씩 물러난다)
     loadEmd().then(() => { const id = emdIdAt(gx, gy); if (id && EMDN.get(id)?.sigun === sg) pickEmd(id, add); });
@@ -712,6 +730,7 @@ document.addEventListener("keydown", ev => {
   if (CAM_EDIT && ev.key === "0") { camReset(); return; }
   if (ev.key === "Escape") {
     if (DZ_PICK) { const id = DZ_PICK; DZ_PICK = null; dzDlg(true, id); return; }
+    if (TIP_PIN) { tipUnpin(); return; }
     if (dzDlgOpen()) { dzDlg(false); return; }
     if (!$("acc-ctx").hidden) { accCtx(null); return; }
     if (!$("lg-pop").hidden) { lgPop(null); return; }
@@ -721,7 +740,7 @@ document.addEventListener("keydown", ev => {
     if (!$("showdlg").hidden) { closeShowDlg(); return; }
     if (AIW.open) { aiToggle(false); return; }
     if (SJ.open) { sjToggle(false); return; }
-    if (!$("prefs").hidden) closePrefs(); else if (!$("help").hidden) closeHelp(); else if (ESEL.length) pickEmd(null); else if (selOn()) selectSig(null); else if (SHOW.on) stopShow();
+    if (!$("prefs").hidden) closePrefs(); else if (!$("help").hidden) closeHelp(); else if (WZ) { WZ = null; camGo(true); } else if (ESEL.length) pickEmd(null); else if (selOn()) selectSig(null); else if (SHOW.on) stopShow();
     return;
   }
   if (ev.key === "?") { $("help").hidden ? openHelp() : closeHelp(); return; }

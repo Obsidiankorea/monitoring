@@ -966,6 +966,7 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 #over #hot circle { fill: none; stroke: var(--accent); stroke-width: 2.5; }
 /* 시군 확대(설정 '시군 누르면 확대') — 읍면동 경계(안쪽 선만)·이름. 확대해 들어가며 선이 서서히 나온다 */
 #over .en { font-weight: 600; fill: var(--ink-2); text-anchor: middle; dominant-baseline: central; }
+#over .rn { font-weight: 500; fill: var(--ink-3); text-anchor: middle; dominant-baseline: central; }
 #over .wl { font-weight: 600; font-style: italic; fill: #8FE3FF; text-anchor: middle; dominant-baseline: central; paint-order: stroke; stroke: #0B1A2A; letter-spacing: .04em; }   /* 강 이름(02-data drawWaterLabels) */
 #over .en .pc { fill: var(--lv-warn); font-weight: 700; }
 /* 날아가는 동안 — 선은 transform 으로 같이 커지되 굵기는 그대로, 글자·점은 잠깐 감췄다가 다 오면 새로 그린다 */
@@ -1913,6 +1914,21 @@ body.sj-on > header, body.sj-on #stage, body.sj-on #tl, body.sj-on #rail { displ
   background: color-mix(in oklab, var(--raised) 60%, transparent); color: var(--ink-2); }
 #tip .hud .goal b { color: var(--ink); font-weight: 800; }
 #tip .hud .sub { margin: .8em 0 .2em; font: 700 .7em var(--sans); letter-spacing: .12em; color: var(--ink-3); }
+/* 지형 · 담당 — 카드 왼쪽 빈자리(이름 | 값 두 칸) */
+#tip .hud .tgs { display: grid; grid-template-columns: auto 1fr; gap: .15em .8em; font-size: .82em; }
+#tip .hud .pad { margin-left: 1.2rem; margin-right: 1.2rem; }
+#tip .hud .tgs .tr { display: contents; }
+#tip .hud .tgs .tr > span { color: var(--ink-3); }
+#tip .hud .tgs .tr > b { font: 600 1em var(--sans); color: var(--ink); }
+#tip .hud .tgs .tel { color: var(--accent); text-decoration: none; font-weight: 700; }
+#tip .hud .tgs .mute { grid-column: 1 / -1; color: var(--ink-3); }
+#tip .hud .dz-pin { grid-column: 1 / -1; display: flex; gap: .4em; }
+#tip .hud .dz-pin input { width: 10em; font: inherit; padding: .2em .4em; background: var(--ground); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; }
+#tip .hud .dz-pin button { font: inherit; padding: .2em .7em; border-radius: 4px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
+#tip.pin { pointer-events: auto; box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 60%, transparent), 0 18px 48px rgba(0,0,0,.55); }
+#tip .hud .ft .x { float: right; border: 0; background: none; color: var(--ink-2); font-size: 1.2em; cursor: pointer; line-height: 1; }
+.ppbox .pp-play { border: 1px solid #94a3b8; background: #fff; color: #111827; border-radius: 4px; font-size: 11px; line-height: 1; padding: 2px 6px; cursor: pointer; pointer-events: auto; }
+.ppbox .pk { color: #111827; font-weight: 700; white-space: nowrap; }
 #tip .hud .lf .d { font-size: .82em; color: var(--ink-2); line-height: 1.45; margin-top: .15em; }
 #tip .hud .d.warn { margin: 0 1em .6em; color: var(--t90); font-size: .8em; }
 /* 지구 자체 기준 — 평면의 자홍 선과 같은 색 */

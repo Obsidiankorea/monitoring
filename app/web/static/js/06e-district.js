@@ -93,12 +93,26 @@ async function loadDistrict() {
       j.rows = j.rows.map(r => by.get(r.id) || r);
       j.regions = x.regions;
     }
-    const one = b => b && { v: [b.top, ...(b.series?.v || [])], xy: b.series?.xy || {}, t: b.series?.t || [], pl: b.series?.pl || [], site: b.series?.site || [] };
+    const one = dzOne;
     DZ_REG = j.regions || DZ_REG;
     DZ_PCT = Object.fromEntries(j.rows.map(r => [r.id, { grid: one(r.b.grid), aws: one(r.b.aws), where: r.where }]));
   } catch { DZ_PCT = DZ_PCT || {}; }
   drawDistrict(); districtLegend();
   DZ_T = setTimeout(loadDistrict, 5 * 60 * 1000);
+}
+const dzOne = b => b && { v: [b.top, ...(b.series?.v || [])], xy: b.series?.xy || {}, t: b.series?.t || [], pl: b.series?.pl || [], pp: b.series?.pp || [], site: b.series?.site || [] };
+/* 고르지 않은 시군 지구에 마우스를 올리면 — 그 시군 시간별 줄을 그때 받는다(경남 전체 시간별은 수십 초라 미리 받지 않는다). 시군마다 5분에 한 번 */
+const DZ_SQ = new Map();
+function dzSerLoad(sg) {
+  const t = DZ_SQ.get(sg);
+  if (t && (t.ing || Date.now() - t.at < 5 * 60e3)) return;
+  DZ_SQ.set(sg, { ing: true, at: Date.now() });
+  getJson(`/api/judge?sigun=${encodeURIComponent(sg)}&series=1&sb=${ACC_BASIS === "grid" ? "grid" : "aws"}`).then(j => {
+    DZ_REG = j.regions || DZ_REG; DZ_PCT = DZ_PCT || {};
+    for (const r of j.rows) DZ_PCT[r.id] = { grid: dzOne(r.b.grid), aws: dzOne(r.b.aws), where: r.where };
+    DZ_SQ.set(sg, { at: Date.now() });
+    if (TIP_PIN?.sigun === sg) { const t = $("tip"), l = t.style.left, tp = t.style.top; tipPin(TIP_PIN, 0, 0); t.style.left = l; t.style.top = tp; }
+  }).catch(() => DZ_SQ.delete(sg));
 }
 const dzRows = () => (OV.has("district") && DZ?.rows ? DZ.rows.filter(r => selHas(r.sigun)) : []);
 const dzSer = r => DZ_PCT?.[r.id]?.[ACC_BASIS === "grid" ? "grid" : "aws"];
@@ -226,10 +240,18 @@ function dzMiniPlane(r) {
   let plane = "";
   if (reg && n) {
     const S = ppScale(reg, 230, 190, 30, 22, 8, 8), cur = Math.min(DZ_TI, n - 1), pn = ppPt(reg, s.pl[cur]);
-    plane = `<div class="ppbox"><div class="ppk">${ppKey(reg, s.site)}</div><svg width="230" height="190" viewBox="0 0 230 190">${ppAreas(reg, S, { site: s.site })}${ppTrail(reg, S, s.pl, cur, true)}`
+    // 지난 자취(검은 선) — 지도 누적 구간만큼(지난 6시간 누적이면 6시간 전부터 지금까지). 15분 축은 지난 15분 값이 없어 그리지 않는다
+    const H = Math.min(48, Math.max(1, accSpan().H || 6)), past = reg.x === "15분" ? [] : (s.pp || []).slice(-H);
+    const xy = p => { const q = ppPt(reg, p); return q && q[0] != null && q[1] != null ? [+S.X(q[0]).toFixed(1), +S.Y(q[1]).toFixed(1)] : null; };
+    const pxy = [...past, s.pl[0]].map(xy).filter(Boolean);
+    const run = [...past.map((p, i) => [xy(p), `${past.length - i}시간 전`]), ...s.pl.map((p, i) => [xy(p), at(i)])].filter(([q]) => q);
+    const black = pxy.length > 1 ? `<polyline points="${pxy.map(q => q.join(",")).join(" ")}" fill="none" stroke="#111827" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`
+      + pxy.slice(0, -1).map(q => `<circle cx="${q[0]}" cy="${q[1]}" r="1.8" fill="#111827"/>`).join("") : "";
+    plane = `<div class="ppbox" data-run="${escH(JSON.stringify(run)).replace(/"/g, "&quot;")}"><div class="ppk">${ppKey(reg, s.site)}</div><svg width="230" height="190" viewBox="0 0 230 190">${ppAreas(reg, S, { site: s.site })}${black}${ppTrail(reg, S, s.pl, cur, true)}`
       + (pn && pn[0] != null && pn[1] != null ? `<circle cx="${S.X(pn[0])}" cy="${S.Y(pn[1])}" r="5" fill="#111827" stroke="#fff" stroke-width="1.5"/>` : "")
+      + `<circle class="pp-run" r="6" fill="#fff" stroke="#111827" stroke-width="2" visibility="hidden"/><text class="pp-lab" x="40" y="14" fill="#111827" font-size="11" font-weight="700"></text>`
       + `<text x="225" y="${190 - 4}" text-anchor="end" fill="${PP_INK3}" font-size="9.5">${reg.x}(㎜) →</text></svg>`
-      + `<div class="dzk lt"><span>지금</span><i></i><span>${escH(at(n - 1))}</span></div></div>`;
+      + `<div class="dzk lt">${run.length > 1 ? `<button class="pp-play" type="button" title="지난 ${past.length}시간 → 지금 → 예보 끝까지 점이 움직인다">▶</button>` : ""}${past.length ? `<span class="pk">━ 지난 ${past.length}시간</span>` : ""}<span>지금</span><i></i><span>${escH(at(n - 1))}</span></div></div>`;
   }
   const texts = (reg?.texts || []).map(x => `<div class="d">· ${escH(x.stage)}: ${escH(x.text)}</div>`).join("");
   const head = ph.skip ? `<b style="color:var(--t100)">⚠ ${ph.skip}가 ${ph.next}보다 더 찼다 — 단계를 건너뛸 수 있음(국지성 폭우)</b>`
@@ -261,7 +283,60 @@ function districtAt(mx, my) {
 }
 /* 지구 마우스 카드(게임 HUD 처럼) — ① 머리: 유형 배지 · 이름 · 큰 % ② 단계 트랙 ③ 왼쪽 단계 막대 · 다음 목표 · 비가 아닌 조건 / 오른쪽 조건 평면
    ④ 지구 자체 기준(평면의 자홍 선과 같은 색 띠) ⑤ 대피기준 · 대피장소 표. #tip 에 .hudtip 을 붙여 줄바꿈 · 너비를 카드에 맡긴다(11-misc) */
-function districtTip(r) {
+/* 평면 재생(▶) — 지난 자취 → 지금 → 예보 끝까지 점을 한 시간씩 옮긴다. 고정한 카드 · 상황판단 창에서 누른다 */
+function ppPlay(box) {
+  const run = JSON.parse(box.dataset.run || "[]"), c = box.querySelector(".pp-run"), lab = box.querySelector(".pp-lab");
+  if (!run.length || !c) return;
+  clearInterval(box._t);
+  let i = 0;
+  const step = () => {
+    const [[x, y], t] = run[i];
+    c.setAttribute("cx", x); c.setAttribute("cy", y); c.setAttribute("visibility", "visible"); lab.textContent = t;
+    if (++i >= run.length) clearInterval(box._t);
+  };
+  step(); box._t = setInterval(step, Math.max(120, Math.min(400, 6000 / run.length)));
+}
+document.addEventListener("click", ev => {
+  const b = ev.target.closest?.(".pp-play");
+  if (b) { ev.stopPropagation(); ppPlay(b.closest(".ppbox")); }
+}, true);
+/* 지형 칸(서버 /api/districts/all 의 tg — app/terrain.py 값) — 카드 왼쪽 빈자리에 */
+function dzTerrainRows(g) {
+  if (!g) return "";
+  const m = v => `${Math.round(v).toLocaleString()}m`, row = (k, v) => v ? `<div class="tr"><span>${k}</span><b>${v}</b></div>` : "";
+  return row("표고", g.el != null ? `${g.el.toFixed(0)}m${g.el <= 10 ? " · 저지대" : ""}` : "")
+    + row("경사", g.sl != null ? `${g.sl}°${g.sl >= 30 ? " · 급경사" : g.sl < 20 ? " · 완만" : ""}` : "")
+    + row("하천", g.rv ? `${escH(g.rv.n || "하천")} ${m(g.rv.d)}${g.rv.dh != null ? ` · ${g.rv.dh >= 0 ? `${g.rv.dh.toFixed(0)}m 위` : `${(-g.rv.dh).toFixed(0)}m 아래`}` : ""}` : "")
+    + row("저수지", g.lk ? `${escH(g.lk.n || "저수지")} ${m(g.lk.d)}${g.lk.dh != null ? ` · ${g.lk.dh.toFixed(0)}m 낮음` : ""}` : "")
+    + row("해안", g.cs != null && g.cs <= 3000 ? m(g.cs) : "")
+    + row("건물", g.b300 ? `${g.b300.toLocaleString()}동(300m)` : "");
+}
+/* 담당자 연락처 — 고정한 카드에서만(상황판단과 같은 /api/contacts · 잠금 번호). AI 쪽 코드는 부르지 않는다 */
+const DZ_CT = new Map();
+async function dzContacts(r) {
+  const box = $("tip").querySelector(".ctb");
+  if (!box) return;
+  let c = DZ_CT.get(r.sigun);
+  if (!c || Date.now() - c.at > 60e3) {
+    try {
+      const res = await fetch(`/api/contacts?sigun=${encodeURIComponent(r.sigun)}`, { headers: { "x-pin": sjPin() }, cache: "no-store" });
+      c = { at: Date.now(), ...(res.status === 401 ? { pin: true } : res.status === 429 ? { err: "잠금 번호를 여러 번 틀렸다 — 5분 뒤" } : await res.json()) };
+      if (!c.pin && !c.err) DZ_CT.set(r.sigun, c);
+    } catch (e) { c = { err: e.message }; }
+  }
+  if (!$("tip").contains(box)) return;
+  const ppl = c.people?.[r.id] || [];
+  box.innerHTML = c.pin ? `<form class="dz-pin"><input type="password" inputmode="numeric" autocomplete="off" placeholder="연락처 잠금 번호"><button>열기</button></form>`
+    : c.err ? `<span class="mute">${escH(c.err)}</span>` : c.on === false ? `<span class="mute">연락처 파일이 없다</span>`
+    : ppl.map((p, n) => `<div class="tr"><span>${escH((p.who || "").replace(/담당부서\s*/g, "") || `담당${n + 1}`)}</span>${p.tel ? `<a class="tel" href="tel:${escH(p.tel.replace(/[^0-9-]/g, ""))}">📞 ${escH(p.tel)}</a>` : `<em class="mute">번호 없음</em>`}</div>`).join("")
+      || `<span class="mute">이 지구 담당자가 표에 없다</span>`;
+  box.querySelector(".dz-pin")?.addEventListener("submit", ev => {
+    ev.preventDefault();
+    try { localStorage.setItem("gn-ct-pin", ev.target.querySelector("input").value); } catch {}
+    DZ_CT.delete(r.sigun); dzContacts(r);
+  });
+}
+function districtTip(r, pin = false) {
   const where = [r.ri, r.jibun].filter(x => x && x !== "–").join(" ");
   const name = r.name && !/구$/.test(r.name) && r.name !== "–" ? r.name : where || r.emd;
   const p = dzPct(r), w = DZ_PCT?.[r.id]?.where, col = dzColVar(dzLv(p)), m = dzMiniPlane(r);
@@ -271,13 +346,17 @@ function districtTip(r) {
     + (p != null ? `<div class="pc" style="--c:${col}"><b>${p}<i>%</i></b><small>${ACC_BASIS === "grid" ? "격자" : "AWS"} 기준${w === "읍면동" ? " · 읍면동 값" : ""}</small></div>` : "") + `</div>`
     + (m ? `<div class="dzs">${m.strip}</div>`
       + `<div class="bd"><div class="lf">${m.bars}<div class="goal">${m.head}</div>`
-      + (m.texts ? `<div class="sub">비가 아닌 조건</div>${m.texts}` : "") + `</div><div class="rt">${m.plane}</div></div>`
+      + (m.texts ? `<div class="sub">비가 아닌 조건</div>${m.texts}` : "")
+      + (r.tg ? `<div class="sub">지형</div><div class="tgs">${dzTerrainRows(r.tg)}</div>` : "")
+      + (pin ? `<div class="sub">담당</div><div class="ctb tgs"><span class="mute">불러오는 중…</span></div>` : "") + `</div><div class="rt">${m.plane}</div></div>`
       + (m.site ? `<div class="site"><span>지구 기준</span><b>${escH(m.site)}</b></div>` : "")
-      : `<div class="d">시군을 눌러 고르면 단계 그래프가 나온다</div>`)
+      : `<div class="d">${(dzSerLoad(r.sigun), DZ_SQ.get(r.sigun)?.ing) ? "단계 그래프 받는 중… (마우스를 다시 올리면 나온다)" : "단계 그래프를 그릴 자료가 없다 — 이 지구 유형의 강우 기준이 없거나 예보를 못 받았다"}</div>`)
     + (r.tf?.length ? `<div class="tfs">${r.tf.map(f => `<em class="tf${f.lv === "w" ? "" : " i"}">${escH(f.t)}</em>`).join("")}</div>` : "")   // 지역 여건(app/terrain.py)
     + (r.approx ? `<div class="d warn">위치는 근사 — 지번으로 못 찾아 그 리 · 읍면동 가운데(판정은 읍면동 기준)</div>` : "")
     + (r.rule || r.shelter ? `<dl>${row("대피기준", r.rule)}${row("대피장소", r.shelter)}</dl>` : "")
-    + `<div class="ft">오른쪽 클릭 — 상황판단 모드 · 카카오맵</div></div>`;
+    + (!m && r.tg ? `<div class="sub pad">지형</div><div class="tgs pad">${dzTerrainRows(r.tg)}</div>` : "")
+    + (!m && pin ? `<div class="sub pad">담당</div><div class="ctb tgs pad"><span class="mute">불러오는 중…</span></div>` : "")
+    + `<div class="ft">${pin ? "고정 — 밖을 누르거나 Esc 로 닫기 · ▶ 지난 자취부터 재생 · " : "왼쪽 클릭 — 고정(담당 연락처) · "}오른쪽 클릭 — 상황판단 모드 · 카카오맵${pin ? `<button class="x" data-unpin title="닫기 (Esc)">✕</button>` : ""}</div></div>`;
 }
 function districtOpen(r) {
   const u = `/map.html?sj=1&sig=${encodeURIComponent(r.sigun)}&r=${encodeURIComponent(r.id)}`;
@@ -434,7 +513,7 @@ function dzSeries() {
   DZ_ST = setTimeout(async () => {
     if (!OV.has("district") || !DZ_PCT || !SELS.length) return;
     const sb = ACC_BASIS === "grid" ? "grid" : "aws";
-    const one = b => b && { v: [b.top, ...(b.series?.v || [])], xy: b.series?.xy || {}, t: b.series?.t || [], pl: b.series?.pl || [], site: b.series?.site || [] };
+    const one = dzOne;
     for (const sg of SELS) {
       try {
         const j = await getJson(`/api/judge?sigun=${encodeURIComponent(sg)}&series=1&sb=${sb}`);

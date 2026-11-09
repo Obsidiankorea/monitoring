@@ -999,6 +999,24 @@ def _pt_max(arr: np.ndarray, cells: list[tuple[str, int, int]]) -> dict[str, flo
     return out
 
 
+def _pt_hours(frames: list, cells: list[tuple[str, int, int]]) -> dict[str, list]:
+    """지구 자리(둘레 8칸 최대)의 매시 강수 — 오래된 것부터, 없는 시각은 None. 상황판단 평면의 지난 자취(검은 선)용."""
+    if not cells:
+        return {}
+    R = np.array([r for _, r, _ in cells]); C = np.array([c for _, _, c in cells])
+    cols = []
+    for f in frames:
+        if f is None:
+            cols.append([None] * len(cells))
+            continue
+        a = np.pad(np.asarray(f, dtype="f8"), 1, constant_values=np.nan)
+        w = np.stack([a[R + 1 + dr, C + 1 + dc] for dr in (-1, 0, 1) for dc in (-1, 0, 1)])
+        ok = np.isfinite(w).any(axis=0)
+        m = np.where(ok, np.nanmax(np.where(np.isfinite(w), w, -np.inf), axis=0), np.nan)
+        cols.append([round(float(v), 1) if np.isfinite(v) else None for v in m])
+    return {rid: [col[i] for col in cols] for i, (rid, _, _) in enumerate(cells)}
+
+
 def emd_windows(windows=(1, 3, 12, 24, 48), now: datetime | None = None, basis: str = "grid", points: dict | None = None) -> dict:
     """경남 읍면동마다 1 · 3 · 12 · 24 · 48시간 누적 최대 칸과 15분 최대 칸 — 한 번에(AI 상황판단용).
     basis=aws 면 누적은 AWS 관측소 합의 IDW 면(aws_frame)의 읍면동 최대 칸 — 15분은 격자뿐이라 그대로 격자.
@@ -1042,6 +1060,8 @@ def emd_windows(windows=(1, 3, 12, 24, 48), now: datetime | None = None, basis: 
             per.setdefault(i, {})[f"{h}h"] = round(v, 1)
         for rid, v in _pt_max(tot, cells).items():
             pts.setdefault(rid, {})[f"{h}h"] = v
+    for rid, hs in _pt_hours(frames, cells).items():          # 지난 48시간 매시(격자 — AWS 기준에서도 자취 모양은 격자로)
+        pts.setdefault(rid, {})["hrs"] = hs
     if k15:
         a15 = gridstore.load("obs15", k15[-1])
         if a15 is not None:

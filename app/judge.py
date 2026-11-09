@@ -195,6 +195,20 @@ def series_of(e: dict, s: dict, fam: str, rule: str) -> dict | None:
     return {"t": list(fl[:len(out)]), "v": out, "xy": xy, "ax": ax, "rule": rule0, "pl": pl, "site": ai.site_area(rule)}
 
 
+def past_of(sr: dict | None, hrs: list | None, n: int = 48) -> dict | None:
+    """평면의 지난 자취 pp — 지금에서 거꾸로 n 시간: 누적 = 지금 누적 − 그 뒤 온 비, 시우량 = 그 시각 매시 값. 오래된 것부터, 끝은 지금 바로 앞.
+    hrs 는 지구 자리 매시(gridview._pt_hours, 오래된 것부터). 빈 시각은 0 으로 뺀다(누적이 덜 줄어 — 자취가 지금 쪽으로 붙는다)."""
+    if not sr or not hrs or not sr.get("pl") or sr["pl"][0][0] is None:
+        return sr
+    a0, out, cum = sr["pl"][0][0], [], 0.0
+    hs = hrs[-n:]
+    for k in range(len(hs) - 1, 0, -1):                       # hs[k] = 그 시각까지 1시간 — 그 앞 시각의 점은 그만큼 뺀다
+        cum += hs[k] or 0
+        out.append([round(max(a0 - cum, 0), 1), hs[k - 1], None])
+    sr["pp"] = out[::-1]
+    return sr
+
+
 def rows_of(sg: str, base: str, k: float, add: tuple = (0.0, 0.0), series: bool = False, sb: str | None = None) -> tuple[list[dict], dict]:
     g, a = _sit(sg, base, k, "grid", add), _sit(sg, base, k, "aws", add)
     ga = {e["emd"]: e for e in a["emd"]}
@@ -211,9 +225,9 @@ def rows_of(sg: str, base: str, k: float, add: tuple = (0.0, 0.0), series: bool 
             eg, ea2 = at_point(e, pg.get(d["id"]), g, d["fam"], d["rule"]), ea and at_point(ea, pa.get(d["id"]), a, d["fam"], d["rule"])
             b = {"grid": pack(eg, d["fam"], d["rule"]), "aws": pack(ea2, d["fam"], d["rule"]) if ea else None}
             if series and sb != "aws":
-                b["grid"]["series"] = series_of(eg, g, d["fam"], d["rule"])
+                b["grid"]["series"] = past_of(series_of(eg, g, d["fam"], d["rule"]), (pg.get(d["id"]) or {}).get("hrs"))
             if series and sb != "grid" and ea:
-                b["aws"]["series"] = series_of(ea2, a, d["fam"], d["rule"])
+                b["aws"]["series"] = past_of(series_of(ea2, a, d["fam"], d["rule"]), (pa.get(d["id"]) or pg.get(d["id"]) or {}).get("hrs"))
             ss = slide_site(d["rule"], sl) if d["fam"] == "산사태" else None
             for v in b.values():                             # 산사태 예보 발령이 기준인 지구 — 강수가 아니라 발령으로
                 if v and ss is not None:

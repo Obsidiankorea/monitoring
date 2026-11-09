@@ -354,8 +354,10 @@ function zoomCam(sigs) {
 /* 휠 확대(11-10) — 지도 위에서 휠을 굴리면 커서 자리를 붙잡고 키우고 줄인다. 잠깐 보는 틀이라 기억하지 않는다
    (기본 틀은 지도 위치 C). 처음 틀까지 줄이거나 시군을 고르면 · Esc 면 풀린다 */
 let WZ = null;
+const wzKey = () => (zoomOn() ? "z" : "") + SELS.join() + "|" + ESEL.join();   // 고른 시군 · 읍면동이 바뀌면 휠 틀은 무효
 function camTarget() {
   const zo = zoomOn() && !CAM_EDIT;
+  if (WZ && WZ.key !== wzKey()) WZ = null;
   if (WZ && !CAM_EDIT) return { cam: WZ, mt: { tx: 0, ty: 0, sc: 1 }, zoom: zo, user: !zo };
   const c = zo ? zoomCam(SELS) : null;                         // 지도 위치를 고치는 동안은 경남 전체 틀로
   if (c) return { cam: c, mt: { tx: 0, ty: 0, sc: 1 }, zoom: true };
@@ -373,7 +375,6 @@ function setWrap(m, animate) {
 }
 function camGo(animate = true) {
   if (!V) return;
-  WZ = null;                             // 시군 고르기 · 풀기 · 판 크기 바뀜 — 휠로 키운 틀은 놓는다
   const T = camTarget();
   if (!T.zoom && !T.user && !CAM && !CAMU && !ZA) {   // 경남 전체 ↔ 경남 전체(타임라인 비켜서기) — 예전대로 CSS 로 옮긴다
     MT = T.mt; setWrap(MT, animate);
@@ -484,7 +485,7 @@ function camReset() { UC = { ...UC0 }; if (CAM_EDIT) camSet(camTarget()); else c
     const s1 = Math.min(base.s * ZMAX * 4, C.s * Math.exp(-ev.deltaY * 0.0015));
     if (s1 <= base.s * 1.001) { if (was) camLive(); return; }   // 처음 틀까지 줄였다 — 휠 틀을 놓는다
     const f = s1 / C.s;
-    WZ = { s: s1, ox: mx - (mx - C.ox) * f, oy: my - (my - C.oy) * f };
+    WZ = { s: s1, ox: mx - (mx - C.ox) * f, oy: my - (my - C.oy) * f, key: wzKey() };
     camLive();
   }, { passive: false });
   $("cam-reset").onclick = camReset;
@@ -552,7 +553,18 @@ function fly(T) {
       같은 시군 안 읍면동 사이 선만 긋고, 시군 모양으로 잘라 삐져나온 끝을 감춘다. */
 let ETOPO = null, EFEAT = null, EMDP = null;
 const EMESH = new Map();
+/* 리 경계(tools/build_ri.py — 국토교통부 행정구역_리) — 시군을 확대했을 때 처음 한 번 받는다. 선은 고른 시군 안 리 사이만 */
+let RTOPO = null, RFEAT = null, RIP = null;
+const RMESH = new Map();
+function ensureRi() {
+  if (!RIP) RIP = getJson("/api/grid/geo/ri.topo.json").then(t => {
+    RTOPO = t; RFEAT = topojson.feature(t, t.objects.ri).features;
+    if (zoomOn()) { drawEmd(); if (!ZA) drawStations(); }
+  }).catch(() => { RIP = null; });
+  return RIP;
+}
 function ensureEmd() {
+  ensureRi();
   if (!EMDP) EMDP = getJson("/api/grid/geo/emd.topo.json").then(t => {
     ETOPO = t; EFEAT = topojson.feature(t, t.objects.emd).features;
     if (zoomOn()) { drawEmd(); if (!ZA) drawStations(); }
@@ -572,6 +584,10 @@ function drawEmd() {
     EMESH.set(sg, topojson.mesh(ETOPO, ETOPO.objects.emd,
       (a, b) => a !== b && a.properties.sigun === sg && b.properties.sigun === sg));
   glData("emd", on ? SELS.join() : "", () => on ? SELS.map(sg => glF(EMESH.get(sg))) : []);
+  const ron = on && !!RTOPO;
+  if (ron) for (const sg of SELS) if (!RMESH.has(sg))
+    RMESH.set(sg, topojson.mesh(RTOPO, RTOPO.objects.ri, (a, b) => a !== b && a.properties.sigun === sg && b.properties.sigun === sg));
+  glData("ri", ron ? SELS.join() : "", () => ron ? SELS.map(sg => glF(RMESH.get(sg))) : []);
 }
 /* 읍면동 이름 — 큰 곳부터, 시군명·최대 라벨·관측소와 겹치지 않는 자리에만(가장 덜 중요한 글자) */
 function drawEmdNames(taken) {
@@ -593,6 +609,20 @@ function drawEmdNames(taken) {
     if (b.x0 < A.x0 - 8 || b.x1 > A.x1 + 8 || b.y0 < 4 || b.y1 > V.H - 4 || hit(b)) continue;
     placed.push(b);
     out.push(`<text class="en" x="${x.toFixed(1)}" y="${y.toFixed(1)}" style="font-size:${fs.toFixed(1)}px;stroke-width:${(fs * 0.2).toFixed(1)}px">${p.name}${pc == null ? "" : ` <tspan class="pc">${pc}%</tspan>`}</text>`);
+  }
+  // 리 이름 — 더 키웠을 때(읍면동을 골랐거나 휠로 한 칸이 7px 넘게)만, 남은 빈자리에 작게. 고른 읍면동이 있으면 그 둘레만
+  if (RFEAT && (ESEL.length || V.s / (V.k || 1) >= 7)) {
+    const rs = Math.max(11, Math.min(16, V.u * 3.4)), rh = rs * 1.2;
+    const eb = ESEL.length ? EFEAT.filter(f => ESEL.includes(f.properties.id)).map(f => { const c = f.geometry.coordinates.flat(3); let a = [1e9, 1e9, -1e9, -1e9]; for (let i = 0; i < c.length; i += 2) a = [Math.min(a[0], c[i]), Math.min(a[1], c[i + 1]), Math.max(a[2], c[i]), Math.max(a[3], c[i + 1])]; return a; }) : null;
+    for (const f of RFEAT) {
+      const p = f.properties;
+      if (!isSel(p.sigun) || (eb && !eb.some(b => p.lx >= b[0] && p.lx <= b[2] && p.ly >= b[1] && p.ly <= b[3]))) continue;
+      const x = V.toX(p.lx), y = V.toY(p.ly), w = p.name.length * rs + 4;
+      const b = { x0: x - w / 2, x1: x + w / 2, y0: y - rh / 2, y1: y + rh / 2 };
+      if (b.x0 < A.x0 || b.x1 > A.x1 || b.y0 < 4 || b.y1 > V.H - 4 || hit(b)) continue;
+      placed.push(b);
+      out.push(`<text class="rn" x="${x.toFixed(1)}" y="${y.toFixed(1)}" style="font-size:${rs.toFixed(1)}px;stroke-width:${(rs * 0.22).toFixed(1)}px">${p.name}</text>`);
+    }
   }
   g.innerHTML = out.join("");
   drawWaterLabels(placed);
