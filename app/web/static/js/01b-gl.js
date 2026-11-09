@@ -38,6 +38,13 @@ const GL_LAYERS = [
   { id: "low-t", type: "raster", source: "low-t", minzoom: 10, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0 } },
   { id: "relief", type: "raster", source: "relief", maxzoom: 10, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0 } },
   { id: "relief-t", type: "raster", source: "relief-t", minzoom: 10, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0 } },
+  // 강 · 호수 · 저수지(레이어 water, 오픈스트리트맵 — tools/build_water.py). 면은 옅게 — 그 위 비 색이 묻히지 않게
+  { id: "water", type: "fill", source: "water", filter: ["==", ["get", "k"], "water"], layout: { visibility: "none" },
+    paint: { "fill-color": "#0B2F4E", "fill-opacity": 0.55 } },
+  { id: "water-ln", type: "line", source: "water", filter: ["==", ["get", "k"], "water"], layout: { visibility: "none" },
+    paint: { "line-color": "#7DDCFF", "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.8, 11, 1.4], "line-opacity": 0.9 } },
+  { id: "river", type: "line", source: "water", filter: ["==", ["get", "k"], "river"], layout: { visibility: "none", "line-join": "round", "line-cap": "round" },
+    paint: { "line-color": "#7DDCFF", "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.9, 11, 2.2], "line-opacity": 0.9 } },
   { id: "bd-halo", type: "line", source: "bd", filter: ["in", ["get", "t"], ["literal", ["sg", "cs"]]],
     layout: { "line-join": "round" }, paint: { "line-color": "var(--bd-halo)", "line-width": 4 } },
   { id: "bd-halo-z", type: "line", source: "bd", filter: ["in", ["get", "t"], ["literal", ["zn", "sb"]]],
@@ -93,7 +100,7 @@ function glInit() {
     center: gll(...GC), zoom: 8, maxZoom: 22,
     style: { version: 8, sources, layers: GL_LAYERS.map(L => ({ ...L, paint: glPaint(L) })) },
   });
-  GL.once("style.load", () => { GL_OK = true; if (V) { buildBase(); glCam(); draw(); } glTerrain(); });
+  GL.once("style.load", () => { GL_OK = true; if (V) { buildBase(); glCam(); draw(); } glTerrain(); glWater(); });
 }
 /* 지형 그림 — 켜진 것만 보인다. 처음 켤 때 terrain.json(bbox)을 읽고 그림을 한 번 올린다 */
 let TERRAIN = null;
@@ -111,6 +118,21 @@ async function glTerrain() {
     } catch (e) { TERRAIN = null; console.warn("지형 그림을 못 읽었다", e); return; }
   }
   for (const id of ["relief", "low"]) for (const L of [id, id + "-t"]) GL.setLayoutProperty(L, "visibility", OV.has(id) && TERRAIN?.ok ? "visible" : "none");
+}
+/* 강 · 호수 · 저수지 — 처음 켤 때 water.json(칸 좌표)을 받아 올린다. 켜면 출처(#osm-attr)도 */
+let WATER = null;
+async function glWater() {
+  const on = OV.has("water");
+  $("osm-attr").hidden = !on;
+  if (!GL_OK) return;
+  if (on && !WATER) {
+    WATER = "loading";
+    try {
+      WATER = (await getJson("water/water.json")).features;
+      glSet("water", glFC(WATER.map(f => glF(f.geometry, f.properties))));
+    } catch (e) { WATER = null; console.warn("강 · 호수 자료를 못 읽었다", e); return; }
+  }
+  for (const L of ["water", "water-ln", "river"]) GL.setLayoutProperty(L, "visibility", OV.has("water") && Array.isArray(WATER) ? "visible" : "none");
 }
 /* 마우스 자리 표고(m) — 지형 레이어를 켰을 때만. 125m 칸 표고(elev.i16.gz, 2MB)를 처음 물을 때 받는다. 아직이면 null */
 let ELEV = null;

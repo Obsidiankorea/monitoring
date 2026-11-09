@@ -14,6 +14,7 @@ const OVL = [
   { id: "temp", label: "기온", short: "기온", key: "E" },
   { id: "relief", label: "지형 음영(산 · 골짜기)", short: "지형", key: "Y" },
   { id: "low", label: "저지대(표고 10m 이하)", short: "저지대", key: "Z" },
+  { id: "water", label: "강 · 호수 · 저수지", short: "물", key: "" },
 ];
 /* ⓘ 에 올리거나 누르면 뜨는 설명 — 레이어 목록·범례는 짧게 두고 긴 말은 여기에 */
 const TIPS = new Map([
@@ -38,6 +39,8 @@ const TIPS = new Map([
     켜 두면 마우스 자리 <b>표고</b>(약, 125m 칸)도 풍선에 뜬다. 표고 = 공개 지형 타일(SRTM 등).`],
   ["ov-low", `<b>저지대</b> — 표고 0~10m 땅을 민트색으로(강수 청색과 안 겹치게)(낙동강 하구 · 김해 · 창원 · 해안 매립지 등). 배수 · 침수에 약한 곳을 짐작하는 용도.
     실제 침수 범위는 '침수흔적'과 같이 본다. 해안선 언저리는 표고 자료가 거칠어 바다 쪽으로 조금 번진다.`],
+  ["ov-water", `<b>강 · 호수 · 저수지</b> — 큰 강은 하늘색 선, 호수 · 저수지 · 댐 호수 · 강의 넓은 물은 면으로(넓이 0.03㎢ 이상).
+    자료 © OpenStreetMap 기여자(ODbL) — 켜면 지도 오른쪽 아래에 출처가 뜬다.`],
   ["ov-tide", `<b>조위</b> — 경남 해안 조위관측소의 바닷물 높이(해양조사원). 표식의 숫자는 지금 실측, 괄호는 예측과의 차이.
     마우스를 올리면 요약, 누르면 게이지 · 물결 팝업. 대조기 기간에는 아이콘 옆에 표시한다.`],
   ["ov-stnval", `<b>지점 강수량 글자</b> — 관측소 옆에 값을 단다. 센 곳부터 빈자리에만, 상위 셋은 지점 이름도.
@@ -148,7 +151,7 @@ function renderLayers() {
   if (LY_OPEN && !OV.has(LY_OPEN)) LY_OPEN = null;
   // 이름 · 키 · ⓘ 만 — 설명은 ⓘ 에. 딸린 항목(지점 강수량 글자)은 부모(관측소) 밑에 들여 쓰고, 부모가 꺼져 있으면 흐리게
   $("ly-menu").innerHTML = OVL.map(o => `<label class="ly-it${o.parent ? " sub" : ""}${o.parent && !OV.has(o.parent) ? " off" : ""}"><input type="checkbox" data-ov="${o.id}" ${OV.has(o.id) ? "checked" : ""}${o.parent && !OV.has(o.parent) ? " disabled" : ""}>
-    <b>${o.label}</b><kbd>${o.key}</kbd><i class="inf" data-tip="ov-${o.id}" aria-label="설명">i</i></label>`).join("");
+    <b>${o.label}</b>${o.key ? `<kbd>${o.key}</kbd>` : ""}<i class="inf" data-tip="ov-${o.id}" aria-label="설명">i</i></label>`).join("");
   for (const c of $("ly-menu").querySelectorAll("input[data-ov]")) c.onchange = () => setOverlay(c.dataset.ov, c.checked);
   renderAlertLegend();
   renderStnLegend();
@@ -170,6 +173,7 @@ function setOverlay(id, on) {
   if (id === "district") { if (on) setLyOpen(id); loadDistrict(); }
   if (id === "stnval") drawStations();
   if (id === "relief" || id === "low") glTerrain();
+  if (id === "water") glWater();
   renderLayers();
 }
 $("ly-btn").onclick = () => {

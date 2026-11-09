@@ -41,25 +41,29 @@ $("stage").addEventListener("contextmenu", ev => {
   if (st && st.key) { ev.preventDefault(); $("tip").hidden = true; stnMenu(ev, st); return; }
   // 지구 · 시군 위 — 상황판단 창으로(왼쪽 클릭은 시군 · 읍면동 고르기라 여기로 옮겼다)
   const dz = districtAt(mx, my)?.dz, sg = sigunAt(V.fromX(mx), V.fromY(my));
-  if (!dz && !sg) return;
   ev.preventDefault();
   $("tip").hidden = true;
-  mapMenu(ev, dz, sg);
+  mapMenu(ev, dz, sg, LCC(V.fromX(mx), V.fromY(my)));
 });
-function mapMenu(ev, dz, sg) {
+function mapMenu(ev, dz, sg, [lon, lat]) {
   const pop = $("stn-pop"), rc = $("stage").getBoundingClientRect();
   const nm = dz && (dz.name && !/구$/.test(dz.name) && dz.name !== "–" ? dz.name : [dz.ri, dz.jibun].filter(x => x && x !== "–").join(" "));
-  pop.innerHTML = `<div class="g">상황판단 모드</div>`
+  const ll = `${lat.toFixed(5)},${lon.toFixed(5)}`;   // 카카오맵은 이름이 있어야 핀이 꽂힌다 — 이름 자리에도 좌표(쉼표는 구분자라 띄어쓰기)
+  pop.innerHTML = `<div class="g">카카오맵 · ${lat.toFixed(4)}°N ${lon.toFixed(4)}°E</div>`
+    + `<button data-u="https://map.kakao.com/link/map/${ll.replace(",", " ")},${ll}">이 자리 지도로 보기</button>`
+    + `<button data-u="https://map.kakao.com/link/roadview/${ll}">이 자리 거리뷰(로드뷰)</button>`
+    + (dz || sg ? `<div class="g">상황판단 모드</div>` : "")
     + (dz ? `<button data-a="dz">이 지구 — ${escH(nm || dz.emd)} <small>${escH(dz.kind || dz.fam)}</small></button>` : "")
     + (sg ? `<button data-a="sg">${escH(sg)} 전체</button>` : "")
     + (dz ? `<div class="g">지구 좌표</div><button data-a="fix">이 지구 좌표 확인 · 고치기</button>` : "")
-    + `<div class="note">별도 창으로 연다(듀얼 모니터). 창이 열려 있으면 그 창이 바뀐다.</div>`;
+    + (dz || sg ? `<div class="note">별도 창으로 연다(듀얼 모니터). 창이 열려 있으면 그 창이 바뀐다.</div>` : "");
   pop.hidden = false;
   pop.style.left = Math.max(4, Math.min(ev.clientX - rc.left, rc.width - pop.offsetWidth - 8)) + "px";
   pop.style.top = Math.max(4, Math.min(ev.clientY - rc.top, rc.height - pop.offsetHeight - 8)) + "px";
   void pop.offsetWidth; pop.classList.add("open");
   for (const b of pop.querySelectorAll("button")) b.onclick = e => {
     e.stopPropagation(); stnPop(null);
+    if (b.dataset.u) return window.open(b.dataset.u, "_blank", "noopener");
     if (b.dataset.a === "fix") return dzDlg(true, dz.id);
     if (b.dataset.a === "dz") districtOpen(dz);
     else if (!window.open(`/map.html?sj=1&sig=${encodeURIComponent(sg)}`, "gn-judge", "popup=1,width=1680,height=1000")) toast("팝업이 막혔다 — 이 사이트의 팝업을 허용한다");
@@ -769,7 +773,7 @@ async function boot() {
   if (SAF_IDS.some(id => OV.has(id))) loadSafety();
   if (OV.has("district")) loadDistrict();
   if (OV.has("tide")) loadTide();
-  glTerrain();
+  glTerrain(); glWater();
   vsrtN = +SET.vsrt_n || 1; x4 = !!SET.x4;
   applyAccFull(); applyHdrPin();
   // 색 — ?pal=kma|blue 가 서버 설정보다 먼저(벽면 화면 고정용). 기상청 색은 서버가 뽑아 둔 범례를 받아 와야 쓴다
