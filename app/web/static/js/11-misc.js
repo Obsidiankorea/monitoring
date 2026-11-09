@@ -7,6 +7,14 @@ const isOff = key => offList().some(x => x.id === key);
 function stnPop(close) {
   if (close === null) { $("stn-pop").classList.remove("open"); $("stn-pop").hidden = true; }
 }
+/* 오른쪽 클릭 메뉴를 마우스 자리에 — .rng-pop 은 zoom: var(--k) 라 left · top 도 k 배로 밀린다. k 로 나눠야 마우스 밑에 뜬다(lgPop 과 같은 식) */
+function popAt(pop, ev, rc) {
+  const k = V?.k || 1;
+  pop.hidden = false;
+  const pw = pop.offsetWidth * k, ph = pop.offsetHeight * k;
+  pop.style.left = Math.max(4, Math.min(ev.clientX - rc.left, rc.width - pw - 8)) / k + "px";
+  pop.style.top = Math.max(4, Math.min(ev.clientY - rc.top, rc.height - ph - 8)) / k + "px";
+}
 function stnMenu(ev, st) {
   const pop = $("stn-pop"), off = isOff(st.key), rc = $("stage").getBoundingClientRect();
   const v = st.v != null ? `${(+st.v * factor()).toFixed(1)}㎜` : "값 없음";
@@ -15,9 +23,7 @@ function stnMenu(ev, st) {
     + `<button data-a="t" class="${off ? "on" : ""}">${off ? "다시 켜기 — 계산에 넣기" : "비활성화 — 계산에서 빼기"}</button>`
     + `<div class="note">${off ? "" : "이 지점 없이 둘레 관측소로 면을 다시 메운다(카드 · 지금 오는 비에서도 뺀다). "}목록은 설정(Ctrl+,) › 관측소</div>`
     + kakaoBtns(`${st.name}(AWS)`, ...LCC(st.x, st.y));
-  pop.hidden = false;
-  pop.style.left = Math.max(4, Math.min(ev.clientX - rc.left, rc.width - pop.offsetWidth - 8)) + "px";
-  pop.style.top = Math.max(4, Math.min(ev.clientY - rc.top, rc.height - pop.offsetHeight - 8)) + "px";
+  popAt(pop, ev, rc);
   void pop.offsetWidth; pop.classList.add("open");
   kakaoBind(pop);
   pop.querySelector("button").onclick = e => {
@@ -80,9 +86,7 @@ function mapMenu(ev, dz, sg, pl) {
     + (sg ? `<button data-a="sg">${escH(sg)} 전체</button>` : "")
     + (dz ? `<div class="g">지구 좌표</div><button data-a="fix">이 지구 좌표 확인 · 고치기</button>` : "")
     + (dz || sg ? `<div class="note">별도 창으로 연다(듀얼 모니터). 창이 열려 있으면 그 창이 바뀐다.</div>` : "");
-  pop.hidden = false;
-  pop.style.left = Math.max(4, Math.min(ev.clientX - rc.left, rc.width - pop.offsetWidth - 8)) + "px";
-  pop.style.top = Math.max(4, Math.min(ev.clientY - rc.top, rc.height - pop.offsetHeight - 8)) + "px";
+  popAt(pop, ev, rc);
   void pop.offsetWidth; pop.classList.add("open");
   for (const b of pop.querySelectorAll("button:not([data-u])")) b.onclick = e => {
     e.stopPropagation(); stnPop(null);
@@ -151,7 +155,7 @@ function valueAt(gx, gy) {
   return CUR.u[r * CUR.w + c];
 }
 $("stage").addEventListener("mousemove", ev => {
-  if (!V || !GEO || ev.target.closest("#tl, #play, #legend, #layers, #rail, #pop, #sw, #camgrab, #cambar, #tools, #aiw, #showdots, #td-pop")) { $("tip").hidden = true; $("stage").style.cursor = ""; return; }
+  if (!V || !GEO || ev.target.closest("#tl, #play, #legend, #layers, #rail, #pop, #sw, #camgrab, #cambar, #tools, #aiw, #showdots, #td-pop, .rng-pop")) { $("tip").hidden = true; $("stage").style.cursor = ""; return; }
   const rc = $("stage").getBoundingClientRect(), x = ev.clientX - rc.left, y = ev.clientY - rc.top;
   const mx = (x - MT.tx) / MT.sc, my = (y - MT.ty) / MT.sc;
   const gx = V.fromX(mx), gy = V.fromY(my), v = valueAt(gx, gy), tip = $("tip");
@@ -208,7 +212,7 @@ $("stage").addEventListener("mouseleave", () => { $("tip").hidden = true; highli
    Ctrl(⌘)+클릭은 더하기·빼기 — 여러 시군 읍면동을 한 판에 견준다 */
 $("stage").addEventListener("click", ev => {
   // 누른 아이콘이 다시 그려지면 ev.target 은 문서에서 빠져 closest 가 헛돈다 — 누른 때의 경로로 본다
-  if (!V || !GEO || ev.composedPath().some(e => e.matches?.("#tl, #play, #legend, #rail, #layers, #hud, #tip, #sw, #camgrab, #cambar, #tools, #aiw, #showdots, #td-pop"))) return;
+  if (!V || !GEO || ev.composedPath().some(e => e.matches?.("#tl, #play, #legend, #rail, #layers, #hud, #tip, #sw, #camgrab, #cambar, #tools, #aiw, #showdots, #td-pop, .rng-pop"))) return;
   const rc = $("stage").getBoundingClientRect();
   const mx = (ev.clientX - rc.left - MT.tx) / MT.sc, my = (ev.clientY - rc.top - MT.ty) / MT.sc;
   if (DZ_PICK) { dzPicked(V.fromX(mx), V.fromY(my)); return; }      // 좌표 고치기 — 지도에서 찍기
