@@ -198,8 +198,9 @@ def of(d: dict) -> dict | None:
         (w if lk["d"] <= 300 and lk["dh"] >= 10 else i)(f"{lk['n'] or '저수지'} 아래 {lk['d']}m · {lk['dh']:.0f}m 낮음")
     if t.get("cs") is not None and t["cs"] <= 500 and el is not None and el <= 5:
         w("해안 저지대")
-    if fam == "산사태" and t.get("sl") is not None:
-        (w if t["sl"] >= 30 else i)(f"경사 {t['sl']}°" + (" 급경사" if t["sl"] >= 30 else " 완만" if t["sl"] < 20 else ""))
+    sl = t.get("sl50", t.get("sl"))                                # 등고선(1:5,000) 경사가 있으면 그것 — 30m 표고는 비탈을 낮게 잡는다
+    if fam == "산사태" and sl is not None:
+        (w if sl >= 30 else i)(f"경사 {sl}°" + (" 급경사" if sl >= 30 else " 완만" if sl < 20 else ""))
     wl = t.get("wl")
     if wl and wl["st"] >= 0:                                       # 수위 — 관심 이상이면 눈여겨볼 것
         (w if wl["st"] >= 1 else i)(f"수위 {wl['n']} {wl['stn']}" + (f" · {wl['nx']}까지 {wl['gap']}m" if wl.get("gap") is not None and wl["st"] < 4 else ""))
