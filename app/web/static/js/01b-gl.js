@@ -41,13 +41,18 @@ const GL_LAYERS = [
   // 건물 밀도(레이어 bldg, 국토교통부 GIS건물통합정보 — tools/build_bldg.py). 지형과 같이 한 장 그림 → 확대하면 조각
   { id: "bldg", type: "raster", source: "bldg", maxzoom: 10, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0 } },
   { id: "bldg-t", type: "raster", source: "bldg-t", minzoom: 10, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0 } },
-  // 강 · 호수 · 저수지(레이어 water, 오픈스트리트맵 — tools/build_water.py). 면은 옅게 — 그 위 비 색이 묻히지 않게. o = 경남 밖 — 회색으로 흐리게
+  // 강 · 호수 · 저수지(레이어 water, 국토지리정보원 연속수치지형도 — tools/build_water.py). 면은 옅게 — 그 위 비 색이 묻히지 않게. o = 경남 밖 — 회색으로 흐리게
+  // 강 선 g = 1 국가하천(굵게) · 2 지방하천 · 3 소하천 등(시군을 고른 확대에서만)
   { id: "water", type: "fill", source: "water", filter: ["==", ["get", "k"], "water"], layout: { visibility: "none" },
     paint: { "fill-color": ["case", ["has", "o"], "#2A3440", "#0B2F4E"], "fill-opacity": ["case", ["has", "o"], 0.35, 0.55] } },
   { id: "water-ln", type: "line", source: "water", filter: ["==", ["get", "k"], "water"], layout: { visibility: "none" },
     paint: { "line-color": ["case", ["has", "o"], "#8A97A6", "#7DDCFF"], "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.8, 11, 1.4], "line-opacity": ["case", ["has", "o"], 0.3, 0.9] } },
-  { id: "river", type: "line", source: "water", filter: ["==", ["get", "k"], "river"], layout: { visibility: "none", "line-join": "round", "line-cap": "round" },
-    paint: { "line-color": ["case", ["has", "o"], "#8A97A6", "#7DDCFF"], "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.9, 11, 2.2], "line-opacity": ["case", ["has", "o"], 0.3, 0.9] } },
+  { id: "river-s", type: "line", source: "water", minzoom: 9.4, filter: ["all", ["==", ["get", "k"], "river"], ["==", ["get", "g"], 3]], layout: { visibility: "none", "line-join": "round", "line-cap": "round" },
+    paint: { "line-color": ["case", ["has", "o"], "#8A97A6", "#7DDCFF"], "line-width": ["interpolate", ["linear"], ["zoom"], 9.4, 0.4, 11, 0.9], "line-opacity": ["case", ["has", "o"], 0.2, 0.55] } },
+  { id: "river", type: "line", source: "water", filter: ["all", ["==", ["get", "k"], "river"], ["<", ["get", "g"], 3]], layout: { visibility: "none", "line-join": "round", "line-cap": "round" },
+    paint: { "line-color": ["case", ["has", "o"], "#8A97A6", "#7DDCFF"],
+             "line-width": ["interpolate", ["linear"], ["zoom"], 8, ["case", ["==", ["get", "g"], 1], 1.8, 0.7], 11, ["case", ["==", ["get", "g"], 1], 3.2, 1.6]],
+             "line-opacity": ["case", ["has", "o"], 0.3, 0.9] } },
   { id: "bd-halo", type: "line", source: "bd", filter: ["in", ["get", "t"], ["literal", ["sg", "cs"]]],
     layout: { "line-join": "round" }, paint: { "line-color": "var(--bd-halo)", "line-width": 4 } },
   { id: "bd-halo-z", type: "line", source: "bd", filter: ["in", ["get", "t"], ["literal", ["zn", "sb"]]],
@@ -124,9 +129,9 @@ async function glTerrain() {
   }
   for (const id of TER_IDS) for (const L of [id, id + "-t"]) GL.setLayoutProperty(L, "visibility", OV.has(id) && TERRAIN?.ok ? "visible" : "none");
 }
-/* 지도 오른쪽 아래 출처 — 켠 레이어의 자료 출처만(오픈스트리트맵 ODbL · 국토교통부 CC BY 둘 다 표시 의무) */
+/* 지도 오른쪽 아래 출처 — 켠 레이어의 자료 출처만(국토지리정보원 · 국토교통부 자료 — 브이월드 CC BY, 출처 표시 의무) */
 function srcAttr() {
-  const a = [OV.has("water") && `강 · 호수 · 저수지 © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> 기여자`,
+  const a = [OV.has("water") && `강 · 호수 · 저수지 © 국토지리정보원 연속수치지형도(브이월드)`,
              OV.has("bldg") && `건물 © 국토교통부 GIS건물통합정보(브이월드)`].filter(Boolean);
   $("osm-attr").hidden = !a.length;
   $("osm-attr").innerHTML = a.join(" · ");
@@ -144,7 +149,7 @@ async function glWater() {
       glSet("water", glFC(WATER.map(f => glF(f.geometry, f.properties))));
     } catch (e) { WATER = null; console.warn("강 · 호수 자료를 못 읽었다", e); return; }
   }
-  for (const L of ["water", "water-ln", "river"]) GL.setLayoutProperty(L, "visibility", OV.has("water") && Array.isArray(WATER) ? "visible" : "none");
+  for (const L of ["water", "water-ln", "river", "river-s"]) GL.setLayoutProperty(L, "visibility", OV.has("water") && Array.isArray(WATER) ? "visible" : "none");
 }
 /* 마우스 자리 표고(m) — 지형 레이어를 켰을 때만. 125m 칸 표고(elev.i16.gz, 2MB)를 처음 물을 때 받는다. 아직이면 null */
 let ELEV = null;
