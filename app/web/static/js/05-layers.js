@@ -23,6 +23,18 @@ const OVL = [
 const LY_GRP = { geo: "지형 · 지리" };
 let LY_GOPEN = new Set();
 try { LY_GOPEN = new Set(JSON.parse(localStorage.getItem("gn-ly-grp") || "[]")); } catch {}
+/* 묶음 체크단추 — 누를 때마다 일부(저장) → 전부 끔 → 전부 켬 → 저장한 일부. 일부 상태에서 누르면 그 조합을 기억한다 */
+let LY_GSAVE = {};
+try { LY_GSAVE = JSON.parse(localStorage.getItem("gn-ly-gsave") || "{}") || {}; } catch {}
+function grpCycle(g) {
+  const ids = OVL.filter(x => x.grp === g).map(x => x.id), on = ids.filter(id => OV.has(id));
+  let want;
+  if (on.length && on.length < ids.length) { LY_GSAVE[g] = on; want = []; }
+  else if (!on.length) want = ids;
+  else { const sv = (LY_GSAVE[g] || []).filter(id => ids.includes(id)); want = sv.length && sv.length < ids.length ? sv : []; }
+  try { localStorage.setItem("gn-ly-gsave", JSON.stringify(LY_GSAVE)); } catch {}
+  for (const id of ids) if (OV.has(id) !== want.includes(id)) setOverlay(id, want.includes(id));
+}
 /* ⓘ 에 올리거나 누르면 뜨는 설명 — 레이어 목록·범례는 짧게 두고 긴 말은 여기에 */
 const TIPS = new Map([
   ["ov-alerts", `<b>기상특보</b> — 발효 중 특보를 시군 <b>테두리 선</b>과 이름 밑 <b>딱지</b>로 그린다.
@@ -168,11 +180,14 @@ function renderLayers() {
     if (!o.grp) { html += item(o); continue; }
     if (OVL.find(x => x.grp === o.grp) !== o) continue;            // 묶음은 첫 항목 자리에 한 번
     const its = OVL.filter(x => x.grp === o.grp), top = its.filter(x => !x.parent), on = top.filter(x => OV.has(x.id)).length, open = LY_GOPEN.has(o.grp);
-    html += `<button type="button" class="ly-grp${on ? " on" : ""}" data-grp="${o.grp}" aria-expanded="${open}"><span class="car">${open ? "▾" : "▸"}</span><b>${LY_GRP[o.grp]}</b><small>${on}/${top.length} 켜짐</small></button>`
+    const all = its.filter(x => OV.has(x.id)).length;
+    html += `<div class="ly-ghd"><input type="checkbox" class="ly-gck" data-gck="${o.grp}" data-mix="${all && all < its.length ? 1 : ""}" ${all === its.length ? "checked" : ""} aria-label="${LY_GRP[o.grp]} 전부 켜고 끄기">`
+      + `<button type="button" class="ly-grp${on ? " on" : ""}" data-grp="${o.grp}" aria-expanded="${open}"><span class="car">${open ? "▾" : "▸"}</span><b>${LY_GRP[o.grp]}</b><small>${on}/${top.length} 켜짐</small></button></div>`
       + (open ? `<div class="ly-gbody">${its.map(item).join("")}</div>` : "");
   }
   $("ly-menu").innerHTML = html;
   for (const c of $("ly-menu").querySelectorAll("input[data-ov]")) c.onchange = () => setOverlay(c.dataset.ov, c.checked);
+  for (const c of $("ly-menu").querySelectorAll("input[data-gck]")) { c.indeterminate = !!c.dataset.mix; c.onchange = () => grpCycle(c.dataset.gck); }
   for (const b of $("ly-menu").querySelectorAll("button[data-grp]")) b.onclick = () => {
     const g = b.dataset.grp;
     LY_GOPEN.has(g) ? LY_GOPEN.delete(g) : LY_GOPEN.add(g);

@@ -797,10 +797,11 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 #pop.doc li.note { list-style: "※ "; color: var(--ink-3); font-size: 13px; }
 #pop.doc code { font-size: 12px; }
 .ly-it:hover { background: color-mix(in oklab, var(--accent) 10%, transparent); }
-.ly-it input { appearance: none; width: 20px; height: 20px; border-radius: 6px; margin: 0; cursor: pointer;
+.ly-it input, .ly-gck { appearance: none; width: 20px; height: 20px; border-radius: 6px; margin: 0; cursor: pointer;
   border: 1.5px solid var(--ink-3); display: grid; place-items: center; }
-.ly-it input:checked { background: var(--accent); border-color: var(--accent); }
-.ly-it input:checked::after { content: "✓"; color: var(--on-accent); font: 800 13px var(--sans); }
+.ly-it input:checked, .ly-gck:checked, .ly-gck:indeterminate { background: var(--accent); border-color: var(--accent); }
+.ly-it input:checked::after, .ly-gck:checked::after { content: "✓"; color: var(--on-accent); font: 800 13px var(--sans); }
+.ly-gck:indeterminate::after { content: "–"; color: var(--on-accent); font: 800 14px var(--sans); }
 .ly-it b { font-size: 15px; }
 .ly-it small { display: block; font-size: 12px; color: var(--ink-3); margin-top: 1px; }
 .ly-it.off { opacity: .45; cursor: default; }
@@ -1967,6 +1968,8 @@ body.sj-on > header, body.sj-on #stage, body.sj-on #tl, body.sj-on #rail { displ
 .ly-grp b { font-size: 15px; }
 .ly-grp small { font: 600 11.5px var(--sans); color: var(--ink-3); }
 .ly-grp.on small { color: var(--accent); }
+.ly-ghd { display: grid; grid-template-columns: 20px 1fr; align-items: center; gap: 2px; padding-left: 10px; margin: 2px 0; }
+.ly-ghd .ly-grp { margin: 0; grid-template-columns: 16px 1fr auto; gap: 6px; }
 .ly-gbody { margin-left: 10px; padding-left: 4px; border-left: 1px solid var(--line); }
 .ly-gbody .ly-it b { white-space: nowrap; }
 /* 지역 여건(app/terrain.py) — 눈여겨볼 꼬리표는 호박색, 참고는 회색. 상황판단 목록 · 상세 · 지도 지구 카드 같이 */
