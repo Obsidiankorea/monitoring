@@ -3,7 +3,7 @@
     PYTHONUTF8=1 ./.venv/Scripts/python.exe tools/build_water.py
 
 받는 것(Overpass) — waterway=river(선) · natural=water / landuse=reservoir(면, 강 넓은 물 · 호수 · 저수지 · 댐 호수)
-만드는 것 app/web/static/water/water.json — FeatureCollection(칸 좌표), properties.k = river(선) | water(면), n = 이름
+만드는 것 app/web/static/water/water.json — FeatureCollection(칸 좌표), properties.k = river(선) | water(면), n = 이름, o = 1 경남 밖(흐리게)
   면은 넓이 MIN_KM2 이상만(논 둠벙까지 넣으면 수만 개), 좌표는 칸 0.01(5m) 단위로 줄이고 더글러스-푸커 5m 로 솎는다.
 ⚠️ 자료 © OpenStreetMap 기여자(ODbL) — 화면에서 이 레이어를 켜면 출처를 띄운다(05-layers.js).
 원본 응답은 tools/.cache/water.json 에(커밋하지 않는다).
@@ -95,9 +95,37 @@ def join(ways):
     return rings
 
 
+def gn_mask(b):
+    """경남 시군 칸 True — 한 칸(500m) 넓혀 경계를 따라 흐르는 강(낙동강)은 안으로 친다. 행 남→북, b 의 i0 · j0 기준."""
+    import gzip
+    import numpy as np
+    g = json.loads((ROOT / "data" / "geo" / "grids.json").read_text(encoding="utf-8"))
+    ids = [s["id"] for s in g["sigun"] if s["kind"] == "gn"]
+    m = np.isin(np.frombuffer(gzip.decompress((ROOT / "data" / "geo" / "mask_sigun.u8.gz").read_bytes()), np.uint8).reshape(b["h"], b["w"]), ids)
+    d = m.copy()
+    for dy in (-1, 0, 1):
+        for dx in (-1, 0, 1):
+            d |= np.roll(np.roll(m, dy, 0), dx, 1)
+    return lambda x, y: 0 <= (c := round(x) - b["i0"]) < b["w"] and 0 <= (r := round(y) - b["j0"]) < b["h"] and bool(d[r, c])
+
+
+def runs(pts, inside):
+    """선을 경남 안 · 밖 토막으로 나눈다 — [(안?, 점들)], 토막끼리 끝점을 나눠 가져 끊김이 없다."""
+    out, cur, st = [], [pts[0]], inside(*pts[0])
+    for q in pts[1:]:
+        f = inside(*q)
+        cur.append(q)
+        if f != st:
+            out.append((st, cur)); cur, st = [q], f
+    if len(cur) >= 2:
+        out.append((st, cur))
+    return out
+
+
 def main():
     p = json.loads((ROOT / "data" / "geo" / "grids.json").read_text(encoding="utf-8"))["hr"]
     b = p["bbox"]
+    inside = gn_mask(b)
     els = fetch(p)["elements"]
     to = lambda g: [(round(x / TOL) * TOL, round(y / TOL) * TOL) for x, y in (lcc_fwd(q["lon"], q["lat"], p) for q in g)]
     inb = lambda r: any(b["i0"] - 5 <= x <= b["i1"] + 5 and b["j0"] - 5 <= y <= b["j1"] + 5 for x, y in r)
@@ -109,8 +137,9 @@ def main():
         if e["type"] == "way" and t.get("waterway") == "river":
             r = dp(to(e["geometry"]), TOL)
             if len(r) >= 2 and inb(r):
-                feats.append({"type": "Feature", "properties": {"k": "river", "n": name},
-                              "geometry": {"type": "LineString", "coordinates": [[round(x, 2), round(y, 2)] for x, y in r]}})
+                for ins, seg in runs(r, inside):     # o=1 경남 밖 — 화면에서 흐리게
+                    feats.append({"type": "Feature", "properties": {"k": "river", "n": name, **({} if ins else {"o": 1})},
+                                  "geometry": {"type": "LineString", "coordinates": [[round(x, 2), round(y, 2)] for x, y in seg]}})
             continue
         if e["type"] == "way":
             outer, inner = [to(e["geometry"])], []
@@ -130,7 +159,8 @@ def main():
             rings = [dp(r[:len(r) // 2 + 1], TOL) + dp(r[len(r) // 2:], TOL)[1:] for r in rings]   # 닫힌 고리는 반씩 — 시작=끝이면 dp 가 두 점으로 접었다
             rings = [r for r in rings if len(r) >= 4]
             if rings:
-                feats.append({"type": "Feature", "properties": {"k": "water", "n": name},
+                ins = sum(inside(x, y) for x, y in rings[0]) * 2 >= len(rings[0])   # 테두리 점 절반 이상이 경남 안이면 안
+                feats.append({"type": "Feature", "properties": {"k": "water", "n": name, **({} if ins else {"o": 1})},
                               "geometry": {"type": "Polygon", "coordinates": [[[round(x, 2), round(y, 2)] for x, y in r] for r in rings]}})
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps({"type": "FeatureCollection", "features": feats,

@@ -38,13 +38,13 @@ const GL_LAYERS = [
   { id: "low-t", type: "raster", source: "low-t", minzoom: 10, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0 } },
   { id: "relief", type: "raster", source: "relief", maxzoom: 10, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0 } },
   { id: "relief-t", type: "raster", source: "relief-t", minzoom: 10, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0 } },
-  // 강 · 호수 · 저수지(레이어 water, 오픈스트리트맵 — tools/build_water.py). 면은 옅게 — 그 위 비 색이 묻히지 않게
+  // 강 · 호수 · 저수지(레이어 water, 오픈스트리트맵 — tools/build_water.py). 면은 옅게 — 그 위 비 색이 묻히지 않게. o = 경남 밖 — 회색으로 흐리게
   { id: "water", type: "fill", source: "water", filter: ["==", ["get", "k"], "water"], layout: { visibility: "none" },
-    paint: { "fill-color": "#0B2F4E", "fill-opacity": 0.55 } },
+    paint: { "fill-color": ["case", ["has", "o"], "#2A3440", "#0B2F4E"], "fill-opacity": ["case", ["has", "o"], 0.35, 0.55] } },
   { id: "water-ln", type: "line", source: "water", filter: ["==", ["get", "k"], "water"], layout: { visibility: "none" },
-    paint: { "line-color": "#7DDCFF", "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.8, 11, 1.4], "line-opacity": 0.9 } },
+    paint: { "line-color": ["case", ["has", "o"], "#8A97A6", "#7DDCFF"], "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.8, 11, 1.4], "line-opacity": ["case", ["has", "o"], 0.3, 0.9] } },
   { id: "river", type: "line", source: "water", filter: ["==", ["get", "k"], "river"], layout: { visibility: "none", "line-join": "round", "line-cap": "round" },
-    paint: { "line-color": "#7DDCFF", "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.9, 11, 2.2], "line-opacity": 0.9 } },
+    paint: { "line-color": ["case", ["has", "o"], "#8A97A6", "#7DDCFF"], "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.9, 11, 2.2], "line-opacity": ["case", ["has", "o"], 0.3, 0.9] } },
   { id: "bd-halo", type: "line", source: "bd", filter: ["in", ["get", "t"], ["literal", ["sg", "cs"]]],
     layout: { "line-join": "round" }, paint: { "line-color": "var(--bd-halo)", "line-width": 4 } },
   { id: "bd-halo-z", type: "line", source: "bd", filter: ["in", ["get", "t"], ["literal", ["zn", "sb"]]],
