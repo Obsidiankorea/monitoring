@@ -274,6 +274,7 @@ function districtTip(r) {
       + (m.texts ? `<div class="sub">비가 아닌 조건</div>${m.texts}` : "") + `</div><div class="rt">${m.plane}</div></div>`
       + (m.site ? `<div class="site"><span>지구 기준</span><b>${escH(m.site)}</b></div>` : "")
       : `<div class="d">시군을 눌러 고르면 단계 그래프가 나온다</div>`)
+    + (r.tf?.length ? `<div class="tfs">${r.tf.map(f => `<em class="tf${f.lv === "w" ? "" : " i"}">${escH(f.t)}</em>`).join("")}</div>` : "")   // 지역 여건(app/terrain.py)
     + (r.approx ? `<div class="d warn">위치는 근사 — 지번으로 못 찾아 그 리 · 읍면동 가운데(판정은 읍면동 기준)</div>` : "")
     + (r.rule || r.shelter ? `<dl>${row("대피기준", r.rule)}${row("대피장소", r.shelter)}</dl>` : "")
     + `<div class="ft">오른쪽 클릭 — 상황판단 모드 · 카카오맵</div></div>`;

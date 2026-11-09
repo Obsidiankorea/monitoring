@@ -1938,3 +1938,13 @@ body.sj-on > header, body.sj-on #stage, body.sj-on #tl, body.sj-on #rail { displ
 .ly-grp.on small { color: var(--accent); }
 .ly-gbody { margin-left: 10px; padding-left: 4px; border-left: 1px solid var(--line); }
 .ly-gbody .ly-it b { white-space: nowrap; }
+/* 지역 여건(app/terrain.py) — 눈여겨볼 꼬리표는 호박색, 참고는 회색. 상황판단 목록 · 상세 · 지도 지구 카드 같이 */
+.tf { font-style: normal; font-size: 11px; font-weight: 600; padding: 0 6px; border-radius: 4px; white-space: nowrap;
+  color: #F5C66B; background: color-mix(in oklab, #F5A524 16%, transparent); border: 1px solid color-mix(in oklab, #F5A524 45%, transparent); }
+.tf.i { color: var(--ink-3); background: transparent; border-color: var(--line); font-weight: 500; }
+#sj .tfs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+#sj .tt { display: grid; gap: 2px; margin-bottom: 4px; }
+#sj .tt .tr { display: grid; grid-template-columns: 64px 1fr; gap: 8px; font-size: 12px; }
+#sj .tt .tr span { color: var(--ink-3); } #sj .tt .tr b { font-weight: 500; color: var(--ink); }
+#tip .hud .tfs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 1em .7em; }
+#tip .hud .tf { font-size: .78em; }

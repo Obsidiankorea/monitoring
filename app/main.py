@@ -535,13 +535,14 @@ async def api_districts(sigun: str):
 @app.get("/api/districts/all")
 async def api_districts_all():
     """지도 레이어 '우려지역 지구'(U) — 좌표가 있는 지구 전부(위키 공개 자료). 연락처는 없다."""
-    from . import ai, contacts
+    from . import ai, contacts, terrain
 
     def one():
         out = []
         for sg in ai.SIGUN_FULL:
             for emd, ds in contacts.districts(sg)["emd"].items():
-                out += [{"sigun": sg, "emd": emd, **{k: d[k] for k in ("id", "name", "ri", "jibun", "kind", "fam", "shelter", "rule", "pos", "approx")}}
+                out += [{"sigun": sg, "emd": emd, **{k: d[k] for k in ("id", "name", "ri", "jibun", "kind", "fam", "shelter", "rule", "pos", "approx")},
+                         "tf": (terrain.of(d) or {}).get("flags")}   # 지역 여건 꼬리표(지도 지구 카드)
                         for d in ds if d["pos"]]
         return out
     rows = await asyncio.to_thread(one)

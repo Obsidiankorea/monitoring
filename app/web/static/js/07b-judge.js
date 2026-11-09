@@ -88,6 +88,26 @@ function sjGroups() {
 const SJ_SOIL = { met: "충족", check: "확인 필요", no: "미충족", unknown: "모름" };
 const SJ_SEC = ["결정 필요 — 기준을 넘었는데 아직 기록이 없다", "곧 넘음 — 3시간 안", "결정함", "지켜볼 곳"];
 function sjPct(c) { return c ? `<b class="pc t${sjLv(c.pct)}">${c.unk ? "모름" : `${c.pct}%`}</b>` : `<b class="pc">—</b>`; }
+/* 지역 여건 꼬리표(app/terrain.py) — 눈여겨볼 것(lv w)만 n 개. 판정 % 와 별개 */
+const sjTfChips = (t, n = 9) => (t?.flags || []).filter(f => f.lv === "w").slice(0, n).map(f => `<em class="tf" title="지역 여건 — 판정 % 와 별개">${escH(f.t)}</em>`).join("");
+/* 상세 — 지역 여건 칸. 숫자는 지구 자리 기준(지형 30m · 하천 · 저수지 국토지리정보원 · 건물 국토교통부 · 침수흔적 행정안전부) */
+function sjTerrain(r) {
+  const t = r.terrain;
+  if (!t) return `<div class="dsec"><h5>지역 여건</h5><p class="mute">${r.pos ? "이 지구는 지형 표를 만든 뒤 좌표가 생겼다 — tools/build_dz_terrain.py 를 다시 돌린다" : "지구 좌표가 없어 지형을 못 본다"}</p></div>`;
+  const row = (k, v) => v ? `<div class="tr"><span>${k}</span><b>${v}</b></div>` : "";
+  const rv = t.rv, lk = t.lk;
+  return `<div class="dsec"><h5>지역 여건 <span class="mute">지형 · 하천 · 과거 침수 — 판정 % 와 별개, 함께 본다</span></h5>
+    ${t.flags?.length ? `<div class="tfs">${t.flags.map(f => `<em class="tf${f.lv === "w" ? "" : " i"}">${escH(f.t)}</em>`).join("")}</div>` : ""}
+    <div class="tt">${row("표고", t.el != null ? `${t.el.toFixed(0)}m${t.el <= 10 ? " · 저지대" : ""}` : "")}
+      ${row("경사", t.sl != null ? `둘레 100m 가장 가파른 곳 ${t.sl}° · 지구 자리 ${t.sl0}°` : "")}
+      ${row("하천", rv ? `${escH(rv.n || (rv.g === 1 ? "국가하천" : "지방하천"))} ${rv.d}m · 지구가 ${rv.dh >= 0 ? `${rv.dh.toFixed(0)}m 높음` : `${(-rv.dh).toFixed(0)}m 낮음`}` : "")}
+      ${row("개울", t.st != null ? `소하천 · 개울 ${t.st}m` : "")}
+      ${row("저수지", lk ? `${escH(lk.n || "이름 없음")} ${lk.d}m · ${lk.dh >= 0 ? `물가가 ${lk.dh.toFixed(0)}m 높음` : `물가가 ${(-lk.dh).toFixed(0)}m 낮음`}` : "")}
+      ${row("해안", t.cs != null ? `바다(표고 0m)까지 ${t.cs}m` : "")}
+      ${row("건물", t.b300 != null ? `100m 안 ${t.b100}동 · 300m 안 ${t.b300}동` : "")}
+      ${row("침수흔적", t.fl ? `${t.fl.in ? "지구 자리가 흔적 안" : "100m 안에 흔적"} — ${escH(String(t.fl.yr || ""))} ${escH(t.fl.nm || "")}` : "")}</div>
+    <p class="mute">급경사 30°↑(위키 산사태 원인: 30~35°에서 가장 많다) · 저지대 10m↓. 하천 200m · 저수지 300m · 해안 500m 는 이 앱이 정한 눈여겨볼 범위. 지형은 30m 자료라 축대 · 옹벽 같은 작은 비탈은 못 본다</p></div>`;
+}
 function sjGroup(g) {
   const sel = g.rows.some(r => r.id === SJ.sel), all = SJ.sg === "all";
   const subs = g.rows.slice(0, sel ? 99 : 4).map(r => {
@@ -95,6 +115,7 @@ function sjGroup(g) {
     return `<button class="sb${r.id === SJ.sel ? " on" : ""}" data-r="${escH(r.id)}"><b>${escH(sjName(r))}</b><span>${escH(sjAddr(r).replace(`${r.emd} `, ""))}</span>`
       + `<em><i class="t${sjLv(b.top)}" title="${r.where === "지구" ? "이 지구 자리 비로 판정" : "읍면동 기준"}">${b.top}%${r.where === "지구" ? "" : "*"}</i> ${b.site != null ? `지구 기준 <i class="t${sjLv(b.site)}">${b.site_slide ? (b.site >= 100 ? "발령 중" : "발령 없음") : `${b.site}%`}</i>` : ""}</em>`
       + (r.soil ? `<em class="soil s-${r.soil.st}" title="지구 기준의 토양함수 ${r.soil.need}% — 산림청 예측정보(시군)로">토양 ${SJ_SOIL[r.soil.st]}</em>` : "")
+      + sjTfChips(r.terrain, 2)
       + `<small>${p0 ? escH((p0.who || "").replace(/담당부서\s*/g, "")) : ""}</small></button>`;
   }).join("") + (!sel && g.rows.length > 4 ? `<button class="sb mr" data-r="${escH(g.rows[4].id)}">외 ${g.rows.length - 4}곳</button>` : "");
   const done = g.dec.length ? `<span class="dn">✔ ${escH(g.dec[0].act)} ${g.dec[0].at.slice(11, 16)}</span>` : "";
@@ -132,6 +153,7 @@ function sjDetail() {
     <div class="dsec"><h5>위치</h5>${r.pos ? `<p>${r.pos[0].toFixed(5)}, ${r.pos[1].toFixed(5)} <span class="mute">— 지번 필지 중심</span></p>` : ""}
       <p class="mute">${r.where === "지구" ? "판정 비 = 이 지구 자리(둘레 1.5km 가장 많이 온 칸) · 예보는 읍면동"
         : `${r.pos ? "지구 자리 비를 아직 못 받아" : SJ.geo?.state === "받는 중" ? `지구 위치 받는 중(${SJ.geo.done}/${SJ.geo.total}) —` : "지구 위치가 없어"} 읍면동에서 가장 많이 온 칸으로 판정`}</p></div>
+    ${sjTerrain(r)}
     <div class="dsec"><h5>결정 — 판단 기록에 남는다</h5><div class="acs">${acts}</div></div>
     <div class="dsec"><h5>담당</h5>${who}</div>
     <div class="dsec"><h5>판정 · ${SJ_BN[SJ.basis]} 기준 <span class="mute">(조건이 '그리고'면 가장 덜 찬 것이 그 기준의 %)</span></h5>${stg}

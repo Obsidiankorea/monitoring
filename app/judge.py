@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 import re
 from datetime import datetime
 
-from . import ai, contacts, safety
+from . import ai, contacts, safety, terrain
 
 STAGES = ("통제", "사전대피", "긴급대피")
 FAMS = ("산사태", "하천", "지하공간")
@@ -219,7 +219,7 @@ def rows_of(sg: str, base: str, k: float, add: tuple = (0.0, 0.0), series: bool 
                 if v and ss is not None:
                     v.update(site=ss, site_slide=True, top=max(v["top"], ss))
             out.append({"sigun": sg, "emd": e["emd"], **d, "b": b, "slide": sl if d["fam"] == "산사태" else None,
-                        "soil": soil_site(d["rule"], plv),
+                        "soil": soil_site(d["rule"], plv), "terrain": terrain.of(d),   # 지역 여건(지형 · 침수흔적) — 판정 % 는 그대로
                         "where": "지구" if d["id"] in pg else "읍면동",
                         "fc6h": e.get("fc6h"), "later": e.get("later")})
     return out, g

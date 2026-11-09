@@ -611,6 +611,16 @@ def ask_free(base: str, text: str, sigun: str | None = None) -> dict:
         from . import db
         with db.tx() as con:                                # 상황판단 모드에서 사람이 누른 결정 — '보류한 것' 등을 물을 수 있게
             dec = [dict(r) for r in con.execute("SELECT * FROM decision WHERE sigun=? ORDER BY id DESC LIMIT 12", (sigun,))]
+        # 지구 지역 여건 — 저지대 · 하천 가까움 · 급경사 · 저수지 아래 · 침수흔적(판정 % 와 별개). 공개 지구 목록 API 로(연락처 모듈은 AI 가 안 만진다)
+        try:
+            dz = [d for d in ai._get(base, "/api/districts/all")["rows"] if d["sigun"] == sigun]
+        except Exception:                       # noqa: BLE001
+            dz = []
+        tl = [f"{d['emd']} {d.get('name') or ''}({d['fam']}): " + " · ".join(f["t"] for f in d["tf"] if f["lv"] == "w")
+              for d in dz if any(f["lv"] == "w" for f in d.get("tf") or [])]
+        tl = sorted((x for x in tl if x), key=lambda s: -s.count("·"))[:25]
+        if tl:
+            ctx += "\n\n[지구 지역 여건(지형 · 과거 침수흔적 — 강우 판정 % 와 별개, 대피 판단 때 함께 볼 것)]\n" + "\n".join("- " + x for x in tl)
         if dec:
             ctx += "\n\n[판단 기록(사람이 누른 결정, 새것부터)]\n" + "\n".join(
                 f"- {d['at'][5:16]} {d['act']} {d['emd'] or ''} {d['fam'] or ''} {d['stage'] or ''}"
