@@ -147,7 +147,8 @@ const kmaHour = () => fadeLow(KMA_LG.cols, KMA_LG.steps, "h" + KMA_LG.cols.join(
 /* 누적 n칸 — 레이더 범례에서 서로 또렷이 갈리는 색만 골라(KMA_SEQ, 레이더 단계 ㎜/h) 그 사이를 고르게.
    ⚠️ 범례 23색을 고르게 뽑았더니 짙은 초록(#005a00)이 어두운 바탕에 묻히고 노랑이 셋 붙었다 — 하늘 · 파랑 · 초록 · 노랑 ·
    주황 · 빨강 · 보라 차례로. 레이더 색 그 자체는 서버가 뽑은 것(색을 흉내 내지 않는다) */
-const KMA_SEQ = [0.1, 0.5, 1, 2, 3, 6, 8, 15, 20, 25, 40, 60, 70];
+// 끝은 60(짙은 보라) — 70㎜/h 색(#b3b4de 옅은 남보라)은 끝 눈금을 넘은 많은 비가 물 · 약한 비처럼 보여 뺐다(11-10)
+const KMA_SEQ = [0.1, 0.5, 1, 2, 3, 6, 8, 15, 20, 25, 40, 50, 60];
 function kmaPick(steps) {
   // 다양한 색조 — 범례 색을 다 쓴다. 어두운 · 회색 바탕에서는 맨 위 짙은 남색 둘(90 · 110㎜/h)이 묻혀 뺀다(밝은 테마는 다)
   const seq = richOn() ? KMA_LG.cols.slice(0, document.documentElement.dataset.theme === "light" ? undefined : -2)

@@ -782,6 +782,20 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
   border: 1px solid var(--line); box-shadow: 0 14px 36px rgba(0,0,0,.4); pointer-events: none; }
 #pop b { color: var(--ink); }
 #pop.pin { pointer-events: auto; border-color: color-mix(in oklab, var(--accent) 55%, var(--line)); }
+/* 긴 설명 — 화면 가운데 문서(제목 · 소제목 · 항목 목록). 눌러 고정하면 굴린다 */
+#pop.doc { max-width: min(760px, calc(100vw / var(--k, 1) - 32px)); width: 760px; max-height: calc(86vh / var(--k, 1)); overflow: auto;
+  padding: 18px 24px 20px; font-size: 14px; line-height: 1.6; background: var(--panel); box-shadow: 0 24px 80px rgba(0,0,0,.6); }
+#pop.doc h3 { margin: 0 0 4px; font-size: 17px; color: var(--ink); }
+#pop.doc .lead { margin: 0 0 12px; color: var(--ink-3); font-size: 13px; }
+#pop.doc h4 { margin: 16px 0 6px; padding-bottom: 4px; font-size: 12px; letter-spacing: .08em; color: var(--accent); border-bottom: 1px solid var(--line); }
+#pop.doc dl { margin: 0; display: grid; grid-template-columns: 84px 1fr; gap: 8px 14px; }
+#pop.doc dt { font-weight: 700; color: var(--ink); padding-top: 1px; }
+#pop.doc dd { margin: 0; }
+#pop.doc ul { margin: 0; padding-left: 16px; }
+#pop.doc li { margin: 1px 0; }
+#pop.doc li > b:first-child { display: inline-block; min-width: 44px; color: var(--ink-3); font-weight: 600; font-size: 12px; }
+#pop.doc li.note { list-style: "※ "; color: var(--ink-3); font-size: 13px; }
+#pop.doc code { font-size: 12px; }
 .ly-it:hover { background: color-mix(in oklab, var(--accent) 10%, transparent); }
 .ly-it input { appearance: none; width: 20px; height: 20px; border-radius: 6px; margin: 0; cursor: pointer;
   border: 1.5px solid var(--ink-3); display: grid; place-items: center; }

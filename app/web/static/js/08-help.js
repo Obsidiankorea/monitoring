@@ -242,6 +242,15 @@ function showPop(el, pin) {
   p.innerHTML = html;
   p.classList.toggle("pin", !!pin);
   p.hidden = false;
+  // 긴 문서형 설명(<div class="doc">)은 화면 가운데에 넓게 — 옆에 붙이면 좁은 기둥에 글자가 늘어서 읽기 힘들다
+  if (p.classList.toggle("doc", html.startsWith('<div class="doc"'))) {
+    const w = p.getBoundingClientRect();
+    p.style.left = Math.max(8, (innerWidth - w.width) / 2) / k + "px"; p.style.top = Math.max(8, (innerHeight - w.height) / 2) / k + "px";
+    document.querySelectorAll(".inf.pin").forEach(x => x.classList.remove("pin"));
+    if (pin) el.classList.add("pin");
+    POP_PIN = pin ? el : null;
+    return;
+  }
   p.style.left = (r.right + 10) / k + "px"; p.style.top = (r.top - 4) / k + "px";
   const pr = p.getBoundingClientRect();
   if (pr.right > innerWidth - 8) p.style.left = Math.max(8, r.left - 10 - pr.width) / k + "px";
