@@ -171,6 +171,7 @@ $("stage").addEventListener("mousemove", ev => {
   const gx = V.fromX(mx), gy = V.fromY(my), v = valueAt(gx, gy), tip = $("tip");
   const td = tideAt(mx, my), sp = td ? null : stationAt(mx, my), rv = sp || td ? null : riverAt(mx, my);
   const sf = td || sp || rv ? null : safetyAt(mx, my) || districtAt(mx, my);
+  if (!sf?.dz) tip.classList.remove("hudtip");
   $("stage").style.cursor = td || sp || rv || sf?.res || sf?.dz || sigunAt(gx, gy) ? "pointer" : "";
   if (td) {                              // 조위 표식 위 — 짧은 요약만. 누르면 팝업
     tip.innerHTML = tideTip(td);
@@ -182,6 +183,12 @@ $("stage").addEventListener("mousemove", ev => {
   if (rv || sf) {                        // 하천 · 댐 · 보 위 — 수위 · 기준 수위 · 1시간 변화 · 방류 / 저수지 계측기 · 침수흔적
     tip.innerHTML = rv ? riverTip(rv) : sf.dz ? districtTip(sf.dz) : safetyTip(sf);
     tip.hidden = false;
+    if (tip.classList.toggle("hudtip", !!sf?.dz)) {   // 큰 지구 카드 — 마우스 옆(오른쪽, 넘치면 왼쪽)에 세로 가운데로. 위로 올리면 마우스를 덮는다
+      const w = tip.offsetWidth, h = tip.offsetHeight;
+      tip.style.left = (x + 24 + w < V.W - 6 ? x + 24 : Math.max(6, x - 24 - w)) + "px";
+      tip.style.top = Math.max(6, Math.min(V.H - h - 6, y - h / 2)) + "px";
+      return;
+    }
     tip.style.left = Math.min(V.W - tip.offsetWidth - 6, x + 16) + "px";
     tip.style.top = Math.max(6, y - tip.offsetHeight - 12) + "px";
     return;

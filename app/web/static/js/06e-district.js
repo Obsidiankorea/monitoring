@@ -105,14 +105,14 @@ const dzSer = r => DZ_PCT?.[r.id]?.[ACC_BASIS === "grid" ? "grid" : "aws"];
 const dzPct = r => { const v = dzSer(r)?.v; return v ? v[Math.min(DZ_TI, v.length - 1)] ?? null : null; };
 /* ── 단계 영역 평면(06e · 07c 같이 쓴다) — 가로 누적(지하공간은 15분) ㎜ × 세로 시우량 ㎜/h 위에 통제 · 사전대피 · 긴급대피 영역.
    '그리고' = 그 점에서 오른쪽 위 네모, '또는' = 영역을 합친 의자(ㄱ) 모양(서버 ai.regions). 70% 자리에 옅은 점선 테두리(근접).
-   지구 원문 기준(흰 점선)도 같은 평면에. 지구의 비는 한 줄 — 시간색(흰 지금 → 보라 내일). 축 끝을 넘는 값은 끝에 붙인다.
+   지구 원문 기준(자홍 흐르는 점선)도 같은 평면에. 지구의 비는 한 줄 — 시간색(흰 지금 → 보라 내일). 축 끝을 넘는 값은 끝에 붙인다.
    앞으로의 15분은 예보가 없다 — 지하공간은 시우량 ÷ 4 로 어림(점선) */
 let DZ_REG = null;
 // 평면은 밝은 회색 바탕(불투명) — 어두운 지도 위에서도 또렷하게(11-07). 단계 색: 통제 노랑 · 사전대피 파랑 · 긴급대피 빨강.
 // 면은 불투명한 연한 색, 높은 단계가 위에 덮는다(겹친 곳 = 더 높은 단계). 테두리는 진한 같은 색.
 const STG_COL = { 통제: "#C99A00", 사전대피: "#1F63D6", 긴급대피: "#D21F1F", "지구 기준": "#1F2430" };
 const STG_FILL = { 통제: "#FFF0B3", 사전대피: "#CFE1FF", 긴급대피: "#FFCFCF" };
-const PP_BG = "#F2F4F7", PP_INK = "#1F2430", PP_INK3 = "#6B7280", PP_LINE = "#C5CBD5";
+const PP_BG = "#F2F4F7", PP_INK = "#1F2430", PP_INK3 = "#6B7280", PP_LINE = "#C5CBD5", PP_SITE = "#C026D3";
 /* 평면에 보일 단계 — 지도 범례 · 상황판단 창이 같이 쓴다(이 브라우저 기억) */
 let PP_SHOW = new Set(["통제", "사전대피", "긴급대피"]);
 try { const v = JSON.parse(localStorage.getItem("gn-pp-st") || "null"); if (Array.isArray(v)) PP_SHOW = new Set(v); } catch {}
@@ -140,9 +140,14 @@ function ppAreas(reg, S, o = {}) {
     s += `<path d="${shape(a)}" fill="none" stroke="${c}" stroke-width="${a.night ? 1.4 : 1.8}"${a.night ? ' stroke-dasharray="5 3"' : ""}/>`
       + (a.night ? "" : `<path d="${shape(a, 0.7)}" fill="none" stroke="${c}" stroke-opacity=".55" stroke-dasharray="2 4"/>`);
   }
-  for (const a of o.site || []) s += `<path d="${shape(a)}" fill="none" stroke="${PP_INK}" stroke-width="1.6" stroke-dasharray="6 3"/>`;
+  // 지구 자체 기준 — 단계 색(노 · 파 · 빨)과 겹치지 않는 자홍 굵은 선 + 흰 테두리, 점선이 천천히 흐른다(.pp-site, 동작 줄이기 설정이면 멈춤)
+  for (const a of o.site || []) s += `<path d="${shape(a)}" fill="none" stroke="#fff" stroke-width="5" stroke-opacity=".9"/>`
+    + `<path class="pp-site" d="${shape(a)}" fill="none" stroke="${PP_SITE}" stroke-width="2.6" stroke-dasharray="9 5" stroke-linecap="round"/>`;
   const all = [...shown, ...(o.site || [])];
-  const tx = [...new Set(all.map(a => a.x).filter(v => v != null))].sort((a, b) => a - b), ty = [...new Set(all.map(a => a.y).filter(v => v != null))].sort((a, b) => a - b);
+  // 눈금 글자가 붙으면(250 · 270) 겹쳐 읽히지 않는다 — 앞 글자와 가로 22px · 세로 11px 안이면 뺀다(선은 그대로)
+  const thin = (vs, P, gap) => { let last = -1e9; return vs.filter(v => { const ok = Math.abs(P(v) - last) >= gap; if (ok) last = P(v); return ok; }); };
+  const tx = thin([...new Set(all.map(a => a.x).filter(v => v != null))].sort((a, b) => a - b), X, 22 * (o.fs || 10) / 10),
+        ty = thin([...new Set(all.map(a => a.y).filter(v => v != null))].sort((a, b) => a - b), Y, 11 * (o.fs || 10) / 10);
   s += `<line x1="${L}" x2="${x1}" y1="${y0}" y2="${y0}" stroke="${PP_INK3}"/><line x1="${L}" x2="${L}" y1="${T}" y2="${y0}" stroke="${PP_INK3}"/>`
     + tx.map(v => `<text x="${X(v)}" y="${H - B + 13}" text-anchor="middle" fill="${PP_INK}" font-size="${o.fs || 10}" font-weight="600">${v}</text>`).join("")
     + ty.map(v => `<text x="${L - 3}" y="${Y(v) + 3}" text-anchor="end" fill="${PP_INK}" font-size="${o.fs || 10}" font-weight="600">${v}</text>`).join("");
@@ -216,7 +221,7 @@ function dzMiniPlane(r) {
       + `<line x1="${bx(100)}" x2="${bx(100)}" y1="0" y2="10" stroke="var(--t100)" stroke-width="1.5"/></svg>`
       + `<em style="color:${dzColVar(lv)}">${v ?? "—"}%</em><small>${v >= 100 ? "넘음" : j != null ? `${at(j)} 도달` : "안 닿음"}</small></div>`;
   }).join("");
-  // ③ 오른쪽 — 단계 영역 평면(셋을 한 평면에, 지금 다음 단계를 진하게) · 지구 원문 기준 흰 점선 · 비가 아닌 조건은 글로
+  // ③ 오른쪽 — 단계 영역 평면(셋을 한 평면에, 지금 다음 단계를 진하게) · 지구 원문 기준 자홍 흐르는 점선 · 비가 아닌 조건은 글로
   const reg = DZ_REG?.[r.fam], n = (s.pl || []).length;
   let plane = "";
   if (reg && n) {
@@ -229,9 +234,8 @@ function dzMiniPlane(r) {
   const texts = (reg?.texts || []).map(x => `<div class="d">· ${escH(x.stage)}: ${escH(x.text)}</div>`).join("");
   const head = ph.skip ? `<b style="color:var(--t100)">⚠ ${ph.skip}가 ${ph.next}보다 더 찼다 — 단계를 건너뛸 수 있음(국지성 폭우)</b>`
     : ph.next ? `다음 단계 <b>${ph.next}</b>${ph.eta(ph.next) != null ? ` · ${at(ph.eta(ph.next))} 도달 예상` : " · 내일까지 안 닿음"}` : `<b style="color:var(--t100)">${ph.cur} 기준까지 넘음</b>`;
-  return `<div class="dzp"><div class="dzl"><div class="dzs">${strip}</div>${bars}<div class="d" style="margin-top:6px">${head}</div>
-      ${texts ? `<div class="d" style="margin-top:4px;color:var(--ink-2)">비가 아닌 조건</div>${texts}` : ""}</div>
-    <div class="dzr">${plane}${s.site?.length ? `<div class="d"><b>${escH(siteText(s.site, reg))}</b></div>` : ""}<div class="d">영역 = 도(행안부) 공통 기준 · 세로 시우량 ㎜/h · 검은 점선 = 지구 원문 기준 · 옅은 점선 = 70% · 보일 단계는 범례에서</div></div></div>`;
+  const site = s.site?.length ? siteText(s.site, reg).replace("이 지구 자체 기준: ", "") : "";
+  return { strip, bars, head, texts, plane, site };
 }
 /* 상황판단 창이 재생 위치를 보냈다 — 배지 색을 그 시각으로(0 이면 지금) */
 function dzTime(i, lab) { DZ_TI = +i || 0; DZ_TL = DZ_TI ? lab || "" : ""; drawDistrict(); districtLegend(); }
@@ -255,18 +259,24 @@ function districtAt(mx, my) {
   const r = f && DZ.rows.find(x => x.id === f.properties.id);
   return r ? { dz: r } : null;
 }
+/* 지구 마우스 카드(게임 HUD 처럼) — ① 머리: 유형 배지 · 이름 · 큰 % ② 단계 트랙 ③ 왼쪽 단계 막대 · 다음 목표 · 비가 아닌 조건 / 오른쪽 조건 평면
+   ④ 지구 자체 기준(평면의 자홍 선과 같은 색 띠) ⑤ 대피기준 · 대피장소 표. #tip 에 .hudtip 을 붙여 줄바꿈 · 너비를 카드에 맡긴다(11-misc) */
 function districtTip(r) {
   const where = [r.ri, r.jibun].filter(x => x && x !== "–").join(" ");
   const name = r.name && !/구$/.test(r.name) && r.name !== "–" ? r.name : where || r.emd;
-  const p = dzPct(r), w = DZ_PCT?.[r.id]?.where;
-  return `<b>${escH(name)}</b> · ${escH(r.kind || r.fam)}${p != null ? ` · <b style="color:${dzColVar(dzLv(p))}">${p}%</b>` : ""}`
-    + `<div class="d">${escH(r.sigun)} ${escH(r.emd)} ${escH(where)}</div>`
-    + (p != null ? `<div class="d">기준 대비 가장 높은 단계 — ${ACC_BASIS === "grid" ? "격자" : "AWS"} 기준${w === "읍면동" ? " · 좌표 없이 읍면동 값" : ""}</div>` : "")
-    + (dzMiniPlane(r) || `<div class="d">시군을 눌러 고르면 단계 그래프가 나온다</div>`)
-    + (r.approx ? `<div class="d">위치는 근사 — 지번으로 못 찾아 그 리 · 읍면동 가운데(판정은 읍면동 기준)</div>` : "")
-    + (r.rule ? `<div class="d">대피기준 ${escH(r.rule)}</div>` : "")
-    + (r.shelter && r.shelter !== "–" ? `<div class="d">대피장소 ${escH(r.shelter)}</div>` : "")
-    + `<div class="d">오른쪽 클릭 → 상황판단 모드</div>`;
+  const p = dzPct(r), w = DZ_PCT?.[r.id]?.where, col = dzColVar(dzLv(p)), m = dzMiniPlane(r);
+  const row = (k, v) => v && v !== "–" ? `<dt>${k}</dt><dd>${escH(v)}</dd>` : "";
+  return `<div class="hud${m ? "" : " sm"}">`
+    + `<div class="hd"><span class="bdg">${escH(r.kind || r.fam)}</span><div class="nm"><b>${escH(name)}</b><small>${escH(r.sigun)} ${escH(r.emd)} ${escH(where)}</small></div>`
+    + (p != null ? `<div class="pc" style="--c:${col}"><b>${p}<i>%</i></b><small>${ACC_BASIS === "grid" ? "격자" : "AWS"} 기준${w === "읍면동" ? " · 읍면동 값" : ""}</small></div>` : "") + `</div>`
+    + (m ? `<div class="dzs">${m.strip}</div>`
+      + `<div class="bd"><div class="lf">${m.bars}<div class="goal">${m.head}</div>`
+      + (m.texts ? `<div class="sub">비가 아닌 조건</div>${m.texts}` : "") + `</div><div class="rt">${m.plane}</div></div>`
+      + (m.site ? `<div class="site"><span>지구 기준</span><b>${escH(m.site)}</b></div>` : "")
+      : `<div class="d">시군을 눌러 고르면 단계 그래프가 나온다</div>`)
+    + (r.approx ? `<div class="d warn">위치는 근사 — 지번으로 못 찾아 그 리 · 읍면동 가운데(판정은 읍면동 기준)</div>` : "")
+    + (r.rule || r.shelter ? `<dl>${row("대피기준", r.rule)}${row("대피장소", r.shelter)}</dl>` : "")
+    + `<div class="ft">오른쪽 클릭 — 상황판단 모드 · 카카오맵</div></div>`;
 }
 function districtOpen(r) {
   const u = `/map.html?sj=1&sig=${encodeURIComponent(r.sigun)}&r=${encodeURIComponent(r.id)}`;
