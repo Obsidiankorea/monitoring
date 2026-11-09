@@ -13,11 +13,13 @@ function stnMenu(ev, st) {
   pop.innerHTML = `<div class="g">${st.sigun} · ${st.name}</div>`
     + `<div class="note">${st.org === "gn" ? "경남 AWS" : `기상청 AWS ${st.stn}`} · 지금 이 층 ${v}</div>`
     + `<button data-a="t" class="${off ? "on" : ""}">${off ? "다시 켜기 — 계산에 넣기" : "비활성화 — 계산에서 빼기"}</button>`
-    + `<div class="note">${off ? "" : "이 지점 없이 둘레 관측소로 면을 다시 메운다(카드 · 지금 오는 비에서도 뺀다). "}목록은 설정(Ctrl+,) › 관측소</div>`;
+    + `<div class="note">${off ? "" : "이 지점 없이 둘레 관측소로 면을 다시 메운다(카드 · 지금 오는 비에서도 뺀다). "}목록은 설정(Ctrl+,) › 관측소</div>`
+    + kakaoBtns(`${st.name}(AWS)`, ...LCC(st.x, st.y));
   pop.hidden = false;
   pop.style.left = Math.max(4, Math.min(ev.clientX - rc.left, rc.width - pop.offsetWidth - 8)) + "px";
   pop.style.top = Math.max(4, Math.min(ev.clientY - rc.top, rc.height - pop.offsetHeight - 8)) + "px";
   void pop.offsetWidth; pop.classList.add("open");
+  kakaoBind(pop);
   pop.querySelector("button").onclick = e => {
     e.stopPropagation(); stnPop(null);
     putOff(off ? offList().filter(x => x.id !== st.key) : [...offList(), { id: st.key, name: st.name, sigun: st.sigun, org: st.org }]);
@@ -43,15 +45,36 @@ $("stage").addEventListener("contextmenu", ev => {
   const dz = districtAt(mx, my)?.dz, sg = sigunAt(V.fromX(mx), V.fromY(my));
   ev.preventDefault();
   $("tip").hidden = true;
-  mapMenu(ev, dz, sg, LCC(V.fromX(mx), V.fromY(my)));
+  mapMenu(ev, dz, sg, placeAt(mx, my, dz) || { n: "", ll: LCC(V.fromX(mx), V.fromY(my)) });
 });
-function mapMenu(ev, dz, sg, [lon, lat]) {
+const dzName = dz => dz.name && !/구$/.test(dz.name) && dz.name !== "–" ? dz.name : [dz.ri, dz.jibun].filter(x => x && x !== "–").join(" ") || dz.emd;
+/* 오른쪽 클릭한 표식 — 카카오맵 핀에 그 이름 · 그 표식 자리를 쓴다(마우스 자리는 표식 반지름만큼 어긋난다). 없으면 null */
+function placeAt(mx, my, dz) {
+  const at = h => LCC(V.fromX(h.x), V.fromY(h.y));
+  const td = tideAt(mx, my);
+  if (td) return { n: `${td.name}(조위관측소)`, ll: LCC(td.x, td.y) };
+  const rv = riverAt(mx, my), h = rv && RIV_HIT.find(x => x.s === rv);
+  if (h) { const k = rv.kind === "wl" ? "수위관측소" : rv.kind === "dam" ? "댐" : "보";
+           return { n: rv.name.endsWith(k) ? rv.name : `${rv.name}(${k})`, ll: at(h) }; }
+  const res = safetyAt(mx, my)?.res;
+  if (res) return { n: `${res.name}(위험저수지)`, ll: [res.lon, res.lat] };
+  if (dz?.pos) return { n: `${dzName(dz)}(${dz.kind || dz.fam})`, ll: [dz.pos[1], dz.pos[0]] };
+  return null;
+}
+/* 카카오맵 지도 · 로드뷰 단추 — 핀은 이름이 있어야 꽂혀서 이름이 없으면 좌표를 이름으로. 쉼표 · / 는 주소 구분자라 뺀다 */
+function kakaoBtns(name, lon, lat) {
+  const ll = `${lat.toFixed(5)},${lon.toFixed(5)}`, n = (name || ll.replace(",", " ")).replace(/[,/]/g, " ");
+  return `<div class="g">카카오맵 · ${escH(name || `${lat.toFixed(4)}°N ${lon.toFixed(4)}°E`)}</div>`
+    + `<button data-u="https://map.kakao.com/link/map/${encodeURIComponent(n)},${ll}">이 자리 지도로 보기</button>`
+    + `<button data-u="https://map.kakao.com/link/roadview/${ll}">이 자리 거리뷰(로드뷰)</button>`;
+}
+function kakaoBind(pop) {
+  for (const b of pop.querySelectorAll("button[data-u]")) b.onclick = e => { e.stopPropagation(); stnPop(null); window.open(b.dataset.u, "_blank", "noopener"); };
+}
+function mapMenu(ev, dz, sg, pl) {
   const pop = $("stn-pop"), rc = $("stage").getBoundingClientRect();
-  const nm = dz && (dz.name && !/구$/.test(dz.name) && dz.name !== "–" ? dz.name : [dz.ri, dz.jibun].filter(x => x && x !== "–").join(" "));
-  const ll = `${lat.toFixed(5)},${lon.toFixed(5)}`;   // 카카오맵은 이름이 있어야 핀이 꽂힌다 — 이름 자리에도 좌표(쉼표는 구분자라 띄어쓰기)
-  pop.innerHTML = `<div class="g">카카오맵 · ${lat.toFixed(4)}°N ${lon.toFixed(4)}°E</div>`
-    + `<button data-u="https://map.kakao.com/link/map/${ll.replace(",", " ")},${ll}">이 자리 지도로 보기</button>`
-    + `<button data-u="https://map.kakao.com/link/roadview/${ll}">이 자리 거리뷰(로드뷰)</button>`
+  const nm = dz && dzName(dz);
+  pop.innerHTML = kakaoBtns(pl.n, ...pl.ll)
     + (dz || sg ? `<div class="g">상황판단 모드</div>` : "")
     + (dz ? `<button data-a="dz">이 지구 — ${escH(nm || dz.emd)} <small>${escH(dz.kind || dz.fam)}</small></button>` : "")
     + (sg ? `<button data-a="sg">${escH(sg)} 전체</button>` : "")
@@ -61,9 +84,8 @@ function mapMenu(ev, dz, sg, [lon, lat]) {
   pop.style.left = Math.max(4, Math.min(ev.clientX - rc.left, rc.width - pop.offsetWidth - 8)) + "px";
   pop.style.top = Math.max(4, Math.min(ev.clientY - rc.top, rc.height - pop.offsetHeight - 8)) + "px";
   void pop.offsetWidth; pop.classList.add("open");
-  for (const b of pop.querySelectorAll("button")) b.onclick = e => {
+  for (const b of pop.querySelectorAll("button:not([data-u])")) b.onclick = e => {
     e.stopPropagation(); stnPop(null);
-    if (b.dataset.u) return window.open(b.dataset.u, "_blank", "noopener");
     if (b.dataset.a === "fix") return dzDlg(true, dz.id);
     if (b.dataset.a === "dz") districtOpen(dz);
     else if (!window.open(`/map.html?sj=1&sig=${encodeURIComponent(sg)}`, "gn-judge", "popup=1,width=1680,height=1000")) toast("팝업이 막혔다 — 이 사이트의 팝업을 허용한다");
