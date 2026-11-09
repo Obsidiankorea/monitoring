@@ -351,8 +351,13 @@ function zoomCam(sigs) {
   return { s, ox: (A.x0 + A.x1) / 2 - (cx - V.X0) * s, oy: (A.y0 + A.y1) / 2 - (V.Y1 - cy) * s };
 }
 /* 가야 할 틀. cam = 화면에 보일 틀(MT 를 접어 넣은 값), mt = 다 온 뒤 MT, zoom = 시군 확대인가 */
+/* 휠 확대(11-10) — 지도 위에서 휠을 굴리면 커서 자리를 붙잡고 키우고 줄인다. 잠깐 보는 틀이라 기억하지 않는다
+   (기본 틀은 지도 위치 C). 처음 틀까지 줄이거나 시군을 고르면 · Esc 면 풀린다 */
+let WZ = null;
 function camTarget() {
-  const c = zoomOn() && !CAM_EDIT ? zoomCam(SELS) : null;      // 지도 위치를 고치는 동안은 경남 전체 틀로
+  const zo = zoomOn() && !CAM_EDIT;
+  if (WZ && !CAM_EDIT) return { cam: WZ, mt: { tx: 0, ty: 0, sc: 1 }, zoom: zo, user: !zo };
+  const c = zo ? zoomCam(SELS) : null;                         // 지도 위치를 고치는 동안은 경남 전체 틀로
   if (c) return { cam: c, mt: { tx: 0, ty: 0, sc: 1 }, zoom: true };
   const m = tlFit();
   const base = { s: m.sc * V.b.s, ox: m.tx + m.sc * V.b.ox, oy: m.ty + m.sc * V.b.oy };
@@ -368,6 +373,7 @@ function setWrap(m, animate) {
 }
 function camGo(animate = true) {
   if (!V) return;
+  WZ = null;                             // 시군 고르기 · 풀기 · 판 크기 바뀜 — 휠로 키운 틀은 놓는다
   const T = camTarget();
   if (!T.zoom && !T.user && !CAM && !CAMU && !ZA) {   // 경남 전체 ↔ 경남 전체(타임라인 비켜서기) — 예전대로 CSS 로 옮긴다
     MT = T.mt; setWrap(MT, animate);
@@ -469,6 +475,18 @@ function camReset() { UC = { ...UC0 }; if (CAM_EDIT) camSet(camTarget()); else c
     ucFrom({ s: C.s * f, ox: mx - (mx - C.ox) * f, oy: my - (my - C.oy) * f }); ucClamp(); camLive();
   }, { passive: false });
   cg.addEventListener("dblclick", () => camReset());
+  $("stage").addEventListener("wheel", ev => {
+    if (CAM_EDIT || !V || !GEN || !ev.target.closest?.("#mapwrap")) return;   // 패널 · 위젯 · 팝업 위 휠은 그대로 굴린다
+    ev.preventDefault();
+    const was = WZ; WZ = null;
+    const base = camTarget().cam, C = was || base;                  // base = 지금 보이는 틀(MT 를 접어 넣은 값)
+    const rc = $("stage").getBoundingClientRect(), mx = ev.clientX - rc.left, my = ev.clientY - rc.top;
+    const s1 = Math.min(base.s * ZMAX * 4, C.s * Math.exp(-ev.deltaY * 0.0015));
+    if (s1 <= base.s * 1.001) { if (was) camLive(); return; }   // 처음 틀까지 줄였다 — 휠 틀을 놓는다
+    const f = s1 / C.s;
+    WZ = { s: s1, ox: mx - (mx - C.ox) * f, oy: my - (my - C.oy) * f };
+    camLive();
+  }, { passive: false });
   $("cam-reset").onclick = camReset;
   $("cam-done").onclick = () => camEdit(false);
   $("b-cam").onclick = () => camEdit(!CAM_EDIT);
