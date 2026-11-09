@@ -64,15 +64,22 @@ function placeAt(mx, my, dz) {
            return { n: rv.name.endsWith(k) ? rv.name : `${rv.name}(${k})`, ll: at(h) }; }
   const res = safetyAt(mx, my)?.res;
   if (res) return { n: `${res.name}(위험저수지)`, ll: [res.lon, res.lat] };
-  if (dz?.pos) return { n: `${dzName(dz)}(${dz.kind || dz.fam})`, ll: [dz.pos[1], dz.pos[0]] };
+  if (dz?.pos) return { n: `${dzName(dz)}(${dz.kind || dz.fam})`, ll: [dz.pos[1], dz.pos[0]], q: dzAddr(dz) };
   return null;
 }
+/* 지구 지번 주소 — 카카오맵 주소 검색용. 위키 칸이 고르지 않다('–', '1313 - 55', '286-1 286-4', '825 일원', '실리도') — 지번은 첫 번호만, 번호가 없으면 글 그대로 */
+function dzAddr(dz) {
+  const cl = v => { v = String(v ?? "").replace(/\s*일원$/, "").replace(/\s*-\s*/g, "-").trim(); return /^[-–]*$/.test(v) ? "" : v; };
+  const j = cl(dz.jibun), jn = j.match(/산?\d+(-\d+)?/)?.[0];
+  return ["경남", SG_ORD.find(x => x.startsWith(dz.sigun)) || dz.sigun, cl(dz.emd), cl(dz.ri), jn || j].filter(Boolean).join(" ");
+}
 /* 카카오맵 지도 · 로드뷰 단추 — 핀은 이름이 있어야 꽂혀서 이름이 없으면 좌표를 이름으로. 쉼표 · / 는 주소 구분자라 뺀다 */
-function kakaoBtns(name, lon, lat) {
+function kakaoBtns(name, lon, lat, q) {
   const ll = `${lat.toFixed(5)},${lon.toFixed(5)}`, n = (name || ll.replace(",", " ")).replace(/[,/]/g, " ");
   return `<div class="g">카카오맵 · ${escH(name || `${lat.toFixed(4)}°N ${lon.toFixed(4)}°E`)}</div>`
     + `<button data-u="https://map.kakao.com/link/map/${encodeURIComponent(n)},${ll}">이 자리 지도로 보기</button>`
-    + `<button data-u="https://map.kakao.com/link/roadview/${ll}">이 자리 거리뷰(로드뷰)</button>`;
+    + `<button data-u="https://map.kakao.com/link/roadview/${ll}">이 자리 거리뷰(로드뷰)</button>`
+    + (q ? `<button data-u="https://map.kakao.com/link/search/${encodeURIComponent(q)}">주소로 찾기 <small>${escH(q.replace(/^경남 /, ""))}</small></button>` : "");
 }
 function kakaoBind(pop) {
   for (const b of pop.querySelectorAll("button[data-u]")) b.onclick = e => { e.stopPropagation(); stnPop(null); window.open(b.dataset.u, "_blank", "noopener"); };
@@ -80,7 +87,7 @@ function kakaoBind(pop) {
 function mapMenu(ev, dz, sg, pl) {
   const pop = $("stn-pop"), rc = $("stage").getBoundingClientRect();
   const nm = dz && dzName(dz);
-  pop.innerHTML = kakaoBtns(pl.n, ...pl.ll)
+  pop.innerHTML = kakaoBtns(pl.n, ...pl.ll, pl.q)
     + (dz || sg ? `<div class="g">상황판단 모드</div>` : "")
     + (dz ? `<button data-a="dz">이 지구 — ${escH(nm || dz.emd)} <small>${escH(dz.kind || dz.fam)}</small></button>` : "")
     + (sg ? `<button data-a="sg">${escH(sg)} 전체</button>` : "")
@@ -156,7 +163,8 @@ function valueAt(gx, gy) {
   return CUR.u[r * CUR.w + c];
 }
 $("stage").addEventListener("mousemove", ev => {
-  if (!V || !GEO || ev.target.closest("#tl, #play, #legend, #layers, #rail, #pop, #sw, #camgrab, #cambar, #tools, #aiw, #showdots, #td-pop, .rng-pop")) { $("tip").hidden = true; $("stage").style.cursor = ""; return; }
+  // 오른쪽 클릭 메뉴가 열려 있으면 툴팁을 감춘다 — 메뉴를 덮지 않게
+  if (!V || !GEO || !$("stn-pop").hidden || ev.target.closest("#tl, #play, #legend, #layers, #rail, #pop, #sw, #camgrab, #cambar, #tools, #aiw, #showdots, #td-pop, .rng-pop")) { $("tip").hidden = true; $("stage").style.cursor = ""; return; }
   const rc = $("stage").getBoundingClientRect(), x = ev.clientX - rc.left, y = ev.clientY - rc.top;
   const mx = (x - MT.tx) / MT.sc, my = (y - MT.ty) / MT.sc;
   const gx = V.fromX(mx), gy = V.fromY(my), v = valueAt(gx, gy), tip = $("tip");
