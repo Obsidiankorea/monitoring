@@ -39,7 +39,7 @@ function sjpPlane(T, rows) {
   const sgs = [...new Set(rows.map(x => x.r.sigun))].sort(), multi = sgs.length > 1, col = r => (multi ? sgCol(r.sigun) : "#374151");
   const W = fams.length > 1 ? Math.floor(1000 / fams.length) - 8 : 760, H = 340;
   const panels = fams.map(f => {
-    const rg = reg[f], S = ppScale(rg, W, H, 40, 26, 22, 10), rs = rows.filter(x => x.r.fam === f && sjB(x.r)?.series?.pl?.length);
+    const rg = reg[f], S = ppScale(rg, W, H, 40, 26, 10, 10), rs = rows.filter(x => x.r.fam === f && sjB(x.r)?.series?.pl?.length);
     const sel = rs.find(x => x.r.id === SJ.sel);
     let s = ppAreas(rg, S, { site: sel ? sjB(sel.r).series.site : [], fs: 11 });
     if (SJP.lines) s += rs.filter(x => x !== sel).map(x => ppTrail(rg, S, sjB(x.r).series.pl, t, SJP.tc, SJP.tc ? null : col(x.r))).join("");
@@ -55,16 +55,16 @@ function sjpPlane(T, rows) {
       taken.push({ x, y, w });
       s += `<text class="lb2" x="${x.toFixed(1)}" y="${y.toFixed(1)}">${escH(name(r))}</text>`;
     }
-    s += `<text x="${S.L}" y="15" fill="${PP_INK}" font-size="13" font-weight="700">${escH(f)}</text>`
-      + `<text x="${W - 8}" y="15" text-anchor="end" fill="${PP_INK3}" font-size="11">가로 ${rg.x} ㎜ · 세로 시우량 ㎜/h</text>`;
-    return `<svg class="sjp-svg pp" viewBox="0 0 ${W} ${H}" role="img" aria-label="${escH(f)} 단계 영역 평면">${s}</svg>`;
+    // 지도 지구 카드(06e .hud)와 같은 결 — 머리 띠(유형 배지 · 축 · 지구 수) 아래 평면
+    return `<div class="ppcard"><div class="pph"><span class="bdg">${escH(f)}</span><small>가로 ${escH(rg.x)} ㎜ · 세로 시우량 ㎜/h</small><em>${rs.length}곳</em></div>`
+      + `<svg class="sjp-svg pp" viewBox="0 0 ${W} ${H}" role="img" aria-label="${escH(f)} 단계 영역 평면">${s}</svg></div>`;
   });
   const sel = rows.find(x => x.r.id === SJ.sel), tx = sel ? (reg[sel.r.fam]?.texts || []) : [];
   const st = sel ? siteText(sjB(sel.r).series.site, reg[sel.r.fam]) : "";
   const sk = multi ? `<div class="ppk big sgk">${sgs.map(g => `<span><i style="background:${sgCol(g)}"></i>${escH(g)}</span>`).join("")}</div>` : "";
   return `<div class="ppk big">${ppKey(reg[fams[0]], sel ? sjB(sel.r).series.site : [])}<span class="mute">영역 = 도(행안부) 공통 기준</span>${SJP.tc || sel ? sjpTimeKey(T) : ""}</div>${sk}<div class="ppw" style="grid-template-columns:repeat(${fams.length}, minmax(0, 1fr))">${panels.join("")}</div>`
-    + (st ? `<p><b>${escH(sjName(sel.r))}</b> — ${escH(st)}</p>` : "")
-    + (tx.length ? `<p class="mute">${escH(sjName(sel.r))} — 비가 아닌 조건: ${tx.map(x => `${escH(x.stage)} ${escH(x.text)}`).join(" · ")}</p>` : "");
+    + (st ? `<div class="hsite"><span>지구 기준</span><b>${escH(sjName(sel.r))} — ${escH(st.replace("이 지구 자체 기준: ", ""))}</b></div>` : "")
+    + (tx.length ? `<div class="hcond"><span>비가 아닌 조건 · ${escH(sjName(sel.r))}</span>${tx.map(x => `<div>· ${escH(x.stage)}: ${escH(x.text)}</div>`).join("")}</div>` : "");
 }
 function sjpSvg(T, rows) {
   const W = 1000, H = 300, L = 44, R = 150, TP = 12, B = 24, n = Math.max(2, T.length), t = Math.min(SJP.t, n - 1);
