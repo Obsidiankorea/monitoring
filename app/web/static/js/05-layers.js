@@ -16,6 +16,7 @@ const OVL = [
   { id: "low", label: "저지대(표고 10m 이하)", short: "저지대", key: "Z", grp: "geo" },
   { id: "water", label: "강 · 호수 · 저수지", short: "물", key: "", grp: "geo" },
   { id: "waterall", label: "지방하천 늘 보기", short: "지방하천", key: "", parent: "water", grp: "geo" },
+  { id: "waterlbl", label: "강 이름 표시(시군 확대)", short: "강 이름", key: "", parent: "water", grp: "geo" },
   { id: "bldg", label: "건물(사람 사는 곳)", short: "건물", key: "", grp: "geo" },
 ];
 /* 레이어 묶음 — 같은 grp 는 접었다 펴는 한 줄 아래로. 펼침은 이 PC 에 기억(브라우저 저장, 못 쓰면 접힌 채) */
@@ -48,6 +49,7 @@ const TIPS = new Map([
   ["ov-water", `<b>강 · 호수 · 저수지</b> — 국토지리정보원 연속수치지형도. 국가하천은 굵은 하늘색 선, 지방하천은 가는 선, 소하천은 시군을 고른 확대에서만.
     호수 · 저수지(1ha 이상)와 넓은 강의 물은 면으로. 경남 밖은 회색으로 흐리게. 켜면 지도 오른쪽 아래에 출처가 뜬다.`],
   ["ov-waterall", `<b>지방하천 늘 보기</b> — 끄면(기본) 지방하천은 시군을 고른 확대에서만 보인다. 켜면 경남 전체 화면에서도 — 줄기가 촘촘해 비 색이 덜 보인다.`],
+  ["ov-waterlbl", `<b>강 이름 표시</b> — 시군을 골라 확대했을 때 국가 · 지방하천 이름을 강을 따라 단다(읍면동 이름 · 관측소 글자와 겹치지 않는 자리만). 이름은 국토지리정보원 하천중심선의 이름 칸.`],
   ["ov-bldg", `<b>건물(사람 사는 곳)</b> — 경남 건물 전부(국토교통부 GIS건물통합정보, 약 160만 동)를 모래색으로. 진할수록 건물이 빽빽하다(시가지 · 아파트 단지), 옅은 점은 시골 마을.
     시군을 고르면 더 자세한 조각으로 바뀐다. 매월 갱신 자료 — 받은 달 기준. 켜면 지도 오른쪽 아래에 출처가 뜬다.`],
   ["ov-tide", `<b>조위</b> — 경남 해안 조위관측소의 바닷물 높이(해양조사원). 표식의 숫자는 지금 실측, 괄호는 예측과의 차이.
@@ -197,7 +199,7 @@ function setOverlay(id, on) {
   if (id === "district") { if (on) setLyOpen(id); loadDistrict(); }
   if (id === "stnval") drawStations();
   if (id === "relief" || id === "low" || id === "bldg") glTerrain();
-  if (id === "water" || id === "waterall") glWater();
+  if (id === "water" || id === "waterall" || id === "waterlbl") { glWater(); drawStations(); }
   renderLayers();
 }
 $("ly-btn").onclick = () => {

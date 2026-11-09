@@ -151,6 +151,7 @@ async function glWater() {
     try {
       WATER = (await getJson("water/water.json")).features;
       glSet("water", glFC(WATER.map(f => glF(f.geometry, f.properties))));
+      if (OV.has("waterlbl")) drawStations();                  // 강 이름 — 자료가 막 왔다(읍면동 이름과 같이 다시 단다)
     } catch (e) { WATER = null; console.warn("강 · 호수 자료를 못 읽었다", e); return; }
   }
   for (const L of ["water", "water-ln", "water-r-ln", "river", "river-l", "river-s"]) GL.setLayoutProperty(L, "visibility", OV.has("water") && Array.isArray(WATER) ? "visible" : "none");

@@ -124,8 +124,10 @@ def parse_pred(rows: list[dict], now: datetime) -> list[dict]:
     return sorted(out, key=lambda r: r["at"], reverse=True)
 
 
-def parse_res(rows: list[dict]) -> list[dict]:
-    """경남 위험저수지 계측기 — 계측기마다 마지막 경보 기록. on = 발령(해제 전)."""
+def parse_res(rows: list[dict], now: datetime | None = None) -> list[dict]:
+    """경남 위험저수지 계측기 — 계측기마다 마지막 경보 기록. on = 발령 중(해제 없음, 72시간 안).
+    old = 마지막 기록이 발령인데 72시간이 넘었다 — 해제를 못 받은 옛 발령(예: 2025-07 발령이 해제 없이 남음). 지금 발령으로 보지 않는다."""
+    now = now or datetime.now()
     last: dict = {}
     for x in rows:
         if not sigun_of_code(x.get("MNG_INST_CD")):
@@ -141,8 +143,14 @@ def parse_res(rows: list[dict]) -> list[dict]:
         except (KeyError, TypeError, ValueError):
             continue
         t = x.get("WRN_APNT_DT") or ""
+        try:
+            age = (now - datetime.strptime(t[:12], "%Y%m%d%H%M")).total_seconds() / 3600
+        except ValueError:
+            age = 0.0                                       # 시각을 못 읽으면 기록 그대로(발령이면 발령)
+        raw = str(x.get("APNT_SE")) == "1"
         out.append({"name": x.get("MEMENT_NM") or "", "sigun": sigun_of_code(x.get("MNG_INST_CD")), "lon": lon, "lat": lat,
-                    "lv": lv, "lvn": RES_LV[lv] if 0 < lv < len(RES_LV) else str(lv), "on": str(x.get("APNT_SE")) == "1",
+                    "lv": lv, "lvn": RES_LV[lv] if 0 < lv < len(RES_LV) else str(lv),
+                    "on": raw and age <= FCST_KEEP_H, "old": raw and age > FCST_KEEP_H, "days": int(age // 24),
                     "at": f"{t[:4]}-{t[4:6]}-{t[6:8]} {t[8:10]}:{t[10:12]}" if len(t) >= 12 else t,
                     "cn": (x.get("WRN_APNT_CN") or "").replace("* 계측기 고장 등에 의한 오측이 발생할수도 있으니 참고하시기 바랍니다.", "").strip()[:200]})
     return sorted(out, key=lambda r: (r["on"], r["lv"], r["at"]), reverse=True)

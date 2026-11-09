@@ -336,7 +336,7 @@ function buildBase() {
       style="font-size:${f.toFixed(1)}px;stroke-width:${(f * 0.16).toFixed(1)}px">${p.sigun}</text>`;
   }).join("");
   $("over").innerHTML =
-    `<g id="walerts"></g><path id="hl"/><path id="selh"/><path id="sel"/><g id="emdn"></g><g id="stns"></g><g id="safg"></g><g id="rivr"></g><g id="tidr"></g><g id="labels"></g><g id="names">${names}</g><g id="tempg"></g>`
+    `<g id="walerts"></g><path id="hl"/><path id="selh"/><path id="sel"/><g id="emdn"></g><g id="wlab"></g><g id="stns"></g><g id="safg"></g><g id="rivr"></g><g id="tidr"></g><g id="labels"></g><g id="names">${names}</g><g id="tempg"></g>`
     + `<g id="wbadge"></g><g id="ranks"></g><g id="hot"></g>`;
   HL = null;
   drawAlerts();

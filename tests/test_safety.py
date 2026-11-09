@@ -33,8 +33,11 @@ def test_res_last_record_per_sensor():
                                     "MEMENT_NM": f"계측{senu}", "LAT": "35.0", "LOT": "128.1", "WRN_CD": cd, "APNT_SE": se,
                                     "WRN_APNT_DT": dt, "MDFCN_DT": "", "WRN_APNT_CN": "(현수위) 2.61m * 계측기 고장 등에 의한 오측이 발생할수도 있으니 참고하시기 바랍니다."}
     out = safety.parse_res([r("03", "1", "20261018212629"), r("03", "2", "20261019010000"), r("02", "1", "20261020000000", 2),
-                            {**r("05", "1", "20261020000000", 3), "MNG_INST_CD": "46790"}])
+                            {**r("05", "1", "20261020000000", 3), "MNG_INST_CD": "46790"}], now=datetime(2026, 10, 20, 1))
     assert [(x["name"], x["on"], x["lvn"]) for x in out] == [("계측2", True, "주의"), ("계측1", False, "경계")]
+    # 해제 없이 72시간 넘은 발령은 지금 발령이 아니다(old) — 2025-07 발령이 '발령 중'으로 남던 것
+    old = safety.parse_res([r("03", "1", "20250717150500")], now=datetime(2026, 11, 9, 22))
+    assert not old[0]["on"] and old[0]["old"] and old[0]["days"] > 400
     assert out[0]["cn"] == "(현수위) 2.61m" and out[0]["at"] == "2026-10-20 00:00"
 
 

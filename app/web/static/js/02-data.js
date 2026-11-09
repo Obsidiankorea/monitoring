@@ -577,6 +577,51 @@ function drawEmdNames(taken) {
     out.push(`<text class="en" x="${x.toFixed(1)}" y="${y.toFixed(1)}" style="font-size:${fs.toFixed(1)}px;stroke-width:${(fs * 0.2).toFixed(1)}px">${p.name}${pc == null ? "" : ` <tspan class="pc">${pc}%</tspan>`}</text>`);
   }
   g.innerHTML = out.join("");
+  drawWaterLabels(placed);
+}
+/* 강 이름(레이어 옵션 waterlbl) — 시군 확대에서 국가 · 지방하천 이름을 강 줄기를 따라(기울여) 단다. 읍면동 이름 다음 — 남은 빈자리에만.
+   한 이름은 화면에서 가장 긴 줄기에, 450px 마다 하나씩. 좌표는 water.json(칸) → V.toX/Y */
+function drawWaterLabels(placed) {
+  const g = $("wlab");
+  if (!g) return;
+  if (!OV.has("water") || !OV.has("waterlbl") || !CAM || !selOn() || !Array.isArray(WATER) || !V) { g.innerHTML = ""; return; }
+  const A = mapArea(), fs = Math.max(11.5, Math.min(18, V.u * 3.6)), out = [];
+  const hit = b => placed.some(p => b.x0 < p.x1 && b.x1 > p.x0 && b.y0 < p.y1 && b.y1 > p.y0);
+  const runs = new Map();                                   // 이름 → [화면 점 줄기 …]
+  const keep = (n, r) => { if (r.length > 1) (runs.get(n) || runs.set(n, []).get(n)).push(r); };
+  for (const f of WATER) {
+    const p = f.properties;
+    if (p.k !== "river" || !p.n || p.g > 2 || p.o) continue;
+    for (const line of f.geometry.coordinates) {
+      let cur = [];
+      for (const [gx, gy] of line) {
+        const x = V.toX(gx), y = V.toY(gy);
+        if (x > A.x0 && x < A.x1 && y > A.y0 && y < A.y1) cur.push([x, y]);
+        else { keep(p.n, cur); cur = []; }
+      }
+      keep(p.n, cur);
+    }
+  }
+  const len = r => r.slice(1).reduce((s, q, i) => s + Math.hypot(q[0] - r[i][0], q[1] - r[i][1]), 0);
+  const best = [...runs].map(([n, rs]) => { const r = rs.reduce((a, b) => (len(b) > len(a) ? b : a)); return [n, r, len(r)]; }).sort((a, b) => b[2] - a[2]);
+  for (const [name, r, L] of best) {
+    const w = name.length * fs * 1.02 + 6;
+    if (L < w * 1.4) continue;                               // 이름보다 짧은 줄기엔 달지 않는다
+    for (let k = 0, n = Math.max(1, Math.floor(L / 450)); k < n; k++) {
+      let t = L * (k + 0.5) / n, i = 1;                      // 줄기를 따라 t 지점
+      for (; i < r.length - 1; i++) { const s = Math.hypot(r[i][0] - r[i - 1][0], r[i][1] - r[i - 1][1]); if (t <= s) break; t -= s; }
+      const a = r[i - 1], b2 = r[i], s = Math.hypot(b2[0] - a[0], b2[1] - a[1]) || 1;
+      const x = a[0] + (b2[0] - a[0]) * Math.min(1, t / s), y = a[1] + (b2[1] - a[1]) * Math.min(1, t / s);
+      let ang = Math.atan2(b2[1] - a[1], b2[0] - a[0]) * 180 / Math.PI;
+      if (ang > 90) ang -= 180; else if (ang < -90) ang += 180;   // 글자가 뒤집히지 않게
+      const c = Math.abs(Math.cos(ang * Math.PI / 180)), sn = Math.abs(Math.sin(ang * Math.PI / 180));
+      const bx = { x0: x - (c * w + sn * fs) / 2, x1: x + (c * w + sn * fs) / 2, y0: y - (sn * w + c * fs) / 2, y1: y + (sn * w + c * fs) / 2 };
+      if (hit(bx)) continue;
+      placed.push(bx);
+      out.push(`<text class="wl" transform="translate(${x.toFixed(1)},${y.toFixed(1)}) rotate(${ang.toFixed(1)})" style="font-size:${fs.toFixed(1)}px;stroke-width:${(fs * 0.22).toFixed(1)}px">${escH(name)}</text>`);
+    }
+  }
+  g.innerHTML = out.join("");
 }
 
 /* 재생 막대 — 범례 오른쪽 ~ 패널 왼쪽 빈자리 가운데. 막대(약 880px)가 그보다 넓으면 눈금 줄(TRK.Wt)을 줄인다.

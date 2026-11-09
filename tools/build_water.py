@@ -84,6 +84,31 @@ def join(ways):
     return rings
 
 
+def merge(lines):
+    """끝점이 같은 토막을 이어 긴 줄기로(하천중심선은 수백 m 토막 — 이름을 달 만큼 긴 줄기가 없었다). 갈래에서는 끊는다."""
+    lines = [list(map(tuple, l)) for l in lines]
+    ends: dict = defaultdict(list)
+    for i, l in enumerate(lines):
+        ends[l[0]].append(i); ends[l[-1]].append(i)
+    used, out = set(), []
+    for i in range(len(lines)):
+        if i in used:
+            continue
+        used.add(i)
+        cur = lines[i][:]
+        for back in (False, True):
+            while True:
+                tip = cur[0] if back else cur[-1]
+                nx = [j for j in ends[tip] if j not in used]
+                if len(nx) != 1 or len(ends[tip]) > 2:              # 갈래(셋 이상 만남)면 멈춘다
+                    break
+                j = nx[0]; used.add(j); l = lines[j]
+                seg = l if l[0] == tip else l[::-1]
+                cur = (seg[::-1][:-1] + cur) if back else (cur + seg[1:])
+        out.append([list(p) for p in cur])
+    return out
+
+
 def gn_mask(b):
     """경남 시군 칸 True — 한 칸(500m) 넓혀 경계를 따라 흐르는 강(낙동강)은 안으로 친다. 행 남→북, b 의 i0 · j0 기준."""
     import gzip
@@ -168,6 +193,7 @@ def main():
                 continue
             lines[(g, rec["NAME"] or "", ins)].append([[round(x, 2), round(y, 2)] for x, y in seg])
     for (g, n, ins), segs in lines.items():
+        segs = merge(segs) if n else segs
         feats.append({"type": "Feature", "properties": {"k": "river", "g": g, "n": n, **({} if ins else {"o": 1})},
                       "geometry": {"type": "MultiLineString", "coordinates": segs}})
     print(f"하천중심선 토막 {n_seg:,} → 묶음 {len(lines):,}", file=sys.stderr)

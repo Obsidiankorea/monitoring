@@ -96,9 +96,9 @@ function safetyAt(mx, my) {
 function safetyTip(h) {
   if (h.res) {
     const s = h.res;
-    return `<b>${escH(s.name)}</b> · ${s.on ? `<b style="color:${SAF_C[s.lv]}">${escH(s.lvn)} 발령 중</b>` : `${escH(s.lvn)} 해제`}`
+    return `<b>${escH(s.name)}</b> · ${s.on ? `<b style="color:${SAF_C[s.lv]}">${escH(s.lvn)} 발령 중</b>` : s.old ? `${escH(s.lvn)} 발령 기록 — 해제 없이 ${s.days}일 지남` : `${escH(s.lvn)} 해제`}`
       + `<div class="d">${s.sigun || ""} · 위험저수지 계측기 · ${escH(s.at)} 기준</div>${s.cn ? `<div class="d">${escH(s.cn)}</div>` : ""}`
-      + `<div class="d">계측기 고장 등으로 잘못 잴 수 있다 — 해제를 못 받은 발령도 남아 있다(시각을 본다)</div>`;
+      + `<div class="d">계측기 고장 등으로 잘못 잴 수 있다 — 해제 기록 없이 72시간 넘은 발령은 지금 발령으로 보지 않는다(산사태 예보와 같은 규칙)</div>`;
   }
   const f = h.flood, d = String(f.d || "").replace(/(\d{4})(\d\d)(\d\d)/g, "$1.$2.$3");
   return `<b>침수흔적 · ${escH(f.yr || "")}</b>${f.dep != null ? ` · 침수심 ${f.dep} m` : ""}<div class="d">${escH(f.nm || "")}</div>`
