@@ -666,7 +666,7 @@ function drawWaterLabels(placed) {
       const bx = { x0: x - (c * w + sn * fs) / 2, x1: x + (c * w + sn * fs) / 2, y0: y - (sn * w + c * fs) / 2, y1: y + (sn * w + c * fs) / 2 };
       if (hit(bx)) continue;
       placed.push(bx);
-      out.push(`<text class="wl" transform="translate(${x.toFixed(1)},${y.toFixed(1)}) rotate(${ang.toFixed(1)})" style="font-size:${fs.toFixed(1)}px;stroke-width:${(fs * 0.22).toFixed(1)}px">${escH(name)}</text>`);
+      out.push(`<text class="rvl" transform="translate(${x.toFixed(1)},${y.toFixed(1)}) rotate(${ang.toFixed(1)})" style="font-size:${fs.toFixed(1)}px;stroke-width:${(fs * 0.22).toFixed(1)}px">${escH(name)}</text>`);
     }
   }
   g.innerHTML = out.join("");
