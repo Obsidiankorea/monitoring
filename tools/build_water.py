@@ -7,7 +7,7 @@
   N3A_E0052114.zip  호수/저수지(면) — 넓이(MARA) MIN_M2 이상
   N3A_E0032111.zip  실폭하천(면, 넓은 강의 물) — 있으면 넣는다
 만드는 것 app/web/static/water/water.json — FeatureCollection(칸 좌표)
-  properties.k = river(선) | water(면), g = 1 국가 · 2 지방 · 3 그 밖(선만), n = 이름, o = 1 경남 밖(흐리게)
+  properties.k = river(선) | water(면), g = 1 국가 · 2 지방 · 3 그 밖(선만), n = 이름, o = 1 경남 밖(흐리게), r = 1 실폭하천 면(테두리는 확대에서만)
   선은 같은 (등급, 이름)끼리 MultiLineString 하나로 묶는다(토막 수만 개 → 객체 수를 줄인다). 좌표는 칸 0.01(5m), 더글러스-푸커 TOL.
 """
 from __future__ import annotations
@@ -186,14 +186,15 @@ def main():
                 continue
             pts, parts = sr.shape.points, list(sr.shape.parts) + [len(sr.shape.points)]
             rings = [grid(pts[a:c]) for a, c in zip(parts[:-1], parts[1:]) if c - a >= 4]
-            rings = [dp(q[:len(q) // 2 + 1], TOL) + dp(q[len(q) // 2:], TOL)[1:] for q in rings]   # 닫힌 고리는 반씩 — 시작=끝이면 dp 가 두 점으로 접는다
+            t = TOL if min_m2 else 2 * TOL      # 실폭하천은 강가 굴곡이 잘아 점이 많다 — 20m 로 솎는다(확대 한계 76m/픽셀)
+            rings = [dp(q[:len(q) // 2 + 1], t) + dp(q[len(q) // 2:], t)[1:] for q in rings]   # 닫힌 고리는 반씩 — 시작=끝이면 dp 가 두 점으로 접는다
             rings = [q for q in rings if len(q) >= 4 and area(q) > 0]
             if not rings or not inb(rings[0]):
                 continue
             ins = sum(inside(x, y) for x, y in rings[0]) * 2 >= len(rings[0])
-            if not ins and min_m2 and (rec.get("MARA") or 0) < 10 * min_m2:   # 경남 밖 호수는 10ha 이상만
+            if not ins and (not min_m2 or (rec.get("MARA") or 0) < 10 * min_m2):   # 경남 밖 — 호수는 10ha 이상만, 실폭하천은 뺀다(국가하천 선이 있다)
                 continue
-            feats.append({"type": "Feature", "properties": {"k": "water", "n": rec.get("NAME") or "", **({} if ins else {"o": 1})},
+            feats.append({"type": "Feature", "properties": {"k": "water", "n": rec.get("NAME") or "", **({} if ins else {"o": 1}), **({} if min_m2 else {"r": 1})},
                           "geometry": {"type": "Polygon", "coordinates": [[[round(x, 2), round(y, 2)] for x, y in q] for q in rings]}})
             cnt += 1
         print(f"{label} 면 {cnt:,}" + (f"(1ha 안 돼 뺀 것 {small:,})" if min_m2 else ""), file=sys.stderr)

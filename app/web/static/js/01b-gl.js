@@ -45,7 +45,10 @@ const GL_LAYERS = [
   // 강 선 g = 1 국가하천(굵게) · 2 지방하천 · 3 소하천 등(시군을 고른 확대에서만)
   { id: "water", type: "fill", source: "water", filter: ["==", ["get", "k"], "water"], layout: { visibility: "none" },
     paint: { "fill-color": ["case", ["has", "o"], "#2A3440", "#0B2F4E"], "fill-opacity": ["case", ["has", "o"], 0.35, 0.55] } },
-  { id: "water-ln", type: "line", source: "water", filter: ["==", ["get", "k"], "water"], layout: { visibility: "none" },
+  { id: "water-ln", type: "line", source: "water", filter: ["all", ["==", ["get", "k"], "water"], ["!", ["has", "r"]]], layout: { visibility: "none" },
+    paint: { "line-color": ["case", ["has", "o"], "#8A97A6", "#7DDCFF"], "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.8, 11, 1.4], "line-opacity": ["case", ["has", "o"], 0.3, 0.9] } },
+  // 실폭하천(넓은 강 · 개울의 물 면) 테두리 — 경남 전체에서는 잔 테두리가 화면을 덮어 시군 확대에서만
+  { id: "water-r-ln", type: "line", source: "water", minzoom: 9.4, filter: ["all", ["==", ["get", "k"], "water"], ["has", "r"]], layout: { visibility: "none" },
     paint: { "line-color": ["case", ["has", "o"], "#8A97A6", "#7DDCFF"], "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.8, 11, 1.4], "line-opacity": ["case", ["has", "o"], 0.3, 0.9] } },
   { id: "river-s", type: "line", source: "water", minzoom: 9.4, filter: ["all", ["==", ["get", "k"], "river"], ["==", ["get", "g"], 3]], layout: { visibility: "none", "line-join": "round", "line-cap": "round" },
     paint: { "line-color": ["case", ["has", "o"], "#8A97A6", "#7DDCFF"], "line-width": ["interpolate", ["linear"], ["zoom"], 9.4, 0.4, 11, 0.9], "line-opacity": ["case", ["has", "o"], 0.2, 0.55] } },
@@ -149,7 +152,7 @@ async function glWater() {
       glSet("water", glFC(WATER.map(f => glF(f.geometry, f.properties))));
     } catch (e) { WATER = null; console.warn("강 · 호수 자료를 못 읽었다", e); return; }
   }
-  for (const L of ["water", "water-ln", "river", "river-s"]) GL.setLayoutProperty(L, "visibility", OV.has("water") && Array.isArray(WATER) ? "visible" : "none");
+  for (const L of ["water", "water-ln", "water-r-ln", "river", "river-s"]) GL.setLayoutProperty(L, "visibility", OV.has("water") && Array.isArray(WATER) ? "visible" : "none");
 }
 /* 마우스 자리 표고(m) — 지형 레이어를 켰을 때만. 125m 칸 표고(elev.i16.gz, 2MB)를 처음 물을 때 받는다. 아직이면 null */
 let ELEV = null;
