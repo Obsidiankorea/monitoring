@@ -1928,3 +1928,13 @@ body.sj-on > header, body.sj-on #stage, body.sj-on #tl, body.sj-on #rail { displ
 #sj .hcond { margin: 8px 0 0; padding: 7px 12px; border-left: 3px solid var(--accent); border-radius: 0 6px 6px 0;
   background: color-mix(in oklab, var(--raised) 60%, transparent); font-size: 12.5px; color: var(--ink-2); line-height: 1.5; }
 #sj .hcond span { display: block; font: 700 11px var(--sans); letter-spacing: .1em; color: var(--ink-3); margin-bottom: 2px; }
+/* 레이어 묶음(05-layers LY_GRP) — 접힌 한 줄: ▸ 이름 · 켜진 수. 펼치면 항목을 한 칸 들여 */
+.ly-grp { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; margin: 2px 0;
+  border: 0; border-radius: 8px; background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.ly-grp:hover { background: color-mix(in oklab, var(--accent) 10%, transparent); }
+.ly-grp .car { justify-self: center; color: var(--ink-2); font-size: 18px; line-height: 1; }
+.ly-grp b { font-size: 15px; }
+.ly-grp small { font: 600 11.5px var(--sans); color: var(--ink-3); }
+.ly-grp.on small { color: var(--accent); }
+.ly-gbody { margin-left: 10px; padding-left: 4px; border-left: 1px solid var(--line); }
+.ly-gbody .ly-it b { white-space: nowrap; }

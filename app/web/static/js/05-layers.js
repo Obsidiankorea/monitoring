@@ -12,12 +12,16 @@ const OVL = [
   { id: "district", label: "우려지역 지구", short: "지구", key: "U" },
   { id: "tide", label: "조위", short: "조위", key: "O" },
   { id: "temp", label: "기온", short: "기온", key: "E" },
-  { id: "relief", label: "지형 음영(산 · 골짜기)", short: "지형", key: "Y" },
-  { id: "low", label: "저지대(표고 10m 이하)", short: "저지대", key: "Z" },
-  { id: "water", label: "강 · 호수 · 저수지", short: "물", key: "" },
-  { id: "waterall", label: "지방하천 늘 보기", short: "지방하천", key: "", parent: "water" },
-  { id: "bldg", label: "건물(사람 사는 곳)", short: "건물", key: "" },
+  { id: "relief", label: "지형 음영(산 · 골짜기)", short: "지형", key: "Y", grp: "geo" },
+  { id: "low", label: "저지대(표고 10m 이하)", short: "저지대", key: "Z", grp: "geo" },
+  { id: "water", label: "강 · 호수 · 저수지", short: "물", key: "", grp: "geo" },
+  { id: "waterall", label: "지방하천 늘 보기", short: "지방하천", key: "", parent: "water", grp: "geo" },
+  { id: "bldg", label: "건물(사람 사는 곳)", short: "건물", key: "", grp: "geo" },
 ];
+/* 레이어 묶음 — 같은 grp 는 접었다 펴는 한 줄 아래로. 펼침은 이 PC 에 기억(브라우저 저장, 못 쓰면 접힌 채) */
+const LY_GRP = { geo: "지형 · 지리" };
+let LY_GOPEN = new Set();
+try { LY_GOPEN = new Set(JSON.parse(localStorage.getItem("gn-ly-grp") || "[]")); } catch {}
 /* ⓘ 에 올리거나 누르면 뜨는 설명 — 레이어 목록·범례는 짧게 두고 긴 말은 여기에 */
 const TIPS = new Map([
   ["ov-alerts", `<b>기상특보</b> — 발효 중 특보를 시군 <b>테두리 선</b>과 이름 밑 <b>딱지</b>로 그린다.
@@ -155,9 +159,24 @@ function fitAlCol() {
 function renderLayers() {
   if (LY_OPEN && !OV.has(LY_OPEN)) LY_OPEN = null;
   // 이름 · 키 · ⓘ 만 — 설명은 ⓘ 에. 딸린 항목(지점 강수량 글자)은 부모(관측소) 밑에 들여 쓰고, 부모가 꺼져 있으면 흐리게
-  $("ly-menu").innerHTML = OVL.map(o => `<label class="ly-it${o.parent ? " sub" : ""}${o.parent && !OV.has(o.parent) ? " off" : ""}"><input type="checkbox" data-ov="${o.id}" ${OV.has(o.id) ? "checked" : ""}${o.parent && !OV.has(o.parent) ? " disabled" : ""}>
-    <b>${o.label}</b>${o.key ? `<kbd>${o.key}</kbd>` : ""}<i class="inf" data-tip="ov-${o.id}" aria-label="설명">i</i></label>`).join("");
+  const item = o => `<label class="ly-it${o.parent ? " sub" : ""}${o.parent && !OV.has(o.parent) ? " off" : ""}"><input type="checkbox" data-ov="${o.id}" ${OV.has(o.id) ? "checked" : ""}${o.parent && !OV.has(o.parent) ? " disabled" : ""}>
+    <b>${o.label}</b>${o.key ? `<kbd>${o.key}</kbd>` : ""}<i class="inf" data-tip="ov-${o.id}" aria-label="설명">i</i></label>`;
+  let html = "";
+  for (const o of OVL) {
+    if (!o.grp) { html += item(o); continue; }
+    if (OVL.find(x => x.grp === o.grp) !== o) continue;            // 묶음은 첫 항목 자리에 한 번
+    const its = OVL.filter(x => x.grp === o.grp), top = its.filter(x => !x.parent), on = top.filter(x => OV.has(x.id)).length, open = LY_GOPEN.has(o.grp);
+    html += `<button type="button" class="ly-grp${on ? " on" : ""}" data-grp="${o.grp}" aria-expanded="${open}"><span class="car">${open ? "▾" : "▸"}</span><b>${LY_GRP[o.grp]}</b><small>${on}/${top.length} 켜짐</small></button>`
+      + (open ? `<div class="ly-gbody">${its.map(item).join("")}</div>` : "");
+  }
+  $("ly-menu").innerHTML = html;
   for (const c of $("ly-menu").querySelectorAll("input[data-ov]")) c.onchange = () => setOverlay(c.dataset.ov, c.checked);
+  for (const b of $("ly-menu").querySelectorAll("button[data-grp]")) b.onclick = () => {
+    const g = b.dataset.grp;
+    LY_GOPEN.has(g) ? LY_GOPEN.delete(g) : LY_GOPEN.add(g);
+    try { localStorage.setItem("gn-ly-grp", JSON.stringify([...LY_GOPEN])); } catch {}
+    renderLayers();
+  };
   renderAlertLegend();
   renderStnLegend();
   renderRiverLegend();
