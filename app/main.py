@@ -1308,6 +1308,21 @@ async def map_page():
     return HTMLResponse(_MAP_PAGE["html"])
 
 
+# 빈 조각(바다 · 아직 안 만든 곳) — 404 대신 투명 1px(지도가 오류로 적지 않게)
+_BLANK_PNG = bytes.fromhex("89504e470d0a1a0a0000000d4948445200000001000000010804000000b51c0c02"
+                           "0000000b49444154789c636060000000030001b8ad3a630000000049454e44ae426082")
+
+
+@app.get("/terrain/t/{layer}/{z}/{x}/{y}.png", include_in_schema=False)
+async def terrain_tile(layer: str, z: int, x: int, y: int):
+    """지형 확대용 조각 — config.TERRAIN/{relief,low}/z/x/y.png. 없으면 투명. 바뀔 일이 드물어 하루 캐시."""
+    if layer not in ("relief", "low"):
+        raise HTTPException(404)
+    fp = config.TERRAIN / layer / str(z) / str(x) / f"{y}.png"
+    hdr = {"Cache-Control": "public, max-age=86400"}
+    return FileResponse(fp, media_type="image/png", headers=hdr) if fp.is_file() else Response(_BLANK_PNG, media_type="image/png", headers=hdr)
+
+
 if STATIC.exists():
     app.mount("/", StaticFiles(directory=STATIC, html=True), name="static")
 

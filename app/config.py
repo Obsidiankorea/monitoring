@@ -20,6 +20,8 @@ STATE = Path(os.environ["GN_STATE"]) if os.environ.get("GN_STATE") else DATA
 # GN_DEMO=1(또는 --demo) 은 시연 서버(:8001) — 이름이 없으면 가장 새 것, /snap/<이름> 으로 갈아 탄다(main).
 # ⚠️ 굳힌 것은 손대지 않는다 — 뜰 때마다 쓰는 사본(GN_SNAP_STATE, 기본 data/cache/snap-<이름>)으로 새로 떠서 쓴다.
 #    발표 중에 바꾼 설정(층 · 시군 등)은 다음에 띄우면 처음으로 돌아간다. 실황 DB(GN_STATE)는 절대 쓰지 않는다.
+# 지형 확대용 조각(tools/build_terrain.py --tiles) — 저장소 밖. NAS 는 appdata/gn-monitor/terrain → /terrain
+TERRAIN = Path(os.environ["GN_TERRAIN"]) if os.environ.get("GN_TERRAIN") else DATA / "terrain"
 SNAPS = Path(os.environ["GN_SNAPS"]) if os.environ.get("GN_SNAPS") else STATE / "snaps"
 DEMO = bool(os.environ.get("GN_DEMO")) or bool(os.environ.get("GN_SNAP"))
 SNAP = os.environ.get("GN_SNAP") or None

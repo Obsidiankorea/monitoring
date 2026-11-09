@@ -170,7 +170,8 @@ $("stage").addEventListener("mousemove", ev => {
   const val = v === MISSING ? "결측"
     : fac > 1 ? `${(v / 10 * fac).toFixed(1)}㎜/h 환산</b> (15분 ${(v / 10).toFixed(1)}㎜)<b>`
     : `${(v / 10).toFixed(1)}㎜`;
-  tip.innerHTML = `<b>${val}</b>${where ? " · " + where : ""}<div class="d">${lat.toFixed(4)}°N ${lon.toFixed(4)}°E · 칸 ${Math.round(gx)}, ${Math.round(gy)}</div>`;
+  const el = OV.has("relief") || OV.has("low") ? elevAt(gx, gy) : null;
+  tip.innerHTML = `<b>${val}</b>${where ? " · " + where : ""}${el != null && el > 0 ? `<div>표고 약 <b>${el}m</b>${el <= 10 ? " · 저지대" : ""}</div>` : ""}<div class="d">${lat.toFixed(4)}°N ${lon.toFixed(4)}°E · 칸 ${Math.round(gx)}, ${Math.round(gy)}</div>`;
   tip.hidden = false;
   const tw = tip.offsetWidth, th = tip.offsetHeight;
   tip.style.left = Math.min(V.W - tw - 6, x + 16) + "px";

@@ -7,6 +7,7 @@
 #   repo/      저장소 받은 것(이 서버에서는 고치지 않는다 — ff-only 로만 당긴다)
 #   config/    api_keys.txt(기상청 API허브 기관용 키 ORG_API_KEY) — PC 에서 SSH 로 복사해 둔다
 #   config/claude/token.txt  AI 자유 질문용 Claude 장기 토큰(PC 에서 `claude setup-token`) — 넣으면 바로 켜진다(재배포 불필요)
+#   terrain/   지형 확대용 조각(PC 에서 tools/build_terrain.py --tiles 로 만들어 올린다) — 두 컨테이너가 /terrain 읽기 전용
 #   state/     DB(gnweather.db) · 격자 캐시 · 시연(snaps/) · 갱신 부탁/상태(update/ — updater.sh) — 컨테이너를 갈아도 남는다(GN_STATE)
 # AI 상황판단(지도 I): 위키는 Hermes 에 넣어 둔 것을 읽기 전용으로 연결한다(WIKI). 자유 질문은 GN_AI(기본 claude-cli).
 # 화면: http://<서버>:8000/  (지도: /map.html)
@@ -20,7 +21,7 @@ PORT=${PORT:-8000}
 WIKI=${WIKI:-/mnt/user/appdata/hermes-agent/knowledge/재난}
 GN_AI=${GN_AI:-claude-cli}
 
-mkdir -p "$D/config/claude" "$D/state/snaps" "$D/state/update"
+mkdir -p "$D/config/claude" "$D/state/snaps" "$D/state/update" "$D/terrain"
 chmod 700 "$D/config/claude"
 # ⚠️ 받은 뒤에는 **새로 받은 이 스크립트로 다시** 시작한다 — bash 는 스크립트를 읽어 가며 돌아서,
 #    도는 중에 git 이 이 파일을 바꾸면 나머지가 옛 내용으로 돈다.
@@ -37,7 +38,7 @@ V=$(git -C "$D/repo" rev-parse --short HEAD)
 echo "[deploy] 판 $V"
 [ -s "$D/config/api_keys.txt" ] || { echo "[deploy] ⚠ $D/config/api_keys.txt 가 없다(ORG_API_KEY)"; exit 1; }
 
-AI=(-e GN_AI="$GN_AI" -v "$D/config/claude:/app/config/claude:ro")
+AI=(-e GN_AI="$GN_AI" -v "$D/config/claude:/app/config/claude:ro" -e GN_TERRAIN=/terrain -v "$D/terrain:/terrain:ro")   # 지형 조각도 같이(두 컨테이너)
 if [ -d "$WIKI" ]; then AI+=(-e GN_WIKI=/wiki -v "$WIKI:/wiki:ro"); else echo "[deploy] ⚠ 위키가 없다($WIKI) — AI 보고에 기준 · 우려지역이 빠진다"; fi
 
 docker build -q -t "$NAME:$V" -t "$NAME:latest" --build-arg APP_VERSION="$V" "$D/repo" >/dev/null

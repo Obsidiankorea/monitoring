@@ -33,8 +33,11 @@ const GL_LAYERS = [
   { id: "ghost", type: "raster", source: "ghost", paint: { "raster-resampling": "nearest", "raster-fade-duration": 0, "raster-opacity": 0 } },
   { id: "hatch", type: "raster", source: "hatch", paint: { "raster-fade-duration": 0 } },
   // 지형(레이어 relief · low) — 강수 위 · 경계 밑. 미리 만든 그림 한 장씩(tools/build_terrain.py)
-  { id: "low", type: "raster", source: "low", layout: { visibility: "none" }, paint: { "raster-fade-duration": 0 } },
-  { id: "relief", type: "raster", source: "relief", layout: { visibility: "none" }, paint: { "raster-fade-duration": 0 } },
+  // 경남 전체(지도 줌 10 아래)는 한 장 그림, 확대하면 조각(-t, 서버 /terrain/t — 30m 자료 · 줌 12부터 등고선)
+  { id: "low", type: "raster", source: "low", maxzoom: 10, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0 } },
+  { id: "low-t", type: "raster", source: "low-t", minzoom: 10, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0 } },
+  { id: "relief", type: "raster", source: "relief", maxzoom: 10, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0 } },
+  { id: "relief-t", type: "raster", source: "relief-t", minzoom: 10, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0 } },
   { id: "bd-halo", type: "line", source: "bd", filter: ["in", ["get", "t"], ["literal", ["sg", "cs"]]],
     layout: { "line-join": "round" }, paint: { "line-color": "var(--bd-halo)", "line-width": 4 } },
   { id: "bd-halo-z", type: "line", source: "bd", filter: ["in", ["get", "t"], ["literal", ["zn", "sb"]]],
@@ -84,6 +87,7 @@ function glInit() {
   const sources = Object.fromEntries(GL_LAYERS.map(L => [L.source, { type: "geojson", data: glFC([]) }]));
   const corner = [gll(GC[0], GC[1]), gll(GC[0] + 1, GC[1]), gll(GC[0] + 1, GC[1] - 1), gll(GC[0], GC[1] - 1)];
   for (const id of CANVAS_SRC) sources[id] = { type: "image", url: BLANK_PNG, coordinates: corner };
+  for (const id of ["relief", "low"]) sources[id + "-t"] = { type: "raster", tiles: [`/terrain/t/${id}/{z}/{x}/{y}.png`], tileSize: 256, minzoom: 11, maxzoom: 13 };
   GL = new maplibregl.Map({
     container: "gl", interactive: false, attributionControl: false, fadeDuration: 0, renderWorldCopies: false,
     center: gll(...GC), zoom: 8, maxZoom: 22,
@@ -99,13 +103,32 @@ async function glTerrain() {
   if (want.length && !TERRAIN) {
     TERRAIN = {};
     try {
-      const b = (await getJson("terrain/terrain.json")).bbox;
+      const j = await getJson("terrain/terrain.json"), b = j.bbox;
+      TERRAIN.meta = j;
       const c = [gll(b.i0 - 0.5, b.j1 + 0.5), gll(b.i1 + 0.5, b.j1 + 0.5), gll(b.i1 + 0.5, b.j0 - 0.5), gll(b.i0 - 0.5, b.j0 - 0.5)];
       for (const id of ["relief", "low"]) GL.getSource(id).updateImage({ url: `terrain/${id}.png`, coordinates: c });
       TERRAIN.ok = true;
     } catch (e) { TERRAIN = null; console.warn("지형 그림을 못 읽었다", e); return; }
   }
-  for (const id of ["relief", "low"]) GL.setLayoutProperty(id, "visibility", OV.has(id) && TERRAIN?.ok ? "visible" : "none");
+  for (const id of ["relief", "low"]) for (const L of [id, id + "-t"]) GL.setLayoutProperty(L, "visibility", OV.has(id) && TERRAIN?.ok ? "visible" : "none");
+}
+/* 마우스 자리 표고(m) — 지형 레이어를 켰을 때만. 125m 칸 표고(elev.i16.gz, 2MB)를 처음 물을 때 받는다. 아직이면 null */
+let ELEV = null;
+function elevAt(gx, gy) {
+  const m = TERRAIN?.meta;
+  if (!m) return null;
+  if (!ELEV) {
+    ELEV = "loading";
+    fetch("terrain/elev.i16.gz").then(r => r.arrayBuffer()).then(async buf => {
+      let u = new Uint8Array(buf);
+      if (u[0] === 0x1f && u[1] === 0x8b) u = new Uint8Array(await new Response(new Blob([u]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer());
+      ELEV = new Int16Array(u.buffer, 0, m.w * m.h);
+    }).catch(() => { ELEV = null; });
+    return null;
+  }
+  if (!(ELEV instanceof Int16Array)) return null;
+  const b = m.bbox, px = Math.floor((gx - b.i0 + 0.5) * m.S), py = Math.floor((b.j1 + 0.5 - gy) * m.S);
+  return px < 0 || py < 0 || px >= m.w || py >= m.h ? null : ELEV[py * m.w + px];
 }
 /* 테마가 바뀌었다 — CSS 변수를 다시 읽어 칠한다 */
 function glTheme() {
