@@ -9,6 +9,7 @@
   표고 · 경사   tools/.cache/terrain/ (Terrarium z12 ≈ 30m — build_terrain 이 받아 둔 것). 30m 라 축대 · 옹벽 같은 작은 비탈은 안 잡힌다
   하천 · 저수지  app/web/static/water/water.json (국토지리정보원 연속수치지형도 — build_water)
   건물          tools/.cache/vworld/AL_D010_48_*.zip (국토교통부 GIS건물통합정보 — build_bldg)
+  붕괴위험지역   tools/.cache/vworld/LSMD_CONT_UP401_경남.zip (국토교통부 연속주제도 급경사재해예방/붕괴위험지역, 급경사지법 지정 · 고시)
 """
 from __future__ import annotations
 
@@ -21,6 +22,7 @@ from datetime import date
 from pathlib import Path
 
 import numpy as np
+import shapefile
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_terrain import Dem  # noqa: E402
@@ -105,6 +107,43 @@ def coast_m(dem, x, y):
     return None
 
 
+def collapse_zones():
+    """급경사 붕괴위험지역 다각형(EPSG:5186 m) — [(고리들, 지구명, 고시일)]. 파일이 없으면 빈 목록."""
+    import glob
+    import io
+    import zipfile
+    zp = sorted(glob.glob(str(ROOT / "tools" / ".cache" / "vworld" / "LSMD_CONT_UP401*.zip")))
+    if not zp:
+        return []
+    z = zipfile.ZipFile(zp[-1])
+    base = next(n for n in z.namelist() if n.endswith(".shp"))[:-4]
+    r = shapefile.Reader(shp=io.BytesIO(z.read(base + ".shp")), shx=io.BytesIO(z.read(base + ".shx")), dbf=io.BytesIO(z.read(base + ".dbf")), encoding="cp949")
+    out = []
+    for sr in r.iterShapeRecords():
+        pts, parts = sr.shape.points, list(sr.shape.parts) + [len(sr.shape.points)]
+        rec = sr.record.as_dict()
+        out.append(([pts[a:b] for a, b in zip(parts[:-1], parts[1:])], rec.get("REMARK") or rec.get("ALIAS") or "", rec.get("NTFDATE") or ""))
+    return out
+
+
+def zone_at(x, y, zones):
+    """점(5186 m)이 붕괴위험지역 안이면 (0, 이름, 고시일), 아니면 가장 가까운 테두리까지 (m, 이름, 고시일)."""
+    best = None
+    for rings, nm, dt in zones:
+        inside, dmin = False, 1e18
+        for r in rings:
+            for (x1, y1), (x2, y2) in zip(r, r[1:] + r[:1]):
+                if (y1 > y) != (y2 > y) and x < (x2 - x1) * (y - y1) / (y2 - y1) + x1:
+                    inside = not inside
+                dx, dy = x2 - x1, y2 - y1
+                t = max(0.0, min(1.0, ((x - x1) * dx + (y - y1) * dy) / (dx * dx + dy * dy or 1e-9)))
+                dmin = min(dmin, math.hypot(x - x1 - t * dx, y - y1 - t * dy))
+        d = 0.0 if inside else dmin
+        if best is None or d < best[0]:
+            best = (d, nm, dt)
+    return best
+
+
 def main():
     base = sys.argv[1] if len(sys.argv) > 1 else "http://100.106.116.92:8000"
     p = json.loads((ROOT / "data" / "geo" / "grids.json").read_text(encoding="utf-8"))["hr"]
@@ -135,6 +174,9 @@ def main():
     bl.done()
     print(f"건물 {len(bl.x):,}동", file=sys.stderr)
 
+    zones = collapse_zones()
+    to5186 = __import__("pyproj").Transformer.from_crs(4326, 5186, always_xy=True)
+    print(f"붕괴위험지역 {len(zones)}곳", file=sys.stderr)
     out = {}
     lat = np.array([r["pos"][0] for r in rows]); lon = np.array([r["pos"][1] for r in rows])
     GX, GY = lcc_fwd_np(lon, lat, p)
@@ -161,12 +203,18 @@ def main():
         if c is not None:
             o["cs"] = c
         o["b100"], o["b300"] = bl.count(x, y, 100), bl.count(x, y, 300)
+        if zones:
+            zx, zy = to5186.transform(r["pos"][1], r["pos"][0])
+            zd, zn, zt = zone_at(zx, zy, zones)
+            if zd <= 1000:
+                o["cz"] = {"d": round(zd), "n": zn, "dt": zt}           # 붕괴위험지역 — d 0 = 안
         out[r["id"]] = o
     OUT.write_text(json.dumps({"built": date.today().isoformat(), "n": len(out),
                                "src": "표고·경사 Terrarium z12(≈30m) · 하천·저수지 국토지리정보원 연속수치지형도 · 건물 국토교통부 GIS건물통합정보",
                                "rows": out}, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     v = list(out.values())
     print(f"→ {OUT} {OUT.stat().st_size // 1024}KB · 저지대(10m↓) {sum(x['el'] <= 10 for x in v)} · 경사 30°↑ {sum(x['sl'] >= 30 for x in v)}"
+          f" · 붕괴위험지역 안 {sum(x.get('cz', {}).get('d', 1) == 0 for x in v)} · 300m 안 {sum(x.get('cz', {}).get('d', 9e9) <= 300 for x in v)}"
           f" · 하천 100m 안 {sum(x.get('rv', {}).get('d', 9e9) <= 100 for x in v)} · 저수지 아래 {sum(x.get('lk', {}).get('dh', -1) > 0 for x in v)}", file=sys.stderr)
 
 
