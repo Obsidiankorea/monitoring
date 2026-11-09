@@ -88,6 +88,7 @@ function mapMenu(ev, dz, sg, pl) {
     + (dz || sg ? `<div class="note">별도 창으로 연다(듀얼 모니터). 창이 열려 있으면 그 창이 바뀐다.</div>` : "");
   popAt(pop, ev, rc);
   void pop.offsetWidth; pop.classList.add("open");
+  kakaoBind(pop);
   for (const b of pop.querySelectorAll("button:not([data-u])")) b.onclick = e => {
     e.stopPropagation(); stnPop(null);
     if (b.dataset.a === "fix") return dzDlg(true, dz.id);
