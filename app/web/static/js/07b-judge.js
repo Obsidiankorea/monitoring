@@ -44,7 +44,11 @@ function sjToggle(on = !SJ.open) {
 }
 async function sjLoad(onlyData) {
   const my = ++SJ.seq, sg = SJ.sg, qs = new URLSearchParams({ sigun: sg, k: SJ.k, add_h: SJ.addH, add_24: SJ.add24, series: 1, sb: SJ.basis });
-  if (!onlyData) $("sj-c").innerHTML = `<div class="sj-ld">${sg === "all" ? "경남 전체 18개 시군" : escH(sg)} 지구 판정을 모으는 중…</div>`;
+  if (!onlyData) {   // 처음 모을 때는 수십 초 걸린다 — 멈춘 것처럼 보이지 않게 움직이는 줄 · 지난 초 · 자리 잡은 뼈대
+    $("sj-c").innerHTML = `<div class="sj-ld" role="status"><div class="ldbar"><i></i></div><b>${sg === "all" ? "경남 전체 18개 시군" : escH(sg)} 지구 판정을 모으는 중</b>
+      <small>강수 격자 · 지구별 대피 기준 · 판단 기록을 맞춰 본다 — 처음에는 수십 초 걸릴 수 있다 · <span class="sec">0</span>초째</small>${'<div class="sk"></div>'.repeat(6)}</div>`;
+    const t0 = Date.now(), tick = setInterval(() => { const e = $("sj-c").querySelector(".sj-ld .sec"); if (e) e.textContent = Math.round((Date.now() - t0) / 1000); else clearInterval(tick); }, 1000);
+  }
   $("sj").classList.add("busy");
   try {
     const one = sg === "all" ? "" : `?sigun=${encodeURIComponent(sg)}`;

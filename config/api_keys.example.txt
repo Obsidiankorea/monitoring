@@ -3,6 +3,12 @@
 # 아래 '여기에기상청API허브기관용키' 자리에 키를 붙여 넣고 저장하면 된다(따옴표 없이).
 ORG_API_KEY=여기에기상청API허브기관용키
 
+# (선택) AI 상황판단 자유 질문 — Anthropic API 키(console.anthropic.com › API Keys). 넣으면 '자동'이 Claude API 로 답한다. 없으면 예상 질문(규칙)만 답한다.
+#   쓴 만큼 크레딧이 줄어든다. Console › Limits 에서 월 한도를 걸어 두기를 권한다.
+# ANTHROPIC_API_KEY=여기에AnthropicAPI키
+# (선택) 모델 — 없으면 claude-opus-5-5. 싸게: claude-sonnet-5-5 또는 claude-haiku-5-5
+# ANTHROPIC_MODEL=claude-opus-5-5
+
 # (선택) 법령 변경 감시 — 법제처 국가법령정보 Open API 인증키(OC = 가입 아이디). 서버 공인 IP 를 법제처에 등록해야 한다. 없으면 감시를 건너뛴다.
 # LAW_OC=여기에법제처OC
 

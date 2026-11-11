@@ -876,3 +876,39 @@ async function boot() {
   if (Q.has("help")) openHelp(["src", "terms", "how"].includes(Q.get("help")) ? Q.get("help") : "src");   // ?help= — 도움말을 연 채로(안내용 링크)
 }
 boot();
+/* ── 첫 수집 안내 — 처음 켜면 자료가 비어 있다. 무엇을 받는 중인지 지도 위에 보여 주고, 지도에 쓸 것이 다 오면 화면을 다시 읽는다.
+   수집 기록(/api/status)에 정상 시각이 없는 동안만 뜬다 — 한 번 받은 뒤에는 다시 뜨지 않는다. 시연 · 사례 · 테스트에는 없다 ── */
+const BOOT_SRC = [["alerts", "기상특보"], ["rain", "관측소 시간 강수"], ["minute", "관측소 매분 강수"], ["grid", "강수 격자(500m)"],
+  ["odam", "동네예보 실황"], ["forecast", "초단기예측"], ["short", "단기예보"], ["qpf", "예측 강수 그림"]];
+const BOOT_CORE = ["alerts", "rain", "grid"];      // 이것만 오면 지도가 그려진다 — 예측은 발표를 기다리느라 늦을 수 있다
+async function bootWatch() {
+  if (window.GN_SNAP || CASE || test) return;
+  let st;
+  try { st = await getJson("/api/status"); } catch { return; }
+  const ready = () => BOOT_CORE.every(k => st[k]?.ok_at);
+  if (ready()) return;
+  const el = document.createElement("div"), t0 = Date.now();
+  el.id = "bootc"; el.setAttribute("role", "status"); el.setAttribute("aria-live", "polite");
+  $("stage").appendChild(el);
+  const paint = () => {
+    const done = BOOT_SRC.filter(([k]) => st[k]?.ok_at).length;
+    el.innerHTML = `<button type="button" class="x" aria-label="닫기">×</button><b>처음 자료를 받는 중</b>
+      <small>기상청에서 지난 며칠 치를 받아 채운다 — 몇 분 걸릴 수 있다 · ${Math.round((Date.now() - t0) / 1000)}초째</small>
+      <div class="bar"><i style="width:${Math.max(4, done / BOOT_SRC.length * 100)}%"></i></div>
+      <ul>${BOOT_SRC.map(([k, n]) => {
+        const s = st[k], c = s?.ok_at ? "ok" : s?.tried_at && !s.ok ? "er" : "ing";
+        return `<li class="${c}"><u></u>${n}<em>${c === "ok" ? "받음" : c === "er" ? "다시 시도 중" : "받는 중"}</em></li>`;
+      }).join("")}</ul>`;
+    el.querySelector(".x").onclick = () => { clearInterval(tm); el.remove(); };
+  };
+  const tm = setInterval(async () => {
+    try { st = await getJson("/api/status"); } catch {}
+    paint();
+    if (!ready()) return;
+    clearInterval(tm); el.classList.add("done");
+    el.querySelector("b").textContent = "받았다 — 화면을 다시 읽는다";
+    setTimeout(() => location.reload(), 1200);
+  }, 3000);
+  paint();
+}
+bootWatch();

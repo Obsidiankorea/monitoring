@@ -899,7 +899,7 @@ async def api_ai_llm_get():
 
 @app.put("/api/settings/ai-llm")
 async def api_ai_llm_put(body: dict):
-    """AI 자유 질문을 누가 답할지 — {mode: auto|off|claude-cli|local|openai, url, model}. 키는 받지 않는다."""
+    """AI 자유 질문을 누가 답할지 — {mode: auto|off|claude-api|claude-cli|local|openai, url, model}. 키는 받지 않는다."""
     from . import llm
     try:
         s = llm.put_setting(body)

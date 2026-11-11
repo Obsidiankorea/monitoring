@@ -143,7 +143,7 @@ function openPrefs() {
     <div class="row"><span class="note">AI 상황판단(I)의 <b>자유 질문 · 다시 판단</b>을 누가 답할지. 예상 질문 단추는 어느 쪽이든 규칙으로 바로 답한다.
       <b>로컬</b> = 이 서버(PC)의 llama-server(Vulkan · Qwen3 8B) — 인터넷 · 키 없이, 질문당 30~40초. 꺼져 있으면 고를 때 · 물을 때 알아서 켠다. <b>Claude</b> = Claude Code 로그인(수십 초).
       <b>기타</b> = OpenAI 호환 주소(서버 환경변수 GN_AI_URL · GN_AI_KEY). <b>자동</b> = 서버 환경변수(GN_AI)대로.</span></div>
-    <div class="row"><span class="k">답하는 쪽</span><span class="seg" id="pf-llm">${[["auto", "자동"], ["off", "끔"], ["claude-cli", "Claude"], ["local", "로컬"], ["openai", "기타"]].map(([m, t]) => `<button type="button" data-m="${m}">${t}</button>`).join("")}</span></div>
+    <div class="row"><span class="k">답하는 쪽</span><span class="seg" id="pf-llm">${[["auto", "자동"], ["off", "끔"], ["claude-api", "Claude API"], ["claude-cli", "Claude"], ["local", "로컬"], ["openai", "기타"]].map(([m, t]) => `<button type="button" data-m="${m}">${t}</button>`).join("")}</span></div>
     <div class="row" id="pf-llm-loc"><span class="k">로컬 주소</span><input id="pf-llm-url" style="flex:1;min-width:0;font:inherit" spellcheck="false"><input id="pf-llm-model" style="width:120px;font:inherit" spellcheck="false" placeholder="모델(비워도 됨)"><button id="pf-llm-save" type="button">저장</button></div>
     <div class="row"><span class="note" id="pf-llm-st">읽는 중…</span></div>
     <h4>AI 알림</h4>
@@ -444,7 +444,7 @@ $("prefs").addEventListener("click", async ev => {
   } catch (e) { alertPaint(`<span class="warnx">${escH(e.message)}</span>`); }
 });
 /* ── AI 답변(설정) — 자유 질문을 누가 답할지 ── */
-const LLM_NAME = { "claude-cli": "Claude", local: "로컬", openai: "기타(OpenAI 호환)" };
+const LLM_NAME = { "claude-api": "Claude API", "claude-cli": "Claude", local: "로컬", openai: "기타(OpenAI 호환)" };
 function llmPaint(j, msg) {
   const st = $("pf-llm-st");
   if (!st) return;

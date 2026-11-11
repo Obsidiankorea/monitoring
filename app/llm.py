@@ -2,6 +2,8 @@
 
   GN_AI 없음      — 끔. 예상 질문(규칙)만 답한다
   GN_AI=openai    — OpenAI 호환 /v1/chat/completions. NAS Hermes(API 서버) 등. GN_AI_URL · GN_AI_KEY · GN_AI_MODEL
+  GN_AI=claude-api — Anthropic API(Console 키, 사용량 과금). config/api_keys.txt 의 ANTHROPIC_API_KEY — 넣으면 '자동'이 이것을 쓴다.
+                     모델은 ANTHROPIC_MODEL(같은 파일) 또는 GN_AI_MODEL, 없으면 claude-opus-5-5.
   GN_AI=claude-cli — `claude -p`(Claude Code, 구독 사용량). 느리다(수십 초). 도구를 다 막고(읽기 · 쓰기 · 웹 없이)
                      받은 맥락만으로 답하게 한다. PC 는 깔린 claude 의 로그인을, NAS(도커)는 장기 토큰을 쓴다:
                      `claude setup-token` 으로 받은 값을 config/claude/token.txt 에 — 부를 때마다 읽으니 넣으면 바로 켜진다.
@@ -25,7 +27,8 @@ import httpx
 from . import config, db
 
 TIMEOUT = 150
-MODES = ("auto", "off", "claude-cli", "local", "openai")
+MODES = ("auto", "off", "claude-api", "claude-cli", "local", "openai")
+API_MODEL = "claude-opus-5-5"
 LOCAL_URL = "http://127.0.0.1:8080"             # llama-server 기본 포트
 LLAMA_DIR = Path(os.environ.get("GN_LLAMA_DIR") or Path.home() / "llm")   # vulkan/llama-server.exe · qwen3-8b.gguf
 _PROC: subprocess.Popen | None = None
@@ -71,14 +74,48 @@ def _claude_exe() -> str | None:
 
 
 def configured() -> str | None:
-    """GN_AI 가 있으면 그것, 없어도 토큰 파일이 있으면 claude-cli(행정 PC 처럼 환경변수를 못 쓰는 곳)."""
+    """GN_AI 가 있으면 그것, 없으면 API 키(api_keys.txt) → claude-api, 토큰 파일 → claude-cli(환경변수를 못 쓰는 PC)."""
     m = (os.environ.get("GN_AI") or "").strip().lower()
-    if m in ("openai", "claude-cli"):
+    if m in ("openai", "claude-cli", "claude-api"):
         return m
+    if _api_key():
+        return "claude-api"
     try:
         return "claude-cli" if TOKEN_FILE.read_text("utf-8-sig").strip() else None
     except OSError:
         return None
+
+
+def _api_key() -> str:
+    """ANTHROPIC_API_KEY — 환경변수, 없으면 config/api_keys.txt(부를 때마다 읽는다 — 넣으면 서버를 다시 켜지 않아도 된다)."""
+    k = (os.environ.get("ANTHROPIC_API_KEY") or "").strip()
+    return k or config._load_keys().get("ANTHROPIC_API_KEY", "")
+
+
+def _claude_api(system: str, user: str) -> str:
+    import anthropic
+    key = _api_key()
+    if not key:
+        raise RuntimeError("ANTHROPIC_API_KEY 가 없다 — config/api_keys.txt 에 한 줄 넣는다")
+    model = (os.environ.get("GN_AI_MODEL") or config._load_keys().get("ANTHROPIC_MODEL") or API_MODEL).strip()
+    client = anthropic.Anthropic(api_key=key, timeout=TIMEOUT)
+    try:
+        r = client.messages.create(model=model, max_tokens=4000, system=system,
+                                   messages=[{"role": "user", "content": user}],
+                                   output_config={"effort": "low"})   # 계산 · 기준 대조는 코드가 했다 — 읽고 정리만
+    except anthropic.AuthenticationError:
+        raise RuntimeError("Anthropic API 키가 맞지 않는다 — config/api_keys.txt 의 ANTHROPIC_API_KEY") from None
+    except anthropic.PermissionDeniedError:
+        raise RuntimeError("Anthropic API 키에 권한이 없다(크레딧 · 조직 설정)") from None
+    except anthropic.RateLimitError:
+        raise RuntimeError("Anthropic API 사용 한도 — 잠시 뒤 다시 묻는다") from None
+    except anthropic.APIConnectionError:
+        raise RuntimeError("Anthropic API 에 닿지 못했다(인터넷)") from None
+    except anthropic.APIStatusError as e:
+        raise RuntimeError(f"Anthropic API 오류 {e.status_code}") from None
+    if r.stop_reason == "refusal":
+        raise RuntimeError("모델이 이 질문에 답하지 않았다")
+    return "".join(b.text for b in r.content if b.type == "text").strip()
 
 
 def setting() -> dict:
@@ -184,6 +221,8 @@ def ask(system: str, user: str) -> str:
             if not start_local(wait=60)["up"]:       # 꺼져 있으면 켜고 한 번 더
                 raise RuntimeError("로컬 LLM 서버를 켰지만 1분 안에 뜨지 않았다 — 잠시 뒤 다시 묻는다") from None
             return _openai(s["url"] or LOCAL_URL, "", s["model"], system, user, local=True)
+    if m == "claude-api":
+        return _claude_api(system, user)
     if m == "openai":
         url = os.environ.get("GN_AI_URL", "")
         if not url:

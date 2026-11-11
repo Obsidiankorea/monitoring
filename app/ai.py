@@ -30,7 +30,8 @@ from . import tide
 
 def _default_wiki() -> Path:
     """GN_WIKI 가 없으면 이 사용자 홈의 obsidian/재난(행정 PC — 환경변수 없이 압축만 풀어 둔다), 그다음 개발 PC 경로."""
-    for c in (Path.home() / "obsidian" / "재난", Path(r"C:\Users\ms\obsidian\재난")):
+    here = Path(__file__).resolve()   # 제출 묶음 — monitoring 옆(소스), 실행파일/경남강수지도 의 두 칸 위(exe)의 위키 폴더
+    for c in (here.parents[2] / "위키", here.parents[3] / "위키", Path.home() / "obsidian" / "재난", Path(r"C:\Users\ms\obsidian\재난")):
         if (c / "tools" / "lookup.py").is_file():
             return c
     return Path.home() / "obsidian" / "재난"
