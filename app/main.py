@@ -866,9 +866,12 @@ async def api_ai_wiki_get():
 
 
 @app.put("/api/settings/ai-wiki")
-async def api_ai_wiki_put(body: dict):
-    """LLM 위키 폴더 — {path}. 빈 값이면 설정을 지우고 환경변수(GN_WIKI) · 기본으로 돌아간다."""
+async def api_ai_wiki_put(body: dict, request: Request):
+    """LLM 위키 폴더 — {path}. 빈 값이면 설정을 지우고 환경변수(GN_WIKI) · 기본으로 돌아간다.
+    ⚠️ 이 서버를 켠 PC 에서만 바꾼다 — 그 폴더의 tools/lookup.py 를 서버가 불러 돌린다(남이 고르면 남의 코드가 돈다)."""
     from . import ai
+    if (request.client.host if request.client else "") not in ("127.0.0.1", "::1"):
+        raise HTTPException(403, "위키 폴더는 서버를 켠 PC 의 화면에서만 바꿀 수 있다(서버는 환경변수 GN_WIKI)")
     r = await asyncio.to_thread(ai.set_wiki, str(body.get("path") or ""))
     if not r["saved"]:
         why = "폴더가 없다" if not r["dir"] else "tools/lookup.py 가 없다" if not r["lookup"] else "문서(.md)가 없다"

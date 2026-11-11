@@ -934,6 +934,8 @@ def set_wiki(path: str) -> dict:
     """위키 폴더를 바꾼다(빈 값 = 설정 지움). 쓸 수 없는 폴더면 바꾸지 않고 이유를 돌려준다. 바꾸면 위키에서 읽은 캐시를 다 비운다."""
     from . import db
     path = (path or "").strip().strip('"')
+    if path.startswith(("\\\\", "//")):          # 네트워크 공유(\서버\폴더) — 남의 PC 의 코드를 불러 돌리게 된다. 폴더를 들여다보지도 않는다
+        return {"path": path, "dir": False, "lookup": False, "csv": False, "rules": False, "md": 0, "ok": False, "saved": False}
     if path:
         chk = wiki_check(Path(path))
         if not chk["ok"]:

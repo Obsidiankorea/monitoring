@@ -77,7 +77,7 @@ def _fetch(w: dict, nw: int | None) -> list[dict]:
             return [x for x in _rows(body, f) if x.get(f) == name and w.get("org", "") in x.get("지자체기관명", w.get("org", ""))]
         except (httpx.HTTPError, RuntimeError) as e:
             err = e
-    raise RuntimeError(f"{name}: {str(err)[:150]}")
+    raise RuntimeError(f"{name}: {str(err).replace(oc, '***')[:150]}")      # 오류 글의 주소에 OC(가입 아이디)가 들어 있다
 
 
 def _snap(w: dict) -> dict:

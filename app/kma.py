@@ -61,7 +61,8 @@ async def fetch_bytes(path: str, params: dict) -> bytes:
             last = e
             if attempt < HTTP_RETRY:
                 await asyncio.sleep(0.8)
-    raise KmaError(f"{path} 실패: {last}")
+    # ⚠️ httpx 오류 글에는 주소가 통째로(authKey 까지) 들어 있다 — 수집 기록 · /api/status · 로그로 나가기 전에 가린다
+    raise KmaError(f"{path} 실패: {str(last).replace(config.ORG_API_KEY, '***')}")
 
 
 def parse_rows(text: str) -> list[list[str]]:
