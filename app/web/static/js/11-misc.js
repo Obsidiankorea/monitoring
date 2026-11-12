@@ -884,7 +884,7 @@ const BOOT_CORE = ["alerts", "rain", "grid"];      // 이것만 오면 지도가
 async function bootWatch() {
   if (window.GN_SNAP || CASE || test) return;
   let st;
-  try { st = await getJson("/api/status"); } catch { return; }
+  try { st = (await getJson("/api/status")).collect || {}; } catch { return; }
   const ready = () => BOOT_CORE.every(k => st[k]?.ok_at);
   if (ready()) return;
   const el = document.createElement("div"), t0 = Date.now();
@@ -902,7 +902,7 @@ async function bootWatch() {
     el.querySelector(".x").onclick = () => { clearInterval(tm); el.remove(); };
   };
   const tm = setInterval(async () => {
-    try { st = await getJson("/api/status"); } catch {}
+    try { st = (await getJson("/api/status")).collect || {}; } catch {}
     paint();
     if (!ready()) return;
     clearInterval(tm); el.classList.add("done");

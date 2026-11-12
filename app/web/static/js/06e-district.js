@@ -307,7 +307,7 @@ function dzTerrainRows(g) {
   return row("표고", g.el != null ? `${g.el.toFixed(0)}m${g.el <= 10 ? " · 저지대" : ""}` : "")
     + row("경사", g.sl != null ? `${g.sl}°${g.sl >= 30 ? " · 급경사" : g.sl < 20 ? " · 완만" : ""}` : "")
     + row("하천", g.rv ? `${escH(g.rv.n || "하천")} ${m(g.rv.d)}${g.rv.dh != null ? ` · ${g.rv.dh >= 0 ? `${g.rv.dh.toFixed(0)}m 위` : `${(-g.rv.dh).toFixed(0)}m 아래`}` : ""}` : "")
-    + row("저수지", g.lk ? `${escH(g.lk.n || "저수지")} ${m(g.lk.d)}${g.lk.dh != null ? ` · ${g.lk.dh.toFixed(0)}m 낮음` : ""}` : "")
+    + row("저수지", g.lk ? `${escH(g.lk.n || "저수지")} ${m(g.lk.d)}${g.lk.dh != null ? ` · 지구가 ${Math.abs(g.lk.dh).toFixed(0)}m ${g.lk.dh >= 0 ? "낮음" : "높음"}` : ""}` : "")
     + row("해안", g.cs != null && g.cs <= 3000 ? m(g.cs) : "")
     + row("건물", g.b300 ? `${g.b300.toLocaleString()}동(300m)` : "");
 }
