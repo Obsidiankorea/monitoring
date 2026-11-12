@@ -74,6 +74,13 @@ def _scan(base: str) -> dict[str, tuple[str, tuple]]:
                     k = f"{sg}|{e['emd']}|{fam}|{c['stage']}|{c['rule']}"
                     out[k] = (c["st"], (sg, e["emd"], fam, c["stage"], c["rule"]))
                     _GAP[k] = {"t": ai.gap_text(c), "pct": (c.get("gap") or {}).get("pct")}
+            for sx in e.get("sites", []):                    # 시군 지구 대피기준 → 긴급대피 안내(담당부서 2026-11)
+                p = sx.get("max_pct")
+                if p is None or p < 70:
+                    continue
+                k = f"{sg}|{e['emd']}|산사태|긴급대피|지구:{sx['rule']}"
+                out[k] = ("met" if p >= 100 else "near", (sg, e["emd"], "산사태", "긴급대피", f"시군 지구 기준 — {sx['rule']}"))
+                _GAP[k] = {"t": f"기준 {p}%", "pct": p}
     return out
 
 

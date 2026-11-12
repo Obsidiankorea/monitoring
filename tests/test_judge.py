@@ -17,14 +17,29 @@ def test_decisions_record_list_delete(tdb):
 
 
 def test_eta_runs_into_short_forecast():
-    """초단기 6시간 안에 안 닿아도 단기예보(eta_hours)를 이어 '내일 01' 같은 시각을 낸다 — 산사태 긴급대피 누적 270㎜."""
-    r = {"rain": {"1h": 5, "3h": 10, "24h": 245, "48h": 245}, "fc_peak": 4, "fc_run30": 0, "m15": 1, "ante": 0,
+    """초단기 6시간 안에 안 닿아도 단기예보(eta_hours)를 이어 '내일 01' 같은 시각을 낸다 — 산사태 긴급대피 24시간 210㎜."""
+    r = {"rain": {"1h": 5, "3h": 10, "12h": 100, "24h": 185, "48h": 245}, "fc_peak": 4, "fc_run30": 0, "m15": 1, "ante": 0,
          "fc_hours": [4] * 6, "fc_labels": ["19", "20", "21", "22", "23", "00"]}
-    pick = lambda r: next(x for x in ai.ladders(r, False, [])["산사태"] if x["rule"].startswith("누적"))  # noqa: E731
-    acc = lambda r: next(p for p in pick(r)["gap"]["parts"] if p["label"] == "48시간")["eta"]  # noqa: E731
-    assert acc(r)["at"] is None                                    # 245 + 24 = 269
+    pick = lambda r: next(x for x in ai.ladders(r, False, [])["산사태"] if x["rule"].startswith("24시간 210"))  # noqa: E731
+    acc = lambda r: pick(r)["gap"]["parts"][0]["eta"]  # noqa: E731
+    assert acc(r)["at"] is None                                    # 185 + 24 = 209
     r |= {"eta_hours": [4] * 6 + [10, 10], "eta_labels": r["fc_labels"] + ["내일 01", "내일 02"]}
     assert acc(r)["at"] == "내일 01"
+
+
+def test_site_rule_becomes_the_urgent_stage():
+    """시군 지구 기준이 지침 긴급대피보다 더 찼으면 그 지구의 긴급대피로 — 덜 찼으면 지침 줄 그대로."""
+    from app import judge
+    v = {"site": 104, "site_parts": [{"label": "3시간"}], "st": {"긴급대피": {"pct": 40, "met": False, "rule": "12시간 150㎜↑(실황)"}}}
+    judge.site_urgent(v, "3시간 90mm이상")
+    u = v["st"]["긴급대피"]
+    assert u["met"] and u["pct"] == 104 and u["rule"] == "시군 지구 기준 — 3시간 90mm이상" and u["by_site"]
+    w = {"site": 30, "st": {"긴급대피": {"pct": 40, "met": False, "rule": "r"}}}
+    judge.site_urgent(w, "x")
+    assert w["st"]["긴급대피"]["rule"] == "r"
+    n = {"site": None, "st": {}}
+    judge.site_urgent(n, "x")
+    assert n["st"] == {}
 
 
 def test_judge_pack_picks_best_per_stage_and_site_rule():
@@ -57,12 +72,12 @@ def test_district_point_rain_redoes_ladder_and_site_rule():
          "ante": 0, "fc_hours": [4] * 6, "fc_labels": [str(h) for h in range(6)], "sites": [], "ladders": {}}
     s = {"night": False, "alerts": [], "river": None, "flood": None}
     assert judge.at_point(e, None, s, "산사태", "") is e                     # 좌표 없으면 읍면동 그대로
-    p = judge.at_point(e, {"1h": 10, "3h": 30, "24h": 120, "48h": 120, "15m": 2}, s, "산사태", "누적강우 250mm이상")
-    assert p["rain"]["24h"] == 120 and p["rain"]["12h"] == 200 and p["m15"] == 2   # 없는 창은 읍면동 값
+    p = judge.at_point(e, {"1h": 10, "12h": 100, "24h": 120, "48h": 120, "15m": 2}, s, "산사태", "누적강우 250mm이상")
+    assert p["rain"]["24h"] == 120 and p["rain"]["3h"] == 90 and p["m15"] == 2     # 없는 창은 읍면동 값
     assert p["sites"][0]["max_pct"] == 48 and set(p["ladders"]) == {"산사태"}
     full = judge.pack({**e, "ladders": ai.ladders(e, False, [])}, "산사태", "")
-    acc = lambda x: next(q["now"] for q in x["st"]["긴급대피"]["parts"] if q["label"] == "48시간")  # noqa: E731
-    assert acc(judge.pack(p, "산사태", "누적강우 250mm이상")) == 120 and acc(full) == 270
+    acc = lambda x: next(q["now"] for q in x["st"]["긴급대피"]["parts"] if q["label"] == "12시간")  # noqa: E731
+    assert acc(judge.pack(p, "산사태", "누적강우 250mm이상")) == 100 and acc(full) == 200
 
 
 def test_point_max_looks_at_neighbours():
@@ -99,12 +114,14 @@ def test_regions_and_site_area():
     r = ai.regions()
     assert set(r) == {"산사태", "하천", "지하공간"} and r["지하공간"]["x"] == "15분"
     kinds = [(a["stage"], a["kind"]) for a in r["산사태"]["areas"]]
-    assert ("긴급대피", "rect") in kinds and ("긴급대피", "vband") not in kinds      # 2026-11 — 긴급대피는 '그리고' 네모 하나
+    assert ("긴급대피", "vband") in kinds and ("사전대피", "band") in kinds and r["산사태"]["x"] == "24시간"   # 별표 4 — 누적만으로, 예보만으로
     assert any("발령" in t["text"] for t in r["하천"]["texts"])                         # 비가 아닌 조건은 글로
     a = ai.site_area("누적강우 250mm이상, 일강우 200mm이상")
-    assert len(a) == 1 and a[0]["kind"] == "vband" and a[0]["x"] == 250                 # 둘 다 가로 — 큰 값
+    assert [(x["kind"], x["x"]) for x in a] == [("vband", 250), ("vband", 200)]         # 쉼표 = 또는
     a = ai.site_area("누적강우 250mm 이상 관측 시간당 50mm 이상 예상")
-    assert len(a) == 1 and a[0]["kind"] == "rect" and (a[0]["x"], a[0]["y"]) == (250, 50)   # 띄어쓰기 = 그리고
+    assert [x["kind"] for x in a] == ["vband", "band"]                                    # 적힌 게 없으면 또는
+    a = ai.site_area("누적강우 250mm 이상 & 시간당 50mm 이상")
+    assert len(a) == 1 and a[0]["kind"] == "rect" and (a[0]["x"], a[0]["y"]) == (250, 50)   # & = 그리고
     a = ai.site_area("누적강우 200mm 이상 또는 시간당 50mm 이상")
     assert [x["kind"] for x in a] == ["vband", "band"]                                    # 또는 = 의자 모양
     assert ai.site_area("") == []

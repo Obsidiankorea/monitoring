@@ -62,9 +62,9 @@ def test_cases_picked_by_wiki_property(tmp_path, monkeypatch):
 
 
 def test_evac_ladder_follows_wiki_value(tmp_path, monkeypatch):
-    """[[통제·대피 기준]] 값도 위키에서 — 산사태 통제 누적 100 → 80 이면 90㎜ 에 닿는다."""
-    _vault(tmp_path, monkeypatch, "산사태_통제_누적,80,mm,,,\n")
-    r = {"rain": {"1h": 5, "3h": 12, "24h": 90, "48h": 90}, "fc_peak": 25, "fc_run30": 0, "m15": 2, "ante": 10,
+    """[[통제·대피 기준]] 값도 위키에서 — 산사태 통제 12시간 65 → 50 이면 55㎜ 에 닿는다."""
+    _vault(tmp_path, monkeypatch, "산사태_통제_12시간,50,mm,,,\n")
+    r = {"rain": {"1h": 5, "3h": 12, "12h": 55, "24h": 60, "48h": 90}, "fc_peak": 25, "fc_run30": 0, "m15": 2, "ante": 10,
          "fc_hours": [25], "fc_labels": ["14"]}
     c = ai.ladders(r, False, [])["산사태"][0]
-    assert c["rule"].startswith("일/누적 80㎜↑") and c["st"] == "met"
+    assert c["rule"].startswith("12시간 50㎜↑") and c["st"] == "met"

@@ -2,7 +2,7 @@ from app import ai
 
 
 def _row(**kw):
-    r = {"rain": {"1h": 5, "3h": 12, "24h": 78, "48h": 80}, "fc_peak": 25, "fc_run30": 0, "m15": 2, "ante": 10,
+    r = {"rain": {"1h": 5, "3h": 12, "12h": 50, "24h": 78, "48h": 80}, "fc_peak": 25, "fc_run30": 0, "m15": 2, "ante": 10,
          "fc_hours": [10, 12, 15, 5, 0, 0], "fc_labels": ["14", "15", "16", "17", "18", "19"]}
     r.update(kw)
     return r
@@ -39,31 +39,37 @@ def test_gap_partial_when_a_condition_is_unknown():
 
 
 def test_ladder_landslide_control_gap_and_eta():
-    c = _rule(ai.ladders(_row(), False, []), "산사태", "통제", "일/누적 100")
+    c = _rule(ai.ladders(_row(), False, []), "산사태", "통제", "24시간 90")
     assert c["st"] == "near"
     g = c["gap"]
-    assert (g["pct"], g["left"], g["by"]) == (80, 20, "일/누적")
-    assert g["eta"] == {"at": "15", "i": 1}                   # 80 + 10 + 12 = 102 ≥ 100
-    assert ai.gap_text(c) == "기준 80% · 남은 20㎜(일/누적) · 예보대로면 15시경 닿음"
+    assert (g["pct"], g["left"], g["by"]) == (87, 12, "24시간")
+    assert g["eta"] == {"at": "15", "i": 1}                   # 78 + 10 + 12 = 100 ≥ 90
+    assert ai.gap_text(c) == "기준 87% · 남은 12㎜(24시간) · 예보대로면 15시경 닿음"
 
 
 def test_ladder_gap_without_forecast_has_no_eta():
-    c = _rule(ai.ladders(_row(fc_hours=[], fc_labels=[]), False, []), "산사태", "통제", "일/누적 100")
+    c = _rule(ai.ladders(_row(fc_hours=[], fc_labels=[]), False, []), "산사태", "통제", "24시간 90")
     assert c["gap"]["eta"] is None and "예보대로면" not in ai.gap_text(c)
 
 
 def test_ladder_capped_forecast_makes_50mm_condition_unknown():
-    row = _row(fc_peak=30, rain={"1h": 5, "3h": 12, "24h": 210, "48h": 210})
-    c = _rule(ai.ladders(row, False, []), "산사태", "사전대피", "일/누적 200")
-    assert c["st"] == "unknown" and c["gap"]["partial"] is True
-    assert "일부 조건은 모름" in ai.gap_text(c)
+    c = _rule(ai.ladders(_row(fc_peak=30), False, []), "산사태", "사전대피", "시간당 50")
+    assert c["st"] == "unknown" and c["gap"] is None and ai.gap_text(c) == ""    # 30 에 막힌 예보는 50 과 못 견준다
 
 
-def test_ladder_actual_rain_rule_mixes_hourly_and_cumulative():
-    c = _rule(ai.ladders(_row(), False, []), "산사태", "긴급대피", "누적")      # 누적 · 시간당 · 일 — 하나로(그리고)
-    g = c["gap"]
-    assert (g["pct"], g["by"], g["unit"]) == (10, "1시간", "㎜/h")
-    assert g["eta"] is None                                    # 1시간 실황은 예보로 닿는 시각을 못 말한다
+def test_landslide_12h_and_24h_are_separate_or_rows():
+    """별표 4 — 과거 12시간 또는 24시간. 한쪽만 차도 그 단계에 닿는다(줄이 따로)."""
+    lad = ai.ladders(_row(rain={"1h": 5, "3h": 20, "12h": 160, "24h": 100, "48h": 300}), False, [])
+    ev = {c["rule"][:4]: c["st"] for c in lad["산사태"] if c["stage"] == "긴급대피" and "gap" in c}
+    assert ev == {"12시간": "met", "24시간": "no"}
+    assert _rule(lad, "산사태", "긴급대피", "12시간")["gap"]["eta"] is None      # 이미 닿았다
+
+
+def test_landslide_forest_prediction_level():
+    """산림청 예측정보(시군) — 주의보면 통제 충족 · 사전대피(예비경보↑) 근접, 경보면 사전 · 긴급 충족, 못 받으면 모름."""
+    st = lambda plv: [c["st"] for c in ai.ladders(_row(), False, [], plv=plv)["산사태"] if "산림청" in c["rule"]]  # noqa: E731
+    assert st(None) == ["unknown"] * 3 and st(0) == ["no"] * 3
+    assert st(1) == ["met", "near", "no"] and st(2) == ["met"] * 3
 
 
 def test_ladder_rules_without_numbers_have_no_gap():
@@ -75,14 +81,18 @@ def test_ladder_rules_without_numbers_have_no_gap():
 def test_night_rule_gap_only_at_night():
     assert _rule(ai.ladders(_row(), False, []), "산사태", "사전대피", "취약시간대")["gap"] is None
     g = _rule(ai.ladders(_row(), True, []), "산사태", "사전대피", "취약시간대")["gap"]
-    assert (g["pct"], g["by"]) == (80, "일/누적")                    # 예보 25/30 = 83 이지만 누적(48시간 80)/100 이 병목(그리고)
+    assert (g["pct"], g["by"]) == (83, "예보 시우량")                # 예보 25/30 — 별표 4 는 누적과 묶지 않는다
 
 
-def test_landslide_emergency_is_one_and_rule():
-    """산사태 긴급대피 — 누적 270 · 시간당 50 · 일 170 을 '그리고'로(2026-11). 누적만 차고 시간당 비가 없으면 긴급대피 아님."""
-    lad = ai.ladders(_row(rain={"1h": 5, "3h": 20, "24h": 200, "48h": 300}), False, [])
-    ev = [c for c in lad["산사태"] if c["stage"] == "긴급대피"]
-    assert len(ev) == 1 and ev[0]["st"] == "no" and ev[0]["gap"]["by"] == "1시간"
+def test_site_rule_or_by_default_and_when_written():
+    """지구 기준 — 따로 적힌 게 없으면 또는(가장 찬 것), & · 이면서가 적혀 있으면 그리고(가장 모자란 것). 담당부서 회신 2026-11."""
+    get = {1: 40, 3: 90, 12: 60, 24: 100, 48: 100}.get
+    assert ai.site_prog("3시간 90mm이상 12시간150mm이상", get)[1] == 100
+    assert ai.site_prog("누적강우 250mm이상, 일강우 200mm이상", get)[1] == 50
+    assert ai.site_prog("누적강우 250mm 이상 & 시간당 50mm 이상", get)[1] == 40
+    prog, pct = ai.site_prog("누적강우 250mm이상 & 일강우 200mm 이상또는 시간당50mm이상", get)
+    assert pct == 80 and [p["label"].endswith("(함께)") for p in prog] == [True, True, False]
+    assert ai.site_prog("산사태 경보 발령 시", get) == ([], None)
 
 
 def _c(stage, st):

@@ -85,9 +85,10 @@ RULES_CSV = Path("data") / "판정값.csv"
 RULE_DEFAULT = {"비상1단계_호우주의보_시군": 4, "비상2단계_호우경보_시군": 3, "긴급재난문자_1시간": 50, "긴급재난문자_3시간": 90,
                 "긴급재난문자_1시간_단독": 72, "상황전파_1시간": 20, "상황전파_일": 100,
                 # [[통제·대피 기준]] 3대 유형 — 조건의 짝(그리고 · 예보/실황)은 ladders() 코드에
-                "산사태_통제_누적": 100, "산사태_통제_예보시우량": 20, "산사태_사전대피_누적": 200, "산사태_사전대피_예보시우량": 50,
-                "산사태_사전대피_선행5일": 120, "산사태_사전대피_야간예보시우량": 30, "산사태_긴급대피_시우량": 50,
-                "산사태_긴급대피_일": 170, "산사태_긴급대피_누적": 270, "하천_통제_시우량": 30, "하천_통제_지속시간": 3,
+                # 산사태 — 행안부 지침(안) 전문 별표 4(2026-11). 범위(65~110 등)는 아래 값을 문턱으로(이르게 알리는 쪽)
+                "산사태_통제_12시간": 65, "산사태_통제_24시간": 90, "산사태_사전대피_12시간": 80, "산사태_사전대피_24시간": 110,
+                "산사태_사전대피_예보시우량": 50, "산사태_사전대피_야간예보시우량": 30,
+                "산사태_긴급대피_12시간": 150, "산사태_긴급대피_24시간": 210, "하천_통제_시우량": 30, "하천_통제_지속시간": 3,
                 "하천_사전대피_누적": 200, "하천_사전대피_예보시우량": 30, "하천_긴급대피_누적": 200, "하천_긴급대피_시우량": 30,
                 "지하공간_사전대피_15분": 20, "지하공간_사전대피_예보시우량": 55, "지하공간_긴급대피_15분": 30,
                 "지하공간_긴급대피_시우량": 55}
@@ -121,7 +122,7 @@ def rules() -> dict:
             else:
                 err.append(f"{k} = {got[k]!r} — 양의 정수가 아니다")
         if (v["비상1단계_호우주의보_시군"] < 2 or v["긴급재난문자_1시간_단독"] <= v["긴급재난문자_1시간"]
-                or v["산사태_사전대피_누적"] <= v["산사태_통제_누적"] or v["지하공간_긴급대피_15분"] <= v["지하공간_사전대피_15분"]):
+                or v["산사태_사전대피_12시간"] <= v["산사태_통제_12시간"] or v["지하공간_긴급대피_15분"] <= v["지하공간_사전대피_15분"]):
             err.append("단계가 겹친다 — 전부 기본값으로")
             v = dict(RULE_DEFAULT)
         _RULES.update(key=key, val={"v": v, "err": err, "src": "위키" if not err else "위키(일부 기본값)"})
@@ -171,7 +172,9 @@ FAMILY_WIKI = {"산사태": "[[통제·대피 기준]] · [[산사태 위험지�
                "지하공간": "[[통제·대피 기준]]", "침수·해안": "[[재난경보와 폭풍해일 기준]] · [[인명피해 우려지역]]",
                "야외·기타": "[[인명피해 우려지역]]"}
 
-_COND = re.compile(r"(?:(\d+)\s*시간|(일)\s*강우|(누적)\s*강우|(시간당))\s*(?:강우\s*)?(\d+(?:\.\d+)?)\s*mm")
+# '3시간 강우량 90mm' · '3시간당 90mm' · '3시간 (기준) 누적강우 60mm' · '시우량 50mm' · '시간강우 60mm' · '일누적강우량' 까지 읽는다
+_COND = re.compile(r"(?:(\d+)\s*시간당?\s*(?:기준\s*)?(?:누적\s*)?|(일)\s*(?:누적\s*)?강우량?|(누적)\s*강우량?|(시간당|시우량|시간\s*강우량?))"
+                   r"이?\s*(?:강우량?이?\s*)?(\d+(?:\.\d+)?)\s*(?:mm|㎜)")
 
 
 def conditions(text: str) -> list[dict]:
@@ -189,6 +192,33 @@ def conditions(text: str) -> list[dict]:
         if win in WINDOWS:
             out.append({"win": win, "mm": float(mm), "label": lab})
     return out
+
+
+_OR_CUT = re.compile(r"또는|[•‧·∙ㆍ\*※\n,]")
+_AND_IN = re.compile(r"&|＆|이면서|이고|동시|그리고")
+
+
+def site_groups(text: str) -> list[list[dict]]:
+    """지구 원문 대피기준 → '또는'으로 이어진 묶음들, 묶음 안은 '그리고'(담당부서 회신 2026-11 — 따로 적힌 게 없으면 또는, 적혀 있으면 그대로).
+    '또는' · 쉼표 · 글머리표 · 줄바꿈으로 토막을 나누고, 한 토막 안에 & · 이면서 · 이고 · 동시가 있으면 그 토막의 조건은 함께 넘어야 한다."""
+    out = []
+    for cl in _OR_CUT.split(text or ""):
+        cs = conditions(cl)
+        if cs:
+            out += [cs] if _AND_IN.search(cl) and len(cs) > 1 else [[c] for c in cs]
+    return out
+
+
+def site_prog(rule: str, get) -> tuple[list[dict], int | None]:
+    """지구 기준의 조건마다 지금 값 · % 와, 기준 전체의 %(묶음 안은 가장 모자란 것, 묶음끼리는 가장 찬 것). get(시간) → ㎜."""
+    prog, best = [], None
+    for g in site_groups(rule):
+        ps = [{**c, "now": get(c["win"]), "label": c["label"] + ("(함께)" if len(g) > 1 else "")} for c in g]
+        for p in ps:
+            p["pct"] = None if p["now"] is None else round(p["now"] / p["mm"] * 100)
+        prog += ps
+        best = max(best or 0, min(p["pct"] or 0 for p in ps))
+    return prog, best
 
 
 def _st(v, need) -> str:
@@ -309,11 +339,14 @@ def _riv(rv: dict | None, need: int) -> tuple[str, dict | None]:
     return st, gap
 
 
-def ladders(r: dict, night: bool, alerts: list[str], rv: dict | None = None, fld: list[dict] | None = None) -> dict:
+def ladders(r: dict, night: bool, alerts: list[str], rv: dict | None = None, fld: list[dict] | None = None,
+            plv: int | None = None) -> dict:
     """읍면동 하나 — [[통제·대피 기준]] 3대 유형 단계별 조건 대조(숫자는 위키 [[판정값]], 조건의 짝은 여기).
-    st 는 '그 조건에 닿았나', gap 은 '기준에서 얼마나 먼가'(비율 · 남은 양 · 닿는 시각)."""
+    st 는 '그 조건에 닿았나', gap 은 '기준에서 얼마나 먼가'(비율 · 남은 양 · 닿는 시각).
+    같은 단계의 줄들은 '또는'이다(행안부 지침(안) 별표 4 — 줄마다 따로, 2개 이상 차면 가장 높은 단계).
+    plv = 산림청 산사태 예측정보(시군 단위) 2 경보 · 1 주의보 · 0 없음 · None 못 받음."""
     rain, fpk, f3 = r["rain"], r["fc_peak"], r["fc_run30"]
-    o1, o24, o48, q15 = rain["1h"], rain["24h"], rain["48h"], r["m15"]
+    o1, o12, o24, o48, q15 = rain["1h"], rain.get("12h"), rain["24h"], rain["48h"], r["m15"]
     accum = max(x for x in (o24, o48) if x is not None) if (o24 is not None or o48 is not None) else None
     fcap = fpk == RN1_CAP                              # 예보가 30 에 막혔으면 그 위는 모른다(그 위 값은 가상 시연에서만 온다)
     v = rules()["v"]
@@ -330,26 +363,26 @@ def ladders(r: dict, night: bool, alerts: list[str], rv: dict | None = None, fld
     def one(label, v, need, unit="㎜"):
         return _part(label, v, need, unit)
 
+    def acc_rows(stage):                                   # 과거 12시간 또는 24시간 누적(실황) — 둘은 '또는'이라 줄을 나눈다
+        return [{"stage": stage, "rule": f"{h}시간 {L[f'{stage}_{h}시간']}㎜↑(실황)", "st": _st(x, L[f"{stage}_{h}시간"]),
+                 "gap": _gap(cum(f"{h}시간", x, L[f"{stage}_{h}시간"]))} for h, x in ((12, o12), (24, o24))]
+
+    def pred(need, near=None):                             # 예측 시간(1~4 · 1~12 · 1시간) · 예비경보는 받는 자료에 없다 — 시군의 지금 단계로만
+        return "unknown" if plv is None else "met" if plv >= need else "near" if near is not None and plv >= near else "no"
+
     out = {
         "산사태": [
-            {"stage": "통제", "rule": f"일/누적 {L['통제_누적']}㎜↑ + {L['통제_예보시우량']}㎜/h↑ 예보",
-             "st": _all(_st(accum, L["통제_누적"]), _st(fpk, L["통제_예보시우량"])),
-             "gap": _gap(cum("일/누적", accum, L["통제_누적"]), one("예보 시우량", fpk, L["통제_예보시우량"], "㎜/h"))},
-            {"stage": "사전대피", "rule": f"일/누적 {L['사전대피_누적']}㎜↑ + {L['사전대피_예보시우량']}㎜/h↑ 예보",
-             "st": _all(_st(accum, L["사전대피_누적"]), f50),
-             "gap": _gap(cum("일/누적", accum, L["사전대피_누적"]), one("예보 시우량", fpk_ok, L["사전대피_예보시우량"], "㎜/h"))},
-            # 선행 5일 120㎜ 는 대시보드가 격자로 계산한다. 뒤의 '산사태 위험 증가 예보'(산림청)는 없어서 → 충족으로는 못 친다(모름)
-            {"stage": "사전대피", "rule": f"선행 5일 {L['사전대피_선행5일']}㎜↑ + 산사태 위험 증가 예보(산림청)",
-             "st": _all(_st(r.get("ante"), L["사전대피_선행5일"]), "unknown"),
-             "gap": _gap(one("선행 5일", r.get("ante"), L["사전대피_선행5일"]), one("산림청 예보", None, 1))},
-            # 통제 누적과 '그리고'(2026-11 결정) — 누적 없이 밤 예보만으로 사전대피가 되면 통제보다 먼저 대피가 된다
-            {"stage": "사전대피", "rule": f"취약시간대(21~06시) 일/누적 {L['통제_누적']}㎜↑ + {L['사전대피_야간예보시우량']}㎜/h↑ 예보",
-             "st": ("no" if not night else _all(_st(accum, L["통제_누적"]), _st(fpk, L["사전대피_야간예보시우량"]))),
-             "gap": _gap(cum("일/누적", accum, L["통제_누적"]), one("예보 시우량", fpk, L["사전대피_야간예보시우량"], "㎜/h")) if night else None},
-            # 위키 표는 두 줄('또는')이지만 하나로 묶는다(2026-11 결정) — '또는'이면 누적 270 만으로, 시간당 비 없이도 긴급대피가 됐다
-            {"stage": "긴급대피", "rule": f"누적 {L['긴급대피_누적']}㎜↑ + {L['긴급대피_시우량']}㎜/h↑ + 일 {L['긴급대피_일']}㎜↑(실황)",
-             "st": _all(_st(o48, L["긴급대피_누적"]), _st(o1, L["긴급대피_시우량"]), _st(o24, L["긴급대피_일"])),
-             "gap": _gap(cum("48시간", o48, L["긴급대피_누적"]), one("1시간", o1, L["긴급대피_시우량"], "㎜/h"), cum("24시간", o24, L["긴급대피_일"]))},
+            *acc_rows("통제"),
+            {"stage": "통제", "rule": "산림청 산사태 예측정보 주의보↑(시군)", "st": pred(1)},
+            *acc_rows("사전대피"),
+            {"stage": "사전대피", "rule": f"시간당 {L['사전대피_예보시우량']}㎜↑ 예보", "st": f50,
+             "gap": _gap(one("예보 시우량", fpk_ok, L["사전대피_예보시우량"], "㎜/h"))},
+            {"stage": "사전대피", "rule": f"취약시간대(21~06시) 시간당 {L['사전대피_야간예보시우량']}㎜↑ 예보",
+             "st": "no" if not night else _st(fpk, L["사전대피_야간예보시우량"]),
+             "gap": _gap(one("예보 시우량", fpk, L["사전대피_야간예보시우량"], "㎜/h")) if night else None},
+            {"stage": "사전대피", "rule": "산림청 산사태 예측정보 예비경보↑(시군 · 주의보면 근접)", "st": pred(2, 1)},
+            *acc_rows("긴급대피"),
+            {"stage": "긴급대피", "rule": "산림청 산사태 예측정보 경보(시군)", "st": pred(2)},
         ],
         "하천": [
             {"stage": "통제", "rule": f"{H['통제_시우량']}㎜/h↑ {H['통제_지속시간']}시간 이상 지속 예보", "st": _st(f3, H["통제_지속시간"]),
@@ -360,7 +393,7 @@ def ladders(r: dict, night: bool, alerts: list[str], rv: dict | None = None, fld
             {"stage": "긴급대피", "rule": f"누적 {H['긴급대피_누적']}㎜↑ + {H['긴급대피_시우량']}㎜/h↑ 실제",
              "st": _all(_st(accum, H["긴급대피_누적"]), _st(o1, H["긴급대피_시우량"])),
              "gap": _gap(cum("일/누적", accum, H["긴급대피_누적"]), one("1시간", o1, H["긴급대피_시우량"], "㎜/h"))},
-            {"stage": "긴급대피", "rule": "호우경보 발령", "st": "met" if "호우경보" in hoou else "no"},
+            {"stage": "긴급대피", "rule": "호우경보 · 태풍경보 발령", "st": "met" if {"호우경보", "태풍경보"} & set(alerts) else "no"},
             # 홍수통제소 수위(app/river.py) — 시군 안 관측소 가운데 가장 높은 단계. 제방 만수위 90% · 교량 수위 90% · 댐 방류 예보는 자료가 없다
             {"stage": "통제", "rule": "홍수주의보 수준 하천수위(주의보 수위↑, 홍수통제소)", "st": _riv(rv, 2)[0], "gap": _riv(rv, 2)[1]},
             {"stage": "긴급대피", "rule": "홍수경보 수준 하천수위(경보 수위↑, 홍수통제소)", "st": _riv(rv, 3)[0], "gap": _riv(rv, 3)[1]},
@@ -782,6 +815,8 @@ def situation(sigun: str, base: str = "http://127.0.0.1:8000", k: float = 1.0, b
     night = now.hour >= 21 or now.hour < 6
 
     rv, fld = river_of(sigun), flood_of(sigun)
+    from . import judge                                     # 산림청 예측정보(시군 단계) — judge 가 ai 를 불러 여기서 늦게 부른다
+    plv = judge._pred_lv(judge.slide_of(sigun))
     sites = _lookup()(wiki(), SIGUN_FULL.get(sigun, sigun), kind="all")
     by_emd: dict[str, list] = defaultdict(list)
     for s in sites["sites"]:
@@ -820,14 +855,12 @@ def situation(sigun: str, base: str = "http://127.0.0.1:8000", k: float = 1.0, b
         row["relay"] = is_relay(r1, r24)
         fam = Counter(FAMILY_OF.get(s["유형"], "야외·기타") for s in by_emd.get(name, []))
         row["risk"] = dict(fam)
-        lad = ladders(row, night, mine, rv, fld)
+        lad = ladders(row, night, mine, rv, fld, plv)
         row["ladders"] = {k: v for k, v in lad.items() if fam.get(k)}       # 그 유형 우려지역이 있을 때만
         row["sites"] = []
         for rule, n in Counter(s["대피기준"] for s in by_emd.get(name, []) if FAMILY_OF.get(s["유형"]) == "산사태").most_common():
-            prog = [{**c, "now": acc[c["win"]].get(name),
-                     "pct": None if acc[c["win"]].get(name) is None else round(acc[c["win"]][name] / c["mm"] * 100)}
-                    for c in conditions(rule)]
-            row["sites"].append({"rule": rule, "n": n, "conds": prog, "max_pct": max((p["pct"] or 0 for p in prog), default=None),
+            prog, pct = site_prog(rule, lambda w: acc[w].get(name))
+            row["sites"].append({"rule": rule, "n": n, "conds": prog, "max_pct": pct,
                                  "check": [x for x in ("토양함수", "예보", "선행") if x in (rule or "")]})
         row["max_pct"] = max((s["max_pct"] or 0 for s in row["sites"]), default=None)
         order = {"met": 3, "near": 2, "unknown": 0, "no": 0}       # 모름은 순위를 올리지 않는다
@@ -838,7 +871,7 @@ def situation(sigun: str, base: str = "http://127.0.0.1:8000", k: float = 1.0, b
                  max((r["rain"]["3h"] or 0 for r in emds), default=0), max((r["fc6h"] or 0 for r in emds), default=0),
                  max((r["fc_peak"] or 0 for r in emds), default=0), now)
     return {
-        "sigun": sigun, "tm": tm, "night": night, "rain_src": src, "basis": basis, "fc_tmfc": fc.get("tmfc"), "k": k, "shrt_tmfc": sh.get("tmfc"),
+        "sigun": sigun, "tm": tm, "night": night, "pred_lv": plv, "rain_src": src, "basis": basis, "fc_tmfc": fc.get("tmfc"), "k": k, "shrt_tmfc": sh.get("tmfc"),
         "ante": {k: an.get(k) for k in ("ok", "have", "want", "missing", "from", "to")},
         "alerts": mine, "pending": pend, "stage": do_stage(groups), "river": rv, "flood": fld, "outlook": ol,
         "tide": tide.text(tide.of_sigun(sigun), max((r["fc6h"] or 0 for r in emds), default=0)),
@@ -849,7 +882,7 @@ def situation(sigun: str, base: str = "http://127.0.0.1:8000", k: float = 1.0, b
                   "principle": "사전대피는 예보, 긴급대피는 실황 · 일몰 전 사전대피 · 그 유형 우려지역에만 적용"},
         "limits": ["지구 좌표가 없어 읍면동 안 가장 많이 온 격자(500m)로 견준다 — 지구 강우의 상한",
                    f"초단기 예보 시우량은 {RN1_CAP:g}㎜ 에서 막혀 온다 — 50·55㎜/h 예보 조건은 '모름'",
-                   "선행 5일 강우 · 토양함수 · 침수심 · 제방 만수위 · 교량 수위 · 댐 방류 예보 · 예측정보(산림청 산사태 예보)는 여기 없다 — 따로 확인(하천 수위는 홍수통제소 원시값을 연결했다)",
+                   "토양함수 · 침수심 · 제방 만수위 · 교량 수위 · 댐 수위는 여기 없다. 산림청 산사태 예측정보는 시군 단위 주의보 · 경보만 받는다(예비경보 · 예측 시간은 못 가린다) — 따로 확인(하천 수위는 홍수통제소 원시값을 연결했다)",
                    "기준 N% · 남은 ㎜ · 닿는 시각은 가장 먼 조건 기준이다 — 닿는 시각은 예보 시우량을 지금 누적에 더한 것이라 창에서 빠지는 옛 비는 빼지 않아 실제보다 이를 수 있다",
                    "조위 단계는 해양조사원 고조정보다 — 폭풍해일 특보와 다른 체계이고, 호우와 만조의 겹침은 나란히 보일 뿐 판정하지 않는다(위키에 기준이 없다)",
                    "전망(높음 · 주의 · 낮음)은 특보 · 단기예보 · 초단기를 묶은 참고다 — 새 발표일수록 무겁고, 지금 비가 같은 말을 하면 시간이 지나도 깎지 않는다. 위키 기준 대조 · 비상단계는 바꾸지 않는다",
@@ -958,14 +991,14 @@ def reset_wiki_cache() -> None:
 
 def ladder_list() -> list[dict]:
     """도움말 표 — 유형 · 단계 · 조건(ladders 의 규칙 글) · 쓰는 자료. 빈 줄 하나를 대조해 규칙 글만 꺼낸다(값은 안 본다)."""
-    row = {"rain": {"1h": 0, "3h": 0, "12h": 0, "24h": 0, "48h": 0}, "m15": 0, "fc_peak": 0, "fc_run30": 0, "ante": 0,
+    row = {"rain": {"1h": 0, "3h": 0, "12h": 0, "24h": 0, "48h": 0}, "m15": 0, "fc_peak": 0, "fc_run30": 0,
            "fc_hours": [0] * 6, "fc_labels": [str(i) for i in range(6)]}
 
     def src(rule: str) -> str:
         if "홍수통제소" in rule:
             return "하천 수위 · 홍수예보(홍수통제소)"
         if "산림청" in rule:
-            return "산림청 산사태 예보 — 대시보드에 없음(모름)"
+            return "산림청 산사태 예측정보(시군 단위 · 호우 · 태풍 특보 때 받는다)"
         if "발령" in rule:
             return "기상특보"
         if "예보" in rule:
@@ -988,11 +1021,12 @@ def regions() -> dict:
     nonrain = lambda fam: [{"stage": r["stage"], "text": r["rule"]} for r in ladder_list()  # noqa: E731
                            if r["fam"] == fam and not r["src"].startswith(("실황", "초단기"))]
     return {
-        "산사태": {"x": "누적", "xu": "㎜", "areas": [
-            {"stage": "통제", "kind": "rect", "x": L["통제_누적"], "y": L["통제_예보시우량"], "note": "예보"},
-            {"stage": "사전대피", "kind": "rect", "x": L["사전대피_누적"], "y": L["사전대피_예보시우량"], "note": "예보"},
-            {"stage": "사전대피", "kind": "rect", "x": L["통제_누적"], "y": L["사전대피_야간예보시우량"], "night": True, "note": "취약시간(21~06시) 예보 · 통제 누적과 함께"},
-            {"stage": "긴급대피", "kind": "rect", "x": L["긴급대피_누적"], "y": L["긴급대피_시우량"], "note": f"실황 · 일 {L['긴급대피_일']}㎜ 도 함께"}],
+        "산사태": {"x": "24시간", "xu": "㎜", "areas": [
+            {"stage": "통제", "kind": "vband", "x": L["통제_24시간"], "note": f"실황 · 또는 12시간 {L['통제_12시간']}㎜"},
+            {"stage": "사전대피", "kind": "vband", "x": L["사전대피_24시간"], "note": f"실황 · 또는 12시간 {L['사전대피_12시간']}㎜"},
+            {"stage": "사전대피", "kind": "band", "y": L["사전대피_예보시우량"], "note": "예보"},
+            {"stage": "사전대피", "kind": "band", "y": L["사전대피_야간예보시우량"], "night": True, "note": "취약시간(21~06시) 예보"},
+            {"stage": "긴급대피", "kind": "vband", "x": L["긴급대피_24시간"], "note": f"실황 · 또는 12시간 {L['긴급대피_12시간']}㎜"}],
             "texts": nonrain("산사태")},
         "하천": {"x": "누적", "xu": "㎜", "areas": [
             {"stage": "통제", "kind": "band", "y": H["통제_시우량"], "note": f"{H['통제_지속시간']}시간 이상 지속 예보"},
@@ -1005,14 +1039,13 @@ def regions() -> dict:
 
 
 def site_area(rule: str) -> list[dict]:
-    """지구 원문 대피기준 → 평면의 영역. 쉼표 · 띄어쓰기는 '그리고'(2026-11 결정) → 네모 하나, 원문에 '또는'이 있으면 두 영역(의자 모양).
+    """지구 원문 대피기준 → 평면의 영역. 묶음(site_groups)마다 하나 — 영역끼리는 '또는', '그리고'로 묶인 것만 네모.
     1시간 조건은 세로, 나머지(누적 · 일 · 3 · 12시간)는 가로 — 가로 조건이 여럿이면 큰 값(한 축에 둘을 못 그린다)."""
-    cs = conditions(rule)
-    if not cs:
-        return []
-    y = max((c["mm"] for c in cs if c["win"] == 1), default=None)
-    x = max((c["mm"] for c in cs if c["win"] != 1), default=None)
-    base = {"stage": "지구 기준", "note": rule}
-    if "또는" in rule and x and y:
-        return [{**base, "kind": "vband", "x": x}, {**base, "kind": "band", "y": y}]
-    return [{**base, "kind": "rect" if x and y else "vband" if x else "band", "x": x, "y": y}]
+    out = []
+    for g in site_groups(rule):
+        y = max((c["mm"] for c in g if c["win"] == 1), default=None)
+        x = max((c["mm"] for c in g if c["win"] != 1), default=None)
+        a = {"stage": "지구 기준", "note": rule, "kind": "rect" if x and y else "vband" if x else "band", "x": x, "y": y}
+        if a not in out:
+            out.append(a)
+    return out

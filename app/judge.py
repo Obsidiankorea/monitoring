@@ -51,6 +51,16 @@ def pack(e: dict, fam: str, rule: str) -> dict:
             "top": max([v["pct"] for v in st.values()] + [site or 0])}
 
 
+def site_urgent(v: dict, rule: str) -> None:
+    """시군 지구 대피기준이 지침 긴급대피보다 더 찼으면 그 지구의 긴급대피로 올린다.
+    담당부서 회신(2026-11) — 사전대피 알림은 지침 별표 4, 긴급대피 알림은 시군별 지구 대피기준으로."""
+    p = v.get("site")
+    if p is None or p <= (v["st"].get("긴급대피") or {}).get("pct", -1):
+        return
+    v["st"]["긴급대피"] = {"pct": p, "met": p >= 100, "unk": False, "eta": None, "eta_h": None, "rule": f"시군 지구 기준 — {rule}",
+                       "partial": False, "parts": v.get("site_parts") or [], "by_site": True}
+
+
 def slide_of(sg: str) -> dict:
     """그 시군에 지금 걸린 산사태 예보(시장 · 군수) · 예측(산림청) — app/safety.py 가 받아 둔 것."""
     on = lambda xs: next((x for x in sorted(xs, key=lambda x: -x["lv"]) if x["sigun"] == sg and x["on"]), None)  # noqa: E731
@@ -122,11 +132,9 @@ def at_point(e: dict, p: dict | None, s: dict, fam: str, rule: str) -> dict:
         return e
     rain = {h: p.get(h, e["rain"].get(h)) for h in e["rain"]}
     row = {**e, "rain": rain, "m15": p.get("15m", e.get("m15"))}
-    row["ladders"] = {fam: ai.ladders(row, s["night"], s["alerts"], s.get("river"), s.get("flood")).get(fam, [])}
-    prog = [{**c, "now": rain.get(f"{c['win']}h"),
-             "pct": None if rain.get(f"{c['win']}h") is None else round(rain[f"{c['win']}h"] / c["mm"] * 100)}
-            for c in ai.conditions(rule)] if fam == "산사태" else []
-    row["sites"] = [{"rule": rule, "conds": prog, "max_pct": max((c["pct"] or 0 for c in prog), default=None)}] if prog else []
+    row["ladders"] = {fam: ai.ladders(row, s["night"], s["alerts"], s.get("river"), s.get("flood"), s.get("pred_lv")).get(fam, [])}
+    prog, pct = ai.site_prog(rule, lambda w: rain.get(f"{w}h"))
+    row["sites"] = [{"rule": rule, "conds": prog, "max_pct": pct}] if prog else []
     return row
 
 
@@ -159,7 +167,7 @@ def series_of(e: dict, s: dict, fam: str, rule: str) -> dict | None:
     r0, cut30 = e["rain"], ai.R("하천_통제_시우량")
     out, cum = [], 0.0
     # 단계 영역 평면 — 시각마다 (누적 = 24 · 48시간 중 큰 것, 시우량, 15분). 앞으로의 15분은 예보가 없어 None
-    acc = lambda rn: max((rn.get(h) for h in ("24h", "48h") if rn.get(h) is not None), default=None)  # noqa: E731
+    acc = lambda rn: max((rn.get(h) for h in (("24h",) if fam == "산사태" else ("24h", "48h")) if rn.get(h) is not None), default=None)  # noqa: E731 — 산사태 평면의 가로는 24시간(별표 4)
     pl = [[acc(r0), r0.get("1h"), e.get("m15")]]
     # 조건 평면 — 단계마다 '지금 가장 많이 찬 기준'을 끝까지 같은 축으로(시각마다 기준이 바뀌면 점이 다른 축으로 튄다)
     now = pack(e, fam, rule)["st"]
@@ -232,6 +240,8 @@ def rows_of(sg: str, base: str, k: float, add: tuple = (0.0, 0.0), series: bool 
             for v in b.values():                             # 산사태 예보 발령이 기준인 지구 — 강수가 아니라 발령으로
                 if v and ss is not None:
                     v.update(site=ss, site_slide=True, top=max(v["top"], ss))
+                if v:
+                    site_urgent(v, d["rule"])
             out.append({"sigun": sg, "emd": e["emd"], **d, "b": b, "slide": sl if d["fam"] == "산사태" else None,
                         "soil": soil_site(d["rule"], plv), "terrain": terrain.of(d),   # 지역 여건(지형 · 침수흔적) — 판정 % 는 그대로
                         "where": "지구" if d["id"] in pg else "읍면동",

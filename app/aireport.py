@@ -175,8 +175,8 @@ def _emd_line(s: dict, r: dict, sites_by: dict) -> str:
     ln = f"{s['sigun']} {r['emd']} — " + " · ".join(b for b in bits if b)
     if r.get("fc6h"):
         ln += f" · 앞으로 6시간 {r['fc6h']:g}㎜"
-    if r.get("ante") is not None and r["ante"] >= ai.R("산사태_사전대피_선행5일") / 2:
-        ln += f" · 직전 5일 {r['ante']:g}㎜(선행강우 기준 {ai.R('산사태_사전대피_선행5일')}㎜)"
+    if r.get("ante") is not None and r["ante"] >= 60:
+        ln += f" · 직전 5일 {r['ante']:g}㎜"
     hits = [f"{fam} {c['stage']} 기준({c['rule']}) {STL[c['st']]}{_gt(c)}" for fam, cs in r["ladders"].items() for c in cs if c["st"] in STL]
     if hits:
         ln += ". " + "; ".join(hits[:3])
@@ -285,7 +285,7 @@ def _gaps(s_list: list[dict]) -> list[str]:
     out = [f"{k}: 자료가 없어 판단 못 함 — {_few(list(dict.fromkeys(v)), 4)}" for k, v in unk.items()]
     fams = {f for s in s_list for f in s["risk_total"]}
     if "산사태" in fams:
-        out.append("산사태 — 산림청 산사태 위험 예보 · 토양함수 자료가 없다(연결 전): 산림청 화면 · 현장으로 확인")
+        out.append("산사태 — 산림청 예측정보는 시군 단위 주의보 · 경보만 받는다(예비경보 · 읍면동 토양함수는 없다): 산사태정보시스템 · 현장으로 확인")
     if "하천" in fams:
         out.append("하천 — 제방 만수위 90% · 교량 수위 90% · 댐 방류 협의 자료가 없다: 현장 · 댐 관리기관에 확인")
         pr = [x["name"] for s in s_list for x in s.get("flood") or [] if x["fc"]["lv"] == 2]
