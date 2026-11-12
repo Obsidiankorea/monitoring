@@ -195,7 +195,7 @@ $("stage").addEventListener("mousemove", ev => {
     tip.style.top = Math.max(6, y - tip.offsetHeight - 12) + "px";
     return;
   }
-  if (rv || sf) {                        // 하천 · 댐 · 보 위 — 수위 · 기준 수위 · 1시간 변화 · 방류 / 저수지 계측기 · 침수흔적
+  if (rv || (sf && (DZ_TIP || !sf.dz))) { // 지구 카드는 옵션(우려지역 지구 패널)으로 끌 수 있다 — 꺼도 누르면 뜬다. 하천 · 댐 · 보 위 — 수위 · 기준 수위 · 1시간 변화 · 방류 / 저수지 계측기 · 침수흔적
     tip.innerHTML = rv ? riverTip(rv) : sf.dz ? districtTip(sf.dz) : safetyTip(sf);
     tip.hidden = false;
     if (tip.classList.toggle("hudtip", !!sf?.dz)) {   // 큰 지구 카드 — 마우스 옆(오른쪽, 넘치면 왼쪽)에 세로 가운데로. 위로 올리면 마우스를 덮는다

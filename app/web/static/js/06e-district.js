@@ -11,7 +11,8 @@ const dzLv = p => (p == null ? 0 : p >= 100 ? 100 : p >= 90 ? 90 : p >= 80 ? 80 
 const dzColVar = lv => (lv ? `var(--t${lv})` : "var(--dz-etc)");
 /* 표시 방식 — icon: 동그라미 배지 + 그림(가까이서) / shape: 작은 도형 + 색(경남 전체에서 덜 겹친다). 범례에서 바꾼다(이 브라우저 기억)
    도형 = 유형(산사태 ▲ · 하천 ● · 지하공간 ■ · 침수·해안 ◆ · 야외·기타 ✚), 색 = 위험도(50 아래는 흰색 — 청색 강수 위에서 보이게) */
-let DZ_STYLE = "icon";
+let DZ_STYLE = "icon", DZ_TIP = true;                  // DZ_TIP — 마우스를 올리면 지구 카드를 띄운다(끄면 눌렀을 때만)
+try { DZ_TIP = localStorage.getItem("gn-dz-tip") !== "0"; } catch {}
 try { DZ_STYLE = localStorage.getItem("gn-dz-style") || "icon"; } catch {}
 if (["icon", "shape", "off"].includes(new URLSearchParams(location.search).get("dz"))) DZ_STYLE = new URLSearchParams(location.search).get("dz");   // ?dz=shape — 벽면 화면용
 const DZ_SHAPE_LOW = "#F2F5FA";
@@ -395,6 +396,7 @@ function districtLegend() {
   const hot = rows.filter(r => (dzPct(r) ?? 0) >= 70).length;
   const body = !DZ ? `<div class="nt">읽는 중…</div>` : DZ.fail ? `<div class="nt w">불러오지 못했다 — ${escH(DZ.fail)}</div>`
     : `<div class="seg dzst">${[["icon", "아이콘"], ["shape", "도형"], ["off", "끔"]].map(([k, l]) => `<button data-dzs="${k}" class="${DZ_STYLE === k ? "on" : ""}">${l}</button>`).join("")}</div>`
+      + `<label class="nt" style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" data-dztip ${DZ_TIP ? "checked" : ""}>마우스를 올리면 지구 카드 띄우기 <span class="mute">(끄면 눌러야 뜬다)</span></label>`
       + DZ_FAM.map(f => `<div class="rr">${dzBadge(f, 0)}<b>${f}</b><span>${rows.filter(r => r.fam === f).length}곳</span></div>`).join("")
       + `<div class="sec">색 = 기준 대비 % (${ACC_BASIS === "grid" ? "격자" : "AWS"})${DZ_TI ? ` · <b>${escH(DZ_TL)} 예상</b>(상황판단 재생)` : ""}</div>`
       + `<div class="keys2">${DZ_LV.map(lv => `<span><i class="dt" style="background:${dzColVar(lv)}"></i>${lv ? `${lv}%↑` : "50 아래"}</span>`).join("")}</div>`
@@ -407,6 +409,10 @@ function districtLegend() {
   box.querySelector(".hd2").onclick = ev => { if (!ev.target.closest(".inf")) setLyOpen(null); };
   box.querySelector("[data-crit]")?.addEventListener("click", () => openHelp("crit"));
   box.querySelector("[data-dzg]")?.addEventListener("click", () => dzDlg(true));
+  box.querySelector("[data-dztip]")?.addEventListener("change", ev => {
+    DZ_TIP = ev.target.checked;
+    try { localStorage.setItem("gn-dz-tip", DZ_TIP ? "1" : "0"); } catch {}
+  });
   for (const b of box.querySelectorAll("[data-pps]")) b.onclick = () => { ppToggle(b.dataset.pps); districtLegend(); };
   for (const b of box.querySelectorAll("[data-dzs]")) b.onclick = () => {
     DZ_STYLE = b.dataset.dzs;
