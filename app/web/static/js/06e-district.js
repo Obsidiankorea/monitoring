@@ -101,7 +101,7 @@ async function loadDistrict() {
   drawDistrict(); districtLegend();
   DZ_T = setTimeout(loadDistrict, 5 * 60 * 1000);
 }
-const dzOne = b => b && { v: [b.top, ...(b.series?.v || [])], xy: b.series?.xy || {}, t: b.series?.t || [], pl: b.series?.pl || [], pp: b.series?.pp || [], site: b.series?.site || [] };
+const dzOne = b => b && { v: [b.top, ...(b.series?.v || [])], xy: b.series?.xy || {}, t: b.series?.t || [], pl: b.series?.pl || [], pp: b.series?.pp || [], site: b.series?.site || [], fc: b.fc, obs: b.obs };
 /* 고르지 않은 시군 지구에 마우스를 올리면 — 그 시군 시간별 줄을 그때 받는다(경남 전체 시간별은 수십 초라 미리 받지 않는다). 시군마다 5분에 한 번 */
 const DZ_SQ = new Map();
 function dzSerLoad(sg) {
@@ -253,7 +253,10 @@ function dzMiniPlane(r) {
   const head = ph.skip ? `<b style="color:var(--t100)">⚠ ${ph.skip}가 ${ph.next}보다 더 찼다 — 단계를 건너뛸 수 있음(국지성 폭우)</b>`
     : ph.next ? `다음 단계 <b>${ph.next}</b>${ph.eta(ph.next) != null ? ` · ${at(ph.eta(ph.next))} 도달 예상` : " · 내일까지 안 닿음"}` : `<b style="color:var(--t100)">${ph.cur} 기준까지 넘음</b>`;
   const site = s.site?.length ? siteText(s.site, reg).replace("이 지구 자체 기준: ", "") : "";
-  return { strip, bars, head, texts, plane, site };
+  // 도달 시점으로 가른 두 줄(지금 값만) — 예보로 닿는 것과 실제 내린 비로 닿은 것은 무게가 다르다(예보 = 권고, 실황 = 실행)
+  const one = (k, v) => `<div class="dz2" title="${escH(v?.rule || "")}"><span>${k}</span>${v ? `<b style="color:${dzColVar(dzLv(v.pct))}">${v.pct}%</b><small>${STG_EMO[v.stage] || ""} ${v.stage}${v.met ? " 충족" : ""}</small>` : `<small>견줄 값 없음</small>`}</div>`;
+  const two = DZ_TI === 0 && (s.fc || s.obs) ? one("예보 기준", s.fc) + one("실황 기준", s.obs) : "";
+  return { strip, bars, head, texts, plane, site, two };
 }
 /* 상황판단 창이 재생 위치를 보냈다 — 배지 색을 그 시각으로(0 이면 지금) */
 function dzTime(i, lab) { DZ_TI = +i || 0; DZ_TL = DZ_TI ? lab || "" : ""; drawDistrict(); districtLegend(); }
@@ -344,7 +347,7 @@ function districtTip(r, pin = false) {
     + `<div class="hd"><span class="bdg">${escH(r.kind || r.fam)}</span><div class="nm"><b>${escH(name)}</b><small>${escH(r.sigun)} ${escH(r.emd)} ${escH(where)}</small></div>`
     + (p != null ? `<div class="pc" style="--c:${col}"><b>${p}<i>%</i></b><small>${ACC_BASIS === "grid" ? "격자" : "AWS"} 기준${w === "읍면동" ? " · 읍면동 값" : ""}</small></div>` : "") + `</div>`
     + (m ? `<div class="dzs">${m.strip}</div>`
-      + `<div class="bd"><div class="lf">${m.bars}<div class="goal">${m.head}</div>`
+      + `<div class="bd"><div class="lf">${m.bars}${m.two}<div class="goal">${m.head}</div>`
       + (m.texts ? `<div class="sub">비가 아닌 조건</div>${m.texts}` : "")
       + (r.tg ? `<div class="sub">지형</div><div class="tgs">${dzTerrainRows(r.tg)}</div>` : "")
       + (pin ? `<div class="sub">담당</div><div class="ctb tgs"><span class="mute">불러오는 중…</span></div>` : "") + `</div><div class="rt">${m.plane}</div></div>`

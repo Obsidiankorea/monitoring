@@ -1940,6 +1940,9 @@ body.sj-on > header, body.sj-on #stage, body.sj-on #tl, body.sj-on #rail { displ
 #tip .hud .dzb > span { width: 4.6em; font-weight: 700; color: var(--ink-2); }
 #tip .hud .dzb em { font-size: .95em; width: 3em; }
 #tip .hud .dzb small { white-space: nowrap; }
+#tip .hud .dz2 { display: flex; align-items: baseline; gap: .5em; font-size: .85em; margin: 0 0 .2em; }
+#tip .hud .dz2 > span { width: 4.6em; color: var(--ink-3); } #tip .hud .dz2 b { font-family: var(--mono); width: 3em; text-align: right; } #tip .hud .dz2 small { color: var(--ink-2); }
+#sj #sj-ev { width: 100%; margin: 0 0 6px; font-size: 12px; } #sj .lg.dc { background: var(--panel-2, transparent); }
 #tip .hud .rt svg { width: calc(230px * var(--k, 1)); height: auto; }   /* 평면도 화면 배율을 따라(viewBox 라 그대로 커진다) */
 #tip .hud .goal { margin-top: .6em; padding: .5em .7em; border-left: 3px solid var(--accent); border-radius: 0 6px 6px 0; font-size: .88em;
   background: color-mix(in oklab, var(--raised) 60%, transparent); color: var(--ink-2); }

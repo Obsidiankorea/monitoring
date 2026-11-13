@@ -284,7 +284,19 @@ async function sjTab(name) {
     return;
   }
   if (name === "판단 기록") {
-    bd.innerHTML = (SJ.log.map(x => `<div class="lg"><time>${x.at.slice(5, 16).replace("T", " ")}</time><b>${escH(x.act)}</b> ${escH(x.sigun)} ${escH(x.emd || "")} ${escH(x.fam || "")} ${escH(x.stage || "")}${x.pct != null ? ` ${x.pct}%` : ""}${x.note ? ` — ${escH(x.note)}` : ""}<i data-del="${x.id}">✕</i></div>`).join("")
+    // 지난 호우(사건 묶음) — 고르면 그 호우의 단계 이력과 판단 기록을 시각 순으로 한 줄에
+    const hm = t => (t || "").slice(5, 16).replace("T", " "), evs = (await getJson("/api/events").catch(() => ({ rows: [] }))).rows;
+    const pick = `<select id="sj-ev" aria-label="호우 고르기"><option value="">지금 — 판단 기록</option>` + evs.map(e => `<option value="${e.id}"${String(SJ.ev) === String(e.id) ? " selected" : ""}>`
+      + `${hm(e.start)} ~ ${e.end ? hm(e.end) : "진행 중"} · ${escH(e.alerts.join(" · ") || "특보 없음")} · 단계 ${e.log} · 결정 ${e.decisions}</option>`).join("") + `</select>`;
+    if (SJ.ev && evs.some(e => String(e.id) === String(SJ.ev))) {
+      const d = await getJson(`/api/events/${SJ.ev}`);
+      bd.innerHTML = pick + (d.rows.map(x => x.kind === "stage"
+        ? `<div class="lg ev"><time>${hm(x.at)}</time>${STG_EMO[x.stage] || ""} <b>${escH(x.stage || "")} ${x.st === "met" ? "충족" : "근접"}</b> ${escH(x.sigun)} ${escH(x.emd || "")} ${escH(x.fam || "")}${x.pct != null ? ` ${x.pct}%` : ""} <span class="mute">${escH(x.rule || "")}</span></div>`
+        : `<div class="lg dc"><time>${hm(x.at)}</time>✍ <b>${escH(x.act)}</b> ${escH(x.sigun)} ${escH(x.emd || "")} ${escH(x.fam || "")} ${escH(x.stage || "")}${x.pct != null ? ` ${x.pct}%` : ""}${x.note ? ` — ${escH(x.note)}` : ""}</div>`).join("")
+        || `<p class="mute">이 호우에는 단계가 바뀐 기록도 결정도 없다</p>`);
+      return;
+    }
+    bd.innerHTML = pick + (SJ.log.map(x => `<div class="lg"><time>${x.at.slice(5, 16).replace("T", " ")}</time><b>${escH(x.act)}</b> ${escH(x.sigun)} ${escH(x.emd || "")} ${escH(x.fam || "")} ${escH(x.stage || "")}${x.pct != null ? ` ${x.pct}%` : ""}${x.note ? ` — ${escH(x.note)}` : ""}<i data-del="${x.id}">✕</i></div>`).join("")
       || `<p class="mute">아직 없다 — 지구를 골라 오른쪽에서 결정하면 시각 · 도달률과 함께 남는다(서버 공유)</p>`) + `<form id="sj-note"><input maxlength="300" placeholder="메모 남기기"><button>남기기</button></form>`;
     return;
   }
@@ -414,6 +426,7 @@ $("sj").addEventListener("submit", ev => {
 });
 let SJ_KT = 0;
 $("sj").addEventListener("change", ev => {
+  if (ev.target.id === "sj-ev") { SJ.ev = ev.target.value; return sjTab("판단 기록"); }
   const id = ev.target.id;
   if (id === "sj-sg") return sjPick(ev.target.value);
   if (id === "sj-cut" || id === "sj-cutp") {

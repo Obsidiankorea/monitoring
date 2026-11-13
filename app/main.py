@@ -33,7 +33,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTex
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from . import aiwatch, apikeys, geocode, heat, its, lawwatch, river, safety, tide, clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, serverupdate, sites, snaps, update
+from . import aiwatch, apikeys, events, geocode, heat, its, lawwatch, river, safety, tide, clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, serverupdate, sites, snaps, update
 from .collectors import alerts, bangjae_rain, forecast, grid_rain, qpf, rain, shortfc
 from .config import CACHE, INTERVALS, POLL_DEFAULT
 
@@ -482,6 +482,21 @@ async def api_ai_decisions_post(body: dict):
                     (clock.now().isoformat(timespec="seconds"), s("sigun", 10), s("emd", 20), s("fam", 10), s("stage", 10), body["act"],
                      int(pct) if isinstance(pct, (int, float)) else None, s("eta", 20), s("note", 300)))
     return await api_ai_decisions(body["sigun"])
+
+
+@app.get("/api/events")
+async def api_events(limit: int = 30):
+    """호우 사건 묶음 목록 — 새것부터(시작~끝 · 걸린 특보 · 단계 이력과 판단 기록 건수)."""
+    return {"rows": await asyncio.to_thread(events.listing, limit)}
+
+
+@app.get("/api/events/{eid}")
+async def api_event(eid: int):
+    """사건 하나 — 단계가 바뀐 이력과 그 사이 판단 기록을 시각 순으로."""
+    d = await asyncio.to_thread(events.detail, eid)
+    if not d:
+        raise HTTPException(404, "그런 사건이 없다")
+    return d
 
 
 @app.delete("/api/ai/decisions/{did}")

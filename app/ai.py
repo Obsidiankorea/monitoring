@@ -411,6 +411,9 @@ def ladders(r: dict, night: bool, alerts: list[str], rv: dict | None = None, fld
              "gap": _gap(one("15분", q15, U["긴급대피_15분"]), one("1시간", o1, U["긴급대피_시우량"], "㎜/h"))},
         ],
     }
+    for cs in out.values():                                # 도달 시점으로 가른다(로드맵 3단계) — 예보 · 예측정보가 낀 줄은 fc, 실제 내린 비 · 수위 · 발령은 obs
+        for c in cs:
+            c["basis"] = "fc" if "예보" in c["rule"] or "예측정보" in c["rule"] else "obs"
     return out
 
 

@@ -137,6 +137,30 @@ CREATE TABLE IF NOT EXISTS decision (
   note   TEXT
 );
 
+-- 호우 사건 묶음(app/events.py) — 시작~끝 · 걸린 특보. end 가 비면 진행 중, last 는 마지막으로 특보나 기준 근접이 있던 때
+CREATE TABLE IF NOT EXISTS event (
+  id     INTEGER PRIMARY KEY AUTOINCREMENT,
+  start  TEXT NOT NULL,
+  end    TEXT,
+  last   TEXT NOT NULL,
+  alerts TEXT NOT NULL DEFAULT '[]'
+);
+
+-- 단계가 바뀐 이력 — 처음 그 단계에 이르렀거나(near) 충족으로 오른(met) 때만 한 줄
+CREATE TABLE IF NOT EXISTS stage_log (
+  id     INTEGER PRIMARY KEY AUTOINCREMENT,
+  event  INTEGER NOT NULL,
+  at     TEXT NOT NULL,
+  sigun  TEXT NOT NULL,
+  emd    TEXT,
+  fam    TEXT,
+  stage  TEXT,
+  st     TEXT NOT NULL,                -- near · met
+  rule   TEXT,
+  pct    INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_stage_log_event ON stage_log(event);
+
 -- 설정. 벽면 화면이라 브라우저가 아니라 서버에 둔다 — 어느 화면에서 바꿔도 같이 간다.
 CREATE TABLE IF NOT EXISTS setting (
   key TEXT PRIMARY KEY,

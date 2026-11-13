@@ -15,11 +15,12 @@ from datetime import datetime
 
 import httpx
 
-from . import ai, aireport, config, db
+from . import ai, aireport, clock, config, db, events
 
 log = logging.getLogger("aiwatch")
 
 RANK = {"near": 1, "met": 2}
+HOLD_S = 1800           # 지난 30분의 가장 높은 상태를 붙든다 — 충족 ↔ 근접을 오르내려도 다시 알리지 않는다(키키쿠루의 30분 최대값)
 KEEP_S = 3600            # 이만큼 안 보이던 것은 상태에서 지운다(다시 생기면 새로 알린다)
 MAX_LINES = 10          # 문자 한 통에 읍면동 줄 몇 개까지
 STAGE_RANK = {"긴급대피": 3, "사전대피": 2, "통제": 1}
@@ -50,6 +51,7 @@ async def send(text: str) -> None:
 
 _GAP: dict[str, dict] = {}      # 열쇠 → {t: 기준 N% · 남은 ㎜ · 닿는 시각 글, pct} (화면 목록 · 읍면동 배지에만. 알림 문자는 그대로)
 _DO: dict = {"v": None}         # 도 비상단계(+사람이 바꾼 값)
+_GROUPS: dict = {"v": []}       # 이번 훑을 때의 특보 묶음(사건 묶음 · app/events.py)
 _STAGES: dict = {}              # 시군 비상단계(매뉴얼이 위키에 있는 시군) — 이번 훑을 때의 특보 기준(+사람이 바꾼 값)
 
 
@@ -60,6 +62,7 @@ def _scan(base: str) -> dict[str, tuple[str, tuple]]:
     _STAGES.clear()
     _STAGES.update(ai.sigun_stages({"groups": o["groups"], "pending": o["pending"]}, ai.overrides())["sigun"])
     _DO["v"] = o["stage"]
+    _GROUPS["v"] = o["groups"]
     if o["stage"]:
         out[f"stage|{o['stage']['stage']}"] = ("met", ("도", o["stage"]["stage"], "비상단계", "", o["stage"]["why"]))
     focus = [r["sigun"] for r in o["rows"]
@@ -114,11 +117,25 @@ def snapshot(base: str) -> dict:
 
 def _diff(now: dict, state: dict, ts: float) -> tuple[list, dict]:
     """새로 생겼거나 상태가 올라간 것만 골라 낸다. 상태는 보이는 것만 남기고 KEEP_S 지난 것은 지운다."""
-    new = [(st, x) for k, (st, x) in now.items()
-           if k not in state or RANK.get(st, 0) > RANK.get(state[k][0], 0)]
-    keep = {k: v for k, v in state.items() if k not in now and ts - v[1] < KEEP_S}
-    keep.update({k: [st, ts] for k, (st, _) in now.items()})
+    new, keep = [], {k: v for k, v in state.items() if k not in now and ts - v[1] < KEEP_S}
+    for k, (st, x) in now.items():
+        old = state.get(k)
+        if old and RANK.get(old[0], 0) > RANK.get(st, 0) and ts - old[1] < HOLD_S:
+            keep[k] = old                                   # 30분 안에 내려갔다 — 높았던 상태와 그 시각을 그대로 둔다
+            continue
+        if not old or RANK.get(st, 0) > RANK.get(old[0], 0):
+            new.append((st, x))
+        keep[k] = [st, ts]
     return new, keep
+
+
+def _log(now: dict) -> None:
+    """사건 묶음 · 단계 이력 — 텔레그램을 켰는지와 무관하게 남긴다(상태도 따로: ai_stage_state)."""
+    new, state = _diff(now, db.get_setting("ai_stage_state", {}) or {}, time.time())
+    by = {x: k for k, (_, x) in now.items()}
+    events.record(clock.now(), _GROUPS["v"], any(not k.startswith("stage|") for k in now), new,
+                  {i: _GAP.get(by.get(x), {}).get("pct") for i, (_, x) in enumerate(new)})
+    db.put_setting("ai_stage_state", state)
 
 
 def _msg(new: list, tm: str) -> str:
@@ -144,14 +161,23 @@ def _msg(new: list, tm: str) -> str:
 
 
 async def run() -> dict:
-    if config.DEMO or not cfg()["on"]:
-        return {"skipped": "꺼 둠"}
-    if not ready():
-        return {"skipped": "텔레그램 키 없음"}
+    if config.DEMO:
+        return {"skipped": "시연"}
     base = f"http://127.0.0.1:{os.environ.get('PORT', '8000')}"
     at = datetime.now().strftime("%m.%d %H:%M")
     try:
         now = await asyncio.to_thread(_scan, base)
+        await asyncio.to_thread(_log, now)
+    except Exception as e:                                  # noqa: BLE001
+        log.warning("단계 이력 실패: %s", _mask(e)[:200])
+        now = None
+    if not cfg()["on"]:
+        return {"skipped": "꺼 둠"}
+    if not ready():
+        return {"skipped": "텔레그램 키 없음"}
+    try:
+        if now is None:
+            now = await asyncio.to_thread(_scan, base)
         new, state = _diff(now, db.get_setting("ai_alert_state", {}) or {}, time.time())
         if new:
             await send(_msg(new, at))

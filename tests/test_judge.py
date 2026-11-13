@@ -134,3 +134,13 @@ def test_soil_site_only_obvious():
     assert [judge.soil_site(r90, lv)["st"] for lv in (2, 1, 0, None)] == ["met", "check", "no", "unknown"]
     assert judge.soil_site(r75, 0)["need"] == 75 and [judge.soil_site(r75, lv)["st"] for lv in (1, 0)] == ["met", "check"]
     assert judge.soil_site("토양함수량 100% 도달 시", 1)["st"] == "check" and judge.soil_site("누적 250mm", 2) is None
+
+
+def test_pack_splits_forecast_and_observed():
+    lad = {"산사태": [{"stage": "통제", "rule": "24시간 90㎜↑(실황)", "st": "near", "gap": {"pct": 75}, "basis": "obs"},
+                    {"stage": "사전대피", "rule": "시간당 50㎜↑ 예보", "st": "met", "gap": {"pct": 110}, "basis": "fc"},
+                    {"stage": "긴급대피", "rule": "산림청 산사태 예측정보 경보(시군)", "st": "unknown", "basis": "fc"}]}
+    from app import judge
+    p = judge.pack({"ladders": lad, "rain": {}, "sites": []}, "산사태", "")
+    assert (p["fc"]["pct"], p["fc"]["stage"], p["fc"]["met"]) == (110, "사전대피", True)
+    assert (p["obs"]["pct"], p["obs"]["stage"], p["obs"]["met"]) == (75, "통제", False)

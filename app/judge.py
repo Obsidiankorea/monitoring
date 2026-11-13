@@ -45,7 +45,19 @@ def pack(e: dict, fam: str, rule: str) -> dict:
                  "parts": [{k: p.get(k) for k in ("label", "now", "need", "unit", "pct")} for p in g.get("parts") or []]}
     sx = next((x for x in e.get("sites", []) if (x["rule"] or "").strip() == rule), None)
     site = sx["max_pct"] if sx else None
-    return {"rain": {k: e["rain"].get(k) for k in ("1h", "3h", "24h")}, "st": st, "site": site,
+    by = {"fc": None, "obs": None}                         # 기준별 가장 찬 줄 — 충족한 단계가 높은 것 먼저, 같으면 % 큰 것
+    for c in e["ladders"].get(fam, []):
+        if c["st"] == "unknown":
+            continue
+        met, p = c["st"] == "met", (c.get("gap") or {}).get("pct") or 0
+        v = {"pct": max(100, p) if met else p, "stage": c["stage"], "met": met, "rule": c["rule"]}
+        k = lambda x: (STAGES.index(x["stage"]) if x["met"] else -1, x["pct"])  # noqa: E731
+        b = c.get("basis", "obs")
+        if by[b] is None or k(v) > k(by[b]):
+            by[b] = v
+    if site is not None and (by["obs"] is None or (not by["obs"]["met"] and site > by["obs"]["pct"])):
+        by["obs"] = {"pct": site, "stage": "긴급대피", "met": site >= 100, "rule": f"시군 지구 기준 — {rule}"}
+    return {"fc": by["fc"], "obs": by["obs"], "rain": {k: e["rain"].get(k) for k in ("1h", "3h", "24h")}, "st": st, "site": site,
             "site_parts": [{"label": c.get("label"), "now": c.get("now"), "need": c.get("mm"), "unit": "㎜", "pct": c.get("pct")}
                            for c in (sx or {}).get("conds", [])],
             "top": max([v["pct"] for v in st.values()] + [site or 0])}
