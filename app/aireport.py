@@ -775,7 +775,22 @@ def _quiet(o: dict, sigun: str | None, rows: list[dict], title: str, when: list[
 
 
 # ── 판례로 본 점검(⚠️) — 위키 [[판례 업무별 적용]] · 판례 쪽. 작성자 해석이며 판시가 아니다([[판례 인용규칙]]) ──
-def _pan(num: int) -> dict | None:
+def _checks(t: str, scene: str | None) -> list[str]:
+    """판례 문서의 '## 근무자 점검' 절에서 그 장면(### 상황판단회의 · 대피 · 통제) 아래 줄 — 근무하는 공무원이 지금 할 일로 쓴 글."""
+    mark = "\n## 근무자 점검"
+    if not scene or mark not in t:
+        return []
+    sec = t.split(mark, 1)[1].split("\n", 1)[-1].split("\n## ", 1)[0]
+    out, on = [], False
+    for ln in sec.splitlines():
+        if ln.startswith("### "):
+            on = ln[4:].strip() == scene
+        elif on and ln.startswith("- "):
+            out.append(ln[2:].strip())
+    return out
+
+
+def _pan(num: int, scene: str | None = None) -> dict | None:
     stem = next((k for k in _index() if k.startswith(f"판례 {num:02d} ")), None)
     if not stem:
         return None
@@ -787,7 +802,7 @@ def _pan(num: int) -> dict | None:
         app = t.split("## 도·시군 등 업무 적용", 1)[1].split("\n", 1)[1].strip().split("\n\n", 1)[0].replace("\n", " ")
     summ = g("summary").split(" — ", 1)[-1]
     return {"stem": stem, "court": g("court"), "date": g("decision_date"), "no": g("case_number"), "type": g("legal_type"),
-            "status": g("status"), "grade": g("evidence_grade"), "summary": summ, "apply": app}
+            "status": g("status"), "grade": g("evidence_grade"), "summary": summ, "apply": app, "check": _checks(t, scene)}
 
 
 def _record_items(*labels: str) -> list[str]:
@@ -822,8 +837,11 @@ def _judicial(scene: str, old: list[int], record: tuple[str, ...], why: str) -> 
     nums = sc.get(scene, []) if sc else old
     items = [f"⚠️ {why} — 아래는 판례를 바탕으로 한 업무 점검 해석이다(판시 아님). 책임은 사무분장 · 관리청 · 정보를 안 시점 · 조치 가능성에 따라 다르다 ([[판례 인용규칙]])"]
     for n in nums:
-        c = _pan(n)
-        if c:
+        c = _pan(n, scene)
+        if c and c["check"]:                                # 근무자 점검 절이 있으면 그 글을 줄마다 — 지금 할 일과 남길 것
+            items.append(f"⚠️ [[{c['stem']}]] — {c['court']} {c['date']}({c['status']} · 근거 {c['grade']})")
+            items += [f"☑ {x}" for x in c["check"]]
+        elif c:
             items.append(f"⚠️ [[{c['stem']}]] — {c['court']} {c['date']} {c['no']}({c['type']} · {c['status']} · 근거 {c['grade']}): {c['summary']}"
                          + (f" ▶ 점검: {c['apply'][:230]}" if c["apply"] else ""))
     rec = _record_items(*record)

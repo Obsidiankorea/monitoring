@@ -68,3 +68,13 @@ def test_evac_ladder_follows_wiki_value(tmp_path, monkeypatch):
          "fc_hours": [25], "fc_labels": ["14"]}
     c = ai.ladders(r, False, [])["산사태"][0]
     assert c["rule"].startswith("12시간 50㎜↑") and c["st"] == "met"
+
+
+def test_case_shows_duty_checks_for_the_scene(tmp_path, monkeypatch):
+    """판례 문서에 '## 근무자 점검' 절이 있으면 그 장면 소제목 아래 줄을 ☑ 로 한 줄씩 — 다른 장면 줄은 안 나온다."""
+    v = _vault(tmp_path, monkeypatch, "")
+    (v / "판례 40 사건.md").write_text("---\nsummary: 사건 — 요지\n적용: [통제]\n---\n# 판례\n\n## 근무자 점검 — 작성자 해석\n\n머리말\n\n"
+                                    "### 상황판단회의\n\n- 보고한다\n\n### 통제\n\n- 사람을 세운다\n- 적는다\n\n## 인용 시 제한\n\n- 다른 절\n", "utf-8")
+    aireport.reset_cache()
+    items = aireport._judicial("통제", [], (), "통제")["items"]
+    assert items[2:] == ["☑ 사람을 세운다", "☑ 적는다"] and "▶" not in items[1]
