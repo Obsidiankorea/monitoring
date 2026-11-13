@@ -3,7 +3,7 @@
    서버가 받아 둔 것(/api/safety · /api/safety/flood)을 그린다. 셋은 따로 켜고 끈다(자료 한 번 받아 나눠 쓴다).
    산사태 — 예보(시장 · 군수 발령) · 예측(산림청)이 걸린 시군에 갈색 테두리 + 이름 위 딱지. 서버는 호우 · 태풍 특보 때(또는 '늘 받기')만 받는다.
    위험저수지 — 계측기 세모(발령 중이면 단계 색). 침수흔적 — 2002~ 과거 침수 구역 옅은 파랑 면. */
-let SAF = null, SAF_FL = null, SAF_T = 0, SAF_HIT = [];
+let SAF = null, SAF_FL = null, SAF_T = 0, SAF_HIT = [], SAF_V = null;   // SAF_V = 산사태취약지역(한 번만 받는다)
 const SAF_IDS = ["slide", "reservoir", "flood"];
 const SAF_C = ["var(--ink-3)", "var(--rv-1)", "var(--rv-2)", "var(--rv-3)", "var(--rv-4)", "var(--rv-4)"];   // 저수지 관심 · 주의 · 경계 · 심각 · 대피
 const safAny = () => SAF_IDS.some(id => OV.has(id));
@@ -17,6 +17,7 @@ async function loadSafety() {
   clearTimeout(SAF_T);
   if (!safAny() || CASE) { SAF = null; drawAlerts(); drawSafety(); renderSafetyLegend(); renderLyIcons(); return; }
   try { SAF = await getJson("/api/safety"); } catch (e) { SAF = { fail: e.message }; }
+  if (OV.has("slide") && !SAF_V) { try { SAF_V = (await getJson("/api/slide/vuln")).rows || []; } catch { SAF_V = []; } }
   if (OV.has("flood") && !SAF_FL && SAF?.flood) { try { SAF_FL = await getJson("/api/safety/flood"); } catch { SAF_FL = []; } }
   drawAlerts(); drawSafety(); renderSafetyLegend(); renderLyIcons();   // 산사태 딱지가 생기면 특보 딱지 크기 · 기온 자리가 바뀐다
   SAF_T = setTimeout(loadSafety, 5 * 60 * 1000);
@@ -68,6 +69,16 @@ function drawSafety() {
       }
     }
   }
+  if (OV.has("slide") && SAF_V?.length) {
+    // 산사태취약지역 — 작은 마름모(토석류 갈색 · 산사태 주황). 고른 시군만 그린다(전체면 다) — 2,500곳이라 가려 그린다
+    const r = Math.max(2.2, Math.min(5, V.u * 0.55));
+    for (const s of SAF_V) {
+      if (!selHas(s.sg)) continue;
+      const [c, rr] = LCCF(s.p[1], s.p[0]), x = V.toX(c), y = V.toY(rr);
+      pts.push(`<path class="sfv${s.ty === "산사태" ? " s" : ""}" d="M${x.toFixed(1)},${(y - r).toFixed(1)}l${r.toFixed(1)},${r.toFixed(1)}l${(-r).toFixed(1)},${r.toFixed(1)}l${(-r).toFixed(1)},${(-r).toFixed(1)}Z"/>`);
+      SAF_HIT.push({ x, y, rr: Math.max(r, 5), v: s });
+    }
+  }
   if (OV.has("reservoir")) {
     const r0 = Math.max(4.5, Math.min(9, V.u));
     for (const s of (SAF.res || []).slice().sort((a, b) => a.on - b.on || a.lv - b.lv)) {
@@ -83,17 +94,23 @@ function drawSafety() {
 }
 /* 마우스 — 저수지 계측기가 먼저, 아니면 침수흔적 면 */
 function safetyAt(mx, my) {
-  if (!V || !(OV.has("reservoir") || OV.has("flood"))) return null;
+  if (!V || !(OV.has("reservoir") || OV.has("flood") || OV.has("slide"))) return null;
   let best = null, bd = Infinity;
   for (const h of SAF_HIT) {
     const dd = (h.x - mx) ** 2 + (h.y - my) ** 2;
-    if (dd <= (h.rr * 1.5) ** 2 && dd < bd) { bd = dd; best = { res: h.s }; }
+    if (dd <= (h.rr * 1.5) ** 2 && dd < bd) { bd = dd; best = h.v ? { vuln: h.v } : { res: h.s }; }
   }
   if (best) return best;
   const f = OV.has("flood") && GL_OK ? GL.queryRenderedFeatures([mx, my], { layers: ["flood"] })[0] : null;
   return f ? { flood: SAF_FL[f.properties.i] } : null;
 }
 function safetyTip(h) {
+  if (h.vuln) {
+    const v = h.vuln;
+    return `<b>산사태취약지역 · ${escH(v.ty)}</b><div class="d">${escH(v.sg)} ${escH(v.emd)} ${escH(v.ri)} ${escH(v.jb)}${v.a ? ` · 지정면적 ${v.a.toLocaleString()}㎡` : ""}</div>`
+      + (v.sh ? `<div class="d">지정대피소 ${escH(v.sh)}</div>` : "")
+      + `<div class="d">경상남도 지정현황 2026-05-01(공공데이터포털) — 자리는 지번을 좌표로 바꾼 것이라 필지 가운데쯤이다</div>`;
+  }
   if (h.res) {
     const s = h.res;
     return `<b>${escH(s.name)}</b> · ${s.on ? `<b style="color:${SAF_C[s.lv]}">${escH(s.lvn)} 발령 중</b>` : s.old ? `${escH(s.lvn)} 발령 기록 — 해제 없이 ${s.days}일 지남` : `${escH(s.lvn)} 해제`}`

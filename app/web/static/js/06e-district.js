@@ -137,7 +137,8 @@ function ppToggle(st) {
 }
 const ppChips = () => ["통제", "사전대피", "긴급대피"].map(st => `<button data-pps="${st}" class="ppc${PP_SHOW.has(st) ? " on" : ""}" style="--c:${STG_COL[st]};--f:${STG_FILL[st]}">${st}</button>`).join("");
 function ppScale(reg, W, H, L = 34, B = 20, T = 8, R = 8) {
-  const xs = reg.areas.map(a => a.x).filter(v => v != null), ys = reg.areas.map(a => a.y).filter(v => v != null);
+  const ar = reg.areas.length ? reg.areas : reg.site || [];   // 공통 영역이 없는 유형(침수·해안 · 야외·기타)은 지구 기준으로 축을 잡는다
+  const xs = ar.map(a => a.x).filter(v => v != null), ys = ar.map(a => a.y).filter(v => v != null);
   const xm = Math.ceil(Math.max(...xs, 10) * 1.3 / 10) * 10, ym = Math.ceil(Math.max(...ys, 10) * 1.4 / 5) * 5;
   return { xm, ym, L, B, T, R, W, H, X: v => L + Math.min(Math.max(v ?? 0, 0), xm) / xm * (W - L - R), Y: v => T + (1 - Math.min(Math.max(v ?? 0, 0), ym) / ym) * (H - T - B) };
 }
@@ -235,7 +236,7 @@ function dzMiniPlane(r) {
   const reg = DZ_REG?.[r.fam], n = (s.pl || []).length;
   let plane = "";
   if (reg && n) {
-    const S = ppScale(reg, 230, 190, 30, 22, 8, 8), cur = Math.min(DZ_TI, n - 1), pn = ppPt(reg, s.pl[cur]);
+    const S = ppScale({ ...reg, site: s.site }, 230, 190, 30, 22, 8, 8), cur = Math.min(DZ_TI, n - 1), pn = ppPt(reg, s.pl[cur]);
     // 지난 자취(검은 선) — 지도 누적 구간만큼(지난 6시간 누적이면 6시간 전부터 지금까지). 15분 축은 지난 15분 값이 없어 그리지 않는다
     const H = Math.min(48, Math.max(1, accSpan().H || 6)), past = reg.x === "15분" ? [] : (s.pp || []).slice(-H);
     const xy = p => { const q = ppPt(reg, p); return q && q[0] != null && q[1] != null ? [+S.X(q[0]).toFixed(1), +S.Y(q[1]).toFixed(1)] : null; };
@@ -312,6 +313,7 @@ function dzTerrainRows(g) {
     + row("저수지", g.lk ? `${escH(g.lk.n || "저수지")} ${m(g.lk.d)}${g.lk.dh != null ? ` · 지구가 ${Math.abs(g.lk.dh).toFixed(0)}m ${g.lk.dh >= 0 ? "낮음" : "높음"}` : ""}` : "")
     + row("해안", g.cs != null && g.cs <= 3000 ? m(g.cs) : "")
     + row("건물", g.b300 ? `${g.b300.toLocaleString()}동(300m)` : "")
+    + row("취약지역", g.sv ? `산사태취약지역(${escH(g.sv.ty)}) ${g.sv.d}m${g.sv.n > 1 ? ` · 300m 안 ${g.sv.n}곳` : ""}` : "")
     + row("이력", g.hx ? `<span title="경남도 복구계획 20건(2016.10~2026.8) — 시설 이름에 이 읍면동이 적힌 것만 세어 실제보다 적다. 주로 ${escH((g.hx.ty || []).join(" · "))}">읍면동 호우 ${g.hx.ev}회 · 복구 ${g.hx.n}건 <small>최근 ${escH(g.hx.last)}</small></span>` : "")
     + row("노후", g.bk ? `<span title="사용승인 30년 넘은 목 · 벽돌 · 블록 · 조적 · 석 구조 — 300m 안, 건축물대장이 붙은 ${g.bk}동 가운데(대장 없는 옛집은 못 센다)">오래된 약한 구조 ${g.bo || 0}동${g.bb ? ` · 지하층 ${g.bb}동` : ""} <small>/ 대장 ${g.bk}동</small></span>` : "");
 }
@@ -354,7 +356,7 @@ function districtTip(r, pin = false) {
       + (r.tg ? `<div class="sub">지형</div><div class="tgs">${dzTerrainRows(r.tg)}</div>` : "")
       + (pin ? `<div class="sub">담당</div><div class="ctb tgs"><span class="mute">불러오는 중…</span></div>` : "") + `</div><div class="rt">${m.plane}</div></div>`
       + (m.site ? `<div class="site"><span>지구 기준</span><b>${escH(m.site)}</b></div>` : "")
-      : `<div class="d">${(dzSerLoad(r.sigun), DZ_SQ.get(r.sigun)?.ing) ? "단계 그래프 받는 중… (마우스를 다시 올리면 나온다)" : "단계 그래프를 그릴 자료가 없다 — 이 지구 유형의 강우 기준이 없거나 예보를 못 받았다"}</div>`)
+      : `<div class="d">${(dzSerLoad(r.sigun), DZ_SQ.get(r.sigun)?.ing) ? "단계 그래프 받는 중… (마우스를 다시 올리면 나온다)" : DZ_FAM.slice(0, 3).includes(r.fam) ? "단계 그래프를 그릴 자료가 없다 — 예보를 못 받았다" : "단계 그래프가 없다 — 이 유형은 행안부 지침 별표 4(산사태 · 하천 · 지하공간)에 없고, 이 지구의 시군 기준도 비의 양으로 읽히지 않는다"}</div>`)
     + (r.tf?.length ? `<div class="tfs">${r.tf.map(f => `<em class="tf${f.lv === "w" ? "" : " i"}">${escH(f.t)}</em>`).join("")}</div>` : "")   // 지역 여건(app/terrain.py)
     + (r.approx ? `<div class="d warn">위치는 근사 — 지번으로 못 찾아 그 리 · 읍면동 가운데(판정은 읍면동 기준)</div>` : "")
     + (r.rule || r.shelter ? `<dl>${row("대피기준", r.rule)}${row("대피장소", r.shelter)}</dl>` : "")

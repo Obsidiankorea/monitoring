@@ -172,9 +172,10 @@ FAMILY_WIKI = {"산사태": "[[통제·대피 기준]] · [[산사태 위험지�
                "지하공간": "[[통제·대피 기준]]", "침수·해안": "[[재난경보와 폭풍해일 기준]] · [[인명피해 우려지역]]",
                "야외·기타": "[[인명피해 우려지역]]"}
 
-# '3시간 강우량 90mm' · '3시간당 90mm' · '3시간 (기준) 누적강우 60mm' · '시우량 50mm' · '시간강우 60mm' · '일누적강우량' 까지 읽는다
-_COND = re.compile(r"(?:(\d+)\s*시간당?\s*(?:기준\s*)?(?:누적\s*)?|(일)\s*(?:누적\s*)?강우량?|(누적)\s*강우량?|(시간당|시우량|시간\s*강우량?))"
-                   r"이?\s*(?:강우량?이?\s*)?(\d+(?:\.\d+)?)\s*(?:mm|㎜)")
+# '시간당 최고 30mm' · '연속강우량 200mm' · '강우량 200mm'(누적으로) · '3시간 강수량 60mm' · '3시간 강우량 90mm' · '3시간당 90mm' · '3시간 (기준) 누적강우 60mm' · '시우량 50mm' · '시간강우 60mm' · '일누적강우량' 까지 읽는다
+_COND = re.compile(r"(?:(\d+)\s*시간당?\s*(?:기준\s*)?(?:누적\s*)?|(일)\s*(?:누적\s*)?강[우수]량?|((?:누적|연속)\s*(?:강[우수]량?)?|(?<![가-힣])강[우수]량)|(시간당|시우량|시간\s*강[우수]량?))"
+                   r"이?\s*(?:최고\s*|최대\s*)?(?:강[우수]량?이?\s*)?(\d+(?:\.\d+)?)\s*(?:mm|㎜)(?!\s*\d+\s*h)")
+_COND_H = re.compile(r"(\d+(?:\.\d+)?)\s*(?:mm|㎜)\s*/?\s*h(?![a-z])", re.I)
 
 
 def conditions(text: str) -> list[dict]:
@@ -186,11 +187,14 @@ def conditions(text: str) -> list[dict]:
         elif day:
             win, lab = 24, "일강우(24시간으로)"
         elif acc:
-            win, lab = 48, "누적(48시간으로)"
+            win, lab = 48, "연속(48시간으로)" if acc.startswith("연속") else "누적(48시간으로)"
         else:
             win, lab = 1, "시간당"
         if win in WINDOWS:
             out.append({"win": win, "mm": float(mm), "label": lab})
+    for mm in _COND_H.findall(text or ""):                 # '45mm h' · '55mm/h↑' — 단위가 뒤에 붙은 시우량(원문의 '/' 가 빠져 온다)
+        if not any(c["win"] == 1 and c["mm"] == float(mm) for c in out):
+            out.append({"win": 1, "mm": float(mm), "label": "시간당"})
     return out
 
 
@@ -201,9 +205,12 @@ _AND_IN = re.compile(r"&|＆|이면서|이고|동시|그리고")
 def site_groups(text: str) -> list[list[dict]]:
     """지구 원문 대피기준 → '또는'으로 이어진 묶음들, 묶음 안은 '그리고'(담당부서 회신 2026-11 — 따로 적힌 게 없으면 또는, 적혀 있으면 그대로).
     '또는' · 쉼표 · 글머리표 · 줄바꿈으로 토막을 나누고, 한 토막 안에 & · 이면서 · 이고 · 동시가 있으면 그 토막의 조건은 함께 넘어야 한다."""
-    out = []
+    out, both = [], "누적" in (text or "") and "연속" in (text or "")
     for cl in _OR_CUT.split(text or ""):
-        cs = conditions(cl)
+        if "취약시간" in cl:                               # 밤에만 서는 조건 — 늘 서는 것처럼 읽으면 30㎜/h 에 울린다
+            continue
+        # shortcut: 누적과 연속강우가 함께 적힌 기준은 연속을 읽지 않는다 — 둘 다 48시간으로 놓으면 '연속 100㎜'가 '누적 250㎜'를 덮는다. 담당부서가 연속강우의 창을 정해 주면 읽는다
+        cs = [c for c in conditions(cl) if not (both and c["label"].startswith("연속"))]
         if cs:
             out += [cs] if _AND_IN.search(cl) and len(cs) > 1 else [[c] for c in cs]
     return out
@@ -1038,6 +1045,8 @@ def regions() -> dict:
         "지하공간": {"x": "15분", "xu": "㎜", "areas": [
             {"stage": "사전대피", "kind": "rect", "x": U["사전대피_15분"], "y": U["사전대피_예보시우량"], "note": "예보"},
             {"stage": "긴급대피", "kind": "rect", "x": U["긴급대피_15분"], "y": U["긴급대피_시우량"], "note": "실황"}], "texts": nonrain("지하공간")},
+        # 지침 별표 4 에 없는 유형 — 공통 영역은 없고 그 지구의 시군 기준만 그린다(judge._site_row)
+        **{f: {"x": "누적", "xu": "㎜", "areas": [], "texts": []} for f in ("침수·해안", "야외·기타")},
     }
 
 

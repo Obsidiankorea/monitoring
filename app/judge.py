@@ -141,13 +141,27 @@ def _pts(base: str, basis: str) -> dict:
 def at_point(e: dict, p: dict | None, s: dict, fam: str, rule: str) -> dict:
     """읍면동 줄 e 를 지구 자리 강수 p 로 바꿔 그 유형 사다리 · 지구 대피기준을 다시 대조한다. p 가 없으면 e 그대로."""
     if not p:
-        return e
+        return _site_row(e, fam, rule)
     rain = {h: p.get(h, e["rain"].get(h)) for h in e["rain"]}
     row = {**e, "rain": rain, "m15": p.get("15m", e.get("m15"))}
     row["ladders"] = {fam: ai.ladders(row, s["night"], s["alerts"], s.get("river"), s.get("flood"), s.get("pred_lv")).get(fam, [])}
     prog, pct = ai.site_prog(rule, lambda w: rain.get(f"{w}h"))
     row["sites"] = [{"rule": rule, "conds": prog, "max_pct": pct}] if prog else []
-    return row
+    return _site_row(row, fam, rule)
+
+
+def _site_row(row: dict, fam: str, rule: str) -> dict:
+    """지침 별표 4 에 없는 유형(침수·해안 · 야외·기타) — 공통 사다리가 없으니 그 지구의 시군 기준(비로 읽히는 것) 하나를 긴급대피 줄로 세운다.
+    담당부서 회신(2026-11) — 긴급대피는 시군별 지구 대피기준으로. 기준을 숫자로 못 읽으면 줄이 없다(그래프도 없다)."""
+    if fam in FAMS:
+        return row
+    sx = next((x for x in row.get("sites", []) if (x["rule"] or "").strip() == rule), None)
+    p = (sx or {}).get("max_pct")
+    if p is None:
+        return row
+    return {**row, "ladders": {**row["ladders"], fam: [{
+        "stage": "긴급대피", "rule": f"시군 지구 기준 — {rule}", "basis": "obs", "st": "met" if p >= 100 else "near" if p >= 70 else "no",
+        "gap": {"pct": p, "parts": [{"label": "지구 기준", "now": None, "need": None, "unit": "%", "pct": p}]}}]}}
 
 
 _ACC = re.compile(r"누적|일|12시간|24시간|48시간|선행")
@@ -239,10 +253,12 @@ def rows_of(sg: str, base: str, k: float, add: tuple = (0.0, 0.0), series: bool 
     out = []
     for e in g["emd"]:
         for d in dist.get(e["emd"], []):
-            if d["fam"] not in e["ladders"]:
-                continue
             ea = ga.get(e["emd"])
             eg, ea2 = at_point(e, pg.get(d["id"]), g, d["fam"], d["rule"]), ea and at_point(ea, pa.get(d["id"]), a, d["fam"], d["rule"])
+            if not eg["ladders"].get(d["fam"]):                # 견줄 기준이 없는 지구(별표 4 밖 유형인데 지구 기준도 비로 못 읽는 것)
+                continue
+            if ea2 and not ea2["ladders"].get(d["fam"]):
+                ea, ea2 = None, None
             b = {"grid": pack(eg, d["fam"], d["rule"]), "aws": pack(ea2, d["fam"], d["rule"]) if ea else None}
             if series and sb != "aws":
                 b["grid"]["series"] = past_of(series_of(eg, g, d["fam"], d["rule"]), (pg.get(d["id"]) or {}).get("hrs"))

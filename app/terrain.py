@@ -209,6 +209,9 @@ def of(d: dict) -> dict | None:
     if cz and cz["d"] <= 300:                                      # 급경사지법으로 지정 · 고시된 붕괴위험지역 — 안이면 눈여겨볼 것
         nm = f" {cz['n']}" if cz.get("n") else ""
         (w if cz["d"] == 0 else i)(f"붕괴위험지역{nm}" if cz["d"] == 0 else f"붕괴위험지역{nm} {cz['d']}m")
+    sv = t.get("sv")
+    if sv and sv["d"] <= 300:                                      # 산림청 · 시군이 지정한 산사태취약지역(산사태 · 토석류)이 가까우면
+        (w if sv["d"] <= 100 else i)(f"산사태취약지역({sv['ty']}) {sv['d']}m" + (f" · 300m 안 {sv['n']}곳" if sv["n"] > 1 else ""))
     if el is not None and el <= 10:
         w(f"저지대 {el:.0f}m")
     rv = t.get("rv")

@@ -232,6 +232,10 @@ def main():
     print(f"건축물대장 붙은 건물 {int(BK.sum()):,} / {len(BK):,} · 오래된 약한 구조 {int(BW.sum()):,} · 지하층 {int(BB.sum()):,}", file=sys.stderr)
 
     zones = collapse_zones()
+    svp = ROOT / "data" / "geo" / "slide_vuln.json"         # 산사태취약지역(tools/build_slide_vuln.py) — 없으면 건너뛴다
+    sv = json.loads(svp.read_text("utf-8"))["rows"] if svp.exists() else []
+    SVL, SVO = np.array([v["p"][0] for v in sv]), np.array([v["p"][1] for v in sv])
+    print(f"산사태취약지역 {len(sv)}곳", file=sys.stderr)
     to5186 = __import__("pyproj").Transformer.from_crs(4326, 5186, always_xy=True)
     print(f"붕괴위험지역 {len(zones)}곳", file=sys.stderr)
     out = {}
@@ -263,6 +267,11 @@ def main():
         ii = ba.within(x, y, 300)                                 # 300m 안 — 대장 붙은 동 · 오래된 약한 구조 · 지하층 있는 동
         if len(ii):
             o["bk"], o["bo"], o["bb"] = int(BK[ii].sum()), int(BW[ii].sum()), int(BB[ii].sum())
+        if sv:                                                    # 가장 가까운 산사태취약지역(m) · 300m 안 개수
+            dd = np.hypot((SVO - r["pos"][1]) * 91000, (SVL - r["pos"][0]) * 111000)
+            k = int(dd.argmin())
+            if dd[k] <= 1000:
+                o["sv"] = {"d": round(float(dd[k])), "n": int((dd <= 300).sum()), "ty": sv[k]["ty"]}
         if zones:
             zx, zy = to5186.transform(r["pos"][1], r["pos"][0])
             zd, zn, zt = zone_at(zx, zy, zones)

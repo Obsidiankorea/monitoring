@@ -552,7 +552,7 @@ def _dz_tg(t: dict) -> dict | None:
     """지도 지구 카드의 '지형' 칸 — 표고 · 경사(등고선 둘레 최대) · 하천 · 저수지 · 해안 · 건물(app/terrain.py 값 그대로)."""
     if not t:
         return None
-    g = {k: t[k] for k in ("el", "cs", "b300", "bk", "bo", "bb") if t.get(k) is not None}
+    g = {k: t[k] for k in ("el", "cs", "b300", "bk", "bo", "bb", "sv") if t.get(k) is not None}
     if t.get("sl50", t.get("sl")) is not None:
         g["sl"] = t.get("sl50", t.get("sl"))
     if (t.get("hx") or {}).get("e"):
@@ -748,6 +748,13 @@ async def api_slide_put(body: dict):
         safety._LIVE["at"].pop("pred", None)
         await safety.run()
     return safety.status()
+
+
+@app.get("/api/slide/vuln")
+async def api_slide_vuln():
+    """산사태취약지역 지정현황(경남, 공공데이터포털 15014457) — 지번을 좌표로 바꿔 둔 것(tools/build_slide_vuln.py). 지도 '산사태' 레이어의 작은 마름모."""
+    p = config.DATA / "geo" / "slide_vuln.json"
+    return json.loads(p.read_text("utf-8")) if p.exists() else {"rows": [], "n": 0}
 
 
 @app.get("/api/safety/flood")

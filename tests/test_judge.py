@@ -112,7 +112,7 @@ def test_plane_splits_accumulated_and_hourly():
 
 def test_regions_and_site_area():
     r = ai.regions()
-    assert set(r) == {"산사태", "하천", "지하공간"} and r["지하공간"]["x"] == "15분"
+    assert set(r) == set(ai.FAMILY) and not r["침수·해안"]["areas"] and r["지하공간"]["x"] == "15분"
     kinds = [(a["stage"], a["kind"]) for a in r["산사태"]["areas"]]
     assert ("긴급대피", "vband") in kinds and ("사전대피", "band") in kinds and r["산사태"]["x"] == "24시간"   # 별표 4 — 누적만으로, 예보만으로
     assert any("발령" in t["text"] for t in r["하천"]["texts"])                         # 비가 아닌 조건은 글로
@@ -144,3 +144,16 @@ def test_pack_splits_forecast_and_observed():
     p = judge.pack({"ladders": lad, "rain": {}, "sites": []}, "산사태", "")
     assert (p["fc"]["pct"], p["fc"]["stage"], p["fc"]["met"]) == (110, "사전대피", True)
     assert (p["obs"]["pct"], p["obs"]["stage"], p["obs"]["met"]) == (75, "통제", False)
+
+
+def test_families_outside_the_guideline_use_the_site_rule():
+    """침수우려도로 등(지침 별표 4 밖) — 공통 사다리가 없어도 지구 기준이 비로 읽히면 긴급대피 줄 하나로 선다. '45mm h' 는 시우량."""
+    from app import judge
+    rule = "• 누적강우 200mm 이상 관측45mm h 이상 예보 침수심 15cm 이상"
+    assert [[(c["win"], c["mm"]) for c in g] for g in ai.site_groups(rule)] == [[(48, 200.0)], [(1, 45.0)]]
+    e = {"ladders": {}, "rain": {"1h": 0, "3h": 0, "12h": 0, "24h": 0, "48h": 0}, "m15": 0, "fc_peak": 0, "fc_run30": 0, "sites": []}
+    s = {"night": False, "alerts": []}
+    p = judge.pack(judge.at_point(e, {"1h": 36, "48h": 50}, s, "침수·해안", rule), "침수·해안", rule)
+    assert p["st"]["긴급대피"]["pct"] == 80 and p["top"] == 80 and p["obs"]["stage"] == "긴급대피"
+    assert not judge.at_point(e, {"1h": 36}, s, "침수·해안", "폭풍해일 경보 발효시(해수면 290cm)")["ladders"].get("침수·해안")
+    assert "침수·해안" in ai.regions()
