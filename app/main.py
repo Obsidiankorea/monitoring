@@ -555,6 +555,8 @@ def _dz_tg(t: dict) -> dict | None:
     g = {k: t[k] for k in ("el", "cs", "b300", "bk", "bo", "bb") if t.get(k) is not None}
     if t.get("sl50", t.get("sl")) is not None:
         g["sl"] = t.get("sl50", t.get("sl"))
+    if (t.get("hx") or {}).get("e"):
+        g["hx"] = t["hx"]["e"]
     for k in ("rv", "lk"):
         if t.get(k):
             g[k] = {x: t[k].get(x) for x in ("n", "d", "dh")}

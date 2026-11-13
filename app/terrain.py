@@ -33,6 +33,24 @@ def table() -> dict:
         return {"rows": {}}
 
 
+DZH = config.DATA / "geo" / "dz_history.json"            # 최근 10년 호우 피해 이력(tools/build_dz_history.py — 경남도 복구계획)
+
+
+@lru_cache(maxsize=2)
+def _dzh(mtime: float) -> dict:
+    return json.loads(DZH.read_text("utf-8"))
+
+
+def history(sigun: str | None, emd: str | None) -> dict | None:
+    """그 읍면동 · 시군의 지난 호우 이력 — {e: 읍면동(확인된 것만), s: 시군, span}. 자료가 없으면 None."""
+    try:
+        h = _dzh(DZH.stat().st_mtime)
+    except OSError:
+        return None
+    e, s = h["emd"].get(f"{sigun}|{emd}"), h["sigun"].get(sigun or "")
+    return {"e": e, "s": s, "span": h["span"]} if e or s else None
+
+
 @lru_cache(maxsize=2)
 def _floods(mtime: float) -> list[tuple]:
     from . import safety
@@ -175,6 +193,9 @@ def of(d: dict) -> dict | None:
     if fl:
         t["fl"] = fl
     t |= live({**d, "_el": t.get("el")})
+    hx = history(d.get("sigun"), d.get("emd"))
+    if hx:
+        t["hx"] = hx
     if not t:
         return None
     fam, F = d.get("fam"), []
@@ -207,6 +228,9 @@ def of(d: dict) -> dict | None:
     rs = t.get("rs")
     if rs:                                                         # 위쪽 위험저수지 — 발령 중이면 하류 대피 확인(위키 [[저수지 재난 시군 사전대피와 주민대피 준비 (진주시 매뉴얼)]])
         (w if rs["on"] else i)(f"위험저수지 {rs['n']} {rs['lvn']}{' 발령' if rs['on'] else ' 해제'} · 위쪽 {rs['d']}m")
+    if hx and hx["e"]:                                            # 이 읍면동에 지난 10년 복구가 잦았으면 눈여겨볼 것(확인된 건수만 — 실제보다 적다)
+        e = hx["e"]
+        (w if e["ev"] >= 4 or e["n"] >= 30 else i)(f"최근 10년 호우 {e['ev']}회 · 복구 {e['n']}건({d.get('emd')})")
     if t.get("b300"):
         i(f"건물 {t['b300']}동(300m)" + (f" · 오래된 약한 구조 {t['bo']}동" if t.get("bo") else "") + (f" · 지하층 {t['bb']}동" if t.get("bb") else ""))
     t["flags"] = F

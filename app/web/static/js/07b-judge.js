@@ -161,6 +161,8 @@ function sjTerrain(r) {
       ${row("저수지", lk ? `${escH(lk.n || "이름 없음")} ${lk.d}m · ${lk.dh >= 0 ? `물가가 ${lk.dh.toFixed(0)}m 높음` : `물가가 ${(-lk.dh).toFixed(0)}m 낮음`}` : "")}
       ${row("해안", t.cs != null ? `바다(표고 0m)까지 ${t.cs}m` : "")}
       ${row("건물", t.b300 != null ? `100m 안 ${t.b100}동 · 300m 안 ${t.b300}동` : "")}
+      ${row("지난 호우", t.hx ? [t.hx.e ? `${escH(r.emd)}: 호우 ${t.hx.e.ev}회에서 공공시설 복구 ${t.hx.e.n}건(주로 ${escH(t.hx.e.ty.join(" · "))}, 최근 ${escH(t.hx.e.last)}) — 시설 이름에 읍면동이 적힌 것만 세어 실제보다 적다` : "",
+        t.hx.s ? `${escH(r.sigun)} 전체: 호우 ${t.hx.s.ev}회 · 복구액 ${t.hx.s.eok.toLocaleString()}억 · 산사태 복구 ${t.hx.s.slide}건(읍면동을 아는 줄 ${t.hx.s.known}%)` : ""].filter(Boolean).join("<br>") + ` <span class="mute">경남도 복구계획 ${escH(t.hx.span)}</span>` : "")}
       ${row("노후 건물", t.bk ? `300m 안 건축물대장이 붙은 ${t.bk}동 가운데 — 사용승인 30년 넘은 목 · 벽돌 · 블록 · 조적 · 석 구조 ${t.bo || 0}동 · 지하층 있는 건물 ${t.bb || 0}동 (대장 없는 옛집은 못 센다)` : "")}
       ${row("수위", t.wl ? `${escH(t.wl.n)}${t.wl.rn ? `(${escH(t.wl.rn)})` : ""}${t.wl.same ? "" : " · 다른 하천일 수 있음"} ${t.wl.d >= 1000 ? `${(t.wl.d / 1000).toFixed(1)}km` : `${t.wl.d}m`} · 지금 ${escH(t.wl.stn)}${t.wl.v != null ? ` ${t.wl.v.toFixed(2)}m` : ""}${t.wl.gap != null ? ` · ${escH(t.wl.nx)}까지 ${t.wl.gap}m` : ""}${t.wl.stale ? " · ⚠ 오래된 값" : ""}` : "")}
       ${row("위험저수지", t.rs ? `${escH(t.rs.n)} — 지구보다 ${t.rs.dh}m 높은 곳 ${t.rs.d}m · ${escH(t.rs.lvn)} ${t.rs.on ? "발령 중" : "해제"}(${escH(t.rs.at)})` : "")}
