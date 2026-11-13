@@ -552,7 +552,7 @@ def _dz_tg(t: dict) -> dict | None:
     """지도 지구 카드의 '지형' 칸 — 표고 · 경사(등고선 둘레 최대) · 하천 · 저수지 · 해안 · 건물(app/terrain.py 값 그대로)."""
     if not t:
         return None
-    g = {k: t[k] for k in ("el", "cs", "b300") if t.get(k) is not None}
+    g = {k: t[k] for k in ("el", "cs", "b300", "bk", "bo", "bb") if t.get(k) is not None}
     if t.get("sl50", t.get("sl")) is not None:
         g["sl"] = t.get("sl50", t.get("sl"))
     for k in ("rv", "lk"):

@@ -311,7 +311,8 @@ function dzTerrainRows(g) {
     + row("하천", g.rv ? `${escH(g.rv.n || "하천")} ${m(g.rv.d)}${g.rv.dh != null ? ` · ${g.rv.dh >= 0 ? `${g.rv.dh.toFixed(0)}m 위` : `${(-g.rv.dh).toFixed(0)}m 아래`}` : ""}` : "")
     + row("저수지", g.lk ? `${escH(g.lk.n || "저수지")} ${m(g.lk.d)}${g.lk.dh != null ? ` · 지구가 ${Math.abs(g.lk.dh).toFixed(0)}m ${g.lk.dh >= 0 ? "낮음" : "높음"}` : ""}` : "")
     + row("해안", g.cs != null && g.cs <= 3000 ? m(g.cs) : "")
-    + row("건물", g.b300 ? `${g.b300.toLocaleString()}동(300m)` : "");
+    + row("건물", g.b300 ? `${g.b300.toLocaleString()}동(300m)` : "")
+    + row("노후", g.bk ? `<span title="사용승인 30년 넘은 목 · 벽돌 · 블록 · 조적 · 석 구조 — 300m 안, 건축물대장이 붙은 ${g.bk}동 가운데(대장 없는 옛집은 못 센다)">오래된 약한 구조 ${g.bo || 0}동${g.bb ? ` · 지하층 ${g.bb}동` : ""} <small>/ 대장 ${g.bk}동</small></span>` : "");
 }
 /* 담당자 연락처 — 고정한 카드에서만(상황판단과 같은 /api/contacts · 잠금 번호). AI 쪽 코드는 부르지 않는다 */
 const DZ_CT = new Map();

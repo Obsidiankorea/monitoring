@@ -80,6 +80,61 @@ class Pts:
         ids = np.concatenate(ids)
         return int((np.hypot(self.x[ids] - x, self.y[ids] - y) * M <= rm).sum())
 
+    def within(self, x, y, rm):
+        """반지름 rm(m) 안 점 번호들."""
+        r = int(rm / M) + 1
+        ids = [self.b[k] for k in ((int(x) + i, int(y) + j) for i in range(-r, r + 1) for j in range(-r, r + 1)) if k in self.b]
+        if not ids:
+            return np.array([], int)
+        ids = np.concatenate(ids)
+        return ids[np.hypot(self.x[ids] - x, self.y[ids] - y) * M <= rm]
+
+
+WEAK = ("목구조", "벽돌", "블록", "조적", "석구조", "흙")       # 비 · 토사에 약한 구조(건축물대장 구조명에 이 글자가 들면)
+OLD_Y = 30                                                # 사용승인 뒤 이 햇수가 지나면 '오래된'
+
+
+def bldg_attrs(p):
+    """건물마다(도형 하나 = 한 동) 자리와 건축물대장 속성 — (Pts, known, weak, base).
+    known = 대장이 붙은 건물(용도 · 구조 · 사용승인일이 있다. 경남은 열에 넷쯤만 — 농촌 옛집은 대장이 없는 것이 많다),
+    weak = 사용승인 OLD_Y 년 넘은 목 · 벽돌 · 블록 · 조적 · 석 구조, base = 지하층이 있는 건물."""
+    import struct
+    import zipfile
+    from build_bldg import SRC
+    z = zipfile.ZipFile(sorted(SRC.glob("AL_D010_48_*.zip"))[-1])
+    tr = __import__("pyproj").Transformer.from_crs(5186, 4326, always_xy=True)
+    cut = date.today().year - OLD_Y
+    X, Y, K, W, B = [], [], [], [], []
+    for shp in [n for n in z.namelist() if n.endswith(".shp")]:
+        s, d = z.open(shp), z.open(shp[:-4] + ".dbf")
+        h = d.read(32)
+        cnt, hl, rl = struct.unpack("<IHH", h[4:12])
+        hd, fs, o = d.read(hl - 32), {}, 1                 # 머리말 나머지 — 칸 정의 32바이트씩, 0x0D 에서 끝
+        for k in range(0, len(hd) - 1, 32):
+            f = hd[k:k + 32]
+            if f[0] == 0x0D:
+                break
+            fs[f[:11].split(b"\0")[0].decode()] = (o, f[16]); o += f[16]
+        s.read(100)
+        g = lambda r, k: r[fs[k][0]:fs[k][0] + fs[k][1]].replace(b"\0", b"").decode("euc-kr", "replace").strip()  # noqa: E731
+        for _ in range(cnt):
+            r, rh = d.read(rl), s.read(8)
+            if len(rh) < 8:
+                break
+            rec = s.read(struct.unpack(">i", rh[4:8])[0] * 2)
+            if struct.unpack("<i", rec[:4])[0] == 0:
+                continue
+            x0, y0, x1, y1 = struct.unpack("<4d", rec[4:36])
+            st, yr, dn = g(r, "A11"), g(r, "A13")[:4], g(r, "A27")
+            X.append((x0 + x1) / 2); Y.append((y0 + y1) / 2)
+            K.append(bool(st or yr)); B.append(dn not in ("", "0"))
+            W.append(yr.isdigit() and 1000 <= int(yr) <= cut and any(k in st for k in WEAK))
+    lon, lat = tr.transform(np.array(X), np.array(Y))
+    gx, gy = lcc_fwd_np(np.asarray(lon), np.asarray(lat), p)
+    pt = Pts()
+    pt.x, pt.y, pt.t = list(gx), list(gy), [0] * len(gx)
+    return pt.done(), np.array(K), np.array(W), np.array(B)
+
 
 def slope_deg(dem, x, y):
     """지구 둘레 ±90m(30m 간격 7×7)에서 가장 가파른 곳의 경사(°)와 지구 자리 경사."""
@@ -173,6 +228,8 @@ def main():
     bl.add([(float(r[:, 0].mean()), float(r[:, 1].mean())) for r in rings], 0)
     bl.done()
     print(f"건물 {len(bl.x):,}동", file=sys.stderr)
+    ba, BK, BW, BB = bldg_attrs(p)
+    print(f"건축물대장 붙은 건물 {int(BK.sum()):,} / {len(BK):,} · 오래된 약한 구조 {int(BW.sum()):,} · 지하층 {int(BB.sum()):,}", file=sys.stderr)
 
     zones = collapse_zones()
     to5186 = __import__("pyproj").Transformer.from_crs(4326, 5186, always_xy=True)
@@ -203,6 +260,9 @@ def main():
         if c is not None:
             o["cs"] = c
         o["b100"], o["b300"] = bl.count(x, y, 100), bl.count(x, y, 300)
+        ii = ba.within(x, y, 300)                                 # 300m 안 — 대장 붙은 동 · 오래된 약한 구조 · 지하층 있는 동
+        if len(ii):
+            o["bk"], o["bo"], o["bb"] = int(BK[ii].sum()), int(BW[ii].sum()), int(BB[ii].sum())
         if zones:
             zx, zy = to5186.transform(r["pos"][1], r["pos"][0])
             zd, zn, zt = zone_at(zx, zy, zones)
@@ -210,7 +270,7 @@ def main():
                 o["cz"] = {"d": round(zd), "n": zn, "dt": zt}           # 붕괴위험지역 — d 0 = 안
         out[r["id"]] = o
     OUT.write_text(json.dumps({"built": date.today().isoformat(), "n": len(out),
-                               "src": "표고·경사 Terrarium z12(≈30m) · 하천·저수지 국토지리정보원 연속수치지형도 · 건물 국토교통부 GIS건물통합정보",
+                               "src": "표고·경사 Terrarium z12(≈30m) · 하천·저수지 국토지리정보원 연속수치지형도 · 건물 국토교통부 GIS건물통합정보(구조 · 사용승인일 · 지하층은 건축물대장이 붙은 건물만)",
                                "rows": out}, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     v = list(out.values())
     print(f"→ {OUT} {OUT.stat().st_size // 1024}KB · 저지대(10m↓) {sum(x['el'] <= 10 for x in v)} · 경사 30°↑ {sum(x['sl'] >= 30 for x in v)}"

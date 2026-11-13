@@ -208,7 +208,7 @@ def of(d: dict) -> dict | None:
     if rs:                                                         # 위쪽 위험저수지 — 발령 중이면 하류 대피 확인(위키 [[저수지 재난 시군 사전대피와 주민대피 준비 (진주시 매뉴얼)]])
         (w if rs["on"] else i)(f"위험저수지 {rs['n']} {rs['lvn']}{' 발령' if rs['on'] else ' 해제'} · 위쪽 {rs['d']}m")
     if t.get("b300"):
-        i(f"건물 {t['b300']}동(300m)")
+        i(f"건물 {t['b300']}동(300m)" + (f" · 오래된 약한 구조 {t['bo']}동" if t.get("bo") else "") + (f" · 지하층 {t['bb']}동" if t.get("bb") else ""))
     t["flags"] = F
     return t
 
