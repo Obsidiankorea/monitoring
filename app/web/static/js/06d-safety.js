@@ -16,7 +16,7 @@ async function loadVuln() {
   try { SAF_V = (await getJson("/api/slide/vuln")).rows || []; } catch { SAF_V = []; }
   drawSafety(); districtLegend();
 }
-function safVuln() {                                     // 토석류 분홍 · 산사태 주황. 고른 시군만(전체면 다) — 2,500곳이라 가려 그린다
+function safVuln() {                                     // 토석류 노랑 · 산사태 빨강. 고른 시군만(전체면 다) — 2,500곳이라 가려 그린다
   if (!vulnOn() || !SAF_V?.length || !V || !V.s) return "";
   const r = Math.max(2.2, Math.min(5, V.u * 0.55));
   let o = "";

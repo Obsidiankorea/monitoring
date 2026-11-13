@@ -348,7 +348,9 @@ def forecast(hours: int = 6, now: datetime | None = None, sigun: str | None = No
 def short_emd(sigun: str, start: str) -> dict:
     """읍면동별 단기예보 1시간 강수(PCP) — start(YYYYMMDDHH, 초단기 끝) 뒤부터 내일 24시까지. 상황판단의 도달 시각을 늘인다.
     다 받은 가장 새 발표분(없으면 받는 중인 것). 단기예보 PCP 도 30 에서 막힌다(shortfc.py) — 센 비는 모자라게 나온다."""
-    xy = {tuple(c["xy"]): c["emd"] for c in grids()["sigun_grids"].get(sigun, [])}
+    xy: dict[tuple, list[str]] = {}                                 # 한 칸을 여러 읍면동이 함께 쓴다(tools/fill_fc_grids.py)
+    for c in grids()["sigun_grids"].get(sigun, []):
+        xy.setdefault(tuple(c["xy"]), []).append(c["emd"])
     d0 = clock.now().replace(hour=0, minute=0, second=0, microsecond=0)
     end = (d0 + timedelta(days=2)).strftime("%Y%m%d%H")            # 모레 00시 = 내일 24시
     with db.tx() as con:
@@ -362,8 +364,7 @@ def short_emd(sigun: str, start: str) -> dict:
     idx = {t: i for i, t in enumerate(tmefs)}
     emd: dict[str, list[float]] = {}
     for r in rows:
-        name = xy.get((r["x"], r["y"]))
-        if name:
+        for name in xy.get((r["x"], r["y"]), ()):
             emd.setdefault(name, [0.0] * len(tmefs))[idx[r["tmef"]]] = r["val"] or 0.0
     day = {d0.strftime("%Y%m%d"): "", (d0 + timedelta(days=1)).strftime("%Y%m%d"): "내일 "}
     return {"tmfc": run["tmfc"], "tmefs": tmefs, "labels": [day.get(t[:8], t[6:8] + "일 ") + t[8:10] for t in tmefs], "emd": emd}

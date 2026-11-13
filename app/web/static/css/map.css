@@ -1480,7 +1480,7 @@ body.heat #ht-lg { position: absolute; left: 22px; bottom: 22px; z-index: 5; dis
 #safg .sfr { fill: var(--ink-3); fill-opacity: .55; stroke: var(--halo); stroke-width: 1; }
 #safg .sfr.on { fill-opacity: 1; stroke: var(--ink); stroke-width: 1.2; }
 #safg .sfr.dim { opacity: .35; }
-#safg .sfv { fill: #FF6FB5; fill-opacity: .9; stroke: var(--halo); stroke-width: .8; } #safg .sfv.s { fill: #FF9F1C; }
+#safg .sfv { fill: #FFE14D; fill-opacity: .9; stroke: var(--halo); stroke-width: .8; } #safg .sfv.s { fill: #FF3B30; }
 #safg .sfn { fill: none; stroke: #F0A050; stroke-width: 3; }                     /* 산사태 예보(발령) — 이름 테두리 */
 #safg .sfn.l2 { stroke: #FF5A4E; stroke-width: 3.5; }
 #safg .sfm rect { fill: #FFF4E6; stroke: #C26A1E; stroke-width: 2.5; }            /* 산림청 예측 — 이름 옆 산 */
