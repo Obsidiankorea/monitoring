@@ -338,7 +338,7 @@ function watchPaintList(g) {
   for (const i of items) (by[i.sigun] ||= []).push(i);
   const top = n => Math.max(...by[n].map(i => WS[i.stage] * 10 + (i.st === "met" ? 5 : 0)));
   const names = Object.keys(by).sort((a, b) => top(b) - top(a));
-  const row = i => `<div class="it"><span class="tg s${WS[i.stage]}${i.st === "met" ? "" : " near"}">${i.stage} ${i.st === "met" ? "충족" : "근접"}</span><b>${escH(i.emd)} — ${escH(i.fam)}</b><em>${escH(i.rule)}</em>${i.gap ? `<span class="gp">${escH(i.gap)}</span>` : ""}</div>`;
+  const row = i => `<div class="it"><span class="tg s${WS[i.stage]}${i.st === "met" ? "" : " near"}" title="${i.stage}">${STG_EMO[i.stage] || i.stage} ${i.st === "met" ? "충족" : "근접"}</span><b>${escH(i.emd)} — ${escH(i.fam)}</b><em>${escH(i.rule)}</em>${i.gap ? `<span class="gp">${escH(i.gap)}</span>` : ""}</div>`;
   pop.innerHTML = `<div class="rh"><b>${WG[g].ic} ${WG[g].title} ${names.length}개 시군</b><span>${WATCH.at} 기준 · ${items.length}건</span><i data-x title="닫기">✕</i></div>`
     + `<label class="rm"><input type="checkbox" data-map ${WATCH_MAP ? "checked" : ""}> 지도에 표시 <small>시군 이름에 ${WG.e.ic} · ${WG.c.ic} 와 색</small></label>`
     + (WATCH.do ? `<div class="rm rdo">도 ${stgChip(WATCH.do)}</div>` : "")
@@ -346,7 +346,7 @@ function watchPaintList(g) {
       + (wStg(n)?.do ? `<div class="act">${escH(wStg(n).do)}</div>` : "")
       + by[n].slice(0, 8).map(row).join("")
       + (by[n].length > 8 ? `<div class="it"><span></span><em>… 외 ${by[n].length - 8}건</em></div>` : "") + `</div>`).join("")
-    + `<div class="nt">${g === "e" ? "긴급대피 = 실황 기준(실제 내린 비) · 사전대피 = 예보 기준. 대피장소 · 근거는 AI 상황판단(I). " : "통제 = 출입 · 통행 제한 단계(대피보다 아래). "}근접 = 기준 수치의 70% 이상. 시군 이름 옆 비상단계는 그 시 매뉴얼(특보 종류 기준) — 도 단계와 별개다. 도 · 시군 모두 기준에 닿으면 그 단계가 된 것으로 보고, 실제와 다르면 특보 아이콘에서 바꾼다. 남은 ㎜ · 닿는 시각은 가장 먼 조건 기준이며, 시각은 예보 시우량을 지금 누적에 더한 값이라 실제보다 이를 수 있다. 판단 · 명령은 권한자 몫 — 기준과의 대조일 뿐이다.</div>`;
+    + `<div class="nt">${g === "e" ? "🚨 긴급대피 = 실황 기준(실제 내린 비) · 🚶 사전대피 = 예보 기준. 대피장소 · 근거는 AI 상황판단(I). " : "🚧 통제 = 출입 · 통행 제한 단계(대피보다 아래). "}근접 = 기준 수치의 70% 이상. 시군 이름 옆 비상단계는 그 시 매뉴얼(특보 종류 기준) — 도 단계와 별개다. 도 · 시군 모두 기준에 닿으면 그 단계가 된 것으로 보고, 실제와 다르면 특보 아이콘에서 바꾼다. 남은 ㎜ · 닿는 시각은 가장 먼 조건 기준이며, 시각은 예보 시우량을 지금 누적에 더한 값이라 실제보다 이를 수 있다. 판단 · 명령은 권한자 몫 — 기준과의 대조일 뿐이다.</div>`;
 }
 function watchOpen(g) {                                     // g: 'e' | 'c' | null(닫기)
   if (g && !wItems(g).length) g = null;

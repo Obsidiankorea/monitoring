@@ -200,7 +200,7 @@ def series_of(e: dict, s: dict, fam: str, rule: str) -> dict | None:
         for st in rule0:
             pt = plane(p["ladders"].get(fam, []), st, rule0[st])
             xy[st].append(pt[0] if pt else None)
-    return {"t": list(fl[:len(out)]), "v": out, "xy": xy, "ax": ax, "rule": rule0, "pl": pl, "site": ai.site_area(rule)}
+    return {"t": list(fl[:len(out)]), "v": out, "xy": xy, "ax": ax, "rule": rule0, "pl": pl, "site": ai.site_area(rule, fam)}
 
 
 def past_of(sr: dict | None, hrs: list | None, n: int = 48) -> dict | None:

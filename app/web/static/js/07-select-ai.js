@@ -67,16 +67,22 @@ function toast(msg) {
 const AIW = { open: false, seq: 0, scope: null, mode: "all" };
 try { AIW.mode = localStorage.getItem("gn-ai-mode") || "all"; } catch {}
 const aiEsc = t => String(t ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
-const aiTxt = t => aiEsc(t).replace(/\[\[([^\]]+)\]\]/g, '<span class="wk">$1</span>');
+/* 단계 이름은 그림글자로 줄인다 — 한 답에서 처음만 '🚨 긴급대피', 다음부터 🚨(올리면 이름). 위키 링크 안 · '통제할' 같은 낱말은 그대로 */
+const STG_EMO = { 통제: "🚧", 사전대피: "🚶", 긴급대피: "🚨" };
+let EMO_SEEN = new Set();
+const stgEmo = h => h.replace(/\[\[[^\]]*\]\]|긴급대피|사전대피|(?<![가-힣])통제(?![가-힣·])/g, m => m[0] === "[" ? m
+  : EMO_SEEN.has(m) ? `<span title="${m}">${STG_EMO[m]}</span>` : (EMO_SEEN.add(m), `${STG_EMO[m]} ${m}`));
+const aiTxt = t => stgEmo(aiEsc(t)).replace(/\[\[([^\]]+)\]\]/g, '<span class="wk">$1</span>');
 /* LLM 답의 마크다운 — 소제목 · 굵게 · 목록(들여쓰기)만. 글자는 aiTxt 가 먼저 막으므로 HTML 이 새지 않는다 */
 const aiInl = t => aiTxt(t).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`([^`]+)`/g, "$1");
-const aiMd = t => String(t ?? "").split(/\r?\n/).map(l => {
+const aiMd = t => (EMO_SEEN = new Set(), String(t ?? "")).split(/\r?\n/).map(l => {
   const h = /^#{1,6}\s+(.*)$/.exec(l) || /^\*\*([^*]+)\*\*:?\s*$/.exec(l), li = /^(\s*)([-*•]|\d+[.)])\s+(.*)$/.exec(l);
   if (h) return `<h6>${aiInl(h[1])}</h6>`;
   if (li) return `<div class="li${li[1].length ? " sub" : ""}"><i>${/\d/.test(li[2]) ? aiEsc(li[2]) : "·"}</i><span>${aiInl(li[3])}</span></div>`;
   return !l.trim() || /^\s*(-{3,}|\*{3,})\s*$/.test(l) ? "" : `<p>${aiInl(l)}</p>`;
 }).join("");
 function aiSections(secs) {
+  EMO_SEEN = new Set();
   const last = secs.map(x => !!x.texts).lastIndexOf(true);    // 체크 칸들 맨 뒤에 적용 단추
   return secs.map((x, n) => {
     const todo = x.h === "할 일", ref = x.h.startsWith("참고");

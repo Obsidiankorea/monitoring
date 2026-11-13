@@ -1038,14 +1038,19 @@ def regions() -> dict:
     }
 
 
-def site_area(rule: str) -> list[dict]:
+def site_area(rule: str, fam: str | None = None) -> list[dict]:
     """지구 원문 대피기준 → 평면의 영역. 묶음(site_groups)마다 하나 — 영역끼리는 '또는', '그리고'로 묶인 것만 네모.
-    1시간 조건은 세로, 나머지(누적 · 일 · 3 · 12시간)는 가로 — 가로 조건이 여럿이면 큰 값(한 축에 둘을 못 그린다)."""
+    1시간 조건은 세로, 3시간은 3으로 나눠 시간당꼴로 세로(사용자 결정 2026-11 — '3시간 90 ≒ 시우량 30'),
+    가로축과 창이 같은 것만 가로(산사태 24시간, 하천 24 · 48시간). 나머지(12시간 등)는 kind 'text' — 글로만."""
+    ax = {"산사태": {24}, "지하공간": set()}.get(fam, {24, 48})
     out = []
     for g in site_groups(rule):
-        y = max((c["mm"] for c in g if c["win"] == 1), default=None)
-        x = max((c["mm"] for c in g if c["win"] != 1), default=None)
-        a = {"stage": "지구 기준", "note": rule, "kind": "rect" if x and y else "vband" if x else "band", "x": x, "y": y}
+        name = lambda c: c["label"].split("(")[0]  # noqa: E731
+        ok = all(c["win"] in (1, 3) or c["win"] in ax for c in g)
+        y = max((c["mm"] / c["win"] for c in g if c["win"] in (1, 3)), default=None) if ok else None
+        x = max((c["mm"] for c in g if c["win"] in ax), default=None) if ok else None
+        a = {"stage": "지구 기준", "note": rule, "kind": "rect" if x and y else "vband" if x else "band" if y else "text", "x": x, "y": y,
+             "lab": " 그리고 ".join(f'{name(c)} {c["mm"]:g}㎜' + (f'(시간당 {c["mm"] / 3:g}㎜꼴)' if c["win"] == 3 else "") for c in g)}
         if a not in out:
             out.append(a)
     return out

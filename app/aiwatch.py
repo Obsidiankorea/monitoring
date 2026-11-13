@@ -23,6 +23,7 @@ RANK = {"near": 1, "met": 2}
 KEEP_S = 3600            # 이만큼 안 보이던 것은 상태에서 지운다(다시 생기면 새로 알린다)
 MAX_LINES = 10          # 문자 한 통에 읍면동 줄 몇 개까지
 STAGE_RANK = {"긴급대피": 3, "사전대피": 2, "통제": 1}
+STAGE_EMO = {"긴급대피": "🚨", "사전대피": "🚶", "통제": "🚧"}   # 알림 글 줄이기 — 처음만 이름을 붙이고 다음부터 그림글자만
 
 
 def cfg() -> dict:
@@ -131,9 +132,10 @@ def _msg(new: list, tm: str) -> str:
         k = (fam, stg)
         d[k] = max(d.get(k, 0), 2 if st == "met" else 1)
     ranked = sorted(by.items(), key=lambda kv: -max(STAGE_RANK[k[1]] * 10 + v for k, v in kv[1].items()))
-    lines = [f"도 비상단계 {x[1]} — {x[4]}" for x in stage]
+    lines, seen = [f"도 비상단계 {x[1]} — {x[4]}" for x in stage], set()
+    emo = lambda s: STAGE_EMO[s] if s in seen else (seen.add(s), f"{STAGE_EMO[s]} {s}")[1]  # noqa: E731
     for (sg, emd), d in ranked[:MAX_LINES]:
-        parts = [f"{fam} {stg} {'충족' if v == 2 else '근접'}" for (fam, stg), v in sorted(d.items(), key=lambda kv: -(STAGE_RANK[kv[0][1]] * 10 + kv[1]))]
+        parts = [f"{fam} {emo(stg)} {'충족' if v == 2 else '근접'}" for (fam, stg), v in sorted(d.items(), key=lambda kv: -(STAGE_RANK[kv[0][1]] * 10 + kv[1]))]
         lines.append(f"{sg} {emd} — " + " · ".join(parts[:3]))
     more = len(ranked) - MAX_LINES
     head = f"⚠️ 경남 AI 상황판단 — {tm} 기준에 가까워졌거나 닿은 곳 {len(ranked)}곳" + (f" · {stage[0][1]} 진입" if stage else "")

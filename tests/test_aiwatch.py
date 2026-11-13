@@ -24,7 +24,7 @@ def test_msg_groups_by_emd():
     new = [("met", ("창원", "진동면", "산사태", "긴급대피", "a")), ("near", ("창원", "진동면", "하천", "사전대피", "b")),
            ("met", ("고성", "동해면", "산사태", "사전대피", "c")), ("met", ("도", "비상 2단계", "비상단계", "", "호우경보 11개 시군"))]
     m = aiwatch._msg(new, "10.19 00:10")
-    assert "2곳" in m and "비상 2단계 진입" in m and m.count("창원 진동면") == 1 and "산사태 긴급대피 충족" in m
+    assert "2곳" in m and "비상 2단계 진입" in m and m.count("창원 진동면") == 1 and "산사태 🚨 긴급대피 충족" in m and "산사태 🚶 충족" in m   # 처음만 이름, 다음부터 그림글자
 
 
 def test_snapshot_items_carry_the_gap_text(monkeypatch):

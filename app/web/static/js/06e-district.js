@@ -156,9 +156,12 @@ function ppAreas(reg, S, o = {}) {
       + (a.night ? "" : `<path d="${shape(a, 0.7)}" fill="none" stroke="${c}" stroke-opacity=".55" stroke-dasharray="2 4"/>`);
   }
   // 지구 자체 기준 — 단계 색(노 · 파 · 빨)과 겹치지 않는 자홍 굵은 점선 + 흰 테두리(움직이면 눈이 아프다 해서 멈춘 선)
-  for (const a of o.site || []) s += `<path d="${shape(a)}" fill="none" stroke="#fff" stroke-width="5" stroke-opacity=".9"/>`
+  const site = (o.site || []).filter(a => a.kind !== "text");
+  for (const a of site) s += `<path d="${shape(a)}" fill="none" stroke="#fff" stroke-width="5" stroke-opacity=".9"/>`
     + `<path d="${shape(a)}" fill="none" stroke="${PP_SITE}" stroke-width="2.6" stroke-dasharray="9 5" stroke-linecap="round"/>`;
-  const all = [...shown, ...(o.site || [])];
+  // 띠마다 원래 창(3시간 90㎜ …) — 가로축과 창이 다른 조건이 같은 축에 놓이므로 무엇의 선인지 적는다
+  site.forEach((a, i) => { if (a.lab) s += `<text x="${(a.kind === "band" ? L : X(a.x)) + 4}" y="${a.kind === "band" ? Y(a.y) - 4 : T + 10 + i * ((o.fs || 10) + 1)}" fill="${PP_SITE}" stroke="#fff" stroke-width="3" paint-order="stroke" font-size="${(o.fs || 10) - 1}" font-weight="700">${a.lab}</text>`; });
+  const all = [...shown, ...site];
   // 눈금 글자가 붙으면(250 · 270) 겹쳐 읽히지 않는다 — 앞 글자와 가로 22px · 세로 11px 안이면 뺀다(선은 그대로)
   const thin = (vs, P, gap) => { let last = -1e9; return vs.filter(v => { const ok = Math.abs(P(v) - last) >= gap; if (ok) last = P(v); return ok; }); };
   const tx = thin([...new Set(all.map(a => a.x).filter(v => v != null))].sort((a, b) => a - b), X, 22 * (o.fs || 10) / 10),
@@ -175,19 +178,11 @@ const ppPt = (reg, p) => (p ? [reg.x === "15분" ? (p[2] ?? (p[1] != null ? p[1]
 /* 밝은 바탕용 시간색 — 진한 검정(지금) → 빨 · 주 · 노 · 초 · 파 · 남 · 보(내일), 명도를 낮춰 흰 바탕에서도 보이게 */
 const ppTimeCol = f => (f <= 0 ? "#111827" : `hsl(${Math.round(270 * f)} 90% 40%)`);
 /* 한 지구 자취 — full 이면 끝까지 시간색, 아니면 ti 까지 옅은 선. 15분 어림 구간은 점선 */
-/* 지구 자체 기준 한 줄 — 평면은 도(행안부) 공통 영역, 지구 원문 숫자는 글로. 누적(가로)을 도 단계 값과 견준다(이름 = 더 엄격) */
-function siteText(site, reg) {
+/* 지구 자체 기준 한 줄 — 조건마다 원래 창 그대로, '또는'으로. 평면에 못 그린 것(12시간 등)은 글로만이라고 적는다 */
+function siteText(site) {
   if (!site?.length) return "";
-  const xs = site.map(a => a.x).filter(v => v != null), ys = site.map(a => a.y).filter(v => v != null), or = site.length > 1;
-  const parts = [xs.length ? `${reg?.x || "누적"} ${Math.max(...xs)}㎜` : "", ys.length ? `시간당 ${Math.max(...ys)}㎜` : ""].filter(Boolean);
-  let cmp = "";
-  const st = (reg?.areas || []).filter(a => a.x != null && !a.night).sort((a, b) => a.x - b.x);
-  if (xs.length && st.length) {
-    const x = Math.max(...xs), lo = st.filter(a => a.x <= x).pop(), hi = st.find(a => a.x > x);
-    cmp = lo?.x === x ? `도 ${lo.stage}(${lo.x})와 같음` : !lo ? `도 ${hi.stage}(${hi.x})보다 이름 — 더 엄격`
-      : hi ? `도 ${lo.stage}(${lo.x})보다 늦고 ${hi.stage}(${hi.x})보다 이름` : `도 ${lo.stage}(${lo.x})보다 늦음`;
-  }
-  return `이 지구 자체 기준: ${parts.join(or ? " 또는 " : " 그리고 ")}${cmp ? ` — ${cmp}` : ""}`;
+  const off = site.filter(a => a.kind === "text").length;
+  return `이 지구 자체 기준: ${site.map(a => a.lab).join(" 또는 ")}${off ? ` — ${site.filter(a => a.kind === "text").map(a => a.lab).join(" · ")}는 그림에 없음` : ""}`;
 }
 function ppTrail(reg, S, pl, ti, full, col) {
   const pts = pl.map((p, i) => [ppPt(reg, p), i]).filter(([p]) => p && p[0] != null && p[1] != null), n = pl.length, end = full ? n - 1 : ti;
@@ -288,14 +283,17 @@ function districtAt(mx, my) {
 function ppPlay(box) {
   const run = JSON.parse(box.dataset.run || "[]"), c = box.querySelector(".pp-run"), lab = box.querySelector(".pp-lab");
   if (!run.length || !c) return;
-  clearInterval(box._t);
-  let i = 0;
+  const btn = box.querySelector(".pp-play"), stop = () => { clearInterval(box._t); box._t = null; if (btn) btn.textContent = "▶"; };
+  if (box._t) { stop(); return; }                        // 도는 중에 누르면 멈춤 — 다시 누르면 그 자리부터
+  let i = box._i < run.length ? box._i || 0 : 0;         // 끝까지 갔으면 처음부터
   const step = () => {
     const [[x, y], t] = run[i];
     c.setAttribute("cx", x); c.setAttribute("cy", y); c.setAttribute("visibility", "visible"); lab.textContent = t;
-    if (++i >= run.length) clearInterval(box._t);
+    box._i = ++i;
+    if (i >= run.length) stop();
   };
-  step(); box._t = setInterval(step, Math.max(120, Math.min(400, 6000 / run.length)));
+  if (btn) btn.textContent = "⏸";
+  box._t = setInterval(step, Math.max(120, Math.min(400, 6000 / run.length))); step();
 }
 document.addEventListener("click", ev => {
   const b = ev.target.closest?.(".pp-play");
