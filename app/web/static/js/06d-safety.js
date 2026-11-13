@@ -7,6 +7,27 @@ let SAF = null, SAF_FL = null, SAF_T = 0, SAF_HIT = [], SAF_V = null;   // SAF_V
 const SAF_IDS = ["slide", "reservoir", "flood"];
 const SAF_C = ["var(--ink-3)", "var(--rv-1)", "var(--rv-2)", "var(--rv-3)", "var(--rv-4)", "var(--rv-4)"];   // 저수지 관심 · 주의 · 경계 · 심각 · 대피
 const safAny = () => SAF_IDS.some(id => OV.has(id));
+/* 산사태취약지역 마름모 — 우려지역 지구 패널에서 켜고 끈다(이 브라우저 기억). 산사태 레이어나 우려지역 지구 레이어가 켜져 있을 때 보인다 */
+let SAF_VON = true;
+try { SAF_VON = localStorage.getItem("gn-vuln") !== "0"; } catch {}
+const vulnOn = () => SAF_VON && !CASE && (OV.has("slide") || OV.has("district"));
+async function loadVuln() {
+  if (!vulnOn() || SAF_V) return;
+  try { SAF_V = (await getJson("/api/slide/vuln")).rows || []; } catch { SAF_V = []; }
+  drawSafety(); districtLegend();
+}
+function safVuln() {                                     // 토석류 갈색 · 산사태 주황. 고른 시군만(전체면 다) — 2,500곳이라 가려 그린다
+  if (!vulnOn() || !SAF_V?.length || !V || !V.s) return "";
+  const r = Math.max(2.2, Math.min(5, V.u * 0.55));
+  let o = "";
+  for (const s of SAF_V) {
+    if (!selHas(s.sg)) continue;
+    const [c, rr] = LCCF(s.p[1], s.p[0]), x = V.toX(c), y = V.toY(rr);
+    o += `<path class="sfv${s.ty === "산사태" ? " s" : ""}" d="M${x.toFixed(1)},${(y - r).toFixed(1)}l${r.toFixed(1)},${r.toFixed(1)}l${(-r).toFixed(1)},${r.toFixed(1)}l${(-r).toFixed(1)},${(-r).toFixed(1)}Z"/>`;
+    SAF_HIT.push({ x, y, rr: Math.max(r, 5), v: s });
+  }
+  return o;
+}
 /* 침수흔적 깊이 색(범례 토글, 이 브라우저 기억) — 침수심(m) 다섯 단계. 청색 강수 위라 하늘 → 노랑 → 주황 → 빨강 → 자주 */
 let SAF_DEP = false;
 try { SAF_DEP = localStorage.getItem("gn-flood-dep") === "1"; } catch {}
@@ -15,9 +36,9 @@ const flDepExpr = () => ["case", ["<", ["get", "dep"], 0], "#9AA3B2",
   ["step", ["get", "dep"], FL_DEP[0][1], ...FL_DEP.slice(0, -1).flatMap(([v], k) => [v, FL_DEP[k + 1][1]])]];
 async function loadSafety() {
   clearTimeout(SAF_T);
-  if (!safAny() || CASE) { SAF = null; drawAlerts(); drawSafety(); renderSafetyLegend(); renderLyIcons(); return; }
+  if (!safAny() || CASE) { SAF = null; drawAlerts(); drawSafety(); renderSafetyLegend(); renderLyIcons(); loadVuln(); return; }
   try { SAF = await getJson("/api/safety"); } catch (e) { SAF = { fail: e.message }; }
-  if (OV.has("slide") && !SAF_V) { try { SAF_V = (await getJson("/api/slide/vuln")).rows || []; } catch { SAF_V = []; } }
+  await loadVuln();
   if (OV.has("flood") && !SAF_FL && SAF?.flood) { try { SAF_FL = await getJson("/api/safety/flood"); } catch { SAF_FL = []; } }
   drawAlerts(); drawSafety(); renderSafetyLegend(); renderLyIcons();   // 산사태 딱지가 생기면 특보 딱지 크기 · 기온 자리가 바뀐다
   SAF_T = setTimeout(loadSafety, 5 * 60 * 1000);
@@ -50,7 +71,7 @@ function drawSafety() {
     GL.setPaintProperty("flood", "fill-opacity", SAF_DEP ? 0.5 : 0.22);
     GL.setPaintProperty("flood-line", "line-color", SAF_DEP ? flDepExpr() : cssVal("var(--sf-flood)"));
   }
-  if (!safAny() || !V || !V.s || !SAF || SAF.fail) { g.innerHTML = ""; return; }
+  if (!safAny() || !V || !V.s || !SAF || SAF.fail) { g.innerHTML = safVuln(); return; }
   const out = [], badges = [], pts = [];
   if (OV.has("slide")) {
     // 예보(발령) — 이름 테두리(시군 경계 갈색 테두리는 호우특보 경계와 헷갈려 뺐다, 11-08). 예측(산림청) — 이름 오른쪽 산 그림. 예전 '산사태주의보(예측)' 글 딱지는 특보 딱지와 겹쳐 뺐다(11-08)
@@ -69,16 +90,6 @@ function drawSafety() {
       }
     }
   }
-  if (OV.has("slide") && SAF_V?.length) {
-    // 산사태취약지역 — 작은 마름모(토석류 갈색 · 산사태 주황). 고른 시군만 그린다(전체면 다) — 2,500곳이라 가려 그린다
-    const r = Math.max(2.2, Math.min(5, V.u * 0.55));
-    for (const s of SAF_V) {
-      if (!selHas(s.sg)) continue;
-      const [c, rr] = LCCF(s.p[1], s.p[0]), x = V.toX(c), y = V.toY(rr);
-      pts.push(`<path class="sfv${s.ty === "산사태" ? " s" : ""}" d="M${x.toFixed(1)},${(y - r).toFixed(1)}l${r.toFixed(1)},${r.toFixed(1)}l${(-r).toFixed(1)},${r.toFixed(1)}l${(-r).toFixed(1)},${(-r).toFixed(1)}Z"/>`);
-      SAF_HIT.push({ x, y, rr: Math.max(r, 5), v: s });
-    }
-  }
   if (OV.has("reservoir")) {
     const r0 = Math.max(4.5, Math.min(9, V.u));
     for (const s of (SAF.res || []).slice().sort((a, b) => a.on - b.on || a.lv - b.lv)) {
@@ -89,12 +100,12 @@ function drawSafety() {
       SAF_HIT.push({ x, y, rr: Math.max(r, 7), s });
     }
   }
-  g.innerHTML = out.join("") + pts.join("") + badges.join("");
+  g.innerHTML = out.join("") + safVuln() + pts.join("") + badges.join("");
   drawHeat();                                  // 기온은 이름 밑 딱지들 다음 줄(05 nameStack)
 }
 /* 마우스 — 저수지 계측기가 먼저, 아니면 침수흔적 면 */
 function safetyAt(mx, my) {
-  if (!V || !(OV.has("reservoir") || OV.has("flood") || OV.has("slide"))) return null;
+  if (!V || !(OV.has("reservoir") || OV.has("flood") || OV.has("slide") || vulnOn())) return null;
   let best = null, bd = Infinity;
   for (const h of SAF_HIT) {
     const dd = (h.x - mx) ** 2 + (h.y - my) ** 2;
@@ -109,6 +120,7 @@ function safetyTip(h) {
     const v = h.vuln;
     return `<b>산사태취약지역 · ${escH(v.ty)}</b><div class="d">${escH(v.sg)} ${escH(v.emd)} ${escH(v.ri)} ${escH(v.jb)}${v.a ? ` · 지정면적 ${v.a.toLocaleString()}㎡` : ""}</div>`
       + (v.sh ? `<div class="d">지정대피소 ${escH(v.sh)}</div>` : "")
+      + `<div class="d">「산림재난방지법」 제22조로 지정 · 고시(산림부서 소관) — 인명피해 우려지역 지구와는 다른 명단이고, 판정 % · 알림은 없다</div>`
       + `<div class="d">경상남도 지정현황 2026-05-01(공공데이터포털) — 자리는 지번을 좌표로 바꾼 것이라 필지 가운데쯤이다</div>`;
   }
   if (h.res) {

@@ -84,7 +84,7 @@ async function loadDistrict() {
   if (!OV.has("district") || CASE) { DZ = null; drawDistrict(); districtLegend(); return; }
   try { DZ = await getJson("/api/districts/all"); } catch (e) { DZ = { fail: e.message }; }
   if (!DZ_SH && !DZ.fail) { try { DZ_SH = await getJson("/api/districts/shapes"); } catch { DZ_SH = { features: [] }; } }
-  drawDistrict(); districtLegend(); renderLyIcons();
+  drawDistrict(); districtLegend(); renderLyIcons(); loadVuln();
   try {                                                  // 위험도 — 경남 전체 판정은 몇 초 걸린다(뒤에 칠한다)
     // 경남 전체는 지금 % 만(빠르다), 시군을 골랐으면 그 시군은 시간별 줄까지(마우스 글 그래프 · 재생) — 경남 전체 시간별은 수십 초 걸렸다
     const sb = ACC_BASIS === "grid" ? "grid" : "aws";
@@ -314,7 +314,6 @@ function dzTerrainRows(g) {
     + row("해안", g.cs != null && g.cs <= 3000 ? m(g.cs) : "")
     + row("건물", g.b300 ? `${g.b300.toLocaleString()}동(300m)` : "")
     + row("취약지역", g.sv ? `산사태취약지역(${escH(g.sv.ty)}) ${g.sv.d}m${g.sv.n > 1 ? ` · 300m 안 ${g.sv.n}곳` : ""}` : "")
-    + row("이력", g.hx ? `<span title="경남도 복구계획 20건(2016.10~2026.8) — 시설 이름에 이 읍면동이 적힌 것만 세어 실제보다 적다. 주로 ${escH((g.hx.ty || []).join(" · "))}">읍면동 호우 ${g.hx.ev}회 · 복구 ${g.hx.n}건 <small>최근 ${escH(g.hx.last)}</small></span>` : "")
     + row("노후", g.bk ? `<span title="사용승인 30년 넘은 목 · 벽돌 · 블록 · 조적 · 석 구조 — 300m 안, 건축물대장이 붙은 ${g.bk}동 가운데(대장 없는 옛집은 못 센다)">오래된 약한 구조 ${g.bo || 0}동${g.bb ? ` · 지하층 ${g.bb}동` : ""} <small>/ 대장 ${g.bk}동</small></span>` : "");
 }
 /* 담당자 연락처 — 고정한 카드에서만(상황판단과 같은 /api/contacts · 잠금 번호). AI 쪽 코드는 부르지 않는다 */
@@ -368,6 +367,18 @@ function districtOpen(r) {
   const u = `/map.html?sj=1&sig=${encodeURIComponent(r.sigun)}&r=${encodeURIComponent(r.id)}`;
   if (!window.open(u, "gn-judge", "popup=1,width=1680,height=1000")) toast("팝업이 막혔다 — 이 사이트의 팝업을 허용한다");
 }
+TIPS.set("vuln-now", `<b>산사태취약지역</b> — 산사태 · 토석류로 인명 · 재산 피해가 우려돼 <b>「산림재난방지법」 제22조</b>(옛 「산림보호법」 제45조의8)에 따라 지정 · 고시한 곳. 소관은 산림청 · 도 산림휴양과 · 시군 산림부서.<br>
+  <b>우려지역 지구와 무엇이 다른가</b><br>
+  · 우려지역 지구(동그라미 배지) — 행안부 「인명피해우려지역 지정 · 관리 지침」으로 시군 재난부서가 올린 지구. 대피 · 통제 기준이 붙어 있어 판정 % 와 알림이 나온다.<br>
+  · 산사태취약지역(마름모) — 산림청 기초조사(5년마다) → 시군 · 지방산림청 실태조사(현장 70 + 해석 30점) → 지정위원회 심의 → 30일 이상 공고 · 이의신청 → 지정 · 고시. 기준 % 가 없어 <b>위치만</b> 보인다.<br>
+  <b>두 종류</b><br>
+  · 산사태 — 비탈이 무너질 우려(위험사면 가까이 집 · 보호시설). 산지사방을 먼저 한다.<br>
+  · 토석류 — 계곡을 따라 흙 · 돌 · 물이 쏟아질 우려(계류 아래 인가). 사방댐 · 계류보전을 먼저 한다.<br>
+  <b>지정되면</b> 사방사업 우선 시행, 연 2회 이상 현지점검(대피소 포함), 대피소 · 표지판 설치, 위험할 때 사용 제한 · 안전조치 명령(법 제22조 · 제25조).<br>
+  <b>빠지는 것</b> 급경사지 · 붕괴위험지역(급경사지법), 도로 · 접도구역(도로법), 시설물(시설물안전법)은 대상이 아니다 — 아파트 뒤 인공 비탈면 같은 곳은 여기에 없다.<br>
+  <b>겹침(이 지도에서 잰 것)</b> 산사태 유형 우려지역 지구 712곳 중 457곳은 300m 안에 취약지역이 있다. 거꾸로 취약지역 2,528곳 중 산사태 우려지역 지구가 300m 안에 있는 곳은 486곳뿐이다.<br>
+  <b>지정 밖에서도 난다</b> 2016~2026 경남 산사태 복구 지점 중 위치를 아는 267건에서 취약지역 300m 안은 23건(9%)이었다(복구비가 집행된 지점 기준 · 필지 가운데 좌표라 어림).<br>
+  <b>자료</b> 공공데이터포털 「경상남도_산사태취약지역지정현황」 2026-05-01 — 2,591곳 중 지번이 좌표로 바뀐 2,528곳. 자리는 필지 가운데쯤이라 실제 위험 사면 · 계류와 수백 m 어긋날 수 있다. 마우스를 올리면 지번 · 지정면적 · 지정대피소. 켜고 끄기는 이 패널에서(산사태 레이어 J 를 켜도 같이 보인다).`);
 TIPS.set("district-now", `위키 인명피해 우려지역 지구. 동그라미 색은 상황판단의 기준 % 중 가장 높은 단계(지도 기준 AWS · 격자를 따른다, 5분마다), 안의 그림은 유형.<br>
   좌표는 연속지적도(국가공간정보포털) 필지 중심, 못 찾은 곳은 브이월드. 넓은 필지(하천 · 도로 · 임야)는 중심 한 점이라 실제 위험 지점과 다를 수 있다 — 위키 data/지구좌표_수동.csv 에 적으면 그것을 쓴다.<br>필지 모양: 시군을 눌러 확대한 뒤 그 안 읍면동을 누르면 더 확대되어 필지가 면으로 보인다(Ctrl+클릭 여러 곳, Esc 로 한 단계씩).`);
 /* 배지 그림 한 장(data URL) — 범례 · 상황판단 차트가 같은 그림을 쓴다 */
@@ -403,6 +414,10 @@ function districtLegend() {
     : `<div class="seg dzst">${[["icon", "아이콘"], ["shape", "도형"], ["off", "끔"]].map(([k, l]) => `<button data-dzs="${k}" class="${DZ_STYLE === k ? "on" : ""}">${l}</button>`).join("")}</div>`
       + `<label class="nt" style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" data-dztip ${DZ_TIP ? "checked" : ""}>마우스를 올리면 지구 카드 띄우기 <span class="mute">(끄면 눌러야 뜬다)</span></label>`
       + DZ_FAM.map(f => `<div class="rr">${dzBadge(f, 0)}<b>${f}</b><span>${rows.filter(r => r.fam === f).length}곳</span></div>`).join("")
+      + `<div class="sec">산사태취약지역 <i class="inf" data-tip="vuln-now">i</i></div>`
+      + `<label class="nt" style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" data-vuln ${SAF_VON ? "checked" : ""}>지도에 마름모로 보이기 <span class="mute">${SAF_V ? `${SAF_V.filter(s => selHas(s.sg)).length}곳` : ""}</span></label>`
+      + `<div class="keys2"><span><i class="dt" style="background:var(--sf-slide);transform:rotate(45deg);border-radius:0"></i>토석류</span><span><i class="dt" style="background:#E08A2B;transform:rotate(45deg);border-radius:0"></i>산사태</span></div>`
+      + `<div class="nt">산림부서가 「산림재난방지법」으로 지정한 곳 — 위 우려지역 지구(재난부서, 행안부 지침)와 <b>다른 명단</b>이다. 위치만 보이고 판정 % · 알림은 없다.</div>`
       + `<div class="sec">색 = 기준 대비 % (${ACC_BASIS === "grid" ? "격자" : "AWS"})${DZ_TI ? ` · <b>${escH(DZ_TL)} 예상</b>(상황판단 재생)` : ""}</div>`
       + `<div class="keys2">${DZ_LV.map(lv => `<span><i class="dt" style="background:${dzColVar(lv)}"></i>${lv ? `${lv}%↑` : "50 아래"}</span>`).join("")}</div>`
       + `<div class="nt">${DZ_PCT ? `70% 넘은 지구 ${hot}곳` : "위험도 계산 중…"} · ${selOn() ? `고른 시군 ${rows.length}곳` : `경남 ${rows.length}곳`}${g ? ` · 좌표 ${g.found}/${g.total}` : ""}</div>`
@@ -414,6 +429,11 @@ function districtLegend() {
   box.querySelector(".hd2").onclick = ev => { if (!ev.target.closest(".inf")) setLyOpen(null); };
   box.querySelector("[data-crit]")?.addEventListener("click", () => openHelp("crit"));
   box.querySelector("[data-dzg]")?.addEventListener("click", () => dzDlg(true));
+  box.querySelector("[data-vuln]")?.addEventListener("change", ev => {
+    SAF_VON = ev.target.checked;
+    try { localStorage.setItem("gn-vuln", SAF_VON ? "1" : "0"); } catch {}
+    if (SAF_VON && !SAF_V) loadVuln(); else { drawSafety(); districtLegend(); }
+  });
   box.querySelector("[data-dztip]")?.addEventListener("change", ev => {
     DZ_TIP = ev.target.checked;
     try { localStorage.setItem("gn-dz-tip", DZ_TIP ? "1" : "0"); } catch {}
