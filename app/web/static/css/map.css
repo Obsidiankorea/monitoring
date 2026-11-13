@@ -785,6 +785,8 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 /* 긴 설명 — 화면 가운데 문서(제목 · 소제목 · 항목 목록). 눌러 고정하면 굴린다 */
 #pop.doc { max-width: min(760px, calc(100vw / var(--k, 1) - 32px)); width: 760px; max-height: calc(86vh / var(--k, 1)); overflow: auto;
   padding: 18px 24px 20px; font-size: 14px; line-height: 1.6; background: var(--panel); box-shadow: 0 24px 80px rgba(0,0,0,.6); }
+#pop.doc p { margin: 0 0 8px; }
+#pop.doc .auto li { margin: 3px 0; } #pop.doc .auto li > b:first-child { display: inline; min-width: 0; color: var(--ink); font-weight: 700; font-size: inherit; }
 #pop.doc h3 { margin: 0 0 4px; font-size: 17px; color: var(--ink); }
 #pop.doc .lead { margin: 0 0 12px; color: var(--ink-3); font-size: 13px; }
 #pop.doc h4 { margin: 16px 0 6px; padding-bottom: 4px; font-size: 12px; letter-spacing: .08em; color: var(--accent); border-bottom: 1px solid var(--line); }
@@ -1478,7 +1480,7 @@ body.heat #ht-lg { position: absolute; left: 22px; bottom: 22px; z-index: 5; dis
 #safg .sfr { fill: var(--ink-3); fill-opacity: .55; stroke: var(--halo); stroke-width: 1; }
 #safg .sfr.on { fill-opacity: 1; stroke: var(--ink); stroke-width: 1.2; }
 #safg .sfr.dim { opacity: .35; }
-#safg .sfv { fill: var(--sf-slide); fill-opacity: .8; stroke: var(--halo); stroke-width: .8; } #safg .sfv.s { fill: #E08A2B; }
+#safg .sfv { fill: #FF6FB5; fill-opacity: .9; stroke: var(--halo); stroke-width: .8; } #safg .sfv.s { fill: #FF9F1C; }
 #safg .sfn { fill: none; stroke: #F0A050; stroke-width: 3; }                     /* 산사태 예보(발령) — 이름 테두리 */
 #safg .sfn.l2 { stroke: #FF5A4E; stroke-width: 3.5; }
 #safg .sfm rect { fill: #FFF4E6; stroke: #C26A1E; stroke-width: 2.5; }            /* 산림청 예측 — 이름 옆 산 */

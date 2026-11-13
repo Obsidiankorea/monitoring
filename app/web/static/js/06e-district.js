@@ -416,7 +416,7 @@ function districtLegend() {
       + DZ_FAM.map(f => `<div class="rr">${dzBadge(f, 0)}<b>${f}</b><span>${rows.filter(r => r.fam === f).length}곳</span></div>`).join("")
       + `<div class="sec">산사태취약지역 <i class="inf" data-tip="vuln-now">i</i></div>`
       + `<label class="nt" style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" data-vuln ${SAF_VON ? "checked" : ""}>지도에 마름모로 보이기 <span class="mute">${SAF_V ? `${SAF_V.filter(s => selHas(s.sg)).length}곳` : ""}</span></label>`
-      + `<div class="keys2"><span><i class="dt" style="background:var(--sf-slide);transform:rotate(45deg);border-radius:0"></i>토석류</span><span><i class="dt" style="background:#E08A2B;transform:rotate(45deg);border-radius:0"></i>산사태</span></div>`
+      + `<div class="keys2"><span><i class="dt" style="background:#FF6FB5;transform:rotate(45deg);border-radius:0"></i>토석류</span><span><i class="dt" style="background:#FF9F1C;transform:rotate(45deg);border-radius:0"></i>산사태</span></div>`
       + `<div class="nt">산림부서가 「산림재난방지법」으로 지정한 곳 — 위 우려지역 지구(재난부서, 행안부 지침)와 <b>다른 명단</b>이다. 위치만 보이고 판정 % · 알림은 없다.</div>`
       + `<div class="sec">색 = 기준 대비 % (${ACC_BASIS === "grid" ? "격자" : "AWS"})${DZ_TI ? ` · <b>${escH(DZ_TL)} 예상</b>(상황판단 재생)` : ""}</div>`
       + `<div class="keys2">${DZ_LV.map(lv => `<span><i class="dt" style="background:${dzColVar(lv)}"></i>${lv ? `${lv}%↑` : "50 아래"}</span>`).join("")}</div>`
