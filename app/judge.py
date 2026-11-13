@@ -255,7 +255,7 @@ def rows_of(sg: str, base: str, k: float, add: tuple = (0.0, 0.0), series: bool 
                 if v:
                     site_urgent(v, d["rule"])
             out.append({"sigun": sg, "emd": e["emd"], **d, "b": b, "slide": sl if d["fam"] == "산사태" else None,
-                        "soil": soil_site(d["rule"], plv), "terrain": terrain.of(d),   # 지역 여건(지형 · 침수흔적) — 판정 % 는 그대로
+                        "soil": soil_site(d["rule"], plv), "terrain": terrain.of({**d, "sigun": sg, "emd": e["emd"]}),   # 지역 여건(지형 · 침수흔적) — 판정 % 는 그대로
                         "where": "지구" if d["id"] in pg else "읍면동",
                         "fc6h": e.get("fc6h"), "later": e.get("later")})
     return out, g

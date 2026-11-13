@@ -574,7 +574,7 @@ async def api_districts_all():
             for emd, ds in contacts.districts(sg)["emd"].items():
                 out += [{"sigun": sg, "emd": emd, **{k: d[k] for k in ("id", "name", "ri", "jibun", "kind", "fam", "shelter", "rule", "pos", "approx")},
                          "tf": t.get("flags"), "tg": _dz_tg(t)}   # 지역 여건 꼬리표 · 지형 값(지도 지구 카드)
-                        for d in ds if d["pos"] for t in [terrain.of(d) or {}]]
+                        for d in ds if d["pos"] for t in [terrain.of({**d, "sigun": sg, "emd": emd}) or {}]]
         return out
     rows = await asyncio.to_thread(one)
     return {"rows": rows, "geo": geocode.status()}
