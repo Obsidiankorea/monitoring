@@ -529,6 +529,30 @@ async def api_contacts(sigun: str, x_pin: str | None = Header(None)):
     return JSONResponse(await asyncio.to_thread(contacts.of_sigun, sigun), headers={"Cache-Control": "no-store"})
 
 
+@app.post("/api/reply/ask")
+async def api_reply_ask(body: dict, request: Request, x_pin: str | None = Header(None)):
+    """{rids, note, base} — 지구 담당자에게 보낼 회신 링크를 만든다(문자는 화면에서). 이름 · 번호가 나가므로 잠금 번호 뒤."""
+    from . import reply
+    _contacts_pin(x_pin)
+    if config.DEMO:
+        raise HTTPException(403, "시연 화면에서는 요청을 만들지 않는다")
+    base = str(body.get("base") or "").strip() or str(request.base_url)
+    out = await asyncio.to_thread(reply.ask, [str(x) for x in body.get("rids") or []], str(body.get("note") or ""), base)
+    return JSONResponse(out, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/reply/list")
+async def api_reply_list(x_pin: str | None = Header(None)):
+    """현장 회신 현황 — 요청한 것 전부와 회신(조치 여부 · 추가 배치 · 사진 유무)."""
+    from . import reply
+    _contacts_pin(x_pin)
+    return JSONResponse({"rows": await asyncio.to_thread(reply.rows)}, headers={"Cache-Control": "no-store"})
+
+
+from . import reply as _reply  # noqa: E402 — 회신 화면(/r/…). 같은 망에서는 대시보드 주소로도 열린다(밖에는 app.reply 서버만)
+app.include_router(_reply.router)
+
+
 @app.get("/api/wiki/page")
 async def api_wiki_page(name: str):
     """상황판단 모드 매뉴얼 칸 — 위키 문서 하나의 본문(머리말 뺀 마크다운). 이름은 위키 목록에 있는 것만(경로를 받지 않는다)."""

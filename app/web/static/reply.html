@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>현장 회신 요청</title>
+<!-- 상황실 화면 — 지구를 골라 요청을 남기고 담당자에게 보낼 문자 글(지구 링크)을 만들고, 회신을 본다(app/reply.py · /api/reply/*).
+     이름 · 번호가 보이므로 연락처 잠금 번호(설정 › AI)가 있으면 그 번호를 넣어야 열린다. -->
+<link rel="stylesheet" href="css/map.css">
+<style>
+body { overflow: auto; }
+main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 64px; display: grid; gap: 24px; }
+h1 { font-size: 20px; margin: 0; } h2 { font-size: 16px; margin: 0 0 12px; }
+section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
+.row { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+label.f { display: grid; gap: 4px; font-size: 12px; color: var(--ink-2); }
+input[type=text], input[type=password], select { height: 36px; padding: 0 10px; background: var(--panel-2); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; font: inherit; }
+input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button, a.btn { height: 36px; padding: 0 14px; border-radius: 6px; border: 1px solid var(--line); background: var(--raised); color: var(--ink); cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }
+button.go { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+button:disabled { opacity: .5; cursor: default; }
+#pick { max-height: 340px; overflow: auto; margin: 12px 0; border: 1px solid var(--line-soft); border-radius: 6px; padding: 4px 12px; }
+#pick h3 { font-size: 12px; color: var(--ink-2); margin: 12px 0 4px; font-weight: 500; }
+#pick label { display: flex; gap: 8px; padding: 4px 0; align-items: baseline; }
+#pick .no { color: var(--ink-3); }
+#pick small { color: var(--ink-3); }
+.msg { color: var(--ink-2); margin: 8px 0 0; min-height: 1.4em; } .msg.bad { color: var(--lv-fail); }
+table { width: 100%; border-collapse: collapse; } th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+th { font-size: 12px; color: var(--ink-2); font-weight: 500; }
+.wrap { overflow-x: auto; }
+.tag { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; border: 1px solid var(--line); }
+.tag.done { color: var(--lv-ok); border-color: var(--lv-ok); } .tag.wait { color: var(--ink-3); }
+.tag.not { color: var(--lv-watch); border-color: var(--lv-watch); } .tag.more { color: var(--lv-warn); border-color: var(--lv-warn); }
+.sub { color: var(--ink-3); font-size: 12px; }
+td img { width: 96px; height: 72px; object-fit: cover; border-radius: 4px; display: block; }
+</style>
+<main>
+  <h1>현장 회신 요청</h1>
+
+  <section>
+    <h2>지구 고르기</h2>
+    <div class="row">
+      <label class="f">연락처 잠금 번호<input type="password" id="pin" inputmode="numeric" autocomplete="off" style="width:120px"></label>
+      <label class="f">시군<select id="sigun"></select></label>
+      <label class="f" style="flex:1;min-width:240px">현장에서 열 주소 — 회신 전용 서버(밖에서 닿는 주소)
+        <input type="text" id="base" placeholder="비우면 지금 이 주소"></label>
+    </div>
+    <div id="pick"><p class="msg">시군을 고르면 지구가 나옵니다.</p></div>
+    <div class="row">
+      <label class="f" style="flex:1;min-width:240px">담당자에게 보낼 요청 한 줄
+        <input type="text" id="note" maxlength="200" value="지금 현장 조치 여부를 알려 주세요"></label>
+      <button class="go" id="ask" disabled>요청 남기고 문자 글 만들기</button>
+    </div>
+    <p class="msg" id="askmsg" role="status"></p>
+    <div class="wrap"><table id="out" hidden><thead><tr><th>받는 사람</th><th>번호</th><th>지구</th><th>보내기</th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section>
+    <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px">
+      <h2 style="margin:0">회신 현황</h2><button id="reload">현황 새로 읽기</button>
+    </div>
+    <div class="wrap"><table id="rows"><thead><tr><th>지구 (누르면 현장 페이지)</th><th>지금 담당자</th><th>요청</th><th>마지막 회신</th><th>조치</th><th>추가 배치</th><th>덧붙인 말</th><th>사진</th></tr></thead><tbody></tbody></table></div>
+    <p class="msg" id="rowmsg" role="status"></p>
+  </section>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+const SIGUN = "창원 진주 통영 사천 김해 밀양 거제 양산 의령 함안 창녕 고성 남해 하동 산청 함양 거창 합천".split(" ");
+const ACT = { done: "조치함", doing: "조치 중", not: "아직", na: "해당 없음" };
+const el = (tag, text, cls) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; };
+const hdr = () => ({ "x-pin": $("#pin").value, "Content-Type": "application/json" });
+const say = (id, text, bad) => { $(id).textContent = text; $(id).className = "msg" + (bad ? " bad" : ""); };
+const why = async r => (await r.json().catch(() => ({}))).detail || `오류 ${r.status}`;
+try { $("#base").value = localStorage.getItem("reply-base") || ""; } catch {}
+
+$("#sigun").append(el("option", "고르기"), ...SIGUN.map(s => el("option", s)));
+$("#sigun").onchange = async () => {
+  const s = $("#sigun").value, box = $("#pick");
+  $("#ask").disabled = true;
+  if (!SIGUN.includes(s)) return;
+  box.replaceChildren(el("p", "읽는 중…", "msg"));
+  const [d, c] = await Promise.all([fetch(`/api/districts?sigun=${s}`), fetch(`/api/contacts?sigun=${s}`, { headers: hdr() })]);
+  if (!c.ok) return box.replaceChildren(el("p", `담당자를 읽지 못했습니다 — ${await why(c)}. 잠금 번호를 확인하고 시군을 다시 고르세요.`, "msg bad"));
+  const emd = (await d.json()).emd, people = (await c.json()).people || {};
+  box.replaceChildren();
+  for (const [name, list] of Object.entries(emd)) {
+    box.append(el("h3", name || "읍면동 없음"));
+    for (const z of list) {
+      const who = (people[z.id] || []).filter(p => /^01\d/.test((p.tel || "").replace(/\D/g, "")));
+      const lab = el("label", null, who.length ? "" : "no"), cb = el("input");
+      cb.type = "checkbox"; cb.value = z.id;
+      lab.append(cb, el("span", `${z.name} · ${z.kind}`), el("small", who.length ? who.map(p => p.who).join(", ") : "휴대폰 번호 모름 — 링크만 만든다"));
+      box.append(lab);
+    }
+  }
+  if (!box.children.length) box.append(el("p", "이 시군에는 지구가 없습니다.", "msg"));
+  $("#ask").disabled = false;
+};
+
+$("#ask").onclick = async () => {
+  const rids = [...document.querySelectorAll("#pick input:checked")].map(x => x.value);
+  if (!rids.length) return say("#askmsg", "지구를 하나 이상 고르세요.", true);
+  try { localStorage.setItem("reply-base", $("#base").value.trim()); } catch {}
+  $("#ask").disabled = true; say("#askmsg", "만드는 중…");
+  const r = await fetch("/api/reply/ask", { method: "POST", headers: hdr(), body: JSON.stringify({ rids, note: $("#note").value, base: $("#base").value.trim() }) });
+  $("#ask").disabled = false;
+  if (!r.ok) return say("#askmsg", `링크를 만들지 못했습니다 — ${await why(r)}`, true);
+  const j = await r.json();
+  const copy = (text, label) => { const b = el("button", label); b.onclick = () => navigator.clipboard.writeText(text).then(() => { b.textContent = "복사했습니다"; }, () => { b.textContent = "복사하지 못했습니다"; }); return b; };
+  $("#out tbody").replaceChildren(...j.people.map(p => {
+    const tr = el("tr"), td = el("td"), a = el("a", "문자 앱 열기", "btn");
+    a.href = `sms:${p.tel}?&body=${encodeURIComponent(p.sms)}`;
+    td.append(a, " ", copy(p.sms, "문자 글 복사"));
+    tr.append(el("td", p.who), el("td", p.tel), el("td", p.names.join(", ")), td);
+    return tr;
+  }), ...j.nophone.map(z => {
+    const tr = el("tr"), td = el("td");
+    td.append(copy(z.url, "링크 복사"));
+    tr.append(el("td", "번호 모름"), el("td", ""), el("td", z.name), td);
+    return tr;
+  }));
+  $("#out").hidden = !(j.people.length + j.nophone.length);
+  say("#askmsg", `지구 ${rids.length}곳에 요청을 남겼습니다. 문자는 아래에서 한 명씩 보냅니다(${j.people.length}명).` + (j.nophone.length ? ` 번호를 모르는 지구 ${j.nophone.length}곳은 링크를 복사해 전하세요.` : ""));
+  load();
+};
+
+async function load() {
+  const r = await fetch("/api/reply/list", { headers: hdr() }).catch(() => null);
+  if (!r) return say("#rowmsg", "현황을 읽지 못했습니다 — 서버에 닿지 않습니다. 30초 뒤 다시 읽습니다.", true);
+  if (!r.ok) return say("#rowmsg", `현황을 읽지 못했습니다 — ${await why(r)}`, true);
+  const rows = (await r.json()).rows;
+  $("#rows tbody").replaceChildren(...rows.map(x => {
+    const tr = el("tr"), pic = el("td"), act = el("td"), more = el("td"), name = el("td"), link = el("a", x.name), r = x.reply;
+    link.href = `/r/${x.token}`; link.target = "_blank"; link.style.color = "var(--accent)";
+    name.append(link, el("div", x.addr, "sub"));
+    if (r?.photo) {
+      const a = el("a"), im = el("img");
+      a.href = im.src = `/r/${x.token}/photo/${r.id}`; a.target = "_blank"; im.alt = `${x.name} 현장 사진`; im.loading = "lazy";
+      a.append(im); pic.append(a);
+    }
+    act.append(x.waiting ? el("span", "회신 기다림", "tag wait") : "", r ? el("span", ACT[r.action], "tag " + (r.action === "not" ? "not" : "done")) : "");
+    if (r) more.append(el("span", r.more === "yes" ? "필요함" : "필요 없음", "tag" + (r.more === "yes" ? " more" : "")));
+    tr.append(name, el("td", x.people.map(p => `${p.who} ${p.tel}`).join(" / ") || "등록 없음"), el("td", x.asked_at ? x.asked_at.slice(5) : ""),
+              el("td", r ? `${r.at.slice(5)} ${r.who}` : ""), act, more, el("td", r?.memo || ""), pic);
+    return tr;
+  }));
+  const n = rows.filter(x => x.waiting).length;
+  say("#rowmsg", rows.length ? `지구 ${rows.length}곳 · 회신 기다림 ${n}곳 · ${new Date().toTimeString().slice(0, 5)} 기준` : "아직 요청한 것이 없습니다.");
+}
+$("#reload").onclick = load;
+$("#pin").onchange = load;
+load();
+setInterval(load, 30000);
+</script>
+</html>

@@ -180,6 +180,25 @@ CREATE TABLE IF NOT EXISTS qpf_frame (
   path TEXT NOT NULL, bytes INTEGER NOT NULL, fetched_at TEXT NOT NULL,
   PRIMARY KEY (tmfc, ef)
 );
+
+-- 현장 회신(app/reply.py). 지구마다 변하지 않는 링크(token) 하나 — 담당자가 바뀌어도 링크는 그대로 넘겨받는다.
+CREATE TABLE IF NOT EXISTS duty_link (
+  rid TEXT PRIMARY KEY, token TEXT NOT NULL UNIQUE,
+  sigun TEXT NOT NULL, name TEXT NOT NULL, addr TEXT NOT NULL    -- '창원시' · 지구 이름 · 시군 읍면동 리
+);
+-- 링크 페이지에서 스스로 등록한 담당자. until 이 비어 있으면 지금 담당(지구마다 둘까지), 채워지면 지난 담당.
+CREATE TABLE IF NOT EXISTS duty_person (
+  id INTEGER PRIMARY KEY, rid TEXT NOT NULL,
+  rank TEXT NOT NULL, name TEXT NOT NULL, tel TEXT NOT NULL,
+  since TEXT NOT NULL, until TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_duty_person ON duty_person(rid, until);
+-- 진행 기록(지우지 않고 쌓는다) — kind: ask 상황실 요청 · reply 현장 회신 · on 담당 등록 · off 담당에서 빠짐
+CREATE TABLE IF NOT EXISTS duty_log (
+  id INTEGER PRIMARY KEY, rid TEXT NOT NULL, at TEXT NOT NULL, kind TEXT NOT NULL,
+  who TEXT NOT NULL, action TEXT, more TEXT, memo TEXT NOT NULL, photo TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_duty_log ON duty_log(rid, id);
 """
 
 

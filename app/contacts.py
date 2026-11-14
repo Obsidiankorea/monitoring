@@ -72,10 +72,13 @@ def districts(sigun: str) -> dict:
 
 def of_sigun(sigun: str) -> dict:
     """시군 하나의 담당자 — 지역ID → [{who, tel}] · 확인 표시. 지구 이름 · 주소는 districts() 가(위키), 여기는 사람만(잠금 뒤)."""
+    from . import reply
     rows = _rows()
-    if not rows:
-        return {"on": False, "people": {}, "check": {}}
     full = ai.SIGUN_FULL.get(sigun, sigun)
+    # 현장 링크 페이지에서 스스로 등록한 지금 담당 — 있으면 파일의 담당자 대신 이쪽을 보인다(담당이 바뀌어도 파일을 고치지 않게)
+    live = reply.current_by_sigun(None if sigun == "all" else full)
+    if not rows and not live:
+        return {"on": False, "people": {}, "check": {}}
     people, check = {}, {}
     for rid, r in rows.items():
         if sigun != "all" and r.get("시군") != full:          # all = 경남 전체(상황판단 모드 경남 목록)
@@ -84,4 +87,5 @@ def of_sigun(sigun: str) -> dict:
                        for i in (1, 2) if r.get(f"담당{i}_연락처") or r.get(f"담당{i}")]
         if r.get("연락처확인"):
             check[rid] = r["연락처확인"]
+    people.update(live)
     return {"on": True, "people": people, "check": check, "n": len(people)}
