@@ -155,8 +155,7 @@ def _site_row(row: dict, fam: str, rule: str) -> dict:
     담당부서 회신(2026-11) — 긴급대피는 시군별 지구 대피기준으로. 기준을 숫자로 못 읽으면 줄이 없다(그래프도 없다)."""
     if fam in FAMS:
         return row
-    sx = next((x for x in row.get("sites", []) if (x["rule"] or "").strip() == rule), None)
-    p = (sx or {}).get("max_pct")
+    p = ai.site_prog(rule, lambda w: row["rain"].get(f"{w}h"))[1]   # 읍면동 줄의 sites 에 이 기준이 없을 수 있어 다시 견준다
     if p is None:
         return row
     return {**row, "ladders": {**row["ladders"], fam: [{
@@ -243,11 +242,42 @@ def past_of(sr: dict | None, hrs: list | None, n: int = 48) -> dict | None:
     return sr
 
 
+def emd_of(sg: str, key: str, ds: list[dict], names: set) -> dict[str, str]:
+    """위키 표의 읍면동 칸이 화면의 읍면동(행정동) 이름과 다른 지구 → {지구ID: 읍면동}. 법정동(김해 내동) · 줄임(의령 가례) · 여러 동을 한 칸에 적은 것.
+    지구 좌표가 놓인 읍면동을 먼저 쓰고, 좌표가 없으면 이름이 하나로 맞는 읍면동(가례 → 가례면, 진영읍 등 → 진영읍). 못 찾으면 뺀다."""
+    from . import gridstore
+    from .domain import gridproj
+    hb, (_, mask) = gridstore.geo()["hr"]["bbox"], gridstore.masks()
+    by_id = {e["id"]: e for e in gridstore.geo()["emd"]}
+    k = key.replace(" ", "")
+    near = [n for n in names if k and (n.startswith(k) or k.startswith(n))]
+    out = {}
+    for d in ds:
+        e = None
+        if d.get("pos"):
+            x, y = gridproj.hr_xy(d["pos"][1], d["pos"][0])
+            c, r = round(x) - hb["i0"], round(y) - hb["j0"]
+            e = by_id.get(int(mask[r, c])) if 0 <= r < hb["h"] and 0 <= c < hb["w"] else None
+        if e and e["sigun"] == sg and e["name"] in names:
+            out[d["id"]] = e["name"]
+        elif len(near) == 1:
+            out[d["id"]] = near[0]
+    return out
+
+
 def rows_of(sg: str, base: str, k: float, add: tuple = (0.0, 0.0), series: bool = False, sb: str | None = None) -> tuple[list[dict], dict]:
     g, a = _sit(sg, base, k, "grid", add), _sit(sg, base, k, "aws", add)
     ga = {e["emd"]: e for e in a["emd"]}
     pg, pa = _pts(base, "grid"), _pts(base, "aws")
-    dist = contacts.districts(sg)["emd"]
+    dist, names = {}, {e["emd"] for e in g["emd"]}
+    for key, ds in contacts.districts(sg)["emd"].items():
+        if key in names:
+            dist.setdefault(key, []).extend(ds)
+            continue
+        at = emd_of(sg, key, ds, names)                      # 표의 읍면동 이름이 달라 판정에서 빠지던 지구(270여 곳)
+        for d in ds:
+            if d["id"] in at:
+                dist.setdefault(at[d["id"]], []).append({**d, "emd_src": key})
     sl = slide_of(sg)
     plv = _pred_lv(sl)
     out = []

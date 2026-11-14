@@ -157,3 +157,12 @@ def test_families_outside_the_guideline_use_the_site_rule():
     assert p["st"]["긴급대피"]["pct"] == 80 and p["top"] == 80 and p["obs"]["stage"] == "긴급대피"
     assert not judge.at_point(e, {"1h": 36}, s, "침수·해안", "폭풍해일 경보 발효시(해수면 290cm)")["ladders"].get("침수·해안")
     assert "침수·해안" in ai.regions()
+
+
+def test_district_emd_names_that_differ_from_the_map():
+    """위키 표의 읍면동 칸이 줄임 · 덧붙임이면 이름이 하나로 맞는 읍면동에 붙인다(좌표가 있으면 좌표가 먼저)."""
+    from app import judge
+    names = {"가례면", "진영읍", "장유1동", "장유2동"}
+    assert judge.emd_of("의령", "가례", [{"id": "a"}], names) == {"a": "가례면"}
+    assert judge.emd_of("김해", "진영읍 등", [{"id": "b"}], names) == {"b": "진영읍"}
+    assert judge.emd_of("김해", "장유", [{"id": "c"}], names) == {}          # 둘에 걸리면 붙이지 않는다
