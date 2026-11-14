@@ -93,6 +93,7 @@ RULE_DEFAULT = {"비상1단계_호우주의보_시군": 4, "비상2단계_호우
                 "지하공간_사전대피_15분": 20, "지하공간_사전대피_예보시우량": 55, "지하공간_긴급대피_15분": 30,
                 "지하공간_긴급대피_시우량": 55}
 _RULES: dict = {}
+_LHU: dict = {}                                       # ladders 의 유형별 판정값 — rules()["v"] 가 같은 동안
 
 
 def rules() -> dict:
@@ -357,7 +358,10 @@ def ladders(r: dict, night: bool, alerts: list[str], rv: dict | None = None, fld
     accum = max(x for x in (o24, o48) if x is not None) if (o24 is not None or o48 is not None) else None
     fcap = fpk == RN1_CAP                              # 예보가 30 에 막혔으면 그 위는 모른다(그 위 값은 가상 시연에서만 온다)
     v = rules()["v"]
-    L, H, U = ({k.split("_", 1)[1]: x for k, x in v.items() if k.startswith(f"{t}_")} for t in ("산사태", "하천", "지하공간"))
+    lhu = _LHU.get("v")
+    if lhu is None or lhu[0] is not v:                     # 판정값이 바뀔 때만 다시 나눈다(상황판단 시간별 줄이 수만 번 부른다)
+        lhu = _LHU["v"] = (v, *({k.split("_", 1)[1]: x for k, x in v.items() if k.startswith(f"{t}_")} for t in ("산사태", "하천", "지하공간")))
+    _, L, H, U = lhu
     f50 = "unknown" if fpk is None or fcap else _st(fpk, L["사전대피_예보시우량"])
     f55 = "unknown" if fpk is None or fcap else _st(fpk, U["사전대피_예보시우량"])
     hoou = [a for a in alerts if a.startswith("호우")]

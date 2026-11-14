@@ -84,15 +84,16 @@ def current_by_sigun(sigun_full: str | None) -> dict[str, list[dict]]:
     return out
 
 
-def ask(rids: list[str], note: str, base: str) -> dict:
+def ask(rids: list[str], note: str, base: str, preview: bool = False) -> dict:
     """지구들에 회신 요청 — 지구 링크를 (없으면) 만들고 기록에 요청을 남긴다.
-    {people: [{who, tel, names, sms}] 번호마다 문자 하나(맡은 지구 링크를 모아), nophone: [{name, url}] 번호를 모르는 지구}."""
+    {people: [{who, tel, names, sms}] 번호마다 문자 하나(맡은 지구 링크를 모아), nophone: [{name, url}] 번호를 모르는 지구, links: [{rid, name, url}]}.
+    preview — 요청(ask)을 남기지 않고 글 · 링크만(상황판단 미리보기). 링크는 지구마다 하나라 없으면 만든다(현황 rows 에는 기록이 생겨야 나온다)."""
     from . import contacts
     dz, csvrows = _districts(), contacts._rows()
     note = (note or "").strip()[:200]
     at = _now()
     by_tel: dict[str, dict] = {}
-    nophone = []
+    nophone, links = [], []
     with db.tx() as con:
         for rid in dict.fromkeys(rids):
             if rid not in dz:
@@ -101,7 +102,9 @@ def ask(rids: list[str], note: str, base: str) -> dict:
             con.execute("INSERT OR IGNORE INTO duty_link(rid, token, sigun, name, addr) VALUES(?,?,?,?,?)",
                         (rid, secrets.token_urlsafe(9), sigun, name, addr))
             url = f"{base.rstrip('/')}/r/{con.execute('SELECT token FROM duty_link WHERE rid=?', (rid,)).fetchone()[0]}"
-            con.execute("INSERT INTO duty_log(rid, at, kind, who, memo) VALUES(?,?,?,?,?)", (rid, at, "ask", "상황실", note))
+            links.append({"rid": rid, "name": name, "url": url})
+            if not preview:
+                con.execute("INSERT INTO duty_log(rid, at, kind, who, memo) VALUES(?,?,?,?,?)", (rid, at, "ask", "상황실", note))
             people = [(_who(p), p["tel"]) for p in _current(con, rid)]
             if not people:                                       # 아직 아무도 등록 안 한 지구 — 연락처 파일의 번호로
                 r = csvrows.get(rid) or {}
@@ -112,7 +115,7 @@ def ask(rids: list[str], note: str, base: str) -> dict:
             if not people:
                 nophone.append({"name": name, "url": url})
     head = f"[경남도 재난상황실] {note or '현장 조치 여부를 알려 주세요'}"
-    return {"nophone": nophone, "people": [
+    return {"nophone": nophone, "links": links, "people": [
         {"who": p["who"], "tel": p["tel"], "names": [n for n, _ in p["items"]],
          "sms": "\n".join([head] + [u if len(p["items"]) == 1 else f"{n} {u}" for n, u in p["items"]])}
         for p in by_tel.values()]}
@@ -126,6 +129,8 @@ def rows() -> list[dict]:
             last = {k: con.execute("SELECT id, at, who, action, more, memo, photo FROM duty_log WHERE rid=? AND kind=?"
                                    " ORDER BY id DESC LIMIT 1", (rid, k)).fetchone() for k in ("ask", "reply")}
             a, r = last["ask"], last["reply"]
+            if not a and not r and not _current(con, rid):    # 미리보기로 링크만 생긴 지구 — 요청 · 회신 · 담당이 생기면 나온다
+                continue
             out.append({"rid": rid, "token": token, "name": name, "addr": addr,
                         "people": [{"who": _who(p), "tel": p["tel"]} for p in _current(con, rid)],
                         "asked_at": a and a[1], "note": a and a[5],

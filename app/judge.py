@@ -7,6 +7,7 @@
 """
 from __future__ import annotations
 
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
@@ -228,6 +229,25 @@ def series_of(e: dict, s: dict, fam: str, rule: str) -> dict | None:
     return {"t": list(fl[:len(out)]), "v": out, "xy": xy, "ax": ax, "rule": rule0, "pl": pl, "site": ai.site_area(rule, fam)}
 
 
+def reach_of(e: dict, s: dict, fam: str, rule: str) -> int:
+    """지금 또는 예보(초단기 + 단기) 끝까지 닿을 수 있는 가장 높은 % 의 윗값 — 문턱 거르기용. 시각마다 다시 대조하는 series_of 대신 한 번에:
+    누적 = 지금 + 예보 다 더함, 1시간 · 3시간 · 예보 시우량 = 예보 가운데 가장 큰 것, 야간 예보 기준도 켠다(넉넉하게 — 덜 거르는 쪽으로).
+    e 는 지구 자리로 바꾼 줄(at_point 뒤)."""
+    fh = [v or 0 for v in (e.get("eta_hours") or e.get("fc_hours") or [])]
+    if not fh:
+        return pack(e, fam, rule)["top"]
+    r0, cut30, run, best = e["rain"], ai.R("하천_통제_시우량"), 0, 0
+    for x in fh:
+        run = run + 1 if x >= cut30 else 0
+        best = max(best, run)
+    rain = {h: None if r0.get(h) is None else round(r0[h] + sum(fh), 1) for h in r0}
+    rain["1h"] = max([r0.get("1h") or 0, *fh])
+    rain["3h"] = max([r0.get("3h") or 0] + [sum(fh[i:i + 3]) for i in range(len(fh))])
+    row = {**e, "fc_peak": max(fh), "fc_run30": max(best, e.get("fc_run30") or 0)}
+    p = at_point(row, {**rain, "15m": e.get("m15")}, {**s, "night": True}, fam, rule)
+    return max(pack(e, fam, rule)["top"], pack(p, fam, rule)["top"])
+
+
 def past_of(sr: dict | None, hrs: list | None, n: int = 48) -> dict | None:
     """평면의 지난 자취 pp — 지금에서 거꾸로 n 시간: 누적 = 지금 누적 − 그 뒤 온 비, 시우량 = 그 시각 매시 값. 오래된 것부터, 끝은 지금 바로 앞.
     hrs 는 지구 자리 매시(gridview._pt_hours, 오래된 것부터). 빈 시각은 0 으로 뺀다(누적이 덜 줄어 — 자취가 지금 쪽으로 붙는다)."""
@@ -265,7 +285,8 @@ def emd_of(sg: str, key: str, ds: list[dict], names: set) -> dict[str, str]:
     return out
 
 
-def rows_of(sg: str, base: str, k: float, add: tuple = (0.0, 0.0), series: bool = False, sb: str | None = None) -> tuple[list[dict], dict]:
+def rows_of(sg: str, base: str, k: float, add: tuple = (0.0, 0.0), series: bool = False, sb: str | None = None,
+            min_pct: float = 0, keep: str | None = None) -> tuple[list[dict], dict]:
     g, a = _sit(sg, base, k, "grid", add), _sit(sg, base, k, "aws", add)
     ga = {e["emd"]: e for e in a["emd"]}
     pg, pa = _pts(base, "grid"), _pts(base, "aws")
@@ -280,7 +301,13 @@ def rows_of(sg: str, base: str, k: float, add: tuple = (0.0, 0.0), series: bool 
                 dist.setdefault(at[d["id"]], []).append({**d, "emd_src": key})
     sl = slide_of(sg)
     plv = _pred_lv(sl)
-    out = []
+    out, memo = [], {}
+
+    def ser(x, s, d, at, pt):                                   # 같은 읍면동 · 기준 문구 · 자리 비면 시간별 줄이 같다 — 한 번만(지난 자취 pp 는 지구마다라 겉만 복사)
+        key = (id(s), x["emd"], d["fam"], d["rule"], at is None, tuple(x["rain"].items()), x.get("m15"))
+        if key not in memo:
+            memo[key] = series_of(x, s, d["fam"], d["rule"])
+        return past_of(memo[key] and dict(memo[key]), (pt or {}).get("hrs"))
     for e in g["emd"]:
         for d in dist.get(e["emd"], []):
             ea = ga.get(e["emd"])
@@ -290,30 +317,38 @@ def rows_of(sg: str, base: str, k: float, add: tuple = (0.0, 0.0), series: bool 
             if ea2 and not ea2["ladders"].get(d["fam"]):
                 ea, ea2 = None, None
             b = {"grid": pack(eg, d["fam"], d["rule"]), "aws": pack(ea2, d["fam"], d["rule"]) if ea else None}
-            if series and sb != "aws":
-                b["grid"]["series"] = past_of(series_of(eg, g, d["fam"], d["rule"]), (pg.get(d["id"]) or {}).get("hrs"))
-            if series and sb != "grid" and ea:
-                b["aws"]["series"] = past_of(series_of(ea2, a, d["fam"], d["rule"]), (pa.get(d["id"]) or pg.get(d["id"]) or {}).get("hrs"))
             ss = slide_site(d["rule"], sl) if d["fam"] == "산사태" else None
             for v in b.values():                             # 산사태 예보 발령이 기준인 지구 — 강수가 아니라 발령으로
                 if v and ss is not None:
                     v.update(site=ss, site_slide=True, top=max(v["top"], ss))
                 if v:
                     site_urgent(v, d["rule"])
-            out.append({"sigun": sg, "emd": e["emd"], **d, "b": b, "slide": sl if d["fam"] == "산사태" else None,
+            # 문턱(min) — 지금 · 예보로 닿을 윗값이 모자라면 시간별 series(비싼 것)를 건너뛴다. 두 기준 중 큰 것(기준을 바꿔도 같은 지구)
+            reach = max(v["top"] for v in b.values() if v)
+            if min_pct and reach < min_pct:
+                reach = max(reach, reach_of(eg, g, d["fam"], d["rule"]), reach_of(ea2, a, d["fam"], d["rule"]) if ea else 0)
+            if series and (reach >= min_pct or d["id"] == keep):
+                if sb != "aws":
+                    b["grid"]["series"] = ser(eg, g, d, pg.get(d["id"]), pg.get(d["id"]))
+                if sb != "grid" and ea:
+                    b["aws"]["series"] = ser(ea2, a, d, pa.get(d["id"]), pa.get(d["id"]) or pg.get(d["id"]))
+            out.append({"sigun": sg, "emd": e["emd"], **d, "b": b, "reach": reach, "slide": sl if d["fam"] == "산사태" else None,
                         "soil": soil_site(d["rule"], plv), "terrain": terrain.of({**d, "sigun": sg, "emd": e["emd"]}),   # 지역 여건(지형 · 침수흔적) — 판정 % 는 그대로
                         "where": "지구" if d["id"] in pg else "읍면동",
                         "fc6h": e.get("fc6h"), "later": e.get("later")})
     return out, g
 
 
-def build(sigun: str, base: str, k: float = 1.0, add_h: float = 0.0, add_24: float = 0.0, series: bool = False, sb: str | None = None) -> dict:
+def build(sigun: str, base: str, k: float = 1.0, add_h: float = 0.0, add_24: float = 0.0, series: bool = False, sb: str | None = None,
+          min_pct: float = 0, keep: str | None = None) -> dict:
+    """min_pct — 지금 · 예보로 그 % 에 못 닿는 지구는 rows 에서 뺀다(keep 지구는 남김). 시군 차트(chart)는 늘 전체로 센다."""
     sgs = list(ai.SIGUN_FULL) if sigun == "all" else [sigun]
     with ThreadPoolExecutor(max_workers=4) as ex:
-        got = list(ex.map(lambda s: (s, *rows_of(s, base, k, (add_h, add_24), series, sb)), sgs))
-    rows, chart, head = [], [], None
+        got = list(ex.map(lambda s: (s, *rows_of(s, base, k, (add_h, add_24), series, sb, min_pct, keep)), sgs))
+    rows, chart, head, n_all = [], [], None, 0
     for sg, rs, g in got:
-        rows += rs
+        n_all += len(rs)
+        rows += [r for r in rs if r["reach"] >= min_pct or r["id"] == keep]
         tops = {b: [(r["fam"], r["b"][b]["top"]) for r in rs if r["b"][b]] for b in ("grid", "aws")}
         chart.append({"sigun": sg, "n": len(rs),
                       "b": {b: {str(t): sum(1 for _, v in tops[b] if v >= t) for t in BUCKETS} for b in tops},
@@ -332,4 +367,50 @@ def build(sigun: str, base: str, k: float = 1.0, add_h: float = 0.0, add_24: flo
     st = safety.status()
     slide = {"keys": st["keys"]["fcst"] or st["keys"]["pred"], "why": st["slide"]["why"], "at": st["at"].get("fcst")}
     return {"slide": slide, "terrain_built": terrain.table().get("built"), "sigun": sigun, "k": k, "add_h": add_h, "add_24": add_24, "tm": tm, "rows": rows, "chart": chart, "head": head,
-            "regions": ai.regions() if series else None}
+            "min": min_pct, "n_all": n_all,
+            "regions": ai.regions() if series else None, "computed_at": datetime.now().isoformat(timespec="seconds")}
+
+
+# build 결과 캐시 — 경남 전체 시간별 줄은 수 초~수십 초. 강수는 몇 분 단위로 바뀌니 잠깐은 같은 것을 준다.
+# 같은 인자로 동시에 오면 한 번만 계산한다(인자마다 자물쇠). fresh 면 건너뛰되, 기다리는 사이 다른 요청이 새로 계산했으면 그것을.
+BTTL = 150                                                 # 미리 계산(warm, 2분마다)이 다음 차례까지 이어지게
+_BC: dict = {}
+_BL: dict = {}
+_BG = threading.Lock()
+SEEN: dict = {}                                            # 상황판단 창의 기본 인자(경남 전체 · 시간별) → 마지막으로 연 시각 — warm 이 이것만 다시 센다
+
+
+def cached(sigun: str, base: str, k: float = 1.0, add_h: float = 0.0, add_24: float = 0.0, series: bool = False, sb: str | None = None,
+           min_pct: float = 0, keep: str | None = None, fresh: bool = False) -> dict:
+    key = (sigun, base, k, add_h, add_24, series, sb, min_pct)
+    if sigun == "all" and series and k == 1.0 and not add_h and not add_24:
+        SEEN[key] = time.time()
+    got = _one(key, fresh)
+    if keep and not any(r["id"] == keep for r in got["rows"]):   # 걸러진 지구를 주소로 바로 열었다 — 그 지구까지 넣은 것을 따로
+        got = _one((*key, keep), fresh)
+    return got
+
+
+def _one(key: tuple, fresh: bool) -> dict:
+    asked = time.time()
+    with _BG:
+        lk = _BL.setdefault(key, threading.Lock())
+    with lk:
+        hit = _BC.get(key)
+        if hit and (hit[0] >= asked or (not fresh and asked - hit[0] < BTTL)):
+            return hit[1]
+        v = build(*key)
+        with _BG:
+            if len(_BC) >= 6:                              # 만약에 배수 · 기준마다 쌓인다 — 오래된 것부터 버린다(결과 하나가 수십 MB)
+                _BC.pop(min(_BC, key=lambda x: _BC[x][0]))
+            _BC[key] = (time.time(), v)
+        return v
+
+
+def warm(within: float = 900) -> int:
+    """최근(within 초) 상황판단 창이 연 기본 인자만 미리 다시 센다 — 창을 열자마자 받게. 다시 센 수."""
+    now = time.time()
+    keys = [x for x, t in list(SEEN.items()) if now - t < within][-2:]
+    for x in keys:
+        _one(x, True)
+    return len(keys)

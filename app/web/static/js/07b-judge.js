@@ -7,7 +7,9 @@
 const SJ_SOLO = new URLSearchParams(location.search).has("sj");
 const SJ = { open: false, sg: "all", k: 1, addH: 0, add24: 0, basis: "grid", cut: { on: true, pct: 70 }, d: null, log: [], st: null,
   ct: null, q: [], llm: null, rep: null, seq: 0, sel: new URLSearchParams(location.search).get("r"), tab: "단계판", more: false, ai: false, wopen: false, msgs: [] };
-try { Object.assign(SJ.cut, JSON.parse(localStorage.getItem("gn-sj-cut") || "{}")); SJ.basis = localStorage.getItem("gn-sj-basis") || "grid"; } catch {}
+SJ.min = 50;                                             // 불러올 범위 — 지금 · 예보로 이 % 에 닿을 수 있는 지구만(0 = 전부). 경남 전체를 다 모으면 수십 초
+try { Object.assign(SJ.cut, JSON.parse(localStorage.getItem("gn-sj-cut") || "{}")); SJ.basis = localStorage.getItem("gn-sj-basis") || "grid"; SJ.min = +(localStorage.getItem("gn-sj-min") ?? 50) || 0; } catch {}
+SJ.dpop = (() => { try { return localStorage.getItem("gn-sj-dpop") === "1"; } catch { return false; } })();   // 지구 상세 — 오른쪽 고정 / 가운데 팝업
 SJ.pane = { l: true, r: true };                          // 왼쪽(매뉴얼) · 오른쪽(상세) 패널 — [ · ] 키
 try { Object.assign(SJ.pane, JSON.parse(localStorage.getItem("gn-sj-pane") || "{}")); } catch {}
 function sjPane(k, on = !SJ.pane[k]) {
@@ -43,9 +45,10 @@ function sjToggle(on = !SJ.open) {
   sjLoad();
 }
 async function sjLoad(onlyData) {
-  const my = ++SJ.seq, sg = SJ.sg, qs = new URLSearchParams({ sigun: sg, k: SJ.k, add_h: SJ.addH, add_24: SJ.add24, series: 1, sb: SJ.basis });
+  const my = ++SJ.seq, sg = SJ.sg, qs = new URLSearchParams({ sigun: sg, k: SJ.k, add_h: SJ.addH, add_24: SJ.add24, series: 1, sb: SJ.basis, min: SJ.min, ...(SJ.sel ? { r: SJ.sel } : {}), ...(SJ.fresh ? { fresh: 1 } : {}) });
+  SJ.fresh = false;                                      // 서버는 2분 남짓 같은 계산을 준다 — [다시 계산] 만 건너뛴다   // r — 걸러져도 고른 지구는 받는다
   if (!onlyData) {   // 처음 모을 때는 수십 초 걸린다 — 멈춘 것처럼 보이지 않게 움직이는 줄 · 지난 초 · 자리 잡은 뼈대
-    $("sj-c").innerHTML = `<div class="sj-ld" role="status"><div class="ldbar"><i></i></div><b>${sg === "all" ? "경남 전체 18개 시군" : escH(sg)} 지구 판정을 모으는 중</b>
+    $("sj-c").innerHTML = `<div class="sj-ld" role="status"><div class="ldbar"><i></i></div><b>${sg === "all" ? "경남 전체 18개 시군" : escH(sg)} 지구 판정을 모으는 중${SJ.min ? ` — ${SJ.min}% 에 닿을 수 있는 곳만` : ""}</b>
       <small>강수 격자 · 지구별 대피 기준 · 판단 기록을 맞춰 본다 — 처음에는 수십 초 걸릴 수 있다 · <span class="sec">0</span>초째</small>${'<div class="sk"></div>'.repeat(6)}</div>`;
     const t0 = Date.now(), tick = setInterval(() => { const e = $("sj-c").querySelector(".sj-ld .sec"); if (e) e.textContent = Math.round((Date.now() - t0) / 1000); else clearInterval(tick); }, 1000);
   }
@@ -205,19 +208,21 @@ function sjDetail() {
     : SJ.ct?.err ? `<p class="mute">${escH(SJ.ct.err)}</p>` : SJ.ct?.on === false ? `<p class="mute">연락처 파일이 없다</p>`
     : ppl.map((p, n) => `<div class="ps"><span>${escH((p.who || "").replace(/담당부서\s*/g, "") || `담당${n + 1}`)}</span>${p.tel ? `<a class="tel" href="tel:${escH(p.tel.replace(/[^0-9-]/g, ""))}" data-ct="${n + 1}|전화">📞 ${escH(p.tel)}</a>` : `<em class="mute">번호 없음</em>`}`
       + (/^01/.test(p.tel || "") ? `<a class="sms" href="sms:${escH(p.tel.replace(/[^0-9]/g, ""))}?body=${msg}" data-ct="${n + 1}|문자">✉ 문자</a>` : "") + `</div>`).join("") || `<p class="mute">이 지구 담당자가 표에 없다</p>`;
+  const rpl = SJ.ct?.pin || SJ.ct?.err ? "" : `<button class="rpl" data-rpl title="이 지구 회신 링크를 담당자에게 문자로 — 받는 사람 · 글 · 휴대폰 화면을 먼저 본다(보내기 전에는 기록이 남지 않는다)">✉ 회신 링크 문자</button>`;
   const acts = [...SJ_STG.map(s => [SJ_ACT[s], s]), ["보류", ""]].map(([a, s]) => {
     const on = recs.find(x => x.act === a && (x.note || "").includes(sjName(r)));
     return `<button class="ac${on ? " on" : ""}" data-act="${a}" data-s="${s}">${on ? "✔ " : ""}${a}</button>`;
   }).join("");
   const sl = r.slide && (r.slide.fcst || r.slide.pred);
-  return `<button class="bk" data-unsel>← 단계 시간표</button><div class="dt"><div class="dh"><b>${escH(sjName(r))}</b><span>${escH(r.sigun)} ${escH(sjAddr(r))}</span><span>${escH(r.kind || r.fam)}${r.shelter && r.shelter !== "–" ? ` · 대피 ${escH(r.shelter)}` : ""}</span>
+  return `<div class="dbar"><button class="bk" data-unsel>← 단계 시간표</button><button class="dpm" data-dpop aria-pressed="${SJ.dpop}" title="${SJ.dpop ? "오른쪽에 고정해 보기" : "가운데 큰 창(팝업)으로 보기"} — 고른 것을 기억한다" aria-label="상세 보기 바꾸기 — 오른쪽 고정 · 팝업">${SJ.dpop ? "◨" : "⧉"}</button>`
+    + `<button class="dx" data-unsel title="닫기 (Esc)" aria-label="상세 닫기">✕</button></div><div class="dt"><div class="dh"><b>${escH(sjName(r))}</b><span>${escH(r.sigun)} ${escH(sjAddr(r))}</span><span>${escH(r.kind || r.fam)}${r.shelter && r.shelter !== "–" ? ` · 대피 ${escH(r.shelter)}` : ""}</span>
       ${sl ? `<span class="slb">산사태${escH((r.slide.fcst || r.slide.pred).kind)} ${r.slide.fcst ? "예보" : "예측"} 발령 중</span>` : ""}</div>
     <div class="dsec"><h5>위치</h5>${r.pos ? `<p>${r.pos[0].toFixed(5)}, ${r.pos[1].toFixed(5)} <span class="mute">— 지번 필지 중심</span></p>` : ""}
       <p class="mute">${r.where === "지구" ? "판정 비 = 이 지구 자리(둘레 1.5km 가장 많이 온 칸) · 예보는 읍면동"
         : `${r.pos ? "지구 자리 비를 아직 못 받아" : SJ.geo?.state === "받는 중" ? `지구 위치 받는 중(${SJ.geo.done}/${SJ.geo.total}) —` : "지구 위치가 없어"} 읍면동에서 가장 많이 온 칸으로 판정`}</p></div>
     ${sjTerrain(r)}
     <div class="dsec"><h5>결정 — 판단 기록에 남는다</h5><div class="acs">${acts}</div></div>
-    <div class="dsec"><h5>담당</h5>${who}</div>
+    <div class="dsec"><h5>담당</h5>${who}${rpl}</div>
     <div class="dsec"><h5>판정 · ${SJ_BN[SJ.basis]} 기준 <span class="mute">(조건이 '그리고'면 가장 덜 찬 것이 그 기준의 %)</span></h5>${stg}
       ${o ? `<p class="mute">${SJ_BN[SJ.basis === "grid" ? "aws" : "grid"]} 기준이면 ${SJ_STG.map(s => o.st[s] ? `${s} ${o.st[s].pct}%` : "").filter(Boolean).join(" · ")}</p>` : ""}</div>
     ${r.rule ? `<div class="dsec"><h5>지구 기준 (원문) ${b.site != null ? sjPct({ pct: b.site }) : ""}</h5><div class="rl">${escH(r.rule)}</div>
@@ -320,9 +325,10 @@ function sjRender() {
     ...(h ? [["앞으로 6시간", `${h.fc6h}㎜`], ["오늘 · 내일 더", `${h.later.today} · ${h.later.tomorrow}㎜`]] : [])].filter(x => x[1])
     .map(([k, v]) => `<div><em>${escH(k)}</em><b>${escH(String(v))}</b></div>`).join("");
   $("sj-top").innerHTML = `<h2><select id="sj-sg" aria-label="시군">${["all", ...ORDER_GN()].map(s => `<option value="${s}"${s === SJ.sg ? " selected" : ""}>${s === "all" ? "경남 전체" : s}</option>`).join("")}</select></h2>
-    <div class="ttl">상황판단<br><span>${d.tm ? `${+d.tm.slice(4, 6)}.${+d.tm.slice(6, 8)}. ${d.tm.slice(8, 10)}:${d.tm.slice(10, 12)} 실황` : ""}${window.GN_SNAP?.fake ? " · 가상 시연" : ""}</span></div>
+    <div class="ttl">상황판단<br><span>${d.tm ? `${+d.tm.slice(4, 6)}.${+d.tm.slice(6, 8)}. ${d.tm.slice(8, 10)}:${d.tm.slice(10, 12)} 실황` : ""}${window.GN_SNAP?.fake ? " · 가상 시연" : ""}${d.computed_at ? ` · <span title="서버가 판정을 센 시각 — 2분 남짓 같은 계산을 다시 준다">${Math.max(0, Math.round((Date.now() - new Date(d.computed_at)) / 60000))}분 전 계산</span> <button class="g" id="sj-re" title="캐시를 건너뛰고 지금 다시 센다(경남 전체는 수 초~수십 초)">다시 계산</button>` : ""}</span></div>
     <div class="hud">${hud}</div>
     <span class="seg">${["grid", "aws"].map(k => `<button data-bs="${k}" class="${SJ.basis === k ? "on" : ""}">${SJ_BN[k]}</button>`).join("")}</span>
+    <label class="cut" title="불러올 범위 — 지금 또는 예보(초단기 포함)로 이 % 에 닿을 수 있는 지구만 서버에서 모은다(빠르다)">불러오기<select id="sj-min" aria-label="불러올 범위">${[0, 30, 50, 70, 90].map(v => `<option value="${v}"${v === SJ.min ? " selected" : ""}>${v ? `${v}% 이상만` : "전부"}</option>`).join("")}</select></label>
     <label class="cut"><input type="checkbox" id="sj-cut"${SJ.cut.on ? " checked" : ""}><input type="number" id="sj-cutp" min="10" max="100" step="5" value="${SJ.cut.pct}">% 이상</label>
     <div class="wif"><b>만약에</b><span class="wt">${[SJ.addH && `매시간 +${SJ.addH}㎜`, SJ.add24 && `24시간 +${SJ.add24}㎜`].filter(Boolean).join(" · ")}</span>
       <input type="range" id="sj-k" min="50" max="300" step="10" value="${Math.round(SJ.k * 100)}" title="초단기 · 단기예보 시우량 배수"><i>×${SJ.k.toFixed(1)}</i>
@@ -340,16 +346,105 @@ function sjRender() {
     if (g.sec !== cur) { cur = g.sec; body += `<div class="sec s${cur}"><b>${SJ_SEC[cur]}</b><span>${gs.filter(x => x.sec === cur).length}</span></div>`; }
     body += sjGroup(g);
   }
-  $("sj-c").innerHTML = `<div class="sjp" id="sj-plot">${sjPlotInner()}</div><div class="lh"><span>읍면동 · 유형</span><span>통제</span><span>사전대피</span><span>긴급대피</span><span>도달</span><span>지구</span></div>`
+  $("sj-c").innerHTML = `<div class="sjp" id="sj-plot">${sjPlotInner()}</div>${d.min && d.n_all > d.rows.length ? `<div class="sj-flt" role="status">전체 ${d.n_all}곳 중 ${d.rows.length}곳만 — 지금 · 예보(초단기 포함)로 ${d.min}% 에 닿을 수 있는 곳 <button id="sj-all">전부 보기</button></div>` : ""}<div class="lh"><span>읍면동 · 유형</span><span>통제</span><span>사전대피</span><span>긴급대피</span><span>도달</span><span>지구</span></div>`
     + (body || `<div class="sj-ld">${SJ.cut.on ? `${SJ.cut.pct}% 이상인 곳이 없다` : "지구가 없다"}</div>`)
     + (gs.length > shown.length ? `<button class="more" id="sj-more">나머지 ${gs.length - shown.length}묶음 더 보기</button>` : "")
     + `<p class="mute foot">좌표가 있는 지구는 그 자리 비, 없으면(*) 읍면동 최대 칸 · 예보는 읍면동 · 색: 50 · 70 · 80 · 90 · 100% 이상</p>`;
   $("sj-d").innerHTML = sjDetail();
+  sjDpop();
   if (!$("sj-l").querySelector(".mtab")) $("sj-l").innerHTML = `<div class="mtab"></div><div class="mbd"></div>`;
   $("sj-l").querySelector(".mtab").innerHTML = sjTabs().map(n => `<button data-tab="${escH(n)}" data-tip="${escH(n)}" aria-label="${escH(n)}">`
     + `<svg viewBox="0 0 16 16" aria-hidden="true">${SJ_TI[n] || SJ_TI.book}</svg><span>${escH(SJ_TN[n] || n)}</span></button>`).join("");
   sjTab(sjTabs().includes(SJ.tab) ? SJ.tab : "단계판");
   if (SJ.ai) sjAiDraw();
+}
+function sjMin(v) { SJ.min = v; try { localStorage.setItem("gn-sj-min", v); } catch {} sjLoad(); }
+/* 상세 팝업 — 같은 #sj-d 를 가운데 큰 창으로(css #sj.dpop). 지구를 골랐을 때만. 뒤판(#sj-bd)은 회신 문자 미리보기와 함께 쓴다 */
+function sjDpop() {
+  const on = SJ.dpop && (SJ.d?.rows || []).some(x => x.id === SJ.sel), was = $("sj").classList.contains("dpop");
+  $("sj").classList.toggle("dpop", on);
+  $("sj-d").setAttribute("role", on ? "dialog" : "complementary");
+  if (on) $("sj-d").setAttribute("aria-modal", "true"); else $("sj-d").removeAttribute("aria-modal");
+  sjBd();
+  if (on && !was) { $("sj-d").tabIndex = -1; $("sj-d").focus(); }
+}
+function sjBd() {
+  let bd = $("sj-bd");
+  if (!bd) { bd = document.createElement("div"); bd.id = "sj-bd"; bd.className = "sj-bd"; $("sj").append(bd); }
+  bd.hidden = !$("sj").classList.contains("dpop") && !SJ_RP.rid;
+  bd.classList.toggle("top", !!SJ_RP.rid);                 // 미리보기는 상세 팝업 위에
+}
+/* Esc — 회신 문자 미리보기 → 상세 팝업 순서로 닫는다(11-misc 의 Esc 가 먼저 부른다). 닫았으면 true */
+function sjEsc() {
+  if (SJ_RP.rid) { sjRp(null); return true; }
+  if ($("sj").classList.contains("dpop")) { SJ.sel = null; sjRender(); return true; }
+  return false;
+}
+/* 회신 링크 문자 — 미리보기는 기록 없이(preview), [문자 앱 열기] · [복사] 를 누를 때 요청을 남긴다. 글 · 링크는 reply.html 과 같은 /api/reply/ask
+   링크 바깥 주소는 reply.html 에 넣은 것(localStorage reply-base — 같은 출처라 함께 쓴다). 이름 · 번호는 잠금 번호 뒤, AI 로 넘기지 않는다 */
+const SJ_RP = { rid: null, note: "지금 현장 조치 여부를 알려 주세요", j: null, done: false, pi: 0, tab: "sms" };
+const sjRpBase = () => { try { return localStorage.getItem("reply-base") || ""; } catch { return ""; } };
+async function sjRpAsk(commit) {
+  const res = await fetch("/api/reply/ask", { method: "POST", headers: { "content-type": "application/json", "x-pin": sjPin() },
+    body: JSON.stringify({ rids: [SJ_RP.rid], note: SJ_RP.note, base: sjRpBase(), preview: !commit }) });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(j.detail || res.status);
+  return j;
+}
+async function sjRp(rid) {
+  let box = $("sj-rp");
+  if (!box) {
+    box = document.createElement("div"); box.id = "sj-rp"; box.className = "sj-rp"; box.tabIndex = -1;
+    box.setAttribute("role", "dialog"); box.setAttribute("aria-modal", "true"); box.setAttribute("aria-label", "회신 링크 문자 미리보기"); $("sj").append(box);
+  }
+  if (rid !== undefined) Object.assign(SJ_RP, { rid, j: null, done: false, pi: 0, tab: "sms" });
+  box.hidden = !SJ_RP.rid;
+  sjBd();
+  if (!SJ_RP.rid) return;
+  const r = (SJ.d?.rows || []).find(x => x.id === SJ_RP.rid);
+  const head = `<header><b>회신 링크 문자 — ${escH(r ? sjName(r) : SJ_RP.rid)}</b><span class="mute">${SJ_RP.done ? "요청을 남겼다" : "미리보기 — 아직 기록이 남지 않았다"}</span><button class="dx" data-rpx aria-label="미리보기 닫기 (Esc)">✕</button></header>`;
+  if (!SJ_RP.j) {
+    box.innerHTML = `${head}<p class="mute">문자 글을 만드는 중…</p>`;
+    if (rid !== undefined) box.focus();
+    try { SJ_RP.j = await sjRpAsk(false); } catch (e) { box.innerHTML = `${head}<p class="mute">문자 글을 만들지 못했다 — ${escH(e.message)}</p>`; return; }
+  }
+  const j = SJ_RP.j, ln = j.links[0], base = sjRpBase();
+  if (!ln) { box.innerHTML = `${head}<p class="mute">이 지구는 회신 링크를 만들 수 없다(위키 · 연락처 표에 지역ID 가 없다)</p>`; return; }
+  const hm = new Date().toTimeString().slice(0, 5);
+  box.innerHTML = `${head}<div class="rpb"><div class="rpt">
+    <label class="rpn">요청 한 줄<input id="sj-rpn" maxlength="200" value="${escH(SJ_RP.note)}"></label>
+    <h5>받는 사람 <span class="mute">번호마다 문자 하나 — 사람이 직접 보낸다 · 고른 사람의 문자가 오른쪽에</span></h5>
+    ${j.people.map((p, i) => `<div class="rp1"><label><input type="radio" name="sj-rpp" value="${i}"${i === SJ_RP.pi ? " checked" : ""}>${escH(p.who || "담당")}</label><b>${escH(p.tel)}</b><a class="btn" data-rpgo="${i}">문자 앱 열기</a><button data-rpcp="${i}">문자 글 복사</button></div>`).join("")
+      || `<p class="mute">휴대폰 번호를 아는 담당자가 없다 — 링크를 복사해 전한다 <button data-rpcp="-1">링크 복사</button></p>`}
+    <h5>보낼 문자 글</h5><pre class="rps"></pre>
+    <h5>링크 주소</h5><p class="rpu">${escH(ln.url)}</p>
+    ${base ? "" : `<p class="rpw">밖에서 닿는 주소가 아직 없다 — 지금 이 주소(${escH(location.origin)})로 만들어 같은 망 밖 휴대폰에서는 안 열린다. <a href="/reply.html" target="_blank" rel="noopener">현장 회신 화면</a>에서 주소를 넣는다</p>`}
+    <p class="mute">${j.demo ? "시연 — [문자 앱 열기] · [복사] 는 되지만 요청 기록은 남기지 않는다" : SJ_RP.done ? "✔ 요청을 남겼다 — 현장 회신 현황(reply.html)에서 회신을 본다" : "[문자 앱 열기] · [복사] 를 누르면 그때 요청 기록이 남는다(지구 진행 기록 · 현황)"}</p></div>
+    <div class="rpm"><div class="rptab" role="tablist" aria-label="담당자 휴대폰 화면"><button role="tab" data-rptab="sms">문자 도착</button><button role="tab" data-rptab="page">링크를 열면</button></div>
+      <div class="rpph"><div class="rpsms" role="tabpanel" aria-label="문자가 도착한 모습"><div class="rpfrom"><i aria-hidden="true">상</i><b>보낸 사람</b><span>상황실 — 보내는 분의 휴대폰 번호</span></div>
+        <time>오늘 ${hm}</time><p class="rpbub"></p></div>
+      <iframe src="${escH(new URL(ln.url).pathname)}" title="링크를 열면 — 담당자 휴대폰 화면" tabindex="-1" inert></iframe></div></div></div>`;
+  sjRpText(); sjRpTab(SJ_RP.tab);
+}
+/* 요청 한 줄 · 고른 사람이 바뀌면 글만 고친다(입력 칸 포커스를 지키려고 다시 그리지 않는다). 글 형식은 reply.ask 와 같다 — 첫 줄만 요청 한 줄 */
+const sjRpSms = p => [`[경남도 재난상황실] ${SJ_RP.note}`, ...(p ? p.sms.split("\n").slice(1) : [SJ_RP.j.links[0].url])].join("\n");
+function sjRpText() {
+  const box = $("sj-rp"), ps = SJ_RP.j.people, txt = sjRpSms(ps[SJ_RP.pi] || ps[0]);
+  box.querySelector(".rps").textContent = txt;
+  box.querySelector(".rpbub").innerHTML = escH(txt).replace(/https?:\/\/[^\s<]+/g, u => `<a href="#" data-rpopen>${u}</a>`);
+  box.querySelectorAll("[data-rpgo]").forEach(a => { const p = ps[+a.dataset.rpgo]; a.href = `sms:${p.tel}?&body=${encodeURIComponent(sjRpSms(p))}`; });
+}
+function sjRpTab(t) {
+  SJ_RP.tab = t;
+  $("sj-rp").querySelector(".rpph").classList.toggle("pg", t === "page");
+  $("sj-rp").querySelectorAll("[data-rptab]").forEach(b => b.setAttribute("aria-selected", b.dataset.rptab === t));
+}
+/* 미리보기에서 실제로 쓸 때 — 한 번만 요청을 남긴다(글을 바꾸면 다시). 시연은 남기지 않는다(서버도 막는다) */
+function sjRpCommit() {
+  if (SJ_RP.j.demo) return toast("시연에서는 요청 기록을 남기지 않는다 — 문자 앱 · 복사만");
+  if (SJ_RP.done) return;
+  SJ_RP.done = true;
+  sjRpAsk(true).then(() => { toast("요청을 남겼다 — 현장 회신 기록"); }, e => { SJ_RP.done = false; toast(`요청을 남기지 못했다 — ${e.message}`); });
 }
 async function sjDecide(body) {
   try {
@@ -391,6 +486,25 @@ if (SJ_BC) SJ_BC.onmessage = ev => {
 };
 $("sj").addEventListener("click", async ev => {
   const t = ev.target;
+  if (t.closest("#sj-bd")) return sjEsc();               // 바깥 누름 — 위에 뜬 것부터 닫는다
+  if (t.closest("[data-rpx]")) return sjRp(null);
+  const rt = t.closest("[data-rptab], [data-rpopen]");
+  if (rt) { ev.preventDefault(); return sjRpTab(rt.dataset.rptab || "page"); }   // 말풍선 속 링크 — 둘째 화면으로
+  const rg = t.closest("[data-rpgo], [data-rpcp]");
+  if (rg) {
+    if (rg.dataset.rpcp != null) {
+      const p = SJ_RP.j.people[+rg.dataset.rpcp];
+      navigator.clipboard.writeText(p ? sjRpSms(p) : SJ_RP.j.links[0].url).then(() => { rg.textContent = "복사했다"; }, () => { rg.textContent = "복사하지 못했다"; });
+    }
+    return sjRpCommit();                                   // 문자 앱 열기는 그대로 sms: 로 간다
+  }
+  if (t.closest("[data-rpl]")) return sjRp(SJ.sel);
+  if (t.closest("[data-dpop]")) {
+    SJ.dpop = !SJ.dpop;
+    try { localStorage.setItem("gn-sj-dpop", SJ.dpop ? "1" : "0"); } catch {}
+    $("sj-d").innerHTML = sjDetail(); sjDpop();
+    return $("sj-d").querySelector("[data-dpop]").focus();   // 키보드로 바꾼 뒤에도 같은 단추에
+  }
   if (t.closest("#sj-x")) return sjToggle(false);
   const pn = t.closest("[data-pane]");
   if (pn) return sjPane(pn.dataset.pane);
@@ -412,6 +526,8 @@ $("sj").addEventListener("click", async ev => {
   const ct = t.closest("[data-ct]");
   if (ct) { const r = SJ.d.rows.find(x => x.id === SJ.sel), [who, how] = ct.dataset.ct.split("|"); sjDecide({ sigun: r.sigun, emd: r.emd, fam: r.fam, act: "메모", note: `연락(${how}) — 지구 ${sjName(r)} 담당${who}` }); return; }
   if (t.closest("#sj-more")) { SJ.more = true; return sjRender(); }
+  if (t.closest("#sj-all")) return sjMin(0);
+  if (t.closest("#sj-re")) { SJ.fresh = true; return sjLoad(true); }
   if (t.closest("#sj-cog") || t.closest("#sj-wok")) { SJ.wopen = t.closest("#sj-cog") ? !SJ.wopen : false; $("sj-wpop").hidden = !SJ.wopen; return; }
   if (t.closest("#sj-k0")) { Object.assign(SJ, { k: 1, addH: 0, add24: 0 }); return sjLoad(true); }
   const del = t.closest("[data-del]");
@@ -432,7 +548,9 @@ let SJ_KT = 0;
 $("sj").addEventListener("change", ev => {
   if (ev.target.id === "sj-ev") { SJ.ev = ev.target.value; return sjTab("판단 기록"); }
   const id = ev.target.id;
+  if (ev.target.name === "sj-rpp") { SJ_RP.pi = +ev.target.value; return sjRpText(); }
   if (id === "sj-sg") return sjPick(ev.target.value);
+  if (id === "sj-min") return sjMin(+ev.target.value);
   if (id === "sj-cut" || id === "sj-cutp") {
     SJ.cut = { on: $("sj-cut").checked, pct: Math.max(10, Math.min(100, +$("sj-cutp").value || 70)) };
     try { localStorage.setItem("gn-sj-cut", JSON.stringify(SJ.cut)); } catch {}
@@ -444,6 +562,7 @@ $("sj").addEventListener("change", ev => {
   }
 });
 $("sj").addEventListener("input", ev => {
+  if (ev.target.id === "sj-rpn") { Object.assign(SJ_RP, { note: ev.target.value.trim().slice(0, 200) || "지금 현장 조치 여부를 알려 주세요", done: false }); return sjRpText(); }
   if (ev.target.id !== "sj-k") return;
   SJ.k = +ev.target.value / 100;
   ev.target.nextElementSibling.textContent = `×${SJ.k.toFixed(1)}`;

@@ -739,6 +739,7 @@ document.addEventListener("keydown", ev => {
     if ($("td-pop") && !$("td-pop").hidden) { tidePop(null); return; }
     if (!$("showdlg").hidden) { closeShowDlg(); return; }
     if (AIW.open) { aiToggle(false); return; }
+    if (SJ.open && sjEsc()) return;                        // 상세 팝업 · 회신 문자 미리보기부터
     if (SJ.open) { sjToggle(false); return; }
     if (!$("prefs").hidden) closePrefs(); else if (!$("help").hidden) closeHelp(); else if (WZ) { WZ = null; camGo(true); } else if (ESEL.length) pickEmd(null); else if (selOn()) selectSig(null); else if (SHOW.on) stopShow();
     return;

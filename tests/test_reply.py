@@ -114,3 +114,32 @@ def test_ai_code_never_touches_reply():
     app = Path(__file__).resolve().parent.parent / "app"
     for f in ("ai.py", "aireport.py", "llm.py", "aiwatch.py"):
         assert not re.search(r"\breply\b|duty_(link|person|log)", (app / f).read_text("utf-8")), f
+
+
+def test_preview_leaves_no_record(tdb, tmp_path, monkeypatch):
+    """상황판단 미리보기(preview) — 글 · 링크는 같지만 요청(ask)은 남지 않고 현황에도 안 나온다. 실제로 보낼 때 남는다."""
+    _setup(tmp_path, monkeypatch)
+    c = TestClient(main.app)
+    pv = c.post("/api/reply/ask", json={"rids": [A], "note": "통제 여부", "base": "https://r.example", "preview": True}).json()
+    (link,) = pv["links"]
+    assert link["url"] in pv["people"][0]["sms"] and pv["people"][0]["tel"] == "01000000001"
+    assert c.get("/api/reply/list").json()["rows"] == []
+    assert TestClient(reply.public_app).get(link["url"].replace("https://r.example", "") + "/data").json()["log"] == []
+    j = c.post("/api/reply/ask", json={"rids": [A], "note": "통제 여부", "base": "https://r.example"}).json()
+    assert j["people"][0]["sms"] == pv["people"][0]["sms"]               # 미리 본 글 그대로 나간다
+    (row,) = c.get("/api/reply/list").json()["rows"]
+    assert row["waiting"] and row["note"] == "통제 여부"
+
+
+def test_demo_preview_only(tdb, tmp_path, monkeypatch):
+    """시연 — 미리보기는 되고(휴대폰 틀의 /r/ 화면도 열린다) 실제 요청 · 현장 등록은 막는다."""
+    from app import config
+    _setup(tmp_path, monkeypatch)
+    monkeypatch.setattr(config, "DEMO", True)
+    c = TestClient(main.app)
+    pv = c.post("/api/reply/ask", json={"rids": [A], "base": "https://r.example", "preview": True}).json()
+    assert pv["demo"] and pv["people"]
+    path = pv["links"][0]["url"].replace("https://r.example", "")
+    assert c.get(path).status_code == 200 and c.get(path + "/data").json()["log"] == []
+    assert c.post("/api/reply/ask", json={"rids": [A]}).status_code == 403
+    assert c.post(path + "/join", json={"name": "x", "tel": "010-1111-2222"}).status_code == 403

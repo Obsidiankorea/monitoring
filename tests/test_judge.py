@@ -166,3 +166,60 @@ def test_district_emd_names_that_differ_from_the_map():
     assert judge.emd_of("의령", "가례", [{"id": "a"}], names) == {"a": "가례면"}
     assert judge.emd_of("김해", "진영읍 등", [{"id": "b"}], names) == {"b": "진영읍"}
     assert judge.emd_of("김해", "장유", [{"id": "c"}], names) == {}          # 둘에 걸리면 붙이지 않는다
+
+
+def test_build_min_drops_districts_that_cannot_reach(monkeypatch):
+    """min=50 — 지금 · 예보로 50% 에 못 닿는 지구는 rows 에서 빠지고 series 도 안 만든다. n_all · 시군 차트는 전체, r(keep) 지구는 남는다."""
+    from app import contacts, judge, safety, terrain
+    e = {"emd": "북면", "rain": {"1h": 1, "3h": 2, "12h": 5, "24h": 10, "48h": 10}, "m15": 0, "fc_peak": 1, "fc_run30": 0, "ante": 0,
+         "fc_hours": [1] * 6, "fc_labels": [str(h) for h in range(6)], "sites": [], "fc6h": 6, "later": None}
+    e["ladders"] = {"산사태": ai.ladders(e, False, [])["산사태"]}
+    g = {"emd": [e], "night": False, "alerts": [], "river": None, "flood": None, "stage": None, "tm": "202611150000"}
+    hot = {"1h": 30, "3h": 60, "12h": 150, "24h": 200, "48h": 200, "15m": 5}
+    ds = [{"id": i, "fam": "산사태", "rule": "누적강우 250mm이상", "name": i} for i in ("hot", "cold")]
+    monkeypatch.setattr(judge, "_sit", lambda *a, **k: g)
+    monkeypatch.setattr(judge, "_pts", lambda base, basis: {"hot": hot})
+    monkeypatch.setattr(contacts, "districts", lambda sg: {"emd": {"북면": ds}})
+    monkeypatch.setattr(judge, "slide_of", lambda sg: {"fcst": None, "pred": None})
+    monkeypatch.setattr(judge, "_pred_lv", lambda sl: None)
+    monkeypatch.setattr(terrain, "of", lambda d: None)
+    monkeypatch.setattr(terrain, "table", lambda: {})
+    monkeypatch.setattr(safety, "status", lambda: {"keys": {"fcst": 0, "pred": 0}, "slide": {"why": ""}, "at": {}})
+    full = judge.build("창원", "x", series=True)
+    assert [r["id"] for r in full["rows"]] == ["hot", "cold"] and full["n_all"] == 2
+    d = judge.build("창원", "x", series=True, min_pct=50)
+    assert [r["id"] for r in d["rows"]] == ["hot"] and d["n_all"] == 2 and d["chart"][0]["n"] == 2
+    assert d["rows"][0]["b"]["grid"]["series"]
+    k = judge.build("창원", "x", series=True, min_pct=50, keep="cold")
+    assert {r["id"] for r in k["rows"]} == {"hot", "cold"} and next(r for r in k["rows"] if r["id"] == "cold")["b"]["grid"].get("series")
+    # 예보가 많이 오면 지금은 낮아도 윗값이 문턱을 넘어 남는다
+    e2 = {**e, "fc_hours": [40] * 6}
+    assert judge.reach_of(e2, g, "산사태", "누적강우 250mm이상") >= 50 > judge.reach_of(e, g, "산사태", "누적강우 250mm이상")
+
+
+def test_build_cache_single_flight_and_warm(monkeypatch):
+    """같은 인자는 한 번만 계산(동시에 와도) · fresh 면 다시 · 걸러진 keep 지구는 따로 · warm 은 최근 연 기본 인자만."""
+    import threading
+    import time
+    from app import judge
+    n = []
+
+    def fake(*a):
+        n.append(a)
+        time.sleep(.05)
+        return {"rows": [{"id": "x"}] + ([{"id": a[8]}] if len(a) > 8 else []), "computed_at": len(n)}
+    monkeypatch.setattr(judge, "build", fake)
+    monkeypatch.setattr(judge, "_BC", {})
+    monkeypatch.setattr(judge, "SEEN", {})
+    ts = [threading.Thread(target=judge.cached, args=("all", "b"), kwargs={"series": True, "sb": "grid", "min_pct": 50}) for _ in range(4)]
+    [t.start() for t in ts]
+    [t.join() for t in ts]
+    assert len(n) == 1
+    assert judge.cached("all", "b", series=True, sb="grid", min_pct=50, keep="x")["computed_at"] == 1 and len(n) == 1   # 이미 들어 있는 지구
+    assert any(r["id"] == "y" for r in judge.cached("all", "b", series=True, sb="grid", min_pct=50, keep="y")["rows"]) and len(n) == 2
+    judge.cached("all", "b", series=True, sb="grid", min_pct=50, fresh=True)
+    assert len(n) == 3
+    judge.cached("창원", "b", series=True)                     # 시군 하나는 미리 계산하지 않는다
+    assert judge.warm() == 1 and len(n) == 5 and n[-1][0] == "all"
+    judge.SEEN.update({k: 0 for k in judge.SEEN})
+    assert judge.warm() == 0

@@ -124,6 +124,18 @@ async def _nightly() -> None:
     log.info("정리: %s · %.1fMB 회수", res["removed"], res["freed_bytes"] / 1048576)
 
 
+async def _judge_warm() -> None:
+    from . import judge
+    if config.DEMO:
+        return
+    try:
+        n = await asyncio.to_thread(judge.warm)
+        if n:
+            log.info("상황판단 미리 계산 %d건", n)
+    except Exception as e:                                 # noqa: BLE001 — 다음 차례에 다시
+        log.warning("상황판단 미리 계산 실패: %s", e)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.init()
@@ -152,6 +164,8 @@ async def lifespan(app: FastAPI):
                       id=kind, max_instances=1, coalesce=True)
     # AI 기준 근접 알림 — 5분마다 훑는다. 켜 둔 서버에서만 보낸다(설정 › AI 알림, 기본 끔 — aiwatch.py)
     sched.add_job(aiwatch.run, "interval", seconds=300, id="aiwatch", max_instances=1, coalesce=True)
+    # 상황판단 창 미리 계산 — 2분마다, 최근 15분 안에 창을 연 기본 인자만(app/judge.warm). 시연에서는 돌지 않는다
+    sched.add_job(_judge_warm, "interval", seconds=120, id="judgewarm", max_instances=1, coalesce=True)
     # 법령 변경 감시 — 하루 한 번(LAW_OC 가 있는 서버에서만). 위키는 고치지 않고 제안 파일만 남긴다(app/lawwatch.py)
     sched.add_job(lawwatch.run, "cron", hour=9, minute=10, id="lawwatch", max_instances=1, coalesce=True)
     # 하천 수위 · 댐 · 보 — 10분마다(HRFCO_KEY 가 있는 서버에서만, app/river.py). 켠 지 20초 뒤 첫 수집
@@ -531,14 +545,16 @@ async def api_contacts(sigun: str, x_pin: str | None = Header(None)):
 
 @app.post("/api/reply/ask")
 async def api_reply_ask(body: dict, request: Request, x_pin: str | None = Header(None)):
-    """{rids, note, base} — 지구 담당자에게 보낼 회신 링크를 만든다(문자는 화면에서). 이름 · 번호가 나가므로 잠금 번호 뒤."""
+    """{rids, note, base, preview} — 지구 담당자에게 보낼 회신 링크를 만든다(문자는 화면에서). 이름 · 번호가 나가므로 잠금 번호 뒤.
+    preview=true 면 요청 기록 없이 글 · 링크만(상황판단 미리보기 — 문자 앱 열기 · 복사를 누를 때 preview 없이 다시 부른다)."""
     from . import reply
     _contacts_pin(x_pin)
-    if config.DEMO:
+    preview = body.get("preview") is True
+    if config.DEMO and not preview:                        # 시연 — 미리보기(가짜 연락처 · 링크)는 보여 주고 요청 기록은 남기지 않는다
         raise HTTPException(403, "시연 화면에서는 요청을 만들지 않는다")
     base = str(body.get("base") or "").strip() or str(request.base_url)
-    out = await asyncio.to_thread(reply.ask, [str(x) for x in body.get("rids") or []], str(body.get("note") or ""), base)
-    return JSONResponse(out, headers={"Cache-Control": "no-store"})
+    out = await asyncio.to_thread(reply.ask, [str(x) for x in body.get("rids") or []], str(body.get("note") or ""), base, preview)
+    return JSONResponse({**out, "demo": config.DEMO}, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/reply/list")
@@ -682,13 +698,17 @@ async def api_contacts_pin_put(body: dict):
 
 
 @app.get("/api/judge")
-async def api_judge(sigun: str = "all", k: float = 1.0, add_h: float = 0.0, add_24: float = 0.0, series: int = 0, sb: str = ""):
+async def api_judge(sigun: str = "all", k: float = 1.0, add_h: float = 0.0, add_24: float = 0.0, series: int = 0, sb: str = "",
+                    min_: float = Query(0, alias="min"), r: str = "", fresh: int = 0):
     """상황판단 모드 — 지구 한 줄씩(위키 지구 × 기상청 격자 · AWS 면 두 기준의 강수 · 통제 · 사전대피 · 긴급대피 %).
-    sigun=all 이면 경남 전체(시군 차트 + 지구 목록). series=1 이면 지구마다 앞으로 시간별 % (차트 줄 · 재생). 연락처는 넣지 않는다(/api/contacts)."""
+    sigun=all 이면 경남 전체(시군 차트 + 지구 목록). series=1 이면 지구마다 앞으로 시간별 % (차트 줄 · 재생). 연락처는 넣지 않는다(/api/contacts).
+    min=50 이면 지금 · 예보(초단기 포함)로 50% 에 못 닿는 지구는 빼고(n_all 은 전체 수, 시군 차트는 전체로) — r 지구는 남긴다(주소로 바로 연 지구).
+    결과는 judge.BTTL 초 캐시(computed_at = 계산 시각), fresh=1 이면 다시 센다."""
     from . import judge
     me = f"http://127.0.0.1:{os.environ.get('PORT', '8000')}"
     try:
-        return await asyncio.to_thread(judge.build, sigun, me, max(0.5, min(3.0, k)), max(0.0, min(100.0, add_h)), max(0.0, min(500.0, add_24)), bool(series), sb if sb in ("grid", "aws") else None)
+        return await asyncio.to_thread(judge.cached, sigun, me, max(0.5, min(3.0, k)), max(0.0, min(100.0, add_h)), max(0.0, min(500.0, add_24)), bool(series), sb if sb in ("grid", "aws") else None,
+                                       max(0.0, min(100.0, min_)), r or None, bool(fresh))
     except FileNotFoundError as e:
         raise HTTPException(503, f"LLM 위키를 못 찾았다(설정 › AI 위키): {e}")
 
