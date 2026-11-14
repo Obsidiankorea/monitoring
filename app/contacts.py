@@ -59,7 +59,7 @@ def districts(sigun: str) -> dict:
         with open(ai.wiki() / "data" / "인명피해 우려지역.csv", encoding="utf-8-sig", newline="") as f:
             for w in csv.DictReader(f):
                 if w.get("시군") == full and w.get("지역ID"):
-                    out.setdefault(w.get("읍면동") or "", []).append({
+                    out.setdefault(w.get("행정동") or w.get("읍면동") or "", []).append({   # 행정동 칸: 읍면동 칸이 법정동 · 범위라 화면과 안 맞는 줄만 채워져 있다
                         "id": w["지역ID"], "name": w.get("지구명") or "", "ri": w.get("리") or "", "jibun": w.get("지번") or "",
                         "kind": w.get("유형") or "", "fam": ai.FAMILY_OF.get(w.get("유형") or "", "야외·기타"),   # 상황판단 모드의 유형 줄
                         "shelter": w.get("대피장소") or "", "rule": (w.get("대피기준") or "").strip(),

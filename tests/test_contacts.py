@@ -50,3 +50,6 @@ def test_districts_from_wiki_without_pin(tdb, tmp_path, monkeypatch):
     tdb.put_setting("contacts_pin", "x")                                 # 잠겨 있어도
     d = TestClient(main.app).get("/api/districts?sigun=창원").json()["emd"]["진동면"][0]
     assert (d["name"], d["ri"], d["jibun"], d["fam"], d["shelter"], d["rule"]) == ("가지구", "교동리", "12", "산사태", "교동마을회관", "누적강우 250mm이상")
+    with open(tmp_path / "data" / "인명피해 우려지역.csv", "w", encoding="utf-8") as f:   # 행정동 칸이 있으면 그 이름으로 묶는다
+        f.write("유형,시군,지구명,읍면동,지역ID,행정동\n해안가 산책로,창원시,용호마을,귀곡동,48120-3.14.1-001,웅남동\n")
+    assert list(TestClient(main.app).get("/api/districts?sigun=창원").json()["emd"]) == ["웅남동"]
