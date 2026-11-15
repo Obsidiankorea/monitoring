@@ -41,7 +41,7 @@ def test_duty_page(tdb, tmp_path, monkeypatch):
     (kim,) = j["people"]                                               # 같은 번호가 맡은 두 지구는 문자 하나에
     assert kim["tel"] == "01000000001" and kim["names"] == ["가지구", "나지구"] and kim["sms"].count("https://r.example/r/") == 2
     url = re.search(r"가지구 (\S+)", kim["sms"]).group(1)
-    tok = url.rsplit("/", 1)[1]
+    tok = url.split("?")[0].rsplit("/", 1)[1]                          # ?p=1 — 받는 사람 자리
     again = c.post("/api/reply/ask", json={"rids": [A], "base": "https://r.example"}).json()
     assert url in again["people"][0]["sms"]                            # 링크는 지구에 붙어 변하지 않는다
 
@@ -76,7 +76,7 @@ def test_duty_page(tdb, tmp_path, monkeypatch):
     assert [(x["who"], x["action"]) for x in log if x["kind"] == "reply"] == [("최이장", "done"), ("주무관 박현장", "doing")]
     lid = next(x["id"] for x in log if x["photo"])
     assert max(Image.open(io.BytesIO(pub.get(f"/r/{tok}/photo/{lid}").content)).size) == 1600        # 큰 사진은 줄여 둔다
-    other = re.search(r"나지구 (\S+)", kim["sms"]).group(1).rsplit("/", 1)[1]
+    other = re.search(r"나지구 (\S+)", kim["sms"]).group(1).split("?")[0].rsplit("/", 1)[1]
     assert pub.get(f"/r/{other}/photo/{lid}").status_code == 404                                    # 다른 지구 링크로는 못 본다
 
     # 교대 — 빠진 사람은 지난 담당으로 남고 자리가 난다
@@ -153,7 +153,7 @@ def test_single_district_sms_and_info(tdb, tmp_path, monkeypatch):
     j = c.post("/api/reply/ask", json=body).json()
     a, b = j["people"]
     assert a["tel"] == b["tel"] and a["names"] == ["가지구"] and b["names"] == ["나지구"]
-    assert a["sms"] == reply.sms_one("가지구", "창원시 북면", "즉시 대피 조치하고 알려 주세요", j["links"][0]["url"])
+    assert a["sms"] == reply.sms_one("가지구", "창원시 북면", "즉시 대피 조치하고 알려 주세요", j["links"][0]["url"] + "?p=1")
     assert a["sms"].startswith("[경남도 재난상황실] 가지구(창원시 북면) — 즉시 대피") and a["sms"].count("https://") == 1 and "%" not in a["sms"]
     row = next(x for x in c.get("/api/reply/list").json()["rows"] if x["rid"] == A)
     assert row["info"] == "긴급대피 104% · 산사태" and row["round"]["ask"]["memo"].startswith("즉시 대피")
@@ -206,3 +206,47 @@ def test_preview_frames_do_not_stamp_view():
     root = Path(main.__file__).parent / "web" / "static"
     assert "?pv=1" in (root / "js" / "07b-judge.js").read_text("utf-8") and "?pv=1" in (root / "reply.html").read_text("utf-8")
     assert re.search(r'PV \? Promise\.resolve\(\) : post\("/seen"', (root / "r.html").read_text("utf-8"))
+
+
+def test_stamp_without_registration(tdb, tmp_path, monkeypatch):
+    """등록 없이 누른다 — 링크의 받는 사람 자리(p)로 이름을 찾는다. 연락처 파일 이름은 상황실(x-pin 뒤)에만, 링크 페이지에는 '담당자'.
+    현장에서 스스로 등록한 이름은 링크 페이지에도. p 가 없으면 '담당자'."""
+    _setup(tmp_path, monkeypatch)
+    c, pub = TestClient(main.app), TestClient(reply.public_app)
+    url = c.post("/api/reply/ask", json={"rids": [A], "base": "https://r.example", "single": True}).json()["people"][0]["sms"].split("\n")[-1]
+    assert url.endswith("?p=1")
+    tok = url.split("?")[0].rsplit("/", 1)[1]
+    assert pub.post(f"/r/{tok}/stamp", json={"p": "1", "step": "ack"}).status_code == 200
+    pub.post(f"/r/{tok}/note", json={"p": "1", "memo": "가는 중"})
+    pub.post(f"/r/{tok}/stamp", json={"step": "doing"})                       # p 없음
+    d = pub.get(f"/r/{tok}/data")
+    assert "김파일" not in d.text and "0000" not in d.text                       # 연락처 파일의 이름 · 번호는 링크 페이지에 안 나간다
+    st = {s["k"]: s["who"] for s in d.json()["rounds"][0]["steps"]}
+    assert st["ack"] == "담당자" and st["doing"] == "담당자" and d.json()["rounds"][0]["ev"][1]["who"] == "담당자"
+    (row,) = c.get("/api/reply/list").json()["rows"]
+    assert {s["k"]: s["who"] for s in row["round"]["steps"]}["ack"] == "김파일"   # 상황실에는 실제 이름
+    me = pub.post(f"/r/{tok}/join", json={"rank": "주무관", "name": "박현장", "tel": "010-1111-2222"}).json()["id"]
+    url2 = c.post("/api/reply/ask", json={"rids": [A], "base": "https://r.example", "single": True}).json()["people"][0]["sms"].split("\n")[-1]
+    assert url2.endswith(f"?p=u{me}")                                         # 등록한 담당이 있으면 그 사람 자리로
+    pub.post(f"/r/{tok}/stamp", json={"p": f"u{me}", "step": "ack"})
+    assert pub.get(f"/r/{tok}/data").json()["rounds"][0]["steps"][2]["who"] == "주무관 박현장"
+
+
+def test_district_card_is_public_wiki_data(tdb, tmp_path, monkeypatch):
+    """링크 페이지의 지구 카드 — 위키 우려지역 표의 유형 · 대피기준 · 대피장소(공개 자료). 없는 칸은 뺀다."""
+    _setup(tmp_path, monkeypatch)
+    w = tmp_path / "wiki" / "data"
+    w.mkdir(parents=True)
+    (w / "인명피해 우려지역.csv").write_text("지역ID,시군,읍면동,지구명,유형,대피기준,대피장소\n"
+                                        f"{A},창원시,북면,가지구,급경사지,누적강우 250mm이상,–\n", "utf-8")
+    monkeypatch.setattr(ai, "wiki", lambda: tmp_path / "wiki")
+    url = TestClient(main.app).post("/api/reply/ask", json={"rids": [A], "base": "https://r.example", "preview": True}).json()["links"][0]["url"]
+    assert reply.form(url.rsplit("/", 1)[1])["card"] == {"kind": "급경사지", "rule": "누적강우 250mm이상"}
+
+
+def test_preview_note_reaches_frame_without_record():
+    """미리보기 틀은 부모 창이 보내는 요청 한 줄을 카드로(같은 출처만) — pv 면 열람 · 단추가 막혀 기록이 안 남는다."""
+    root = Path(main.__file__).parent / "web" / "static"
+    r = (root / "r.html").read_text("utf-8")
+    assert 'ev.origin !== location.origin || ev.data?.type !== "gn-rp-note"' in r and "b.disabled = PV" in r
+    assert 'postMessage({ type: "gn-rp-note", note: SJ_RP.note }, location.origin)' in (root / "js" / "07b-judge.js").read_text("utf-8")

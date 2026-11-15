@@ -4,9 +4,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>현장 회신</title>
-<!-- 지구 하나의 현장 페이지(app/reply.py) — 상황실 요청, 단계 단추(확인 → 조치 중 → 조치 완료, 한 번 = 스탬프 하나), 진행 단계 표, 담당자 등록 · 교대.
+<!-- 지구 하나의 현장 페이지(app/reply.py) — 지구 카드, 상황실 요청, 단계 단추(확인 → 조치 중 → 조치 완료, 한 번 = 스탬프 하나), 진행 단계 표.
+     등록 없이 바로 누른다 — 문자를 받은 사람이 그 지구 담당자(?p= 받는 사람 자리로 누가 눌렀는지 안다). 등록 · 교대는 맨 아래 접어 둔다.
      비 오는 밖에서 한 손 · 장갑으로 — 밝은 바탕 · 큰 단추(56px↑) · 바깥 자원 없음(글꼴 · 스크립트를 받지 않는다).
-     ?pv=1 — 상황판단 미리보기 · 상황실 현황에서 연 것. 열람을 찍지 않는다 -->
+     ?pv=1 — 상황판단 미리보기 · 상황실 현황에서 연 것. 열람을 찍지 않고 단추도 안 눌린다. 미리보기는 부모 창이 보내는 요청 한 줄(postMessage)을 카드로 -->
 <style>
 :root { --ground: #EEF2F7; --panel: #FFFFFF; --line: #C9D4E1; --ink: #101821; --ink-2: #47596D; --accent: #1B6FA8; --on: #FFFFFF; --ok: #12805A; --bad: #B4401A; --warn: #8A5A00; }
 * { box-sizing: border-box; }
@@ -60,11 +61,18 @@ ol { list-style: none; margin: 0; padding: 0; }
 .ev { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 8px; }
 .ev li { padding: 6px 0; font-size: 16px; }
 .ev li.x { text-decoration: line-through; color: var(--ink-2); }
+.card { margin: 0 0 16px; padding: 12px 16px; }
+.card dl { margin: 0; } .card div { display: grid; grid-template-columns: 76px 1fr; gap: 8px; padding: 4px 0; font-size: 16px; }
+.card dt { color: var(--ink-2); } .card dd { margin: 0; }
+.card dd.clip { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.card button { min-height: 44px; margin-top: 4px; color: var(--accent); border-color: var(--accent); }
+.foot { color: var(--ink-2); font-size: 14px; text-align: center; margin: 8px 0 0; }
 details { margin-top: 12px; } summary { min-height: 48px; display: flex; align-items: center; color: var(--accent); font-weight: 600; cursor: pointer; }
 </style>
 <main>
   <h1 id="name">불러오는 중…</h1>
   <p class="addr" id="addr"></p>
+  <section class="card" id="card" hidden></section>
 
   <section class="req" id="req" hidden></section>
 
@@ -84,8 +92,9 @@ details { margin-top: 12px; } summary { min-height: 48px; display: flex; align-i
 
   <section><h2>진행</h2><div id="tl"></div></section>
 
+  <details id="duty"><summary>담당이 바뀌었나요? — 담당자 등록 · 교대 · 링크 넘기기</summary>
   <section id="people-box">
-    <h2>지금 담당자</h2>
+    <h2>지금 담당자 <span class="opt">(등록은 교대 때만 — 안 해도 누를 수 있습니다)</span></h2>
     <div id="people"></div>
     <form id="join" hidden>
       <h3 id="joinhead" style="font-size:16px;margin:16px 0 8px"></h3>
@@ -102,16 +111,18 @@ details { margin-top: 12px; } summary { min-height: 48px; display: flex; align-i
   </section>
 
   <section id="pastbox" hidden><h2>지난 담당자</h2><ol id="past"></ol></section>
+  </details>
+  <p class="foot">이 링크를 받은 분이 담당자로 기록됩니다.</p>
 </main>
 <script>
-const base = location.pathname.replace(/\/$/, ""), KEY = "me:" + base, PV = new URLSearchParams(location.search).has("pv");
+const Q = new URLSearchParams(location.search), base = location.pathname.replace(/\/$/, ""), KEY = "me:" + base, PV = Q.has("pv"), P = Q.get("p") || "";
 const $ = s => document.querySelector(s);
 const el = (tag, text, cls) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; };
 const say = (id, cls, text) => { $(id).className = "state " + cls; $(id).textContent = text; };
 const day = s => `${+s.slice(5, 7)}.${+s.slice(8, 10)}. ${s.slice(11)}`;
 const ago = s => { const m = Math.max(0, Math.round((Date.now() - new Date(s.replace(" ", "T"))) / 60000)); return m < 60 ? `${m}분 전` : `${Math.floor(m / 60)}시간 ${m % 60}분 전`; };
 const LAB = { ack: "확인했습니다", doing: "조치 중", done: "조치 완료", na: "해당 없음", help: "지원 필요" };
-let me = null, photo = null, D = null;
+let me = null, photo = null, D = null, PVNOTE = null, CARDOPEN = false;
 try { me = +localStorage.getItem(KEY) || null; } catch {}
 const setMe = id => { me = id; try { id ? localStorage.setItem(KEY, id) : localStorage.removeItem(KEY); } catch {} };
 
@@ -148,19 +159,34 @@ function draw(d) {
   document.title = d.name + " — 현장 회신";
   $("#name").textContent = d.name; $("#addr").textContent = d.addr;
   if (!d.people.some(p => p.id === me)) setMe(null);            // 내가 빠졌거나 다른 휴대폰
+  // 지구 카드 — 위키 우려지역 표(공개 자료). 긴 대피기준은 두 줄까지, 펼치기
+  const c = d.card || {}, rows = [["유형", c.kind], ["대피기준", c.rule], ["대피장소", c.shelter]].filter(x => x[1]);
+  $("#card").hidden = !rows.length;
+  const dl = el("dl");
+  dl.append(...rows.map(([k, v]) => {
+    const div = el("div"), dd = el("dd", v, k === "대피기준" ? (CARDOPEN ? "rule" : "rule clip") : "");
+    div.append(el("dt", k), dd);
+    return div;
+  }));
+  $("#card").replaceChildren(dl);
+  const clip = $("#card dd.rule");
+  if (clip && (CARDOPEN || clip.scrollHeight > clip.clientHeight + 2)) {
+    const more = el("button", CARDOPEN ? "접기" : "펼치기");
+    more.onclick = () => { CARDOPEN = !CARDOPEN; draw(D); };
+    $("#card").append(more);
+  }
   const r = d.rounds[0], a = r?.ask;
-  $("#req").hidden = !a;
-  if (a) $("#req").replaceChildren(el("p", "상황실 요청", "lab"), el("p", a.memo, "msg"), el("p", `요청 ${day(a.at)} · ${ago(a.at)}`, "at"));
-  if (me) $("#tl").closest("section").after($("#people-box")); else $("#act").before($("#people-box"));   // 처음 온 사람은 등록부터 — 등록 칸을 단추 위로
+  $("#req").hidden = !a && PVNOTE == null;
+  if (PVNOTE != null) $("#req").replaceChildren(el("p", "상황실 요청 — 보내기 전 미리보기", "lab"), el("p", PVNOTE, "msg"), el("p", "보내면 이 글이 요청으로 남습니다", "at"));
+  else if (a) $("#req").replaceChildren(el("p", "상황실 요청", "lab"), el("p", a.memo, "msg"), el("p", `요청 ${day(a.at)} · ${ago(a.at)}`, "at"));
   // 단추 — 다음 단계가 가장 크게. 한 번 = 기록 한 줄
   const nx = r?.steps.find(s => s.st === "next")?.k, main = LAB[nx] ? nx : null, rest = ["ack", "doing", "done"].filter(k => k !== main);
-  const btn = (k, cls) => { const b = el("button", LAB[k], cls); b.disabled = !me; b.onclick = () => press(k); return b; };
+  const btn = (k, cls) => { const b = el("button", LAB[k], cls); b.disabled = PV; b.onclick = () => press(k); return b; };   // 등록 없이 바로 — 미리보기만 막는다
   const two = el("div", null, "steps2"), side = el("div", null, "side");
   two.append(...rest.map(k => btn(k)));
-  const un = el("button", "방금 누른 것 취소", "undo"); un.disabled = !me; un.onclick = () => press("undo");
+  const un = el("button", "방금 누른 것 취소", "undo"); un.disabled = PV; un.onclick = () => press("undo");
   side.append(btn("na"), btn("help"), un);
-  $("#btns").replaceChildren(...(main ? [btn(main, "big")] : [el("p", r?.now === "조치 완료" ? "조치 완료로 기록되어 있습니다. 상황이 바뀌면 다시 누르세요." : "", "hint")]), two, side,
-    ...(me ? [] : [el("p", d.people.length ? "위 '지금 담당자'에서 본인을 고르거나 등록하면 누를 수 있습니다." : "위에서 담당자로 등록하면 누를 수 있습니다.", "hint")]));
+  $("#btns").replaceChildren(...(main ? [btn(main, "big")] : [el("p", r?.now === "조치 완료" ? "조치 완료로 기록되어 있습니다. 상황이 바뀌면 다시 누르세요." : "", "hint")]), two, side);
   $("#tl").replaceChildren(...(d.rounds.length ? [tlList(r), ...d.rounds.slice(1).map(x => {
     const dt = el("details");
     dt.append(el("summary", `지난 요청 ${x.ask ? day(x.ask.at) : "요청 없이"} — ${x.now}`), tlList(x));
@@ -179,7 +205,7 @@ function draw(d) {
     if (p.id !== me) { const mine = el("button", "이게 나입니다"); mine.onclick = () => { setMe(p.id); draw(d); }; row.append(mine); }
     row.append(out);
     return row;
-  }) : [el("p", "아직 등록한 담당자가 없습니다. 아래에 본인을 등록해 주세요.", "hint")]));
+  }) : [el("p", "등록한 담당자가 없습니다 — 문자를 받은 분이 담당자로 기록됩니다. 담당이 바뀌었을 때만 아래에 등록하세요.", "hint")]));
   $("#join").hidden = d.people.length >= d.max;
   $("#joinhead").textContent = d.people.length ? "함께 맡는 사람 한 명 더 등록" : "본인 등록";
   $("#pastbox").hidden = !d.past.length;
@@ -188,7 +214,7 @@ function draw(d) {
 
 async function press(step) {
   try {
-    const j = await post("/stamp", { id: me, step });
+    const j = await post("/stamp", { id: me, p: P, step });
     await load();
     const as = { ack: "확인으로", doing: "조치 중으로", done: "조치 완료로", na: "해당 없음으로", help: "지원 필요로", undo: "방금 누른 것 취소로" };
     say("#astate", "ok", `${j.at.slice(11)} ${as[step]} 기록했습니다.`);
@@ -207,7 +233,7 @@ $("#join").onsubmit = async e => {
   const f = e.target;
   try {
     setMe((await post("/join", { rank: f.rank.value, name: f.name.value, tel: f.tel.value })).id);
-    f.reset(); await load(); say("#pstate", "ok", "등록했습니다. 위에서 단계를 누를 수 있습니다.");
+    f.reset(); await load(); say("#pstate", "ok", "등록했습니다. 이 휴대폰에서 누르면 이 이름으로 기록됩니다.");
   } catch (err) { say("#pstate", "bad", `등록하지 못했습니다. ${err.message}`); }
 };
 
@@ -238,13 +264,19 @@ $("#note").onsubmit = async e => {
   if (!f.memo.value.trim() && !photo) return say("#nstate", "bad", "덧붙일 말을 쓰거나 사진을 찍어 주세요.");
   btn.disabled = true; say("#nstate", "", "보내는 중…");
   try {
-    await post("/note", { id: me, memo: f.memo.value, photo });
+    await post("/note", { id: me, p: P, memo: f.memo.value, photo });
     photo = null; f.reset(); $("#shotimg").hidden = true; $("#shotlab").textContent = "사진 찍기";
     await load(); say("#nstate", "ok", "덧붙였습니다.");
   } catch (err) { say("#nstate", "bad", `보내지 못했습니다. ${err.message}`); }   // 쓴 말 · 찍은 사진은 그대로 둔다
   btn.disabled = false;
 };
 
+// 미리보기 — 부모 창(상황판단, 같은 출처)이 지금 쓰는 요청 한 줄을 보낸다. 기록은 남지 않는다
+if (PV) addEventListener("message", ev => {
+  if (ev.origin !== location.origin || ev.data?.type !== "gn-rp-note") return;
+  PVNOTE = String(ev.data.note || "");
+  if (D) draw(D);
+});
 (PV ? Promise.resolve() : post("/seen", {}).catch(() => {}))      // 열람 — 요청마다 한 번(서버가 가린다)
   .then(load).catch(() => { $("#name").textContent = "화면을 불러오지 못했습니다"; $("#addr").textContent = "연결을 확인하고 다시 열어 주세요."; });
 setInterval(() => { if (D && !document.hidden) load().catch(() => {}); }, 60000);   // 지난 시간 · 다른 담당자가 누른 것

@@ -455,12 +455,18 @@ async function sjRp(rid) {
         <time>오늘 ${hm}</time><p class="rpbub"></p></div>
       <iframe src="${escH(new URL(ln.url).pathname)}?pv=1" title="링크를 열면 — 담당자 휴대폰 화면" tabindex="-1" inert></iframe></div></div></div>`;
   sjRpText(); sjRpTab(SJ_RP.tab);
+  box.querySelector("iframe").addEventListener("load", sjRpPost);
 }
-/* 요청 한 줄 · 고른 사람이 바뀌면 글만 고친다(입력 칸 포커스를 지키려고 다시 그리지 않는다). 글 형식은 reply.ask 와 같다 — 첫 줄만 요청 한 줄 */
+/* 휴대폰 틀(r.html?pv=1, 같은 출처)에 지금 쓰는 요청 한 줄을 보낸다 — 틀을 다시 부르지 않고 '상황실 요청' 카드만 바뀐다 */
+function sjRpPost() {
+  $("sj-rp")?.querySelector("iframe")?.contentWindow?.postMessage({ type: "gn-rp-note", note: SJ_RP.note }, location.origin);
+}
+/* 요청 한 줄 · 고른 사람이 바뀌면 글만 고친다(입력 칸 포커스를 지키려고 다시 그리지 않는다). 글은 서버가 만든 것 그대로 */
 const sjRpSms = p => (p ? p.sms : SJ_RP.j.links[0].url);    // 글은 서버(reply.sms_one)가 만든 것 그대로
 let SJ_RPT = 0;
 function sjRpNoteIn(v) {                                  // 요청 한 줄 — 칠 때마다 잠깐 뒤 미리보기(기록 없음)를 다시 받아 글만 바꾼다
   Object.assign(SJ_RP, { note: v.trim().slice(0, 200) || "지금 현장 조치 여부를 알려 주세요", done: false });
+  sjRpPost();
   clearTimeout(SJ_RPT);
   SJ_RPT = setTimeout(async () => {
     const want = SJ_RP.note;
