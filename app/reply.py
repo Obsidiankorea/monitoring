@@ -123,7 +123,7 @@ def ask(rids: list[str], note: str, base: str, preview: bool = False, single: bo
                 con.execute("INSERT INTO duty_log(rid, at, kind, who, more, memo) VALUES(?,?,?,?,?,?)",
                             (rid, at, "ask", "상황실", (info or "").strip()[:60] or None, note))
             # 받는 사람 자리 p — 링크에 붙여 누가 눌렀는지 안다(u<id> 현장 등록 담당 · 1 · 2 연락처 파일 담당1 · 2)
-            people = [(_who(p), p["tel"], f"u{p['id']}") for p in _current(con, rid)]
+            people = [(_who(p), p["tel"], f"u{p['id']}") for p in _current(con, rid) if p["tel"]]   # 번호 없이 등록한 담당은 문자를 못 받는다
             if not people:                                       # 아직 아무도 등록 안 한 지구 — 연락처 파일의 번호로
                 r = csvrows.get(rid) or {}
                 people = [(r.get(f"담당{i}") or "", t, str(i)) for i in (1, 2)
@@ -145,12 +145,7 @@ def _mins(a: str, b: str) -> int:
     return int((datetime.strptime(b, f) - datetime.strptime(a, f)).total_seconds() // 60)
 
 
-def _mask(who: str, more: str | None) -> str:
-    """연락처 파일에서 온 이름(more = csv1 · csv2) — 링크 페이지에서는 '담당자' · '담당자 2' 로만(링크는 넘겨질 수 있다)."""
-    return {"csv1": "담당자", "csv2": "담당자 2"}.get(more or "", who)
-
-
-def rounds(con, rid: str, n: int = 5, now: str | None = None, mask: bool = False) -> list[dict]:
+def rounds(con, rid: str, n: int = 5, now: str | None = None) -> list[dict]:
     """진행 기록을 요청마다 묶은 단계 표 — 새 요청부터 n 개. 화면 셋(r.html · reply.html · 상황판단)은 이것을 그리기만 한다.
     {ask: {at, memo, info} | None(요청 없이 쌓인 것), steps: [{k, label, t, who, plus, st: done|skip|next|todo}], ev: [...], now, side, warn}
     예전 회신(action done · doing · not · na + more)도 읽는다 — '아직'은 받아 봤다(확인)로, more=yes 는 지원 필요로."""
@@ -166,7 +161,7 @@ def rounds(con, rid: str, n: int = 5, now: str | None = None, mask: bool = False
         if cur is None:
             cur = {"ask": None, "ev": []}
             out.append(cur)
-        e = {"id": lid, "at": at, "who": _mask(who, more) if mask else who, "memo": memo or "", "photo": bool(photo)}
+        e = {"id": lid, "at": at, "who": who, "memo": memo or "", "photo": bool(photo)}
         if kind == "view":
             cur["ev"].append({**e, "k": "view", "who": ""})
         elif kind in ("on", "off", "note"):
@@ -237,20 +232,22 @@ def _link(con, token: str) -> tuple[str, str, str]:
     return got
 
 
-def form(token: str) -> dict:
-    """링크 페이지에 줄 것 — 지구 · 지금 담당 · 지난 담당 · 진행 기록(새 것부터 60줄)."""
+def form(token: str, pk: str = "") -> dict:
+    """링크 페이지에 줄 것 — 지구 · 받는 사람(p → 직급 · 이름) · 지금 담당 · 지난 담당 · 진행 기록(새 것부터 60줄).
+    ⚠️ 휴대폰 번호는 내보내지 않는다(링크는 넘겨질 수 있다) — 번호는 상황실(잠금 번호 뒤)에서만."""
     with db.tx() as con:
         rid, name, addr = _link(con, token)
-        rd = rounds(con, rid, mask=True)
+        rd = rounds(con, rid)
         for r in rd:
             if r["ask"]:
                 r["ask"].pop("info")                             # 그때의 단계 · % 는 상황실 기록에만 — 현장에는 요청 문구만
         return {"name": name, "addr": addr, "card": (_districts().get(rid) or ("", "", "", "", {}))[4], "max": MAX_PEOPLE,
-                "people": _current(con, rid), "rounds": rd,
+                "people": [{k: x[k] for k in ("id", "rank", "name", "since")} for x in _current(con, rid)],
+                "pwho": {k: pw[k] for k in ("rank", "name")} if (pw := _person(con, rid, pk)) else None, "rounds": rd,
                 "now": _now(), "warn_min": WARN_MIN,
                 "past": [{"rank": r[0], "name": r[1], "since": r[2], "until": r[3]} for r in con.execute(
                     "SELECT rank, name, since, until FROM duty_person WHERE rid=? AND until IS NOT NULL ORDER BY id DESC LIMIT 20", (rid,))],
-                "log": [{"id": r[0], "at": r[1], "kind": r[2], "who": _mask(r[3], r[5]), "action": r[4],
+                "log": [{"id": r[0], "at": r[1], "kind": r[2], "who": r[3], "action": r[4],
                          "more": None if r[2] == "ask" or r[5] in ("csv1", "csv2") else r[5], "memo": r[6], "photo": bool(r[7])}
                         for r in con.execute("SELECT id, at, kind, who, action, more, memo, photo FROM duty_log WHERE rid=?"
                                              " ORDER BY id DESC LIMIT 60", (rid,))]}
@@ -262,17 +259,26 @@ def _open() -> None:
 
 
 def join(token: str, body: dict) -> dict:
-    """담당자 등록 — {rank, name, tel}. 지구마다 둘까지(셋째는 누가 빠져야 한다). 등록한 사람의 id."""
+    """담당자 등록 — {rank, name, tel(선택), p, fix}. 번호를 비우면 링크의 받는 사람 자리(p) 번호를 서버 안에서 이어 쓴다(응답에 안 낸다).
+    fix — '아닙니다 — 다시 입력': p 가 지금 현장 등록 담당이면 그 사람은 빠지고(교대) 새 이름으로. 지구마다 둘까지. 등록한 사람의 id."""
     _open()
     rank, name = str(body.get("rank") or "").strip()[:20], str(body.get("name") or "").strip()[:20]
-    tel = _mobile(str(body.get("tel") or ""))
-    if not name or not tel:
-        raise HTTPException(400, "성명과 휴대폰 번호(010…)를 넣어 주세요")
+    raw = str(body.get("tel") or "").strip()
+    tel = _mobile(raw)
+    if not name or (raw and not tel):
+        raise HTTPException(400, "성명을 넣어 주세요" if not name else "휴대폰 번호는 010… 로 넣거나 비워 두세요")
     with db.tx() as con:
         rid, _, _ = _link(con, token)
+        pp = _person(con, rid, body.get("p"))
+        tel = tel or (pp or {}).get("tel") or ""
         now = _current(con, rid)
-        if (same := next((p for p in now if p["tel"] == tel), None)):   # 같은 번호로 또 누름 — 그 사람 그대로
+        if (same := next((p for p in now if tel and p["tel"] == tel and _who(p) == f"{rank} {name}".strip()), None)):   # 같은 사람이 또 누름
             return {"id": same["id"]}
+        pk = str(body.get("p") or "")
+        if body.get("fix") and pk[:1] == "u" and (old := next((p for p in now if f"u{p['id']}" == pk), None)):
+            con.execute("UPDATE duty_person SET until=? WHERE id=?", (_now(), old["id"]))     # 링크를 받은 사람이 다르다 — 교대로 남긴다
+            con.execute("INSERT INTO duty_log(rid, at, kind, who, memo) VALUES(?,?,?,?,?)", (rid, _now(), "off", _who(old), ""))
+            now = [p for p in now if p is not old]
         if len(now) >= MAX_PEOPLE:
             raise HTTPException(409, f"담당자는 {MAX_PEOPLE}명까지입니다. 교대라면 앞 사람을 먼저 빼 주세요")
         at = _now()
@@ -307,23 +313,28 @@ def seen(token: str) -> dict:
     return {"ok": True, "new": False}
 
 
-def _actor(con, rid: str, body: dict) -> tuple[str, str | None]:
-    """누가 눌렀나 → (who, more). 등록 없이 누른다 — 문자를 받은 사람이 그 지구 담당자(사용자 결정 2026-11-15).
-    이 휴대폰에서 등록한 사람(id) → 링크의 받는 사람 자리 p(u<id> 등록 담당 · 1 · 2 연락처 파일 담당1 · 2, more=csv1 · csv2 로 표시) → '담당자'."""
-    p = next((p for p in _current(con, rid) if p["id"] == body.get("id")), None)
-    if p:
-        return _who(p), None
-    pk = str(body.get("p") or "")
+def _person(con, rid: str, pk: str) -> dict | None:
+    """링크의 받는 사람 자리 p → {rank, name, tel} (u<id> 현장 등록 담당 · 1 · 2 연락처 파일 담당1 · 2). 못 찾으면 None.
+    연락처 파일에 '담당N_직급' 칸이 있으면 직급으로, 없으면 담당 칸 글자를 그대로 이름에(억지로 나누지 않는다). tel 은 서버 안에서만 쓴다."""
+    pk = str(pk or "")
     if pk[:1] == "u" and pk[1:].isdigit():
-        got = con.execute("SELECT rank, name FROM duty_person WHERE id=? AND rid=?", (int(pk[1:]), rid)).fetchone()
-        if got:
-            return f"{got[0]} {got[1]}".strip(), None
+        got = con.execute("SELECT rank, name, tel FROM duty_person WHERE id=? AND rid=?", (int(pk[1:]), rid)).fetchone()
+        return {"rank": got[0], "name": got[1], "tel": got[2]} if got else None
     if pk in ("1", "2"):
         from . import contacts
-        nm = ((contacts._rows().get(rid) or {}).get(f"담당{pk}") or "").strip()
+        r = contacts._rows().get(rid) or {}
+        nm = (r.get(f"담당{pk}") or "").strip()
         if nm and nm not in ("–", "-"):
-            return nm, f"csv{pk}"
-    return "담당자", None
+            return {"rank": (r.get(f"담당{pk}_직급") or "").strip(), "name": nm,
+                    "tel": _mobile(r.get(f"담당{pk}_연락처_정규화") or r.get(f"담당{pk}_연락처") or "")}
+    return None
+
+
+def _actor(con, rid: str, body: dict) -> tuple[str, str | None]:
+    """누가 눌렀나 → (who, more). 등록 없이 누른다 — 문자를 받은 사람이 그 지구 담당자(사용자 결정 2026-11-15).
+    이 휴대폰에서 등록한 사람(id) → 링크의 받는 사람 자리 p → '담당자'."""
+    p = next((p for p in _current(con, rid) if p["id"] == body.get("id")), None) or _person(con, rid, body.get("p"))
+    return (_who(p) or "담당자") if p else "담당자", None
 
 
 def stamp(token: str, body: dict) -> dict:
@@ -408,8 +419,8 @@ async def page(token: str):
 
 
 @router.get("/r/{token}/data")
-async def page_data(token: str):
-    return form(token)
+async def page_data(token: str, p: str = ""):
+    return form(token, p)
 
 
 @router.post("/r/{token}")

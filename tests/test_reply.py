@@ -209,27 +209,37 @@ def test_preview_frames_do_not_stamp_view():
 
 
 def test_stamp_without_registration(tdb, tmp_path, monkeypatch):
-    """등록 없이 누른다 — 링크의 받는 사람 자리(p)로 이름을 찾는다. 연락처 파일 이름은 상황실(x-pin 뒤)에만, 링크 페이지에는 '담당자'.
-    현장에서 스스로 등록한 이름은 링크 페이지에도. p 가 없으면 '담당자'."""
+    """등록 없이 누른다 — 링크의 받는 사람 자리(p)로 직급 · 이름을 찾아 링크 페이지에도 보인다. 휴대폰 번호는 링크 페이지 응답 어디에도 없다.
+    '아닙니다 — 다시 입력'은 번호 없이도 등록(p 자리 번호를 서버 안에서 이어 씀) → 이후 그 이름으로. 번호는 상황실(x-pin 뒤)에만. p 가 없으면 '담당자'."""
     _setup(tmp_path, monkeypatch)
     c, pub = TestClient(main.app), TestClient(reply.public_app)
     url = c.post("/api/reply/ask", json={"rids": [A], "base": "https://r.example", "single": True}).json()["people"][0]["sms"].split("\n")[-1]
     assert url.endswith("?p=1")
     tok = url.split("?")[0].rsplit("/", 1)[1]
+    nophone = lambda r: not re.search(r"0\d{1,2}-?\d{3,4}-?\d{4}", r.text)  # noqa: E731
+    d = pub.get(f"/r/{tok}/data?p=1")
+    assert d.json()["pwho"] == {"rank": "", "name": "김파일"} and nophone(d)            # 직급 칸이 없으면 담당 칸 그대로
+    assert pub.get(f"/r/{tok}/data").json()["pwho"] is None and pub.get(f"/r/{tok}/data?p=9").json()["pwho"] is None
     assert pub.post(f"/r/{tok}/stamp", json={"p": "1", "step": "ack"}).status_code == 200
-    pub.post(f"/r/{tok}/note", json={"p": "1", "memo": "가는 중"})
     pub.post(f"/r/{tok}/stamp", json={"step": "doing"})                       # p 없음
-    d = pub.get(f"/r/{tok}/data")
-    assert "김파일" not in d.text and "0000" not in d.text                       # 연락처 파일의 이름 · 번호는 링크 페이지에 안 나간다
+    d = pub.get(f"/r/{tok}/data?p=1")
     st = {s["k"]: s["who"] for s in d.json()["rounds"][0]["steps"]}
-    assert st["ack"] == "담당자" and st["doing"] == "담당자" and d.json()["rounds"][0]["ev"][1]["who"] == "담당자"
-    (row,) = c.get("/api/reply/list").json()["rows"]
-    assert {s["k"]: s["who"] for s in row["round"]["steps"]}["ack"] == "김파일"   # 상황실에는 실제 이름
-    me = pub.post(f"/r/{tok}/join", json={"rank": "주무관", "name": "박현장", "tel": "010-1111-2222"}).json()["id"]
+    assert st["ack"] == "김파일" and st["doing"] == "담당자" and nophone(d)
+    # 아닙니다 — 다시 입력(번호 없이)
+    me = pub.post(f"/r/{tok}/join", json={"rank": "주무관", "name": "박현장", "p": "1", "fix": True}).json()["id"]
+    pub.post(f"/r/{tok}/stamp", json={"id": me, "p": "1", "step": "done"})
+    d = pub.get(f"/r/{tok}/data?p=1")
+    assert d.json()["rounds"][0]["steps"][4]["who"] == "주무관 박현장" and d.json()["people"][0]["name"] == "박현장" and nophone(d)
+    rows = c.get("/api/reply/list").json()["rows"]
+    assert rows[0]["people"] == [{"who": "주무관 박현장", "tel": "01000000001"}]   # 번호는 상황실에만 — p 자리 번호를 이어 씀
     url2 = c.post("/api/reply/ask", json={"rids": [A], "base": "https://r.example", "single": True}).json()["people"][0]["sms"].split("\n")[-1]
-    assert url2.endswith(f"?p=u{me}")                                         # 등록한 담당이 있으면 그 사람 자리로
-    pub.post(f"/r/{tok}/stamp", json={"p": f"u{me}", "step": "ack"})
-    assert pub.get(f"/r/{tok}/data").json()["rounds"][0]["steps"][2]["who"] == "주무관 박현장"
+    assert url2.endswith(f"?p=u{me}")                                         # 이제 문자는 등록한 그 사람 자리로
+    assert pub.get(f"/r/{tok}/data?p=u{me}").json()["pwho"] == {"rank": "주무관", "name": "박현장"}
+    # u 자리에서 '아닙니다' — 그 사람은 빠지고(교대) 새 사람
+    me2 = pub.post(f"/r/{tok}/join", json={"rank": "팀장", "name": "최교대", "p": f"u{me}", "fix": True}).json()["id"]
+    d = pub.get(f"/r/{tok}/data").json()
+    assert [p["id"] for p in d["people"]] == [me2] and d["past"][0]["name"] == "박현장"
+    assert pub.post(f"/r/{tok}/join", json={"name": "x", "tel": "055-1"}).status_code == 400   # 번호를 넣으면 휴대폰이어야
 
 
 def test_district_card_is_public_wiki_data(tdb, tmp_path, monkeypatch):
