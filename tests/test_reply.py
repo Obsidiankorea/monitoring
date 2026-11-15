@@ -112,7 +112,7 @@ def test_pin_and_public_surface(tdb, tmp_path, monkeypatch):
 def test_ai_code_never_touches_reply():
     """담당자 표에는 이름 · 번호가 있다 — AI 맥락을 만드는 코드가 부르면 LLM 에 샐 수 있다."""
     app = Path(__file__).resolve().parent.parent / "app"
-    for f in ("ai.py", "aireport.py", "llm.py", "aiwatch.py"):
+    for f in ("ai.py", "aireport.py", "llm.py", "aiwatch.py", "judge.py"):   # reply 가 judge 를 부르는 것은 되고, 거꾸로는 안 된다
         assert not re.search(r"\breply\b|duty_(link|person|log)", (app / f).read_text("utf-8")), f
 
 
@@ -260,3 +260,49 @@ def test_preview_note_reaches_frame_without_record():
     r = (root / "r.html").read_text("utf-8")
     assert 'ev.origin !== location.origin || ev.data?.type !== "gn-rp-note"' in r and "b.disabled = PV" in r
     assert 'postMessage({ type: "gn-rp-note", note: SJ_RP.note }, location.origin)' in (root / "js" / "07b-judge.js").read_text("utf-8")
+
+
+def test_gauge_is_the_judge_row(tdb, tmp_path, monkeypatch):
+    """링크 페이지의 '지금 비와 기준' — 그 지구 judge 줄(격자)의 단계 · 조건 · % 그대로, 시군 하나 · 시간별로 캐시를 탄다.
+    연락처는 섞이지 않고, 대시보드에 못 닿으면 빈 것(오류 아님), 없는 토큰은 404."""
+    from app import judge
+    _setup(tmp_path, monkeypatch)
+    st = {"통제": {"pct": 43, "met": False, "unk": False, "eta": "내일 02", "eta_h": 9, "rule": "24시간 200㎜↑(실황)", "partial": False,
+                 "parts": [{"label": "24시간", "now": 86, "need": 200, "unit": "㎜", "pct": 43}]}}
+    row = {"id": A, "emd": "북면", "fam": "산사태", "rule": "누적강우 250mm이상", "where": "지구", "b": {"grid": {
+        "rain": {"1h": 4, "3h": 10, "24h": 86}, "top": 43, "site": 34, "site_parts": [{"label": "누적", "now": 86, "need": 250.0, "unit": "㎜", "pct": 34}],
+        "st": st, "series": {"t": ["19", "20"], "v": [45, 51], "xy": {}}}, "aws": None}}
+    calls = []
+    monkeypatch.setattr(ai, "_get", lambda *a, **k: (_ for _ in ()).throw(OSError("대시보드 꺼짐")))   # 날씨 묶음은 못 받은 문장만 빠진다
+    monkeypatch.setattr(judge, "cached", lambda *a: calls.append(a) or {"rows": [row], "computed_at": "2026-11-15T12:00:00", "tm": "202611151200"})
+    url = TestClient(main.app).post("/api/reply/ask", json={"rids": [A], "base": "https://r.example", "preview": True}).json()["links"][0]["url"]
+    pub = TestClient(reply.public_app)
+    g = pub.get(url.replace("https://r.example", "") + "/gauge")
+    assert calls[0][0] == "창원" and calls[0][5:8] == (True, "grid", 0.0)              # 시군 하나 · 시간별 · 격자
+    j = g.json()
+    assert j["st"] == st and j["top"] == 43 and j["site"] == 34 and j["series"] == {"t": ["19", "20"], "v": [45, 51]} and j["at"]
+    assert "김파일" not in g.text and "0000" not in g.text
+    assert pub.get("/r/nope/gauge").status_code == 404
+
+    def down(*a):
+        raise OSError("대시보드 꺼짐")
+    monkeypatch.setattr(judge, "cached", down)
+    assert pub.get(url.replace("https://r.example", "") + "/gauge").json() == {}
+
+
+def test_weather_band(monkeypatch):
+    """링크 페이지 '지금 날씨' — 그 시군 특보 · 예비특보, 지금 비(판정 줄), 앞으로(초단기, 그 읍면동). 대시보드가 가진 값만 문장으로."""
+    al = {"data": {"groups": [{"name": "호우주의보", "tmfc": "09:00", "siguns": ["창원", "고성"]}, {"name": "호우경보", "tmfc": "10:00", "siguns": ["진주"]}],
+                   "pending": [{"sigun": "창원", "name": "태풍", "tmfc": "11:00"}]}}
+    fc = {"tmfc": "202611151200", "labels": ["13", "14", "15", "16", "17", "18"],
+          "emd_sigun": [{"emd": "북면", "d": [5, 8, 28, 10, 0, 0]}, {"emd": "동읍", "d": [0] * 6}]}
+    got = {"/api/alerts": al, "/api/forecast": fc}
+    monkeypatch.setattr(ai, "_get", lambda base, path, **k: got[path])
+    w = reply.weather("창원", "b", "북면", {"1h": 12, "3h": 35, "24h": None}, "202611151210")
+    assert w["lines"] == ["호우주의보 발효 중(09:00~) · 태풍 예비특보(11:00).", "지금 시간당 12㎜ · 3시간 35㎜.",
+                          "앞으로 3시간 41㎜ · 6시간 51㎜ 더, 15시쯤 시간당 28㎜로 가장 셈."]
+    assert w["fc"] == {"h3": 41, "h6": 51, "peak": 28, "peak_at": "15"} and w["tmfc"] == "202611151200"
+    al["data"] = {"groups": [], "pending": []}
+    w = reply.weather("창원", "b", "동읍", {"1h": None, "3h": None, "24h": None}, None)
+    assert w["lines"] == ["특보 없음.", "앞으로 6시간 비 예보 없음."]                      # 값이 없는 문장은 뺀다
+    assert set(w) == {"alerts", "pending", "rain", "fc", "lines", "tm", "tmfc"} and "김파일" not in str(w)   # 연락처는 섞이지 않는다

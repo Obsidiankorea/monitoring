@@ -35,11 +35,34 @@ textarea { min-height: 72px; }
 button { min-height: 56px; padding: 0 14px; font: inherit; font-weight: 600; border: 1.5px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--ink); }
 button:focus-visible, a:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
 button.go { width: 100%; min-height: 56px; border: 0; background: var(--ink); color: var(--on); font-weight: 700; }
-button.big { width: 100%; min-height: 76px; font-size: 22px; border: 0; background: var(--accent); color: var(--on); font-weight: 800; }
 button:disabled { opacity: .5; }
-.steps2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
-.side { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
-.side .undo { grid-column: 1 / -1; color: var(--ink-2); font-weight: 500; }
+.stp { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.stp button { min-height: 56px; padding: 4px 2px; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.2; }
+.stp button.next { background: var(--accent); border-color: var(--accent); color: var(--on); font-weight: 800; }
+.stp button.done { border-color: var(--ok); color: var(--ok); }
+.stp small { font-size: 12px; font-weight: 500; }
+.mini { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 6px; }
+.mini button { min-height: 44px; padding: 0 2px; font-size: 16px; font-weight: 500; color: var(--ink-2); }
+#act h2 { margin-bottom: 8px; }
+#notebox { margin-top: 6px; } #notebox summary { min-height: 44px; font-size: 16px; }
+/* 지금 날씨 — 늘 보이는 짧은 띠(특보는 글자로) */
+#wx { margin: 0 0 16px; padding: 10px 16px; background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 12px; }
+#wx p { margin: 0; font-size: 16px; } #wx p.al { font-weight: 700; } #wx small { display: block; margin-top: 4px; font-size: 13px; color: var(--ink-2); }
+/* 지금 비와 기준 — 막대(100% 선) · 숫자 · 글자 함께. 기본은 요약 한 줄 */
+#gauge { margin: 0 0 16px; padding: 4px 16px 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+#gauge summary { font-size: 16px; color: var(--ink); font-weight: 600; flex-wrap: wrap; gap: 4px; }
+#gauge summary span { color: var(--ink-2); font-weight: 400; }
+.gs { margin: 10px 0 4px; }
+.gs .h { display: flex; justify-content: space-between; gap: 8px; font-weight: 700; }
+.gs .h em { font-style: normal; font-weight: 600; color: var(--ink-2); } .gs .h em.met { color: var(--bad); }
+.gs .rl { color: var(--ink-2); font-size: 14px; margin: 2px 0 4px; }
+.bar { position: relative; height: 12px; border-radius: 6px; background: var(--ground); border: 1px solid var(--line); margin-right: 16.6%; }
+.bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 6px; background: var(--accent); }
+.bar i.met { background: var(--bad); }
+.bar::after { content: "100%"; position: absolute; left: 100%; top: -4px; padding-left: 4px; font-size: 11px; color: var(--ink-2); border-left: 2px solid var(--ink); height: 18px; }
+.gp { font-size: 14px; color: var(--ink-2); margin: 4px 0 0; }
+.gsv { display: block; width: 100%; height: 64px; margin-top: 6px; }
+.gm { font-size: 13px; color: var(--ink-2); margin: 8px 0 0; }
 .who { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
 .who:first-of-type { border-top: 0; padding-top: 0; }
 .who b { flex: 1 1 100%; } .who a { color: var(--accent); font-weight: 600; flex: 1; min-height: 48px; display: flex; align-items: center; }
@@ -99,6 +122,8 @@ details { margin-top: 12px; } summary { min-height: 48px; display: flex; align-i
     <p class="state" id="wstate" role="status"></p>
   </section>
   <section class="card" id="card" hidden></section>
+  <section id="wx" hidden aria-label="지금 날씨"></section>
+  <details id="gauge" hidden><summary></summary><div id="gbody"></div></details>
 
   <section class="req" id="req" hidden></section>
 
@@ -106,14 +131,15 @@ details { margin-top: 12px; } summary { min-height: 48px; display: flex; align-i
     <h2>지금 상황 누르기</h2>
     <div id="btns"></div>
     <p class="state" id="astate" role="status"></p>
-    <form id="note" hidden>
+    <details id="notebox"><summary>사진 · 메모 덧붙이기</summary>
+    <form id="note">
       <span class="lab">방금 누른 것에 덧붙이기 <span class="opt">(없어도 됩니다)</span></span>
       <img id="shotimg" alt="보낼 현장 사진" hidden>
       <label class="shot"><input type="file" id="shot" accept="image/*" capture="environment"><span id="shotlab">사진 찍기</span></label>
       <label class="lab" style="margin-top:12px">덧붙일 말<textarea name="memo" maxlength="500" style="font-weight:400"></textarea></label>
       <button class="go" style="margin-top:8px">덧붙이기</button>
       <p class="state" id="nstate" role="status"></p>
-    </form>
+    </form></details>
   </section>
 
   <section><h2>진행</h2><div id="tl"></div></section>
@@ -216,14 +242,16 @@ function draw(d) {
   $("#req").hidden = !a && PVNOTE == null;
   if (PVNOTE != null) $("#req").replaceChildren(el("p", "상황실 요청 — 보내기 전 미리보기", "lab"), el("p", PVNOTE, "msg"), el("p", "보내면 이 글이 요청으로 남습니다", "at"));
   else if (a) $("#req").replaceChildren(el("p", "상황실 요청", "lab"), el("p", a.memo, "msg"), el("p", `요청 ${day(a.at)} · ${ago(a.at)}`, "at"));
-  // 단추 — 다음 단계가 가장 크게. 한 번 = 기록 한 줄
-  const nx = r?.steps.find(s => s.st === "next")?.k, main = LAB[nx] ? nx : null, rest = ["ack", "doing", "done"].filter(k => k !== main);
-  const btn = (k, cls) => { const b = el("button", LAB[k], cls); b.disabled = PV; b.onclick = () => press(k); return b; };   // 등록 없이 바로 — 미리보기만 막는다
-  const two = el("div", null, "steps2"), side = el("div", null, "side");
-  two.append(...rest.map(k => btn(k)));
-  const un = el("button", "방금 누른 것 취소", "undo"); un.disabled = PV; un.onclick = () => press("undo");
-  side.append(btn("na"), btn("help"), un);
-  $("#btns").replaceChildren(...(main ? [btn(main, "big")] : [el("p", r?.now === "조치 완료" ? "조치 완료로 기록되어 있습니다. 상황이 바뀌면 다시 누르세요." : "", "hint")]), two, side);
+  // 단추 — 한 줄 3칸, 다음 단계만 채운 색 · 지난 단계는 ✓ 시각. 한 번 = 기록 한 줄. 등록 없이 바로(미리보기만 막는다)
+  const btn = (k, text, cls) => { const b = el("button", text, cls); b.disabled = PV; b.setAttribute("aria-label", LAB[k] || "방금 누른 것 취소"); b.onclick = () => press(k); return b; };
+  const stp = el("div", null, "stp"), mini = el("div", null, "mini");
+  stp.append(...[["ack", "확인"], ["doing", "조치 중"], ["done", "완료"]].map(([k, t]) => {
+    const s = r?.steps.find(x => x.k === k), b = btn(k, null, s?.st === "next" ? "next" : s?.st === "done" ? "done" : "");
+    b.append(el("span", (s?.st === "done" ? "✓ " : "") + t), ...(s?.st === "done" ? [el("small", s.t)] : []));
+    return b;
+  }));
+  mini.append(btn("na", "해당 없음"), btn("help", "지원 필요"), btn("undo", "취소"));
+  $("#btns").replaceChildren(stp, mini);
   $("#tl").replaceChildren(...(d.rounds.length ? [tlList(r), ...d.rounds.slice(1).map(x => {
     const dt = el("details");
     dt.append(el("summary", `지난 요청 ${x.ask ? day(x.ask.at) : "요청 없이"} — ${x.now}`), tlList(x));
@@ -254,9 +282,49 @@ async function press(step) {
     await load();
     const as = { ack: "확인으로", doing: "조치 중으로", done: "조치 완료로", na: "해당 없음으로", help: "지원 필요로", undo: "방금 누른 것 취소로" };
     say("#astate", "ok", `${j.at.slice(11)} ${as[step]} 기록했습니다.`);
-    $("#note").hidden = step === "undo";
   } catch (e) { say("#astate", "bad", `기록하지 못했습니다. ${e.message}`); }
 }
+
+/* 지금 비와 기준 — /gauge 가 준 그 지구 판정 줄(상황판단 상세와 같은 숫자). 못 받으면 칸을 숨긴다 */
+function drawWx(w) {                                            // 서버(reply.weather)가 만든 문장을 그대로 — 대시보드가 가진 값만
+  const box = $("#wx"), hm = t => (t ? `${t.slice(8, 10)}:${t.slice(10, 12)}` : "");
+  box.hidden = !w?.lines?.length;
+  if (box.hidden) return;
+  box.replaceChildren(...w.lines.map((t, i) => el("p", t, i === 0 && w.alerts?.length ? "al" : "")),
+    el("small", ["지금 날씨", w.tm && `실황 ${hm(w.tm)}`, w.tmfc && `예보 ${hm(w.tmfc)} 발표`].filter(Boolean).join(" · ")));
+}
+function drawGauge(g) {
+  drawWx(g?.weather);
+  const box = $("#gauge");
+  box.hidden = !g || !g.st;
+  if (box.hidden) return;
+  const SG = ["통제", "사전대피", "긴급대피"].filter(k => g.st[k]), pc = c => (c.unk ? "모름" : `${c.pct}%`);
+  box.querySelector("summary").replaceChildren("지금 비와 기준 ", el("span", SG.map(k => `${k} ${pc(g.st[k])}`).join(" · ") + (g.site != null && !g.site_slide ? ` · 지구 기준 ${g.site}%` : "")));
+  const one = (name, c, rule, parts, note) => {
+    const w = el("div", null, "gs"), h = el("div", null, "h"), bar = el("div", null, "bar"), i = el("i", null, c.met ? "met" : "");
+    i.style.width = `${Math.min(100, c.unk ? 0 : c.pct)}%`;
+    bar.append(i); bar.setAttribute("role", "img"); bar.setAttribute("aria-label", `${name} ${pc(c)}`);
+    h.append(el("span", `${name} ${pc(c)}`), el("em", c.met ? "넘음" : note || "", c.met ? "met" : ""));
+    w.append(h, el("div", rule, "rl"), bar, ...parts.filter(q => q.now != null || q.need != null).map(q =>
+      el("p", `${q.label || ""} ${q.now ?? "모름"} / ${q.need ?? "—"}${q.unit || ""}${q.pct != null ? ` (${q.pct}%)` : ""}`, "gp")));
+    return w;
+  };
+  const body = [];                                              // 지금 비는 위 날씨 띠에
+  body.push(...SG.map(k => one(k, g.st[k], g.st[k].rule, g.st[k].parts || [], g.st[k].eta ? `${g.st[k].eta}시쯤 닿음` : "")));
+  if (g.site != null) body.push(one("지구 자체 기준", { pct: g.site, met: g.site >= 100 }, g.rule, g.site_slide ? [] : g.site_parts, g.site_slide ? (g.site >= 100 ? "산사태 예보 발령 중" : "발령 없음") : ""));
+  if (g.series.v.length > 1) {                                   // 앞으로 시간마다 가장 높은 단계 % — 작은 꺾은선, 100% 점선
+    const v = g.series.v, top = Math.max(100, ...v) * 1.1, W = 300, H = 64, x = i => (i / (v.length - 1)) * W, y = p => H - (p / top) * H;
+    const svg = `<svg class="gsv" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="앞으로 ${v.length}시간 — 가장 높은 단계 % ${v[0]}%에서 ${v[v.length - 1]}%">`
+      + `<line x1="0" x2="${W}" y1="${y(100)}" y2="${y(100)}" stroke="#101821" stroke-dasharray="4 3" stroke-width="1"/>`
+      + `<polyline fill="none" stroke="#1B6FA8" stroke-width="2.5" vector-effect="non-scaling-stroke" points="${v.map((p, i) => `${x(i).toFixed(1)},${y(p).toFixed(1)}`).join(" ")}"/></svg>`;
+    const sv = el("div");
+    sv.innerHTML = svg;                                          // 숫자만 넣은 그림(바깥 자원 없음)
+    body.push(el("p", `앞으로 — ${g.series.t[0]}시 ${v[0]}% → ${g.series.t[v.length - 1]}시 ${v[v.length - 1]}% (점선 100%)`, "gp"), sv);
+  }
+  body.push(el("p", `${g.basis} 기준 · ${g.where === "지구" ? "이 지구 자리 비" : "읍면동에서 가장 많이 온 칸"} · ${g.at ? g.at.slice(11, 16) + " 계산" : ""} — 예보로 닿는 시각은 예보대로 올 때`, "gm"));
+  $("#gbody").replaceChildren(...body);
+}
+const loadGauge = () => fetch(base + "/gauge").then(r => (r.ok ? r.json() : null)).then(drawGauge, () => drawGauge(null));
 
 async function load() {
   const r = await fetch(base + "/data" + (P ? `?p=${encodeURIComponent(P)}` : ""));
@@ -317,7 +385,7 @@ if (PV) addEventListener("message", ev => {
   if (D) draw(D);
 });
 (PV ? Promise.resolve() : post("/seen", {}).catch(() => {}))      // 열람 — 요청마다 한 번(서버가 가린다)
-  .then(load).catch(() => { $("#name").textContent = "화면을 불러오지 못했습니다"; $("#addr").textContent = "연결을 확인하고 다시 열어 주세요."; });
-setInterval(() => { if (D && !document.hidden) load().catch(() => {}); }, 60000);   // 지난 시간 · 다른 담당자가 누른 것
+  .then(() => { loadGauge(); return load(); }).catch(() => { $("#name").textContent = "화면을 불러오지 못했습니다"; $("#addr").textContent = "연결을 확인하고 다시 열어 주세요."; });
+setInterval(() => { if (D && !document.hidden) { load().catch(() => {}); loadGauge(); } }, 60000);   // 지난 시간 · 다른 담당자가 누른 것
 </script>
 </html>

@@ -21,7 +21,9 @@ from __future__ import annotations
 import base64
 import csv
 import io
+import asyncio
 import json
+import os
 import re
 import secrets
 from datetime import datetime
@@ -253,6 +255,79 @@ def form(token: str, pk: str = "") -> dict:
                                              " ORDER BY id DESC LIMIT 60", (rid,))]}
 
 
+def dash_base() -> str:
+    """판정 자료를 받을 대시보드 주소 — 회신 전용 서버(8010)는 GN_DASH_BASE 로, 대시보드 안에서는 자기 자신(main 의 /api/judge 와 같은 주소라 캐시도 같이 쓴다)."""
+    return os.environ.get("GN_DASH_BASE") or f"http://127.0.0.1:{os.environ.get('PORT', '8000')}"
+
+
+def gauge(token: str) -> dict:
+    """링크 페이지의 '지금 비와 기준' — 그 지구 판정 줄(judge, 기상청 격자 기준)을 추려서. 상황판단 상세의 '판정'과 같은 숫자.
+    judge.cached 를 시군 하나 · 시간별로 불러 캐시(BTTL) · 단일 실행을 탄다(지구 링크 여럿이 1분마다 읽어도 시군당 한 번).
+    대시보드에 못 닿거나 그 지구 줄이 없으면 빈 것 {} — 화면은 칸을 숨긴다. 연락처는 없다(judge 는 넣지 않는다)."""
+    with db.tx() as con:
+        rid, _, _ = _link(con, token)                            # 없는 링크면 404
+        sg_full = con.execute("SELECT sigun FROM duty_link WHERE rid=?", (rid,)).fetchone()[0]
+    from . import ai, judge
+    sg = next((k for k, v in ai.SIGUN_FULL.items() if v == sg_full or k == sg_full), None)
+    if not sg:
+        return {}
+    try:
+        d = judge.cached(sg, dash_base(), 1.0, 0.0, 0.0, True, "grid", 0.0)
+    except Exception:                                        # noqa: BLE001 — 대시보드가 꺼졌거나 위키가 없다: 칸을 숨긴다
+        return {}
+    r = next((x for x in d.get("rows") or [] if x["id"] == rid), None)
+    b = r and r["b"].get("grid")
+    if not b:
+        return {}
+    sr = b.get("series") or {}
+    return {"weather": weather(sg, dash_base(), r["emd"], b["rain"], d.get("tm")), "at": d.get("computed_at"), "tm": d.get("tm"), "basis": "기상청 격자", "fam": r["fam"], "rule": r.get("rule") or "", "where": r.get("where"),
+            "rain": b["rain"], "top": b["top"], "site": b.get("site"), "site_slide": bool(b.get("site_slide")), "site_parts": b.get("site_parts") or [],
+            "st": {k: {x: v.get(x) for x in ("pct", "met", "unk", "eta", "eta_h", "rule", "partial", "parts")} for k, v in b["st"].items()},
+            "series": {"t": sr.get("t") or [], "v": sr.get("v") or []}}
+
+
+def _mm(v) -> str:
+    return f"{v:g}㎜"
+
+
+def weather(sg: str, base: str, emd: str, rain: dict, tm: str | None) -> dict:
+    """그 지역 '지금 날씨' 한 묶음 — 대시보드가 이미 가진 값만(새로 계산하지 않는다). 특보 · 예비특보(/api/alerts, 그 시군),
+    지금 비(판정 줄 — 지구 자리, 없으면 읍면동), 앞으로(/api/forecast 초단기 6시간, 그 읍면동). 못 받은 것은 그 문장만 뺀다.
+    {alerts, pending, rain, fc: {h3, h6, peak, peak_at} | None, lines: [문장], tm, tmfc}"""
+    from . import ai
+    out: dict = {"alerts": None, "pending": None, "rain": rain, "fc": None, "lines": [], "tm": tm, "tmfc": None}
+    try:
+        al = ai._get(base, "/api/alerts").get("data") or {}
+        out["alerts"] = [{"name": g["name"], "at": (g.get("at") or {}).get(sg) or g.get("tmfc")} for g in al.get("groups", []) if sg in g.get("siguns", [])]
+        out["pending"] = [{"name": x.get("name"), "at": x.get("tmfc")} for x in al.get("pending", []) if x.get("sigun") == sg]
+    except Exception:                                          # noqa: BLE001 — 특보를 못 받았으면 그 문장만 뺀다
+        pass
+    try:
+        fc = ai._get(base, "/api/forecast", hours=6, sigun=sg)
+        e = next((x for x in fc.get("emd_sigun", []) if x.get("emd") == emd), None)
+        if e and e.get("d"):
+            dd, lab = e["d"], fc.get("labels") or []
+            i = max(range(len(dd)), key=lambda k: dd[k])
+            out["fc"] = {"h3": round(sum(dd[:3]), 1), "h6": round(sum(dd), 1), "peak": dd[i], "peak_at": lab[i] if i < len(lab) else None}
+            out["tmfc"] = fc.get("tmfc")
+    except Exception:                                          # noqa: BLE001
+        pass
+    L = out["lines"]
+    if out["alerts"] is not None:
+        a = [f"{x['name']} 발효 중" + (f"({x['at']}~)" if x["at"] else "") for x in out["alerts"]]
+        a += [f"{x['name']} 예비특보" + (f"({x['at']})" if x["at"] else "") for x in out["pending"] or [] if x["name"]]
+        L.append(" · ".join(a) + "." if a else "특보 없음.")
+    now = [f"{k} {_mm(rain[h])}" for k, h in (("시간당", "1h"), ("3시간", "3h"), ("24시간", "24h")) if rain.get(h) is not None]
+    if now:
+        L.append("지금 " + " · ".join(now) + ".")
+    f = out["fc"]
+    if f and f["h6"] > 0:
+        L.append(f"앞으로 3시간 {_mm(f['h3'])} · 6시간 {_mm(f['h6'])} 더" + (f", {f['peak_at']}시쯤 시간당 {_mm(f['peak'])}로 가장 셈." if f["peak_at"] else "."))
+    elif f:
+        L.append("앞으로 6시간 비 예보 없음.")
+    return out
+
+
 def _open() -> None:
     if config.DEMO:
         raise HTTPException(403, "시연 화면에서는 받지 않습니다")
@@ -421,6 +496,11 @@ async def page(token: str):
 @router.get("/r/{token}/data")
 async def page_data(token: str, p: str = ""):
     return form(token, p)
+
+
+@router.get("/r/{token}/gauge")
+async def page_gauge(token: str):
+    return await asyncio.to_thread(gauge, token)               # 판정 계산이 길 수 있다 — 이벤트 루프를 막지 않게
 
 
 @router.post("/r/{token}")
