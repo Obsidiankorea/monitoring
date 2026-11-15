@@ -81,7 +81,7 @@ function dzIcons() {
 }
 async function loadDistrict() {
   clearTimeout(DZ_T);
-  if (!OV.has("district") || CASE) { DZ = null; drawDistrict(); districtLegend(); return; }
+  if (!OV.has("district") || CASE || new URLSearchParams(location.search).has("sj")) { DZ = null;   /* 상황판단 창은 지도가 가려져 있다 — 경남 전체 판정을 한 번 더 부르지 않는다 */ drawDistrict(); districtLegend(); return; }
   try { DZ = await getJson("/api/districts/all"); } catch (e) { DZ = { fail: e.message }; }
   if (!DZ_SH && !DZ.fail) { try { DZ_SH = await getJson("/api/districts/shapes"); } catch { DZ_SH = { features: [] }; } }
   drawDistrict(); districtLegend(); renderLyIcons(); loadVuln();

@@ -4,8 +4,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>현장 회신</title>
-<!-- 지구 하나의 현장 페이지(app/reply.py) — 담당자 등록 · 교대, 조치 상황 올리기, 지금까지의 기록.
-     비 오는 밖에서 한 손으로 — 밝은 바탕 · 큰 단추 · 바깥 자원 없음(글꼴 · 스크립트를 받지 않는다) -->
+<!-- 지구 하나의 현장 페이지(app/reply.py) — 상황실 요청, 단계 단추(확인 → 조치 중 → 조치 완료, 한 번 = 스탬프 하나), 진행 단계 표, 담당자 등록 · 교대.
+     비 오는 밖에서 한 손 · 장갑으로 — 밝은 바탕 · 큰 단추(56px↑) · 바깥 자원 없음(글꼴 · 스크립트를 받지 않는다).
+     ?pv=1 — 상황판단 미리보기 · 상황실 현황에서 연 것. 열람을 찍지 않는다 -->
 <style>
 :root { --ground: #EEF2F7; --panel: #FFFFFF; --line: #C9D4E1; --ink: #101821; --ink-2: #47596D; --accent: #1B6FA8; --on: #FFFFFF; --ok: #12805A; --bad: #B4401A; --warn: #8A5A00; }
 * { box-sizing: border-box; }
@@ -15,47 +16,79 @@ h1 { font-size: 22px; margin: 4px 0 0; }
 .addr { color: var(--ink-2); margin: 0 0 16px; }
 section { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin: 0 0 16px; }
 h2 { font-size: 17px; margin: 0 0 12px; }
-.hint { color: var(--ink-2); font-size: 14px; margin: 8px 0 0; }
-fieldset { border: 0; padding: 0; margin: 0 0 16px; }
-legend, .lab { font-weight: 600; font-size: 15px; padding: 0; margin: 0 0 8px; display: block; }
+.hint { color: var(--ink-2); font-size: 16px; margin: 8px 0 0; }
+.req { border: 2px solid var(--warn); }
+.req .lab { color: var(--warn); font-weight: 700; font-size: 16px; margin: 0 0 4px; }
+.req p { margin: 0; } .req .msg { font-size: 21px; font-weight: 700; line-height: 1.35; }
+.req .at { margin-top: 6px; }
+.lab { font-weight: 600; font-size: 16px; padding: 0; margin: 0 0 8px; display: block; }
 .opt { font-weight: 400; color: var(--ink-2); }
-.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.seg label { position: relative; }
-.seg input { position: absolute; opacity: 0; inset: 0; }
-.seg span { display: flex; align-items: center; justify-content: center; min-height: 52px; border: 1.5px solid var(--line); border-radius: 10px; background: var(--panel); font-weight: 600; text-align: center; }
-.seg input:checked + span { background: var(--accent); border-color: var(--accent); color: var(--on); }
-.seg input:focus-visible + span, .shot:focus-within { outline: 3px solid var(--ink); outline-offset: 2px; }
-.shot { display: flex; align-items: center; justify-content: center; min-height: 52px; border: 1.5px dashed var(--accent); border-radius: 10px; color: var(--accent); font-weight: 600; }
+.shot { position: relative; display: flex; align-items: center; justify-content: center; min-height: 56px; border: 1.5px dashed var(--accent); border-radius: 10px; color: var(--accent); font-weight: 600; }
 .shot input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.shot:focus-within { outline: 3px solid var(--ink); outline-offset: 2px; }
 img { display: block; width: 100%; border-radius: 10px; margin: 8px 0; }
 img[hidden] { display: none; }
 input[type=text], input[type=tel], textarea { width: 100%; min-height: 48px; font: inherit; padding: 10px; border: 1.5px solid var(--line); border-radius: 10px; margin-top: 6px; }
 textarea { min-height: 72px; }
-button { min-height: 48px; padding: 0 14px; font: inherit; font-weight: 600; border: 1.5px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--ink); }
+button { min-height: 56px; padding: 0 14px; font: inherit; font-weight: 600; border: 1.5px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--ink); }
+button:focus-visible, a:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
 button.go { width: 100%; min-height: 56px; border: 0; background: var(--ink); color: var(--on); font-weight: 700; }
+button.big { width: 100%; min-height: 76px; font-size: 22px; border: 0; background: var(--accent); color: var(--on); font-weight: 800; }
 button:disabled { opacity: .5; }
+.steps2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.side { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.side .undo { grid-column: 1 / -1; color: var(--ink-2); font-weight: 500; }
 .who { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
 .who:first-of-type { border-top: 0; padding-top: 0; }
 .who b { flex: 1 1 100%; } .who a { color: var(--accent); font-weight: 600; flex: 1; min-height: 48px; display: flex; align-items: center; }
-.me { font-size: 13px; font-weight: 600; color: var(--ok); border: 1px solid var(--ok); border-radius: 999px; padding: 0 8px; margin-left: 6px; }
-.state { margin: 10px 0 0; font-weight: 600; min-height: 1.45em; }
+.me { font-size: 14px; font-weight: 600; color: var(--ok); border: 1px solid var(--ok); border-radius: 999px; padding: 0 8px; margin-left: 6px; }
+.state { margin: 10px 0 0; font-weight: 700; min-height: 1.45em; }
 .state.ok { color: var(--ok); } .state.bad { color: var(--bad); }
 ol { list-style: none; margin: 0; padding: 0; }
-ol li { padding: 10px 0; border-top: 1px solid var(--line); }
-ol li:first-child { border-top: 0; padding-top: 0; }
-.at { color: var(--ink-2); font-size: 14px; }
-.ask { color: var(--warn); font-weight: 600; }
+.at { color: var(--ink-2); font-size: 16px; }
 .grid2 { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; }
+/* 단계 표 — 지난 단계는 시각과 함께 채우고, 다음 단계를 강조 */
+.tl li { position: relative; padding: 0 0 14px 30px; }
+.tl li::before { content: ""; position: absolute; left: 7px; top: 4px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line); background: var(--panel); }
+.tl li::after { content: ""; position: absolute; left: 14px; top: 22px; bottom: 0; width: 2px; background: var(--line); }
+.tl li:last-child::after { display: none; }
+.tl li.done::before { background: var(--ok); border-color: var(--ok); }
+.tl li.skip::before { border-style: dashed; }
+.tl li.next::before { border-color: var(--accent); border-width: 4px; }
+.tl li.next b { color: var(--accent); }
+.tl b { display: block; } .tl span { color: var(--ink-2); font-size: 16px; }
+.ev { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 8px; }
+.ev li { padding: 6px 0; font-size: 16px; }
+.ev li.x { text-decoration: line-through; color: var(--ink-2); }
+details { margin-top: 12px; } summary { min-height: 48px; display: flex; align-items: center; color: var(--accent); font-weight: 600; cursor: pointer; }
 </style>
 <main>
   <h1 id="name">불러오는 중…</h1>
   <p class="addr" id="addr"></p>
 
-  <section>
+  <section class="req" id="req" hidden></section>
+
+  <section id="act">
+    <h2>지금 상황 누르기</h2>
+    <div id="btns"></div>
+    <p class="state" id="astate" role="status"></p>
+    <form id="note" hidden>
+      <span class="lab">방금 누른 것에 덧붙이기 <span class="opt">(없어도 됩니다)</span></span>
+      <img id="shotimg" alt="보낼 현장 사진" hidden>
+      <label class="shot"><input type="file" id="shot" accept="image/*" capture="environment"><span id="shotlab">사진 찍기</span></label>
+      <label class="lab" style="margin-top:12px">덧붙일 말<textarea name="memo" maxlength="500" style="font-weight:400"></textarea></label>
+      <button class="go" style="margin-top:8px">덧붙이기</button>
+      <p class="state" id="nstate" role="status"></p>
+    </form>
+  </section>
+
+  <section><h2>진행</h2><div id="tl"></div></section>
+
+  <section id="people-box">
     <h2>지금 담당자</h2>
     <div id="people"></div>
     <form id="join" hidden>
-      <h3 id="joinhead" style="font-size:15px;margin:16px 0 8px"></h3>
+      <h3 id="joinhead" style="font-size:16px;margin:16px 0 8px"></h3>
       <div class="grid2">
         <label class="lab">직급<input type="text" name="rank" maxlength="20" autocomplete="organization-title"></label>
         <label class="lab">성명<input type="text" name="name" maxlength="20" autocomplete="name" required></label>
@@ -68,45 +101,17 @@ ol li:first-child { border-top: 0; padding-top: 0; }
     <p class="hint">담당자는 2명까지입니다. 여기 넣은 직급 · 성명 · 번호는 이 링크를 가진 사람과 재난상황실에 보입니다.</p>
   </section>
 
-  <section>
-    <h2>지금 상황 올리기</h2>
-    <form id="reply">
-      <div style="margin:0 0 16px">
-        <span class="lab">현장 사진 <span class="opt">(없어도 됩니다)</span></span>
-        <img id="shotimg" alt="보낼 현장 사진" hidden>
-        <label class="shot"><input type="file" id="shot" accept="image/*" capture="environment"><span id="shotlab">사진 찍기</span></label>
-      </div>
-      <fieldset><legend>조치 여부</legend>
-        <div class="seg">
-          <label><input type="radio" name="action" value="done"><span>조치함</span></label>
-          <label><input type="radio" name="action" value="doing"><span>조치 중</span></label>
-          <label><input type="radio" name="action" value="not"><span>아직</span></label>
-          <label><input type="radio" name="action" value="na"><span>해당 없음</span></label>
-        </div>
-      </fieldset>
-      <fieldset><legend>인력 · 장비 추가 배치</legend>
-        <div class="seg">
-          <label><input type="radio" name="more" value="yes"><span>필요함</span></label>
-          <label><input type="radio" name="more" value="no"><span>필요 없음</span></label>
-        </div>
-      </fieldset>
-      <label class="lab">덧붙일 말 <span class="opt">(없어도 됩니다)</span><textarea name="memo" maxlength="500" style="font-weight:400"></textarea></label>
-      <button class="go" style="margin-top:16px">상황 올리기</button>
-      <p class="state" id="rstate" role="status"></p>
-    </form>
-  </section>
-
-  <section><h2>진행 기록</h2><ol id="log"></ol></section>
   <section id="pastbox" hidden><h2>지난 담당자</h2><ol id="past"></ol></section>
 </main>
 <script>
-const base = location.pathname.replace(/\/$/, ""), KEY = "me:" + base;
+const base = location.pathname.replace(/\/$/, ""), KEY = "me:" + base, PV = new URLSearchParams(location.search).has("pv");
 const $ = s => document.querySelector(s);
 const el = (tag, text, cls) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; };
 const say = (id, cls, text) => { $(id).className = "state " + cls; $(id).textContent = text; };
-const ACT = { done: "조치함", doing: "조치 중", not: "아직", na: "해당 없음" };
 const day = s => `${+s.slice(5, 7)}.${+s.slice(8, 10)}. ${s.slice(11)}`;
-let me = null, photo = null;
+const ago = s => { const m = Math.max(0, Math.round((Date.now() - new Date(s.replace(" ", "T"))) / 60000)); return m < 60 ? `${m}분 전` : `${Math.floor(m / 60)}시간 ${m % 60}분 전`; };
+const LAB = { ack: "확인했습니다", doing: "조치 중", done: "조치 완료", na: "해당 없음", help: "지원 필요" };
+let me = null, photo = null, D = null;
 try { me = +localStorage.getItem(KEY) || null; } catch {}
 const setMe = id => { me = id; try { id ? localStorage.setItem(KEY, id) : localStorage.removeItem(KEY); } catch {} };
 
@@ -116,10 +121,51 @@ async function post(path, body) {
   return r.json();
 }
 
+/* 단계 표 — 서버(reply.rounds)가 센 것을 그리기만 한다(상황판단 · 현황 화면도 같은 목록) */
+function tlList(r) {
+  const ol = el("ol", null, "tl");
+  for (const s of r.steps) {
+    const li = el("li", null, s.st);
+    li.append(el("b", s.label), el("span", s.st === "done" ? [s.t, s.who, s.plus ? `+${s.plus}분` : ""].filter(Boolean).join(" · ")
+      : s.st === "skip" ? "건너뜀" : s.st === "next" ? "다음 단계" : ""));
+    ol.append(li);
+  }
+  const ev = el("ol", null, "ev");
+  for (const x of r.ev) {
+    if (x.k === "view") continue;
+    const li = el("li", `${x.t} · ${x.who ? x.who + " · " : ""}${x.label}${x.x ? " (취소됨)" : ""}${x.memo ? " — " + x.memo : ""}`, x.x ? "x" : "");
+    if (x.photo) { const im = el("img"); im.src = `${base}/photo/${x.id}`; im.alt = `${x.t} 현장 사진`; im.loading = "lazy"; li.append(im); }
+    ev.append(li);
+  }
+  const box = el("div");
+  box.append(ol);
+  if (ev.children.length) box.append(ev);
+  return box;
+}
+
 function draw(d) {
+  D = d;
   document.title = d.name + " — 현장 회신";
   $("#name").textContent = d.name; $("#addr").textContent = d.addr;
   if (!d.people.some(p => p.id === me)) setMe(null);            // 내가 빠졌거나 다른 휴대폰
+  const r = d.rounds[0], a = r?.ask;
+  $("#req").hidden = !a;
+  if (a) $("#req").replaceChildren(el("p", "상황실 요청", "lab"), el("p", a.memo, "msg"), el("p", `요청 ${day(a.at)} · ${ago(a.at)}`, "at"));
+  if (me) $("#tl").closest("section").after($("#people-box")); else $("#act").before($("#people-box"));   // 처음 온 사람은 등록부터 — 등록 칸을 단추 위로
+  // 단추 — 다음 단계가 가장 크게. 한 번 = 기록 한 줄
+  const nx = r?.steps.find(s => s.st === "next")?.k, main = LAB[nx] ? nx : null, rest = ["ack", "doing", "done"].filter(k => k !== main);
+  const btn = (k, cls) => { const b = el("button", LAB[k], cls); b.disabled = !me; b.onclick = () => press(k); return b; };
+  const two = el("div", null, "steps2"), side = el("div", null, "side");
+  two.append(...rest.map(k => btn(k)));
+  const un = el("button", "방금 누른 것 취소", "undo"); un.disabled = !me; un.onclick = () => press("undo");
+  side.append(btn("na"), btn("help"), un);
+  $("#btns").replaceChildren(...(main ? [btn(main, "big")] : [el("p", r?.now === "조치 완료" ? "조치 완료로 기록되어 있습니다. 상황이 바뀌면 다시 누르세요." : "", "hint")]), two, side,
+    ...(me ? [] : [el("p", d.people.length ? "위 '지금 담당자'에서 본인을 고르거나 등록하면 누를 수 있습니다." : "위에서 담당자로 등록하면 누를 수 있습니다.", "hint")]));
+  $("#tl").replaceChildren(...(d.rounds.length ? [tlList(r), ...d.rounds.slice(1).map(x => {
+    const dt = el("details");
+    dt.append(el("summary", `지난 요청 ${x.ask ? day(x.ask.at) : "요청 없이"} — ${x.now}`), tlList(x));
+    return dt;
+  })] : [el("p", "아직 기록이 없습니다.", "at")]));
   $("#people").replaceChildren(...(d.people.length ? d.people.map(p => {
     const row = el("div", null, "who"), b = el("b", `${p.rank} ${p.name}`.trim()), tel = el("a", p.tel.replace(/^(\d{3})(\d{3,4})(\d{4})$/, "$1-$2-$3"));
     tel.href = "tel:" + p.tel;
@@ -136,24 +182,18 @@ function draw(d) {
   }) : [el("p", "아직 등록한 담당자가 없습니다. 아래에 본인을 등록해 주세요.", "hint")]));
   $("#join").hidden = d.people.length >= d.max;
   $("#joinhead").textContent = d.people.length ? "함께 맡는 사람 한 명 더 등록" : "본인 등록";
-  $("#reply").querySelector("button").disabled = !me;
-  if (!me) say("#rstate", "", d.people.length ? "위에서 본인을 고르거나 담당자로 등록하면 올릴 수 있습니다." : "담당자로 등록하면 올릴 수 있습니다.");
-  else if ($("#rstate").className === "state ") say("#rstate", "", "");
-  $("#log").replaceChildren(...(d.log.length ? d.log.map(x => {
-    const li = el("li"), head = el("div", `${day(x.at)} · ${x.who}`, "at");
-    li.append(head);
-    if (x.kind === "ask") li.append(el("div", `상황실 요청: ${x.memo || "현장 조치 여부를 알려 주세요"}`, "ask"));
-    else if (x.kind === "on") li.append(el("div", "담당자로 등록"));
-    else if (x.kind === "off") li.append(el("div", "담당에서 빠짐"));
-    else {
-      li.append(el("div", `${ACT[x.action]} · 추가 배치 ${x.more === "yes" ? "필요함" : "필요 없음"}`));
-      if (x.memo) li.append(el("div", x.memo));
-      if (x.photo) { const im = el("img"); im.src = `${base}/photo/${x.id}`; im.alt = `${day(x.at)} 현장 사진`; im.loading = "lazy"; li.append(im); }
-    }
-    return li;
-  }) : [el("li", "아직 기록이 없습니다.", "at")]));
   $("#pastbox").hidden = !d.past.length;
   $("#past").replaceChildren(...d.past.map(p => el("li", `${p.rank} ${p.name}`.trim() + ` · ${day(p.since)} ~ ${day(p.until)}`)));
+}
+
+async function press(step) {
+  try {
+    const j = await post("/stamp", { id: me, step });
+    await load();
+    const as = { ack: "확인으로", doing: "조치 중으로", done: "조치 완료로", na: "해당 없음으로", help: "지원 필요로", undo: "방금 누른 것 취소로" };
+    say("#astate", "ok", `${j.at.slice(11)} ${as[step]} 기록했습니다.`);
+    $("#note").hidden = step === "undo";
+  } catch (e) { say("#astate", "bad", `기록하지 못했습니다. ${e.message}`); }
 }
 
 async function load() {
@@ -167,14 +207,15 @@ $("#join").onsubmit = async e => {
   const f = e.target;
   try {
     setMe((await post("/join", { rank: f.rank.value, name: f.name.value, tel: f.tel.value })).id);
-    f.reset(); await load(); say("#pstate", "ok", "등록했습니다.");
+    f.reset(); await load(); say("#pstate", "ok", "등록했습니다. 위에서 단계를 누를 수 있습니다.");
   } catch (err) { say("#pstate", "bad", `등록하지 못했습니다. ${err.message}`); }
 };
 
 $("#share").onclick = async () => {
+  const url = location.origin + base;                           // 미리보기 표시(?pv)는 넘기지 않는다
   try {
-    if (navigator.share) await navigator.share({ title: document.title, url: location.href });
-    else { await navigator.clipboard.writeText(location.href); say("#pstate", "ok", "링크를 복사했습니다. 문자나 메신저에 붙여 보내세요."); }
+    if (navigator.share) await navigator.share({ title: document.title, url });
+    else { await navigator.clipboard.writeText(url); say("#pstate", "ok", "링크를 복사했습니다. 문자나 메신저에 붙여 보내세요."); }
   } catch {}
 };
 
@@ -188,22 +229,24 @@ $("#shot").onchange = async e => {
     c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
     photo = c.toDataURL("image/jpeg", .8);
     $("#shotimg").src = photo; $("#shotimg").hidden = false; $("#shotlab").textContent = "사진 다시 찍기";
-  } catch { say("#rstate", "bad", "사진을 읽지 못했습니다. 다시 찍어 주세요."); }
+  } catch { say("#nstate", "bad", "사진을 읽지 못했습니다. 다시 찍어 주세요."); }
 };
 
-$("#reply").onsubmit = async e => {
+$("#note").onsubmit = async e => {
   e.preventDefault();
-  const f = e.target, btn = f.querySelector("button"), action = f.action.value, more = f.more.value;
-  if (!action || !more) return say("#rstate", "bad", !action ? "조치 여부를 골라 주세요." : "추가 배치가 필요한지 골라 주세요.");
-  btn.disabled = true; say("#rstate", "", "올리는 중…");
+  const f = e.target, btn = f.querySelector("button");
+  if (!f.memo.value.trim() && !photo) return say("#nstate", "bad", "덧붙일 말을 쓰거나 사진을 찍어 주세요.");
+  btn.disabled = true; say("#nstate", "", "보내는 중…");
   try {
-    await post("", { id: me, action, more, memo: f.memo.value, photo });
+    await post("/note", { id: me, memo: f.memo.value, photo });
     photo = null; f.reset(); $("#shotimg").hidden = true; $("#shotlab").textContent = "사진 찍기";
-    await load(); say("#rstate", "ok", "올렸습니다. 상황이 바뀌면 다시 올려 주세요.");
-  } catch (err) { say("#rstate", "bad", `올리지 못했습니다. ${err.message}`); }   // 고른 것 · 찍은 사진은 그대로 둔다
-  btn.disabled = !me;
+    await load(); say("#nstate", "ok", "덧붙였습니다.");
+  } catch (err) { say("#nstate", "bad", `보내지 못했습니다. ${err.message}`); }   // 쓴 말 · 찍은 사진은 그대로 둔다
+  btn.disabled = false;
 };
 
-load().catch(() => { $("#name").textContent = "화면을 불러오지 못했습니다"; $("#addr").textContent = "연결을 확인하고 다시 열어 주세요."; });
+(PV ? Promise.resolve() : post("/seen", {}).catch(() => {}))      // 열람 — 요청마다 한 번(서버가 가린다)
+  .then(load).catch(() => { $("#name").textContent = "화면을 불러오지 못했습니다"; $("#addr").textContent = "연결을 확인하고 다시 열어 주세요."; });
+setInterval(() => { if (D && !document.hidden) load().catch(() => {}); }, 60000);   // 지난 시간 · 다른 담당자가 누른 것
 </script>
 </html>

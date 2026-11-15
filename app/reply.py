@@ -33,7 +33,14 @@ from . import config, db
 
 DIR = config.STATE / "replies"                     # 사진 — <기록 번호>.jpg
 PAGE = config.ROOT / "app" / "web" / "static" / "r.html"
-ACTIONS = ("done", "doing", "not", "na")           # 조치함 · 조치 중 · 아직 · 해당 없음
+ACTIONS = ("done", "doing", "not", "na")           # 예전 회신 화면(한 번에 조치 여부 + 추가 배치) — 기록은 그대로 읽는다
+# 단계 스탬프 — 큰 단추 한 번 = 기록 한 줄(kind reply · action). 요청(ask) · 열람(view)은 상황실 · 자동.
+# 출동 상태 단추(접수 → 출동 → 도착 → 완료) · 호출 확인(받았다는 것 자체를 한 단계로) · 택배 조회 단계 표를 본떴다
+STEPS = (("ask", "요청"), ("view", "열람"), ("ack", "확인"), ("doing", "조치 중"), ("done", "조치 완료"))
+SIDE = {"na": "해당 없음", "help": "지원 필요"}
+STAMPS = ("ack", "doing", "done", "na", "help", "undo")   # undo = 방금 누른 것 취소(지우지 않고 새 줄로 바로잡는다)
+NOTE = "현장 조치 여부를 알려 주세요"
+WARN_MIN = 10                                      # 요청하고 이만큼 확인이 없으면 상황실 화면에 경고
 MAX_PEOPLE = 2
 MAX_BODY = 6 * 1024 * 1024                         # 화면이 사진을 줄여 보낸다(긴 변 1600) — 그래도 넘으면 받지 않는다
 
@@ -48,8 +55,8 @@ def _mobile(tel: str) -> str:
     return d if re.fullmatch(r"01\d{8,9}", d) else ""
 
 
-def _districts() -> dict[str, tuple[str, str, str]]:
-    """지역ID → (시군, 지구 이름, 주소) — 위키 우려지역 표, 거기 없으면 연락처 파일."""
+def _districts() -> dict[str, tuple[str, str, str, str]]:
+    """지역ID → (시군, 지구 이름, 주소, 시군 읍면동) — 위키 우려지역 표, 거기 없으면 연락처 파일."""
     from . import ai, contacts
     out = {}
     try:
@@ -60,7 +67,8 @@ def _districts() -> dict[str, tuple[str, str, str]]:
     for w in list(contacts._rows().values()) + src:          # 뒤(위키)가 이긴다
         if w.get("지역ID"):
             out[w["지역ID"]] = (w.get("시군") or "", w.get("지구명") or w["지역ID"],
-                              " ".join(x for x in (w.get("시군"), w.get("읍면동"), w.get("리")) if x))
+                              " ".join(x for x in (w.get("시군"), w.get("읍면동"), w.get("리")) if x),
+                              " ".join(x for x in (w.get("시군"), w.get("읍면동")) if x))
     return out
 
 
@@ -84,10 +92,16 @@ def current_by_sigun(sigun_full: str | None) -> dict[str, list[dict]]:
     return out
 
 
-def ask(rids: list[str], note: str, base: str, preview: bool = False) -> dict:
+def sms_one(name: str, place: str, note: str, url: str) -> str:
+    """지구 하나에 고정된 문자 글(상황판단에서 보낼 때) — 화면은 이것을 그대로 쓴다(글을 따로 만들지 않는다). % 같은 숫자는 넣지 않는다."""
+    return f"[경남도 재난상황실] {name}({place}) — {note or NOTE}\n{url}"
+
+
+def ask(rids: list[str], note: str, base: str, preview: bool = False, single: bool = False, info: str = "") -> dict:
     """지구들에 회신 요청 — 지구 링크를 (없으면) 만들고 기록에 요청을 남긴다.
     {people: [{who, tel, names, sms}] 번호마다 문자 하나(맡은 지구 링크를 모아), nophone: [{name, url}] 번호를 모르는 지구, links: [{rid, name, url}]}.
-    preview — 요청(ask)을 남기지 않고 글 · 링크만(상황판단 미리보기). 링크는 지구마다 하나라 없으면 만든다(현황 rows 에는 기록이 생겨야 나온다)."""
+    preview — 요청(ask)을 남기지 않고 글 · 링크만(상황판단 미리보기). 링크는 지구마다 하나라 없으면 만든다(현황 rows 에는 기록이 생겨야 나온다).
+    single — 지구마다 따로(같은 번호가 다른 지구를 맡아도 묶지 않는다) · 글은 sms_one. info — 그때의 단계 · %(요청 기록의 more 칸, 현장에는 안 보인다)."""
     from . import contacts
     dz, csvrows = _districts(), contacts._rows()
     note = (note or "").strip()[:200]
@@ -98,27 +112,92 @@ def ask(rids: list[str], note: str, base: str, preview: bool = False) -> dict:
         for rid in dict.fromkeys(rids):
             if rid not in dz:
                 continue
-            sigun, name, addr = dz[rid]
+            sigun, name, addr, place = dz[rid]
             con.execute("INSERT OR IGNORE INTO duty_link(rid, token, sigun, name, addr) VALUES(?,?,?,?,?)",
                         (rid, secrets.token_urlsafe(9), sigun, name, addr))
             url = f"{base.rstrip('/')}/r/{con.execute('SELECT token FROM duty_link WHERE rid=?', (rid,)).fetchone()[0]}"
             links.append({"rid": rid, "name": name, "url": url})
             if not preview:
-                con.execute("INSERT INTO duty_log(rid, at, kind, who, memo) VALUES(?,?,?,?,?)", (rid, at, "ask", "상황실", note))
+                con.execute("INSERT INTO duty_log(rid, at, kind, who, more, memo) VALUES(?,?,?,?,?,?)",
+                            (rid, at, "ask", "상황실", (info or "").strip()[:60] or None, note))
             people = [(_who(p), p["tel"]) for p in _current(con, rid)]
             if not people:                                       # 아직 아무도 등록 안 한 지구 — 연락처 파일의 번호로
                 r = csvrows.get(rid) or {}
                 people = [(r.get(f"담당{i}") or "", t) for i in (1, 2)
                           if (t := _mobile(r.get(f"담당{i}_연락처_정규화") or r.get(f"담당{i}_연락처") or ""))]
             for who, tel in people:
-                by_tel.setdefault(tel, {"who": who, "tel": tel, "items": []})["items"].append((name, url))
+                by_tel.setdefault((tel, rid) if single else tel, {"who": who, "tel": tel, "items": [], "one": sms_one(name, place, note, url)})["items"].append((name, url))
             if not people:
                 nophone.append({"name": name, "url": url})
-    head = f"[경남도 재난상황실] {note or '현장 조치 여부를 알려 주세요'}"
+    head = f"[경남도 재난상황실] {note or NOTE}"
     return {"nophone": nophone, "links": links, "people": [
         {"who": p["who"], "tel": p["tel"], "names": [n for n, _ in p["items"]],
-         "sms": "\n".join([head] + [u if len(p["items"]) == 1 else f"{n} {u}" for n, u in p["items"]])}
+         "sms": p["one"] if single else "\n".join([head] + [u if len(p["items"]) == 1 else f"{n} {u}" for n, u in p["items"]])}
         for p in by_tel.values()]}
+
+
+def _mins(a: str, b: str) -> int:
+    f = "%Y-%m-%d %H:%M"
+    return int((datetime.strptime(b, f) - datetime.strptime(a, f)).total_seconds() // 60)
+
+
+def rounds(con, rid: str, n: int = 5, now: str | None = None) -> list[dict]:
+    """진행 기록을 요청마다 묶은 단계 표 — 새 요청부터 n 개. 화면 셋(r.html · reply.html · 상황판단)은 이것을 그리기만 한다.
+    {ask: {at, memo, info} | None(요청 없이 쌓인 것), steps: [{k, label, t, who, plus, st: done|skip|next|todo}], ev: [...], now, side, warn}
+    예전 회신(action done · doing · not · na + more)도 읽는다 — '아직'은 받아 봤다(확인)로, more=yes 는 지원 필요로."""
+    now = now or _now()
+    out: list[dict] = []
+    cur = None
+    for lid, at, kind, who, action, more, memo, photo in con.execute(
+            "SELECT id, at, kind, who, action, more, memo, photo FROM duty_log WHERE rid=? ORDER BY id", (rid,)):
+        if kind == "ask":
+            cur = {"ask": {"at": at, "memo": memo or NOTE, "info": more}, "ev": []}
+            out.append(cur)
+            continue
+        if cur is None:
+            cur = {"ask": None, "ev": []}
+            out.append(cur)
+        e = {"id": lid, "at": at, "who": who, "memo": memo or "", "photo": bool(photo)}
+        if kind == "view":
+            cur["ev"].append({**e, "k": "view", "who": ""})
+        elif kind in ("on", "off", "note"):
+            cur["ev"].append({**e, "k": kind})
+        elif kind == "reply" and action == "undo":
+            last = next((x for x in reversed(cur["ev"]) if x["k"] in STAMPS[:-1] and not x.get("x") and x["who"] == who), None)
+            if last:
+                last["x"] = True                                 # 취소된 스탬프 — 줄은 남고 단계에서만 빠진다
+            cur["ev"].append({**e, "k": "undo", "of": last and last["k"]})
+        elif kind == "reply":
+            cur["ev"].append({**e, "k": {"not": "ack"}.get(action, action)})
+            if more == "yes":
+                cur["ev"].append({**e, "k": "help", "memo": "", "photo": False})
+    for r in out:
+        a = r["ask"]
+        live = [x for x in r["ev"] if not x.get("x")]
+        first = {k: next((x for x in live if x["k"] == k), None) for k, _ in STEPS[1:]}
+        top = max([i for i, (k, _) in enumerate(STEPS) if first.get(k)] + [0 if a else -1])
+        r["steps"] = []
+        for i, (k, lab) in enumerate(STEPS):
+            x = {"at": a["at"], "who": "상황실"} if k == "ask" and a else first.get(k)
+            st = "done" if x else "skip" if i < top else "next" if i == top + 1 else "todo"
+            r["steps"].append({"k": k, "label": lab, "st": st, "who": (x or {}).get("who", ""),
+                               "t": _t(x["at"], a and a["at"]) if x else "", "plus": _mins(a["at"], x["at"]) if x and a else None})
+        r["now"] = STEPS[top][1] if top >= 0 else "요청 없음"
+        r["side"] = [SIDE[k] for k in SIDE if any(x["k"] == k for x in live)]
+        r["warn"] = None
+        if a and top < 2 and (m := _mins(a["at"], now)) >= WARN_MIN:
+            r["warn"] = {"min": m, "text": f"{m}분째 확인 없음" + (" (열람함)" if top == 1 else "")}
+        for x in r["ev"]:
+            x["t"] = _t(x["at"], a and a["at"])
+            x["plus"] = _mins(a["at"], x["at"]) if a else None
+            x["label"] = dict(STEPS).get(x["k"]) or SIDE.get(x["k"]) or {"on": "담당자로 등록", "off": "담당에서 빠짐", "note": "덧붙임",
+                                                                      "undo": f"취소 — {dict(STEPS, **SIDE).get(x.get('of'), '')}"}.get(x["k"], x["k"])
+    return out[::-1][:n]
+
+
+def _t(at: str, base: str | None) -> str:
+    """HH:MM — 요청한 날과 다르면 날짜도."""
+    return at[11:16] if base and at[:10] == base[:10] else f"{int(at[5:7])}.{int(at[8:10])}. {at[11:16]}"
 
 
 def rows() -> list[dict]:
@@ -126,14 +205,15 @@ def rows() -> list[dict]:
     out = []
     with db.tx() as con:
         for rid, token, name, addr in con.execute("SELECT rid, token, name, addr FROM duty_link").fetchall():
-            last = {k: con.execute("SELECT id, at, who, action, more, memo, photo FROM duty_log WHERE rid=? AND kind=?"
-                                   " ORDER BY id DESC LIMIT 1", (rid, k)).fetchone() for k in ("ask", "reply")}
+            last = {k: con.execute("SELECT id, at, who, action, more, memo, photo FROM duty_log WHERE rid=? AND kind IN (?, ?)"
+                                   " ORDER BY id DESC LIMIT 1", (rid, k, "note" if k == "reply" else k)).fetchone() for k in ("ask", "reply")}
             a, r = last["ask"], last["reply"]
             if not a and not r and not _current(con, rid):    # 미리보기로 링크만 생긴 지구 — 요청 · 회신 · 담당이 생기면 나온다
                 continue
-            out.append({"rid": rid, "token": token, "name": name, "addr": addr,
+            rd = rounds(con, rid, 1)
+            out.append({"rid": rid, "token": token, "name": name, "addr": addr, "round": rd[0] if rd else None,
                         "people": [{"who": _who(p), "tel": p["tel"]} for p in _current(con, rid)],
-                        "asked_at": a and a[1], "note": a and a[5],
+                        "asked_at": a and a[1], "note": a and a[5], "info": a and a[4],
                         "reply": r and {"id": r[0], "at": r[1], "who": r[2], "action": r[3], "more": r[4], "memo": r[5], "photo": bool(r[6])},
                         "waiting": bool(a and (not r or r[0] < a[0]))})     # 마지막 요청 뒤로 회신이 없다
     out.sort(key=lambda x: x["asked_at"] or "", reverse=True)
@@ -152,10 +232,15 @@ def form(token: str) -> dict:
     """링크 페이지에 줄 것 — 지구 · 지금 담당 · 지난 담당 · 진행 기록(새 것부터 60줄)."""
     with db.tx() as con:
         rid, name, addr = _link(con, token)
-        return {"name": name, "addr": addr, "max": MAX_PEOPLE, "people": _current(con, rid),
+        rd = rounds(con, rid)
+        for r in rd:
+            if r["ask"]:
+                r["ask"].pop("info")                             # 그때의 단계 · % 는 상황실 기록에만 — 현장에는 요청 문구만
+        return {"name": name, "addr": addr, "max": MAX_PEOPLE, "people": _current(con, rid), "rounds": rd,
+                "now": _now(), "warn_min": WARN_MIN,
                 "past": [{"rank": r[0], "name": r[1], "since": r[2], "until": r[3]} for r in con.execute(
                     "SELECT rank, name, since, until FROM duty_person WHERE rid=? AND until IS NOT NULL ORDER BY id DESC LIMIT 20", (rid,))],
-                "log": [{"id": r[0], "at": r[1], "kind": r[2], "who": r[3], "action": r[4], "more": r[5], "memo": r[6], "photo": bool(r[7])}
+                "log": [{"id": r[0], "at": r[1], "kind": r[2], "who": r[3], "action": r[4], "more": None if r[2] == "ask" else r[5], "memo": r[6], "photo": bool(r[7])}
                         for r in con.execute("SELECT id, at, kind, who, action, more, memo, photo FROM duty_log WHERE rid=?"
                                              " ORDER BY id DESC LIMIT 60", (rid,))]}
 
@@ -196,6 +281,51 @@ def leave(token: str, body: dict) -> dict:
         at = _now()
         con.execute("UPDATE duty_person SET until=? WHERE id=?", (at, p["id"]))
         con.execute("INSERT INTO duty_log(rid, at, kind, who, memo) VALUES(?,?,?,?,?)", (rid, at, "off", _who(p), ""))
+    return {"ok": True}
+
+
+def seen(token: str) -> dict:
+    """열람 — 링크를 연 때, 요청마다 한 번(이름 없이). 상황판단 미리보기(?pv=1) · 상황실 현황에서 연 것은 화면이 부르지 않는다."""
+    _open()
+    with db.tx() as con:
+        rid, _, _ = _link(con, token)
+        last = con.execute("SELECT kind FROM duty_log WHERE rid=? AND kind IN ('ask', 'view') ORDER BY id DESC LIMIT 1", (rid,)).fetchone()
+        if last and last[0] == "ask":
+            con.execute("INSERT INTO duty_log(rid, at, kind, who, memo) VALUES(?,?,?,?,?)", (rid, _now(), "view", "", ""))
+            return {"ok": True, "new": True}
+    return {"ok": True, "new": False}
+
+
+def stamp(token: str, body: dict) -> dict:
+    """단계 스탬프 — {id 누른 담당자, step}. 단추 한 번 = 한 줄. 메모 · 사진은 note 로 덧붙인다."""
+    _open()
+    step = body.get("step")
+    if step not in STAMPS:
+        raise HTTPException(400, "모르는 단계입니다")
+    with db.tx() as con:
+        rid, _, _ = _link(con, token)
+        p = next((p for p in _current(con, rid) if p["id"] == body.get("id")), None)
+        if not p:
+            raise HTTPException(400, "담당자로 등록한 뒤 눌러 주세요")
+        at = _now()
+        con.execute("INSERT INTO duty_log(rid, at, kind, who, action, memo) VALUES(?,?,?,?,?,?)", (rid, at, "reply", _who(p), step, ""))
+    return {"ok": True, "at": at}
+
+
+def note(token: str, body: dict) -> dict:
+    """스탬프 뒤에 덧붙이는 말 · 사진 — {id, memo, photo}. 둘 중 하나는 있어야 한다."""
+    _open()
+    memo = str(body.get("memo") or "").strip()[:500]
+    if not memo and not body.get("photo"):
+        raise HTTPException(400, "덧붙일 말이나 사진을 넣어 주세요")
+    with db.tx() as con:
+        rid, _, _ = _link(con, token)
+        p = next((p for p in _current(con, rid) if p["id"] == body.get("id")), None)
+        if not p:
+            raise HTTPException(400, "담당자로 등록한 뒤 보내 주세요")
+        lid = con.execute("INSERT INTO duty_log(rid, at, kind, who, memo) VALUES(?,?,?,?,?)", (rid, _now(), "note", _who(p), memo)).lastrowid
+        if body.get("photo"):
+            con.execute("UPDATE duty_log SET photo=? WHERE id=?", (_photo(lid, body["photo"]), lid))
     return {"ok": True}
 
 
@@ -259,6 +389,21 @@ async def page_data(token: str):
 @router.post("/r/{token}")
 async def page_answer(token: str, request: Request):
     return answer(token, await _json(request))
+
+
+@router.post("/r/{token}/seen")
+async def page_seen(token: str):
+    return seen(token)
+
+
+@router.post("/r/{token}/stamp")
+async def page_stamp(token: str, request: Request):
+    return stamp(token, await _json(request))
+
+
+@router.post("/r/{token}/note")
+async def page_note(token: str, request: Request):
+    return note(token, await _json(request))
 
 
 @router.post("/r/{token}/join")

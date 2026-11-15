@@ -62,11 +62,31 @@ async function sjLoad(onlyData) {
     Object.assign(SJ, { d, log: lg.rows });
     SJ.geo = await getJson("/api/geocode").catch(() => null);
     if (ct) SJ.ct = ct.status === 401 ? { pin: true } : ct.status === 429 ? { err: "잠금 번호를 여러 번 틀렸다 — 5분 뒤" } : await ct.json();
+    if (!SJ.ct?.pin && !SJ.ct?.err) await sjRpList();
     if (rp) Object.assign(SJ, { q: rp.questions || [], llm: rp.llm ?? null, rep: rp });
   } catch (e) { if (my === SJ.seq) $("sj-c").innerHTML = `<div class="sj-ld">못 모았다 — ${escH(e.message)}</div>`; $("sj").classList.remove("busy"); return; }
   $("sj").classList.remove("busy");
   if (!SJ.d.rows.some(r => r.id === SJ.sel)) SJ.sel = null;
   sjRender();
+}
+/* 현장 회신 현황 — 지구 → 마지막 요청의 단계 표(reply.rounds). 이름 · 번호가 들어 있어 잠금 번호 뒤(/api/reply/list), 판정 자료와 섞지 않는다 */
+async function sjRpList() {
+  try {
+    const res = await fetch("/api/reply/list", { headers: { "x-pin": sjPin() }, cache: "no-store" });
+    SJ.rp = res.ok ? Object.fromEntries((await res.json()).rows.filter(x => x.round?.ask).map(x => [x.rid, x])) : null;
+  } catch { SJ.rp = null; }
+}
+const sjRpTag = rd => rd.warn ? "확인 없음" : { 요청: "요청함", 열람: "요청함", 확인: "확인", "조치 중": "조치 중", "조치 완료": "완료" }[rd.now] || rd.now;
+/* 상세 담당 칸 아래 — 지금 단계 한 줄 + 펼치면 단계 표(현장 화면 r.html · 현황 reply.html 과 같은 목록을 그린다) */
+function sjRpBox(r) {
+  const x = SJ.rp?.[r.id], rd = x?.round;
+  if (!rd) return "";
+  const st = rd.steps.map(s => `<li class="${s.st}"><b>${escH(s.label)}</b><span>${s.st === "done" ? escH([s.t, s.who, s.plus ? `+${s.plus}분` : ""].filter(Boolean).join(" · "))
+    : s.st === "skip" ? "건너뜀" : s.st === "next" ? "다음 단계" : ""}</span></li>`).join("");
+  const ev = rd.ev.filter(e => e.k !== "view").map(e => `<li class="${e.x ? "x" : ""}">${escH(`${e.t} · ${e.who ? e.who + " · " : ""}${e.label}${e.x ? " (취소됨)" : ""}${e.memo ? " — " + e.memo : ""}`)}${e.photo ? " 📷" : ""}</li>`).join("");
+  return `<details class="rpx${rd.warn ? " w" : ""}"><summary><b>현장 회신</b> ${escH(rd.now)}${rd.side.length ? ` · ${escH(rd.side.join(" · "))}` : ""}`
+    + `${rd.warn ? ` <em>⚠ ${escH(rd.warn.text)}</em>` : ""}<span class="mute">요청 ${escH(rd.ask.at.slice(11))}${rd.ask.info ? ` · ${escH(rd.ask.info)}` : ""}</span></summary>`
+    + `<p class="mute">요청: ${escH(rd.ask.memo)}</p><ol class="tl">${st}</ol>${ev ? `<ol class="ev">${ev}</ol>` : ""}</details>`;
 }
 /* 묶음 — 시군 · 읍면동 · 유형. 상태: 결정 필요(넘었는데 기록 없음) · 곧(3시간 안) · 결정함 · 지켜볼 곳 */
 function sjGroups() {
@@ -181,6 +201,7 @@ function sjGroup(g) {
       + `<em><i class="t${sjLv(b.top)}" title="${r.where === "지구" ? "이 지구 자리 비로 판정" : "읍면동 기준"}">${b.top}%${r.where === "지구" ? "" : "*"}</i> ${b.site != null ? `지구 기준 <i class="t${sjLv(b.site)}">${b.site_slide ? (b.site >= 100 ? "발령 중" : "발령 없음") : `${b.site}%`}</i>` : ""}</em>`
       + (r.soil ? `<em class="soil s-${r.soil.st}" title="지구 기준의 토양함수 ${r.soil.need}% — 산림청 예측정보(시군)로">토양 ${SJ_SOIL[r.soil.st]}</em>` : "")
       + sjTfChips(r.terrain, 2)
+      + (SJ.rp?.[r.id] ? `<em class="rpst${SJ.rp[r.id].round.warn ? " w" : ""}" title="현장 회신 — ${escH(SJ.rp[r.id].round.now)}">${escH(sjRpTag(SJ.rp[r.id].round))}</em>` : "")
       + `<small>${p0 ? escH((p0.who || "").replace(/담당부서\s*/g, "")) : ""}</small></button>`;
   }).join("") + (!sel && g.rows.length > 4 ? `<button class="sb mr" data-r="${escH(g.rows[4].id)}">외 ${g.rows.length - 4}곳</button>` : "");
   const done = g.dec.length ? `<span class="dn">✔ ${escH(g.dec[0].act)} ${g.dec[0].at.slice(11, 16)}</span>` : "";
@@ -222,7 +243,7 @@ function sjDetail() {
         : `${r.pos ? "지구 자리 비를 아직 못 받아" : SJ.geo?.state === "받는 중" ? `지구 위치 받는 중(${SJ.geo.done}/${SJ.geo.total}) —` : "지구 위치가 없어"} 읍면동에서 가장 많이 온 칸으로 판정`}</p></div>
     ${sjTerrain(r)}
     <div class="dsec"><h5>결정 — 판단 기록에 남는다</h5><div class="acs">${acts}</div></div>
-    <div class="dsec"><h5>담당</h5>${who}${rpl}</div>
+    <div class="dsec"><h5>담당</h5>${who}${rpl}${sjRpBox(r)}</div>
     <div class="dsec"><h5>판정 · ${SJ_BN[SJ.basis]} 기준 <span class="mute">(조건이 '그리고'면 가장 덜 찬 것이 그 기준의 %)</span></h5>${stg}
       ${o ? `<p class="mute">${SJ_BN[SJ.basis === "grid" ? "aws" : "grid"]} 기준이면 ${SJ_STG.map(s => o.st[s] ? `${s} ${o.st[s].pct}%` : "").filter(Boolean).join(" · ")}</p>` : ""}</div>
     ${r.rule ? `<div class="dsec"><h5>지구 기준 (원문) ${b.site != null ? sjPct({ pct: b.site }) : ""}</h5><div class="rl">${escH(r.rule)}</div>
@@ -382,11 +403,20 @@ function sjEsc() {
 }
 /* 회신 링크 문자 — 미리보기는 기록 없이(preview), [문자 앱 열기] · [복사] 를 누를 때 요청을 남긴다. 글 · 링크는 reply.html 과 같은 /api/reply/ask
    링크 바깥 주소는 reply.html 에 넣은 것(localStorage reply-base — 같은 출처라 함께 쓴다). 이름 · 번호는 잠금 번호 뒤, AI 로 넘기지 않는다 */
-const SJ_RP = { rid: null, note: "지금 현장 조치 여부를 알려 주세요", j: null, done: false, pi: 0, tab: "sms" };
+const SJ_RP = { rid: null, note: "", j: null, done: false, pi: 0, tab: "sms", info: "" };
+/* 요청 한 줄 기본값 — 그 지구에서 지금 닿은(넘은) 가장 높은 단계 · 유형으로. 결정 단추(SJ_ACT)와 같은 말. % 는 문자에 넣지 않고 기록(info)에만 */
+const SJ_RQ = { 산사태: "위험 구간 출입을 통제", 하천: "하천변 · 둔치 출입을 통제", 지하공간: "지하차도 · 지하공간 출입을 통제", "침수·해안": "침수 우려 도로 · 해안 출입을 통제" };
+function sjRpNote(r) {
+  const b = r && sjB(r), s = b && [...SJ_STG].reverse().find(k => b.st[k]?.met);
+  const top = b && SJ_STG.map(k => [k, b.st[k]]).filter(([, c]) => c).sort((x, y) => y[1].pct - x[1].pct)[0];
+  SJ_RP.info = top ? `${top[0]} ${top[1].pct}% · ${r.fam} · ${SJ_BN[SJ.basis]}` : "";
+  return s === "긴급대피" ? "즉시 대피 조치하고 알려 주세요" : s === "사전대피" ? "주민 사전대피를 안내하고 알려 주세요"
+    : s === "통제" ? `${SJ_RQ[r.fam] || "현장 출입을 통제"}하고 알려 주세요` : "지금 현장 조치 여부를 알려 주세요";
+}
 const sjRpBase = () => { try { return localStorage.getItem("reply-base") || ""; } catch { return ""; } };
 async function sjRpAsk(commit) {
   const res = await fetch("/api/reply/ask", { method: "POST", headers: { "content-type": "application/json", "x-pin": sjPin() },
-    body: JSON.stringify({ rids: [SJ_RP.rid], note: SJ_RP.note, base: sjRpBase(), preview: !commit }) });
+    body: JSON.stringify({ rids: [SJ_RP.rid], note: SJ_RP.note, base: sjRpBase(), preview: !commit, single: true, info: SJ_RP.info }) });
   const j = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(j.detail || res.status);
   return j;
@@ -397,7 +427,7 @@ async function sjRp(rid) {
     box = document.createElement("div"); box.id = "sj-rp"; box.className = "sj-rp"; box.tabIndex = -1;
     box.setAttribute("role", "dialog"); box.setAttribute("aria-modal", "true"); box.setAttribute("aria-label", "회신 링크 문자 미리보기"); $("sj").append(box);
   }
-  if (rid !== undefined) Object.assign(SJ_RP, { rid, j: null, done: false, pi: 0, tab: "sms" });
+  if (rid !== undefined) Object.assign(SJ_RP, { rid, j: null, done: false, pi: 0, tab: "sms", note: sjRpNote((SJ.d?.rows || []).find(x => x.id === rid)) });
   box.hidden = !SJ_RP.rid;
   sjBd();
   if (!SJ_RP.rid) return;
@@ -423,11 +453,20 @@ async function sjRp(rid) {
     <div class="rpm"><div class="rptab" role="tablist" aria-label="담당자 휴대폰 화면"><button role="tab" data-rptab="sms">문자 도착</button><button role="tab" data-rptab="page">링크를 열면</button></div>
       <div class="rpph"><div class="rpsms" role="tabpanel" aria-label="문자가 도착한 모습"><div class="rpfrom"><i aria-hidden="true">상</i><b>보낸 사람</b><span>상황실 — 보내는 분의 휴대폰 번호</span></div>
         <time>오늘 ${hm}</time><p class="rpbub"></p></div>
-      <iframe src="${escH(new URL(ln.url).pathname)}" title="링크를 열면 — 담당자 휴대폰 화면" tabindex="-1" inert></iframe></div></div></div>`;
+      <iframe src="${escH(new URL(ln.url).pathname)}?pv=1" title="링크를 열면 — 담당자 휴대폰 화면" tabindex="-1" inert></iframe></div></div></div>`;
   sjRpText(); sjRpTab(SJ_RP.tab);
 }
 /* 요청 한 줄 · 고른 사람이 바뀌면 글만 고친다(입력 칸 포커스를 지키려고 다시 그리지 않는다). 글 형식은 reply.ask 와 같다 — 첫 줄만 요청 한 줄 */
-const sjRpSms = p => [`[경남도 재난상황실] ${SJ_RP.note}`, ...(p ? p.sms.split("\n").slice(1) : [SJ_RP.j.links[0].url])].join("\n");
+const sjRpSms = p => (p ? p.sms : SJ_RP.j.links[0].url);    // 글은 서버(reply.sms_one)가 만든 것 그대로
+let SJ_RPT = 0;
+function sjRpNoteIn(v) {                                  // 요청 한 줄 — 칠 때마다 잠깐 뒤 미리보기(기록 없음)를 다시 받아 글만 바꾼다
+  Object.assign(SJ_RP, { note: v.trim().slice(0, 200) || "지금 현장 조치 여부를 알려 주세요", done: false });
+  clearTimeout(SJ_RPT);
+  SJ_RPT = setTimeout(async () => {
+    const want = SJ_RP.note;
+    try { const j = await sjRpAsk(false); if (want === SJ_RP.note && SJ_RP.rid) { SJ_RP.j = j; sjRpText(); } } catch {}
+  }, 300);
+}
 function sjRpText() {
   const box = $("sj-rp"), ps = SJ_RP.j.people, txt = sjRpSms(ps[SJ_RP.pi] || ps[0]);
   box.querySelector(".rps").textContent = txt;
@@ -444,7 +483,7 @@ function sjRpCommit() {
   if (SJ_RP.j.demo) return toast("시연에서는 요청 기록을 남기지 않는다 — 문자 앱 · 복사만");
   if (SJ_RP.done) return;
   SJ_RP.done = true;
-  sjRpAsk(true).then(() => { toast("요청을 남겼다 — 현장 회신 기록"); }, e => { SJ_RP.done = false; toast(`요청을 남기지 못했다 — ${e.message}`); });
+  sjRpAsk(true).then(async () => { toast("요청을 남겼다 — 현장 회신 기록"); await sjRpList(); sjRender(); }, e => { SJ_RP.done = false; toast(`요청을 남기지 못했다 — ${e.message}`); });
 }
 async function sjDecide(body) {
   try {
@@ -562,7 +601,7 @@ $("sj").addEventListener("change", ev => {
   }
 });
 $("sj").addEventListener("input", ev => {
-  if (ev.target.id === "sj-rpn") { Object.assign(SJ_RP, { note: ev.target.value.trim().slice(0, 200) || "지금 현장 조치 여부를 알려 주세요", done: false }); return sjRpText(); }
+  if (ev.target.id === "sj-rpn") return sjRpNoteIn(ev.target.value);
   if (ev.target.id !== "sj-k") return;
   SJ.k = +ev.target.value / 100;
   ev.target.nextElementSibling.textContent = `×${SJ.k.toFixed(1)}`;
@@ -575,4 +614,5 @@ document.addEventListener("keydown", ev => {
   if (ev.key === "[") { ev.preventDefault(); sjPane("l"); }
   if (ev.key === "]") { ev.preventDefault(); sjPane("r"); }
 });
-if (SJ_SOLO) { document.title = "상황판단 — 경남"; setTimeout(() => sjToggle(true), 1200); }
+if (SJ_SOLO) { document.title = "상황판단 — 경남"; $("sj").hidden = false;   // 바로 덮는다 — 1.2초 동안 지도가 먼저 비치지 않게
+  setTimeout(() => sjToggle(true), 1200); }

@@ -546,6 +546,7 @@ async def api_contacts(sigun: str, x_pin: str | None = Header(None)):
 @app.post("/api/reply/ask")
 async def api_reply_ask(body: dict, request: Request, x_pin: str | None = Header(None)):
     """{rids, note, base, preview} — 지구 담당자에게 보낼 회신 링크를 만든다(문자는 화면에서). 이름 · 번호가 나가므로 잠금 번호 뒤.
+    single=true 면 지구마다 따로 · 그 지구 이름이 든 글(상황판단), info 는 그때의 단계 · %(기록에만).
     preview=true 면 요청 기록 없이 글 · 링크만(상황판단 미리보기 — 문자 앱 열기 · 복사를 누를 때 preview 없이 다시 부른다)."""
     from . import reply
     _contacts_pin(x_pin)
@@ -553,7 +554,8 @@ async def api_reply_ask(body: dict, request: Request, x_pin: str | None = Header
     if config.DEMO and not preview:                        # 시연 — 미리보기(가짜 연락처 · 링크)는 보여 주고 요청 기록은 남기지 않는다
         raise HTTPException(403, "시연 화면에서는 요청을 만들지 않는다")
     base = str(body.get("base") or "").strip() or str(request.base_url)
-    out = await asyncio.to_thread(reply.ask, [str(x) for x in body.get("rids") or []], str(body.get("note") or ""), base, preview)
+    out = await asyncio.to_thread(reply.ask, [str(x) for x in body.get("rids") or []], str(body.get("note") or ""), base, preview,
+                                  body.get("single") is True, str(body.get("info") or ""))
     return JSONResponse({**out, "demo": config.DEMO}, headers={"Cache-Control": "no-store"})
 
 
@@ -697,8 +699,22 @@ async def api_contacts_pin_put(body: dict):
     return await api_contacts_pin_get()
 
 
+_JZ: dict[int, tuple[dict, bytes]] = {}                  # 판정 결과(캐시된 그 객체) → 압축해 둔 응답. 8MB 를 부를 때마다 다시 글로 바꾸고 누르면 몇 초 걸린다
+
+
+def _judge_gz(got: dict) -> bytes:
+    hit = _JZ.get(id(got))
+    if hit and hit[0] is got:
+        return hit[1]
+    b = gzip.compress(json.dumps(got, ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode("utf-8"), 5)
+    if len(_JZ) >= 6:
+        _JZ.clear()
+    _JZ[id(got)] = (got, b)
+    return b
+
+
 @app.get("/api/judge")
-async def api_judge(sigun: str = "all", k: float = 1.0, add_h: float = 0.0, add_24: float = 0.0, series: int = 0, sb: str = "",
+async def api_judge(request: Request, sigun: str = "all", k: float = 1.0, add_h: float = 0.0, add_24: float = 0.0, series: int = 0, sb: str = "",
                     min_: float = Query(0, alias="min"), r: str = "", fresh: int = 0):
     """상황판단 모드 — 지구 한 줄씩(위키 지구 × 기상청 격자 · AWS 면 두 기준의 강수 · 통제 · 사전대피 · 긴급대피 %).
     sigun=all 이면 경남 전체(시군 차트 + 지구 목록). series=1 이면 지구마다 앞으로 시간별 % (차트 줄 · 재생). 연락처는 넣지 않는다(/api/contacts).
@@ -707,8 +723,11 @@ async def api_judge(sigun: str = "all", k: float = 1.0, add_h: float = 0.0, add_
     from . import judge
     me = f"http://127.0.0.1:{os.environ.get('PORT', '8000')}"
     try:
-        return await asyncio.to_thread(judge.cached, sigun, me, max(0.5, min(3.0, k)), max(0.0, min(100.0, add_h)), max(0.0, min(500.0, add_24)), bool(series), sb if sb in ("grid", "aws") else None,
-                                       max(0.0, min(100.0, min_)), r or None, bool(fresh))
+        got = await asyncio.to_thread(judge.cached, sigun, me, max(0.5, min(3.0, k)), max(0.0, min(100.0, add_h)), max(0.0, min(500.0, add_24)), bool(series), sb if sb in ("grid", "aws") else None,
+                                      max(0.0, min(100.0, min_)), r or None, bool(fresh))
+        if "gzip" not in request.headers.get("accept-encoding", ""):
+            return got
+        return Response(await asyncio.to_thread(_judge_gz, got), media_type="application/json", headers={"Content-Encoding": "gzip", "Vary": "Accept-Encoding"})
     except FileNotFoundError as e:
         raise HTTPException(503, f"LLM 위키를 못 찾았다(설정 › AI 위키): {e}")
 

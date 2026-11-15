@@ -143,3 +143,66 @@ def test_demo_preview_only(tdb, tmp_path, monkeypatch):
     assert c.get(path).status_code == 200 and c.get(path + "/data").json()["log"] == []
     assert c.post("/api/reply/ask", json={"rids": [A]}).status_code == 403
     assert c.post(path + "/join", json={"name": "x", "tel": "010-1111-2222"}).status_code == 403
+
+
+def test_single_district_sms_and_info(tdb, tmp_path, monkeypatch):
+    """상황판단에서 보낼 때(single) — 그 지구 이름 · 시군 읍면동이 든 글, 같은 번호가 맡은 다른 지구와 묶지 않는다. 단계 · % 는 기록에만."""
+    _setup(tmp_path, monkeypatch)
+    c = TestClient(main.app)
+    body = {"rids": [A, "48125-3.2-002"], "note": "즉시 대피 조치하고 알려 주세요", "base": "https://r.example", "single": True, "info": "긴급대피 104% · 산사태"}
+    j = c.post("/api/reply/ask", json=body).json()
+    a, b = j["people"]
+    assert a["tel"] == b["tel"] and a["names"] == ["가지구"] and b["names"] == ["나지구"]
+    assert a["sms"] == reply.sms_one("가지구", "창원시 북면", "즉시 대피 조치하고 알려 주세요", j["links"][0]["url"])
+    assert a["sms"].startswith("[경남도 재난상황실] 가지구(창원시 북면) — 즉시 대피") and a["sms"].count("https://") == 1 and "%" not in a["sms"]
+    row = next(x for x in c.get("/api/reply/list").json()["rows"] if x["rid"] == A)
+    assert row["info"] == "긴급대피 104% · 산사태" and row["round"]["ask"]["memo"].startswith("즉시 대피")
+    tok = j["links"][0]["url"].rsplit("/", 1)[1]
+    assert "104%" not in TestClient(reply.public_app).get(f"/r/{tok}/data").text          # 현장에는 % 가 안 간다
+
+
+def test_stamps_timeline(tdb, tmp_path, monkeypatch):
+    """요청 → 열람(요청마다 한 번) → 확인 → 조치 중 → 조치 완료, 시각 · 걸린 시간. 취소는 새 줄로, 늦은 확인은 경고."""
+    _setup(tmp_path, monkeypatch)
+    c, pub = TestClient(main.app), TestClient(reply.public_app)
+    T = ["2026-11-15 14:00"]
+    monkeypatch.setattr(reply, "_now", lambda: T[0])
+    url = c.post("/api/reply/ask", json={"rids": [A], "base": "https://r.example", "single": True}).json()["links"][0]["url"]   # 14:00
+    tok = url.rsplit("/", 1)[1]
+    pub.get(f"/r/{tok}/data")                                         # 데이터만 읽는 것(미리보기 · 상황실)은 열람이 아니다
+    with tdb.tx() as con:
+        assert reply.rounds(con, A, now="2026-11-15 14:12")[0]["warn"]["text"] == "12분째 확인 없음"
+    T[0] = "2026-11-15 14:03"
+    assert pub.post(f"/r/{tok}/seen").json()["new"] and not pub.post(f"/r/{tok}/seen").json()["new"]   # 14:03 — 두 번째는 안 찍힘
+    T[0] = "2026-11-15 14:04"
+    me = pub.post(f"/r/{tok}/join", json={"rank": "주무관", "name": "박현장", "tel": "010-1111-2222"}).json()["id"]   # 14:04
+    assert pub.post(f"/r/{tok}/stamp", json={"id": me, "step": "nope"}).status_code == 400
+    for st, t in (("ack", "14:05"), ("doing", "14:07"), ("done", "14:20"), ("undo", "14:21"), ("done", "14:30")):
+        T[0] = f"2026-11-15 {t}"
+        assert pub.post(f"/r/{tok}/stamp", json={"id": me, "step": st}).json()["at"].endswith(t)
+    d = pub.get(f"/r/{tok}/data").json()
+    (r,) = d["rounds"]
+    assert [(s["k"], s["st"], s["t"], s["plus"]) for s in r["steps"]] == [
+        ("ask", "done", "14:00", 0), ("view", "done", "14:03", 3), ("ack", "done", "14:05", 5), ("doing", "done", "14:07", 7), ("done", "done", "14:30", 30)]
+    assert r["now"] == "조치 완료" and r["warn"] is None and r["steps"][2]["who"] == "주무관 박현장" and r["steps"][1]["who"] == ""
+    assert [e["label"] for e in r["ev"] if e.get("x")] == ["조치 완료"] and any(e["label"] == "취소 — 조치 완료" for e in r["ev"])
+    T[0] = "2026-11-16 00:10"                                         # 다음 날 — 날짜가 붙는다
+    pub.post(f"/r/{tok}/note", json={"id": me, "memo": "통제선 설치"})
+    assert reply.form(tok)["rounds"][0]["ev"][-1]["t"] == "11.16. 00:10"
+
+
+def test_old_replies_still_read(tdb, tmp_path, monkeypatch):
+    """예전 회신(조치 여부 + 추가 배치 한 번에)도 단계 표로 — '아직'은 확인, 추가 배치 필요는 지원 필요."""
+    _setup(tmp_path, monkeypatch)
+    with tdb.tx() as con:
+        con.execute("INSERT INTO duty_log(rid, at, kind, who, memo) VALUES(?,?,?,?,?)", (A, "2026-11-14 10:00", "ask", "상황실", "통제 여부"))
+        con.execute("INSERT INTO duty_log(rid, at, kind, who, action, more, memo) VALUES(?,?,?,?,?,?,?)", (A, "2026-11-14 10:30", "reply", "주무관 박", "not", "yes", "가는 중"))
+        (r,) = reply.rounds(con, A, now="2026-11-14 11:00")
+    assert r["now"] == "확인" and r["side"] == ["지원 필요"] and r["steps"][1]["st"] == "skip" and r["steps"][2]["plus"] == 30
+
+
+def test_preview_frames_do_not_stamp_view():
+    """상황판단 휴대폰 틀 · 상황실 현황은 ?pv=1 로 열고, 현장 화면은 pv 면 열람을 부르지 않는다."""
+    root = Path(main.__file__).parent / "web" / "static"
+    assert "?pv=1" in (root / "js" / "07b-judge.js").read_text("utf-8") and "?pv=1" in (root / "reply.html").read_text("utf-8")
+    assert re.search(r'PV \? Promise\.resolve\(\) : post\("/seen"', (root / "r.html").read_text("utf-8"))

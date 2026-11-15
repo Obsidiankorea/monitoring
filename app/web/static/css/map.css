@@ -1811,6 +1811,22 @@ body.sj-on > header, body.sj-on #stage, body.sj-on #tl, body.sj-on #rail { displ
 #sj .rpsms time { display: block; text-align: center; margin: 12px 0 6px; font-size: 11px; color: #47596D; }
 #sj .rpbub { margin: 0 40px 12px 12px; padding: 9px 12px; white-space: pre-wrap; word-break: break-all; background: #FFFFFF; border: 1px solid #C9D4E1; border-radius: 4px 14px 14px 14px; }
 #sj .rpbub a { color: #1B6FA8; text-decoration: underline; }
+/* 현장 회신 단계 — 상세 담당 칸 아래(지금 단계 한 줄, 펼치면 단계 표) · 가운데 지구 줄의 작은 표시. 확인이 늦으면 색과 글로 */
+#sj .rpst { font-style: normal; font-size: 10.5px; padding: 0 5px; border-radius: 4px; margin-left: 4px; border: 1px solid var(--accent); color: var(--accent); }
+#sj .rpst.w { border-color: var(--lv-watch); color: var(--lv-watch); font-weight: 600; }
+#sj .rpx { margin-top: 8px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; font-size: 12.5px; }
+#sj .rpx.w { border-color: var(--lv-watch); }
+#sj .rpx summary { cursor: pointer; display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+#sj .rpx summary em { font-style: normal; font-weight: 600; color: var(--lv-watch); } #sj .rpx summary .mute { margin-left: auto; }
+#sj .rpx p { margin: 6px 0; }
+#sj .rpx .tl { list-style: none; margin: 4px 0 0; padding: 0; }
+#sj .rpx .tl li { position: relative; padding: 0 0 8px 20px; }
+#sj .rpx .tl li::before { content: ""; position: absolute; left: 3px; top: 4px; width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--line); background: var(--panel); }
+#sj .rpx .tl li.done::before { background: var(--lv-ok); border-color: var(--lv-ok); } #sj .rpx .tl li.skip::before { border-style: dashed; }
+#sj .rpx .tl li.next::before { border-color: var(--accent); } #sj .rpx .tl li.next b { color: var(--accent); }
+#sj .rpx .tl b { font-weight: 600; margin-right: 8px; } #sj .rpx .tl span { color: var(--ink-3); }
+#sj .rpx .ev { list-style: none; margin: 4px 0 0; padding: 4px 0 0; border-top: 1px solid var(--line-soft); color: var(--ink-2); }
+#sj .rpx .ev li.x { text-decoration: line-through; color: var(--ink-3); }
 #sj .pn { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 #sj .pn button { background: transparent; border: 0; border-right: 1px solid var(--line); color: var(--ink-3); padding: 4px 9px; font-size: 13px; line-height: 1; }
 #sj .pn button:last-child { border-right: 0; }
