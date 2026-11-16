@@ -166,6 +166,8 @@ async def lifespan(app: FastAPI):
     sched.add_job(aiwatch.run, "interval", seconds=300, id="aiwatch", max_instances=1, coalesce=True)
     # 상황판단 창 미리 계산 — 2분마다, 최근 15분 안에 창을 연 기본 인자만(app/judge.warm). 시연에서는 돌지 않는다
     sched.add_job(_judge_warm, "interval", seconds=120, id="judgewarm", max_instances=1, coalesce=True)
+    # 보고서 17시 대기 — 1분마다, 걸린 것이 있을 때만(app/reports.py wait_tick)
+    sched.add_job(_reports_tick, "interval", seconds=60, id="reportwait", max_instances=1, coalesce=True)
     # 법령 변경 감시 — 하루 한 번(LAW_OC 가 있는 서버에서만). 위키는 고치지 않고 제안 파일만 남긴다(app/lawwatch.py)
     sched.add_job(lawwatch.run, "cron", hour=9, minute=10, id="lawwatch", max_instances=1, coalesce=True)
     # 하천 수위 · 댐 · 보 — 10분마다(HRFCO_KEY 가 있는 서버에서만, app/river.py). 켠 지 20초 뒤 첫 수집
@@ -1062,6 +1064,55 @@ async def api_reports_run(body: dict):
         return {"ok": True, "name": name, "tg": st}
     return Response(data, media_type="application/x-hwp", headers={"Content-Disposition": reports.disposition(name), "X-Tg": st,
                                                                    "Access-Control-Expose-Headers": "X-Tg, Content-Disposition", "Cache-Control": "no-store"})
+
+
+@app.get("/api/reports/wait")
+async def api_reports_wait_get():
+    """17시 대기 상태 — {id: {state: waiting|ready|fail, status, since, until, name, tg, why}}. 지도 단추가 1분마다 가볍게 묻는다."""
+    from . import reports
+    return {"wait": reports.wait_state()}
+
+
+@app.post("/api/reports/wait")
+async def api_reports_wait_set(body: dict):
+    """{id, opts, tg} — 17시 발표 대기를 건다(서버 스케줄러가 1분마다 jaenan 에 묻는다). 시연에서는 걸지 않는다."""
+    from . import reports
+    if config.DEMO:
+        raise HTTPException(403, "시연 화면에서는 17시 대기를 걸지 않는다")
+    try:
+        st = reports.wait_set(str(body.get("id") or ""), body.get("opts") if isinstance(body.get("opts"), dict) else {}, body.get("tg") is True)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    asyncio.get_running_loop().run_in_executor(None, reports.wait_tick)   # 이미 나와 있으면 바로 만든다(기다리지 않고 답한다)
+    return {"wait": st}
+
+
+@app.delete("/api/reports/wait")
+async def api_reports_wait_cancel(id: str):
+    from . import reports
+    return {"wait": reports.wait_cancel(id)}
+
+
+@app.get("/api/reports/wait/file")
+async def api_reports_wait_file(id: str):
+    """17시 대기로 만들어 둔 파일 받기."""
+    from . import reports
+    try:
+        name, data = reports.wait_file(id)
+    except ValueError as e:
+        raise HTTPException(404, str(e)) from e
+    return Response(data, media_type="application/x-hwp", headers={"Content-Disposition": reports.disposition(name), "Cache-Control": "no-store"})
+
+
+async def _reports_tick() -> None:
+    """17시 대기 — 걸린 것이 있을 때만 한 바퀴(1분마다). 시연에서는 돌지 않는다."""
+    from . import reports
+    if config.DEMO or not reports.wait_any():
+        return
+    try:
+        await asyncio.to_thread(reports.wait_tick)
+    except Exception as e:                                 # noqa: BLE001 — 다음 차례에 다시
+        log.warning("17시 대기 확인 실패: %s", str(e)[:200])
 
 
 @app.post("/api/ai/alert-test")

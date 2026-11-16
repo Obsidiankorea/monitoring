@@ -1,12 +1,21 @@
 "use strict";
 /* ── 보고서 창(오른쪽 위 첫 단추) — 언레이드 재난상황보고서 서버(jaenan-weather)가 만드는 한글 보고서를 받기 · 텔레그램으로 보내기.
-   목록은 서버 등록부(app/reports.py REG)를 그대로 그린다 — 보고서가 늘면 거기 한 줄. 썸네일 img/reports/<id>.png, 없으면 문서 모양 자리표시.
-   서버는 한 번에 한 작업이라 만드는 동안 다른 타일은 기다림 안내. 설정(⚙): 받을 때 텔레그램에도 · 보고서별 옵션(등록부 opts) — 이 브라우저에 기억 */
-const REP = { d: null, g: "전체", busy: null, t0: 0, tick: 0, set: false, back: null, msg: null };
+   목록 · 옵션 정의는 서버 등록부(app/reports.py REG)를 그대로 그린다 — 보고서가 늘면 거기 한 줄. 썸네일 img/reports/<id>.png, 없으면 문서 모양 자리표시.
+   타일 오른쪽 누름(· 메뉴 키 · Shift+F10 · 타일의 ⚙) = 그 보고서 옵션창 — 런처(윈도우 앱) 옵션 가운데 서버에서 되는 것. 이 브라우저에 보고서별로 기억하고,
+   보낼 때는 기본값과 다른 것만(안 보낸 것은 서버 설정을 따른다). 머리 ⚙ = 전체 설정(받을 때 텔레그램에도).
+   17시 대기(등록부 wait) — 서버가 1분마다 묻고, 이 화면은 상태만 1분마다 가볍게(걸린 것이 있을 때만) 물어 타일 · 도구 줄 단추에 표시 */
+const REP = { d: null, g: "전체", busy: null, t0: 0, tick: 0, set: false, back: null, msg: null, w: {}, op: null, opBack: null };
 const repPref = () => { try { return JSON.parse(localStorage.getItem("gn-rep") || "{}"); } catch { return {}; } };
 function repSave(p) { try { localStorage.setItem("gn-rep", JSON.stringify({ ...repPref(), ...p })); } catch {} }
 const repName = cd => { const m = /filename\*=UTF-8''([^;]+)/i.exec(cd || ""); return m ? decodeURIComponent(m[1]) : ""; };
 const REP_TG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 4 3 11l6 2.2M21 4l-3.2 15.5L9 13.2M21 4 9 13.2v5.3l3.2-3.2"/></svg>';
+const REP_CLK = '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2"/><path d="M8 4.6V8l2.4 1.5"/></svg>';
+const repById = id => (REP.d?.reports || []).find(r => r.id === id);
+const repSame = (a, b) => JSON.stringify(a ?? "") === JSON.stringify(b ?? "");
+/* 이 보고서의 저장된 옵션(없으면 기본값) · 서버로 보낼 것(기본값과 다른 것만) · 바뀐 것이 있나 */
+const repVals = r => ({ ...Object.fromEntries(r.opts.map(o => [o.key, o.default])), ...(repPref().opts?.[r.id] || {}) });
+const repSend = r => { const v = repVals(r); return Object.fromEntries(r.opts.filter(o => !repSame(v[o.key], o.default)).map(o => [o.key, v[o.key]])); };
+const repChanged = r => r.opts.some(o => { const s = repPref().opts?.[r.id]; return s && o.key in s && !repSame(s[o.key], o.default); });
 
 async function openRep() {
   REP.back = document.activeElement;
@@ -14,9 +23,10 @@ async function openRep() {
   repDraw();
   try { REP.d = await getJson("/api/reports"); } catch (e) { REP.d = { err: e.message, reports: [], groups: [] }; }
   if (!$("rep").hidden) repDraw();
+  repPoll();
 }
 function closeRep() {
-  $("rep").hidden = true; REP.set = false;
+  $("rep").hidden = true; REP.set = false; REP.op = null;
   if (REP.back?.isConnected) REP.back.focus();
 }
 /* 왜 못 만드나 — 시연 · 토큰 없음 · 다른 보고서를 만드는 중 */
@@ -28,27 +38,103 @@ function repWhy(r) {
   if (REP.busy && REP.busy !== r.id) return "다른 보고서를 만드는 중 — 서버는 한 번에 하나, 끝나면 누르세요";
   return "";
 }
+/* 17시 대기 표시 — 대기 중(시계) · 준비됨(✓, 누르면 저장해 둔 파일) · 그만둠(사유) */
+function repWaitBadge(r) {
+  const w = REP.w[r.id];
+  if (!w) return "";
+  const t = w.state === "waiting" ? "17시 대기 중" : w.state === "ready" ? "17시 보고서 준비됨 — 눌러 받기" : "17시 대기 그만둠";
+  const tip = w.state === "waiting" ? `${w.until?.slice(11, 16)} 까지 1분마다 확인${w.status ? ` — 지금 ${w.status}` : ""}${w.tg ? " · 나오면 텔레그램으로" : ""}`
+    : w.state === "ready" ? `${w.at?.slice(11, 16)} 에 만들었다${w.tg_st === "ok" ? " · 텔레그램으로 보냈다" : w.tg_st ? ` · 텔레그램 실패` : ""}` : w.why || "";
+  return `<div class="rt-w ${escH(w.state)}" title="${escH(tip)}">${w.state === "ready" ? "✓" : REP_CLK}<span>${escH(t)}</span>`
+    + `<button type="button" data-wx="${escH(r.id)}" aria-label="${escH(`${r.name} 17시 대기 ${w.state === "waiting" ? "취소" : "지우기"}`)}">${w.state === "waiting" ? "취소" : "지우기"}</button></div>`;
+}
 function repTile(r) {
-  const why = repWhy(r), busy = REP.busy === r.id, off = !!why || busy, d = REP.d || {};
+  const why = repWhy(r), busy = REP.busy === r.id, off = !!why || busy, d = REP.d || {}, w = REP.w[r.id], rd = w?.state === "ready";
   const th = `<span class="th">${r.thumb ? `<img src="img/reports/${escH(r.id)}.png" alt="" loading="lazy">` : ""}`
     + `<i class="ph" aria-hidden="true"><b></b><u></u><u></u><u></u><u></u><u></u></i>`
     + (busy ? `<em class="run" role="status"><i class="ldbar"><i></i></i>만드는 중 · <span class="sec">${Math.round((Date.now() - REP.t0) / 1000)}</span>초</em>` : "")
-    + (!r.ready ? `<em class="soon">준비 중</em>` : "") + `</span>`;
-  return `<div class="rt${busy ? " busy" : ""}${r.ready ? "" : " off"}">`
-    + `<button type="button" class="rt-main" data-get="${escH(r.id)}"${off ? " disabled" : ""} title="${escH(why || `${r.name} 받기 — 한글 파일(.hwp)`)}" aria-label="${escH(`${r.name} 받기${why ? ` — ${why}` : ""}`)}">`
+    + (!r.ready ? `<em class="soon">준비 중</em>` : "") + (r.ready && repChanged(r) ? `<em class="chg" title="기본값과 다른 옵션이 있다">옵션</em>` : "") + `</span>`;
+  const lab = rd ? `${r.name} — 17시 보고서 받기` : `${r.name} 받기${why ? ` — ${why}` : ""}`;
+  return `<div class="rt${busy ? " busy" : ""}${r.ready ? "" : " off"}${w ? ` w-${escH(w.state)}` : ""}" data-id="${escH(r.id)}">`
+    + `<button type="button" class="rt-main" data-get="${escH(r.id)}"${off && !rd ? " disabled" : ""} title="${escH(rd ? "저장해 둔 17시 보고서를 받는다" : why || `${r.name} 받기 — 한글 파일(.hwp) · 오른쪽 누름: 옵션`)}" aria-label="${escH(lab)}">`
     + `${th}<span class="nm"><b>${escH(r.name)}</b><small>${escH(r.desc)}</small></span></button>`
     + (r.ready ? `<button type="button" class="rt-tg" data-tg="${escH(r.id)}"${off || !d.tg ? " disabled" : ""} aria-label="${escH(`${r.name} 텔레그램으로 보내기`)}"`
-      + ` title="${escH(why || (d.tg ? "텔레그램으로 보내기만(받지 않음)" : "텔레그램 키가 없다 — 설정 › API 키"))}">${REP_TG}</button>` : "")
-    + `</div>`;
+      + ` title="${escH(why || (d.tg ? "텔레그램으로 보내기만(받지 않음)" : "텔레그램 키가 없다 — 설정 › API 키"))}">${REP_TG}</button>`
+      + `<button type="button" class="rt-op" data-op="${escH(r.id)}" aria-label="${escH(`${r.name} 옵션`)}" title="옵션 — 타일 오른쪽 누름 · Shift+F10 과 같다">⚙</button>` : "")
+    + repWaitBadge(r) + `</div>`;
 }
 function repSettings() {
-  const d = REP.d || {}, p = repPref(), opts = (d.reports || []).filter(r => r.ready && r.opts?.length);
-  return `<div class="set" id="rep-set"><b>설정</b>`
+  const d = REP.d || {}, p = repPref();
+  return `<div class="set" id="rep-set"><b>전체 설정</b>`
     + `<label class="ck"><input type="checkbox" id="rep-tg"${p.tg ? " checked" : ""}${d.tg ? "" : " disabled"}> 받을 때 텔레그램에도 보내기${d.tg ? "" : ` <span class="mute">— 텔레그램 키가 없다</span>`}</label>`
-    + opts.map(r => r.opts.map(o => `<label class="op"><span>${escH(r.name)} · ${escH(o.label)}</span>`
-      + `<input type="text" data-opt="${escH(r.id)}|${escH(o.key)}" value="${escH((p.opts?.[r.id] || {})[o.key] || "")}"${o.kind === "datetime" ? ` inputmode="numeric" maxlength="12" placeholder="YYYYMMDDHHMM"` : ""}>`
-      + (o.hint ? `<small class="mute">${escH(o.hint)}</small>` : "") + `</label>`).join("")).join("")
-    + `<p class="mute">이 브라우저에만 기억한다.</p></div>`;
+    + `<p class="mute">보고서별 옵션은 타일을 오른쪽 눌러(또는 타일의 ⚙) 연다 · 이 브라우저에만 기억한다.</p></div>`;
+}
+/* 옵션창 — 등록부 opts 정의대로(묶음 = sec). 일시 · 수 · 고르기 · 여러 개 · 켜고 끄기 · 글 */
+const repDt = v => (v && v.length === 12 ? `${v.slice(0, 4)}-${v.slice(4, 6)}-${v.slice(6, 8)}T${v.slice(8, 10)}:${v.slice(10, 12)}` : "");
+function repField(o, v) {
+  const id = `rep-o-${o.key}`, hint = o.hint ? `<small class="mute">${escH(o.hint)}</small>` : "", k = o.kind;
+  if (k === "bool") return `<label class="ck"><input type="checkbox" id="${id}" data-k="${escH(o.key)}"${v ? " checked" : ""}> ${escH(o.label)}</label>${hint}`;
+  if (k === "multi") return `<fieldset class="mu"><legend>${escH(o.label)}</legend>${o.values.map(([x, t]) => `<label><input type="checkbox" data-k="${escH(o.key)}" value="${escH(x)}"${(v || []).includes(x) ? " checked" : ""}> ${escH(t)}</label>`).join("")}</fieldset>${hint}`;
+  const inp = k === "choice" ? `<select id="${id}" data-k="${escH(o.key)}">${o.values.map(([x, t]) => `<option value="${escH(x)}"${x === v ? " selected" : ""}>${escH(t)}</option>`).join("")}</select>`
+    : k === "int" ? `<input id="${id}" data-k="${escH(o.key)}" type="number" inputmode="numeric" min="${o.min}" max="${o.max}" step="1" value="${escH(String(v ?? ""))}">`
+    : k === "datetime" ? `<input id="${id}" data-k="${escH(o.key)}" type="datetime-local" value="${escH(repDt(v))}">`
+    : `<input id="${id}" data-k="${escH(o.key)}" type="text" maxlength="${o.max || 60}" value="${escH(v ?? "")}">`;
+  return `<label class="fl" for="${id}"><span>${escH(o.label)}${k === "int" ? ` <i class="mute">${o.min}~${o.max}</i>` : ""}</span>${inp}</label>${hint}`;
+}
+function repOpDraw() {
+  const r = repById(REP.op), box = $("rep-op");
+  if (!r) { box.hidden = true; return; }
+  const v = repVals(r), secs = [...new Set(r.opts.map(o => o.sec || "옵션"))], d = REP.d || {}, w = REP.w[r.id];
+  const wait = r.wait ? `<fieldset class="sec wt"><legend>17시 발표 대기</legend>
+      <p class="mute">통보문 · 단기예보(육상)가 오늘 17시 발표로 나올 때까지 서버가 1분마다 확인하다가, 나오면 17시 기준으로 만들어 둔다 — 창을 닫아도 된다. 18:30 까지 안 나오면 그만둔다.</p>
+      <label class="ck"><input type="checkbox" id="rep-wtg"${w ? (w.tg ? " checked" : "") : (repPref().tg ? " checked" : "")}${d.tg ? "" : " disabled"}> 나오면 텔레그램으로 보내기${d.tg ? "" : ` <span class="mute">— 텔레그램 키가 없다</span>`}</label>
+      <div class="row">${w?.state === "waiting" ? `<button type="button" id="rep-wx">17시 대기 취소</button><span class="mute">대기 중 — ${escH(w.until?.slice(11, 16) || "")} 까지${w.status ? ` · 지금 ${escH(w.status)}` : ""}</span>`
+        : `<button type="button" id="rep-wgo"${d.demo || !d.ready ? " disabled" : ""}>17시 발표 대기 걸기</button><span class="mute">${d.demo ? "시연 화면에서는 걸지 않는다" : !d.ready ? "서버 토큰이 없다" : w?.state === "ready" ? "준비된 것이 있다 — 다시 걸면 새로 기다린다" : "지금 옵션으로 만든다"}</span>`}</div></fieldset>` : "";
+  box.hidden = false;
+  box.innerHTML = `<div class="op" role="dialog" aria-modal="true" aria-labelledby="rep-op-t" tabindex="-1">
+    <div class="oh">${r.thumb ? `<img src="img/reports/${escH(r.id)}.png" alt="">` : `<i class="ph" aria-hidden="true"></i>`}<div><b id="rep-op-t">${escH(r.name)} 옵션</b><small class="mute">${escH(r.desc)}</small></div>
+      <button type="button" id="rep-opx" aria-label="옵션 닫기 (Esc)" title="닫기 (Esc)">✕</button></div>
+    <form class="ob" id="rep-of">${secs.map(s => `<fieldset class="sec"><legend>${escH(s)}</legend>${r.opts.filter(o => (o.sec || "옵션") === s).map(o => repField(o, v[o.key])).join("")}</fieldset>`).join("")
+      || `<p class="mute">이 보고서는 고칠 옵션이 없다</p>`}${wait}</form>
+    <p class="msg" id="rep-om" role="status"></p>
+    <div class="of"><button type="button" id="rep-o0">기본값으로</button><span class="sp"></span><button type="button" id="rep-os">저장</button>
+      <button type="button" id="rep-og" class="pri"${repWhy(r) ? " disabled" : ""}>저장하고 받기</button></div></div>`;
+  box.querySelector(".op").focus();
+}
+function repOpOpen(id) {
+  const r = repById(id);
+  if (!r || !r.ready || REP.op === id) return;
+  REP.opBack = document.activeElement; REP.op = id;
+  repOpDraw();
+}
+function repOpClose() {
+  REP.op = null; $("rep-op").hidden = true;
+  if (REP.opBack?.isConnected) REP.opBack.focus();
+}
+/* 옵션창 글 → 값(정의 꼴대로). 범위 밖이면 무엇이 틀렸는지 */
+function repOpRead(r) {
+  const f = $("rep-of"), out = {};
+  for (const o of r.opts) {
+    if (o.kind === "multi") { out[o.key] = [...f.querySelectorAll(`input[data-k="${CSS.escape(o.key)}"]:checked`)].map(x => x.value); continue; }
+    const el = f.querySelector(`[data-k="${CSS.escape(o.key)}"]`);
+    if (o.kind === "bool") out[o.key] = el.checked;
+    else if (o.kind === "int") {
+      const n = Number(el.value);
+      if (!Number.isInteger(n) || n < o.min || n > o.max) throw new Error(`${o.label}은 ${o.min}~${o.max} 사이로`);
+      out[o.key] = n;
+    } else if (o.kind === "datetime") out[o.key] = el.value.replace(/\D/g, "").slice(0, 12);
+    else out[o.key] = el.value.trim();
+  }
+  for (const o of r.opts) if (o.kind === "multi" && !out[o.key].length) throw new Error(`${o.label}을 하나 이상 골라 주세요`);
+  return out;
+}
+function repOpSave(r) {
+  try {
+    const all = { ...(repPref().opts || {}) };
+    all[r.id] = repOpRead(r);
+    repSave({ opts: all });
+    return true;
+  } catch (e) { $("rep-om").textContent = `저장하지 못했다 — ${e.message}`; $("rep-om").className = "msg bad"; return false; }
 }
 function repDraw() {
   const d = REP.d, list = d?.reports || [], gs = ["전체", ...(d?.groups || [])];
@@ -58,28 +144,44 @@ function repDraw() {
     : !d.tg ? "텔레그램 키가 없어 받기만 된다" : "";
   $("rep").innerHTML = `<div class="box" role="dialog" aria-modal="true" aria-labelledby="rep-t" tabindex="-1">
     <div class="top"><b id="rep-t">보고서</b><span class="mute">재난상황보고서 서버에서 한글 파일로</span><span class="sp"></span>
-      <button type="button" id="rep-cog" class="${REP.set ? "on" : ""}" aria-expanded="${REP.set}" aria-controls="rep-set" aria-label="보고서 설정" title="설정 — 텔레그램 · 보고서별 옵션">⚙</button>
+      <button type="button" id="rep-cog" class="${REP.set ? "on" : ""}" aria-expanded="${REP.set}" aria-controls="rep-set" aria-label="전체 설정" title="전체 설정 — 받을 때 텔레그램에도">⚙</button>
       <button type="button" id="rep-x" aria-label="닫기 (Esc)" title="닫기 (Esc)">✕</button></div>
     ${note ? `<p class="note">${escH(note)}</p>` : ""}
     ${REP.set ? repSettings() : ""}
     <nav aria-label="묶음">${gs.map(g => { const n = g === "전체" ? list.length : list.filter(r => r.group === g).length;
       return `<button type="button" data-g="${escH(g)}" aria-pressed="${g === REP.g}" class="${g === REP.g ? "on" : ""}">${escH(g)} <i>${n}</i></button>`; }).join("")}</nav>
     <div class="grid">${shown.map(repTile).join("") || `<p class="mute">이 묶음에는 아직 보고서가 없다</p>`}</div>
-    <p class="msg${REP.msg && !REP.msg.ok ? " bad" : ""}" role="status">${escH(REP.msg?.text || (REP.busy ? "보고서 서버가 만드는 중 — 풍수해보고는 1분 안팎 걸린다" : "타일을 누르면 받는다 · 구석 단추는 텔레그램으로 보내기만"))}</p></div>`;
-  if (!$("rep").hidden && !$("rep").contains(document.activeElement)) $("rep").querySelector(".box").focus();   /* 다시 그려 초점이 빠졌으면 창 안으로 */
+    <p class="msg${REP.msg && !REP.msg.ok ? " bad" : ""}" role="status">${escH(REP.msg?.text || (REP.busy ? "보고서 서버가 만드는 중 — 풍수해보고는 1분 안팎 걸린다" : "타일을 누르면 받는다 · 오른쪽 누름(⚙)은 옵션 · 구석 단추는 텔레그램으로 보내기만"))}</p></div>
+    <div class="opbg" id="rep-op" hidden></div>`;
+  if (REP.op) repOpDraw();
+  else if (!$("rep").hidden && !$("rep").contains(document.activeElement)) $("rep").querySelector(".box").focus();   /* 다시 그려 초점이 빠졌으면 창 안으로 */
+}
+async function repSaveFile(res, fallback) {
+  const blob = await res.blob(), name = repName(res.headers.get("Content-Disposition")) || fallback, a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  return name;
 }
 async function repRun(id, mode) {
+  const r = repById(id);
+  if (!r) return;
+  if (mode === "dl" && REP.w[id]?.state === "ready") {         /* 17시 대기로 만들어 둔 것 */
+    try {
+      const res = await fetch(`/api/reports/wait/file?id=${encodeURIComponent(id)}`);
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || `오류 ${res.status}`);
+      REP.msg = { ok: true, text: `받았다 — ${await repSaveFile(res, `${id}.hwp`)} (17시 보고서)` };
+    } catch (e) { REP.msg = { ok: false, text: `받지 못했다 — ${e.message}` }; }
+    return repDraw();
+  }
   if (REP.busy) return;
   const p = repPref(), dl = mode === "dl", tg = mode === "tg" || (dl && !!p.tg && !!REP.d?.tg);
   REP.busy = id; REP.t0 = Date.now(); REP.msg = null; repDraw();
   REP.tick = setInterval(() => { const e = $("rep").querySelector(".rt.busy .sec"); if (e) e.textContent = Math.round((Date.now() - REP.t0) / 1000); }, 1000);
   try {
-    const res = await fetch("/api/reports/run", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, opts: p.opts?.[id] || {}, tg, dl }) });
+    const res = await fetch("/api/reports/run", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, opts: repSend(r), tg, dl }) });
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || `오류 ${res.status}`);
     if (dl) {
-      const blob = await res.blob(), name = repName(res.headers.get("Content-Disposition")) || `${id}.hwp`, a = document.createElement("a"), t = res.headers.get("X-Tg");
-      a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      const t = res.headers.get("X-Tg"), name = await repSaveFile(res, `${id}.hwp`);
       REP.msg = { ok: t !== "fail", text: `받았다 — ${name}${t === "ok" ? " · 텔레그램에도 보냈다" : t === "fail" ? " · 텔레그램은 보내지 못했다" : ""}` };
     } else {
       const j = await res.json();
@@ -89,32 +191,80 @@ async function repRun(id, mode) {
   clearInterval(REP.tick); REP.busy = null;
   if (!$("rep").hidden) repDraw();
 }
+/* 17시 대기 걸기 · 취소 — 상태는 서버(STATE)에 남는다 */
+async function repWait(id, on) {
+  const r = repById(id), m = $("rep-om");
+  try {
+    const res = on ? await fetch("/api/reports/wait", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, opts: repSend(r), tg: !!$("rep-wtg")?.checked }) })
+      : await fetch(`/api/reports/wait?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(j.detail || `오류 ${res.status}`);
+    REP.w = j.wait || {};
+    REP.msg = { ok: true, text: on ? `${r.name} — 17시 발표 대기를 걸었다(창을 닫아도 서버가 확인한다)` : `${r.name} — 17시 대기를 껐다` };
+  } catch (e) {
+    if (m) { m.textContent = `${on ? "걸지" : "끄지"} 못했다 — ${e.message}`; m.className = "msg bad"; }
+    return;
+  }
+  repMark();
+  if (!$("rep").hidden) repDraw();
+}
+/* 상태 묻기 — 창을 닫아도 도구 줄 단추에 점(대기 중 시계 · 준비됨 초록). 걸린 것이 없으면 처음 한 번만 */
+async function repPoll() {
+  try { REP.w = (await getJson("/api/reports/wait")).wait || {}; } catch { return; }
+  repMark();
+  if (!$("rep").hidden && !REP.busy && !REP.op) repDraw();        /* 옵션창을 고치는 중이면 다시 그리지 않는다 */
+}
+function repMark() {
+  const v = Object.values(REP.w), st = v.some(x => x.state === "ready") ? "ready" : v.some(x => x.state === "waiting") ? "waiting" : "", b = $("b-rep");
+  b.classList.toggle("w-ready", st === "ready"); b.classList.toggle("w-waiting", st === "waiting");
+  const t = st === "ready" ? " — 17시 보고서 준비됨" : st === "waiting" ? " — 17시 발표 대기 중" : "";
+  b.setAttribute("aria-label", `보고서${t}`);
+  b.title = `보고서${t || " — 기상 · 일일 · 풍수해 · 긴급상황보고 한글 파일 받기 · 텔레그램 보내기"}`;
+}
+setInterval(() => { if (Object.keys(REP.w).length && !document.hidden) repPoll(); }, 60e3);
+setTimeout(repPoll, 4000);
 $("rep").addEventListener("click", ev => {
-  const t = ev.target;
+  const t = ev.target, r = repById(REP.op);
+  if (REP.op) {                                              /* 옵션창 — 바깥(옵션창 뒤판) 누름은 옵션창만 닫는다 */
+    if (t.id === "rep-op" || t.closest("#rep-opx")) return repOpClose();
+    if (t.closest("#rep-o0")) { const all = { ...(repPref().opts || {}) }; delete all[r.id]; repSave({ opts: all }); repOpDraw(); $("rep-om").textContent = "기본값으로 돌렸다"; return; }
+    if (t.closest("#rep-os")) { if (repOpSave(r)) { repDraw(); $("rep-om").textContent = "저장했다"; } return; }
+    if (t.closest("#rep-og")) { if (repOpSave(r)) { const id = r.id; repOpClose(); repRun(id, "dl"); } return; }
+    if (t.closest("#rep-wgo")) { if (repOpSave(r)) repWait(r.id, true); return; }
+    if (t.closest("#rep-wx")) return repWait(r.id, false);
+    return;
+  }
   if (t.id === "rep") return closeRep();                     /* 바깥(어두운 뒤판) 누름 */
   if (t.closest("#rep-x")) return closeRep();
   if (t.closest("#rep-cog")) { REP.set = !REP.set; repDraw(); return $("rep-cog").focus(); }
   const g = t.closest("[data-g]");
   if (g) { REP.g = g.dataset.g; repDraw(); return $("rep").querySelector(`[data-g="${CSS.escape(REP.g)}"]`)?.focus(); }
+  const op = t.closest("[data-op]");
+  if (op) return repOpOpen(op.dataset.op);
+  const wx = t.closest("[data-wx]");
+  if (wx) return repWait(wx.dataset.wx, false);
   const a = t.closest("[data-get], [data-tg]");
   if (a && !a.disabled) repRun(a.dataset.get || a.dataset.tg, a.dataset.get ? "dl" : "tg");
 });
-$("rep").addEventListener("change", ev => {
-  const t = ev.target;
-  if (t.id === "rep-tg") repSave({ tg: t.checked });
-  if (t.dataset.opt) {
-    const [id, k] = t.dataset.opt.split("|"), o = { ...(repPref().opts || {}) };
-    o[id] = { ...(o[id] || {}), [k]: t.value.trim() };
-    repSave({ opts: o });
-  }
+$("rep").addEventListener("contextmenu", ev => {
+  const tile = ev.target.closest(".rt[data-id]");
+  if (!tile || REP.op) return;
+  ev.preventDefault();
+  repOpOpen(tile.dataset.id);
 });
-/* Esc 로 닫기 · Tab 가두기 — 창이 열려 있으면 지도 단축키로 넘기지 않는다(문서 단계에서 먼저 받는다) */
+$("rep").addEventListener("change", ev => { if (ev.target.id === "rep-tg") repSave({ tg: ev.target.checked }); });
+/* Esc — 옵션창부터 닫기 · Tab 가두기(위에 뜬 창 안에서) · 메뉴 키 · Shift+F10 = 옵션. 창이 열려 있으면 지도 단축키로 넘기지 않는다 */
 document.addEventListener("keydown", ev => {
   if ($("rep").hidden) return;
   ev.stopPropagation();
-  if (ev.key === "Escape") { ev.preventDefault(); return closeRep(); }
+  if (ev.key === "Escape") { ev.preventDefault(); return REP.op ? repOpClose() : closeRep(); }
+  if (!REP.op && (ev.key === "ContextMenu" || (ev.shiftKey && ev.key === "F10"))) {
+    const tile = document.activeElement?.closest?.(".rt[data-id]");
+    if (tile) { ev.preventDefault(); return repOpOpen(tile.dataset.id); }
+  }
   if (ev.key !== "Tab") return;
-  const box = $("rep").querySelector(".box"), fs = [...box.querySelectorAll("button:not([disabled]), input:not([disabled]), [tabindex='0']")];
+  const box = REP.op ? $("rep-op").querySelector(".op") : $("rep").querySelector(".box");
+  const fs = [...box.querySelectorAll("button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex='0']")].filter(x => x.offsetParent !== null);
   if (!fs.length) return;
   const i = fs.indexOf(document.activeElement);
   if (i < 0) { ev.preventDefault(); (ev.shiftKey ? fs[fs.length - 1] : fs[0]).focus(); }

@@ -2140,3 +2140,50 @@ body.sj-on > header, body.sj-on #stage, body.sj-on #tl, body.sj-on #rail { displ
 #rep .msg { margin: 0; padding: 10px 18px 14px; font-size: 13px; color: var(--ink-2); border-top: 1px solid var(--line); }
 #rep .msg.bad { color: var(--lv-fail); }
 @media (max-width: 480px) { #rep .box { max-width: calc(100vw - 16px); } #rep .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 12px; } #rep .top .mute { display: none; } }
+/* 보고서 — 타일 ⚙(옵션) · 바뀐 옵션 표시 · 17시 대기 배지, 옵션창(창 위의 작은 대화상자), 도구 줄 단추의 대기 점 */
+#rep .rt-op { position: absolute; top: 62px; right: 14px; z-index: 3; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%;
+  font-size: 18px; color: var(--ink-2); background: var(--panel); border: 1px solid var(--line); box-shadow: 0 2px 6px rgba(0,0,0,.25); cursor: pointer; }
+#rep .rt-op:hover { color: var(--ink); border-color: var(--accent); }
+#rep .th .chg { left: 8px; bottom: 8px; padding: 2px 8px; border-radius: 6px; color: var(--ink); background: color-mix(in oklab, var(--accent) 30%, var(--panel)); border: 1px solid var(--accent); }
+#rep .rt-w { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding: 4px 4px 4px 10px; border-radius: 10px; font-size: 12px; font-weight: 700; border: 1px solid var(--line); background: var(--panel-2); }
+#rep .rt-w svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; }
+#rep .rt-w span { flex: 1; min-width: 0; }
+#rep .rt-w button { min-height: 32px; padding: 0 10px; font: 600 12px var(--sans); color: var(--ink-2); background: transparent; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+#rep .rt-w.waiting { color: var(--lv-watch); border-color: color-mix(in oklab, var(--lv-watch) 60%, var(--line)); }
+#rep .rt-w.ready { color: var(--lv-ok); border-color: var(--lv-ok); }
+#rep .rt-w.fail { color: var(--lv-fail); }
+#rep .rt.w-ready .rt-main { border-color: var(--lv-ok); }
+#rep .opbg { position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; background: rgba(4, 8, 14, .5); border-radius: inherit; }
+#rep .opbg[hidden] { display: none; }
+#rep .op { zoom: var(--k, 1); width: 560px; max-width: calc(100vw - 24px); max-height: calc(100vh / var(--k, 1) - 32px); display: flex; flex-direction: column;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 18px 60px rgba(0,0,0,.5); outline: none; color: var(--ink); font-family: var(--sans); }
+#rep .oh { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+#rep .oh img, #rep .oh .ph { width: 42px; aspect-ratio: 210 / 297; border-radius: 4px; background: #fff; flex: none; object-fit: cover; object-position: top; }
+#rep .oh > div { flex: 1; min-width: 0; display: grid; } #rep .oh b { font-size: 16px; }
+#rep .oh button { width: 44px; height: 44px; border: 0; background: transparent; color: var(--ink-2); font-size: 20px; cursor: pointer; border-radius: 10px; }
+#rep .ob { overflow: auto; padding: 4px 14px 10px; display: grid; gap: 4px; }
+#rep .ob .sec { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px 10px; margin: 6px 0 0; display: grid; gap: 6px; min-width: 0; }
+#rep .ob legend { padding: 0 4px; font-weight: 700; font-size: 13px; color: var(--ink-2); }
+#rep .ob .fl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; }
+#rep .ob .fl > span { flex: 1 1 140px; color: var(--ink); }
+#rep .ob input[type=text], #rep .ob input[type=number], #rep .ob input[type=datetime-local], #rep .ob select {
+  height: 40px; min-width: 0; max-width: 100%; padding: 0 10px; font: 500 14px var(--sans); color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; color-scheme: dark light; }
+#rep .ob input[type=number] { width: 96px; font-family: var(--mono); }
+#rep .ob .ck { display: flex; align-items: center; gap: 8px; min-height: 40px; font-size: 13px; cursor: pointer; }
+#rep .ob input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
+#rep .ob .mu { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; }
+#rep .ob .mu legend { padding: 0; margin-bottom: 4px; font-weight: 500; color: var(--ink); }
+#rep .ob .mu label { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; cursor: pointer; }
+#rep .ob small { margin-top: -2px; }
+#rep .ob .wt { border-color: color-mix(in oklab, var(--lv-watch) 50%, var(--line)); }
+#rep .ob .wt p { margin: 0; }
+#rep .ob .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+#rep .ob .row button, #rep .of button { min-height: 44px; padding: 0 14px; font: 600 13px var(--sans); color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+#rep .of button.pri { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+#rep .of button:disabled, #rep .ob .row button:disabled { opacity: .5; cursor: default; }
+#rep .of { display: flex; gap: 8px; align-items: center; padding: 10px 14px 12px; border-top: 1px solid var(--line); } #rep .of .sp { flex: 1; }
+#rep .op .msg { border-top: 0; padding: 0 14px 4px; min-height: 1.4em; }
+#b-rep { position: relative; }
+#b-rep.w-waiting::after, #b-rep.w-ready::after { content: ""; position: absolute; top: 4px; right: 4px; width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--panel); }
+#b-rep.w-waiting::after { background: var(--lv-watch); } #b-rep.w-ready::after { background: var(--lv-ok); }
+@media (max-width: 480px) { #rep .op .of { flex-wrap: wrap; } #rep .op .of .sp { display: none; } #rep .op .of button { flex: 1 1 auto; } }
