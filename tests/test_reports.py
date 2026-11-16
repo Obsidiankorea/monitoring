@@ -172,3 +172,40 @@ def test_wait_api_demo_and_cancel(waitdir, monkeypatch):
     monkeypatch.setattr(config, "DEMO", True)
     assert c.post("/api/reports/wait", json={"id": "weather"}).status_code == 403
     assert c.get("/api/reports").json()["reports"][0]["wait"] is True
+
+
+PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 20
+
+
+def test_logos_proxy_checks_and_masks(keys, monkeypatch):
+    got = []
+
+    def h(req):
+        got.append(req)
+        assert req.headers["Authorization"] == f"Bearer {TOK}"
+        if req.url.path == "/api/logos":
+            if req.method == "POST":
+                return httpx.Response(200, json={"ok": True, "name": req.url.params["name"]})
+            return httpx.Response(200, json={"ok": True, "logos": [{"name": "도민과 함께 경남 대도약", "user": False}], "selected": "도민과 함께 경남 대도약"})
+        if req.url.path == "/api/logos/selected":
+            return httpx.Response(400, json={"ok": False, "error": f"없는 로고입니다 {TOK}"})
+        return httpx.Response(200, content=PNG)
+    c = httpx.Client(transport=httpx.MockTransport(h))
+    assert reports.logos(c)["selected"] == "도민과 함께 경남 대도약"
+    assert reports.logo_upload("2027 로고", PNG, c) == "2027 로고" and got[-1].content == PNG
+    with pytest.raises(ValueError):
+        reports.logo_upload("x", b"GIF89a....", c)                                      # 종류 — jaenan 까지 안 간다
+    with pytest.raises(ValueError):
+        reports.logo_upload("x", PNG + b"0" * reports.LOGO_MAX, c)
+    with pytest.raises(ValueError) as e:
+        reports.logo_select("없음", c)
+    assert TOK not in str(e.value)
+    assert reports.logo_img("x", c) == PNG
+
+
+def test_logos_api_demo_and_upload(keys, monkeypatch):
+    c = TestClient(main.app)
+    monkeypatch.setattr(reports, "logo_upload", lambda name, data: f"{name}:{len(data)}")
+    assert c.post("/api/reports/logos?name=새 로고", content=PNG).json() == {"name": f"새 로고:{len(PNG)}"}
+    monkeypatch.setattr(config, "DEMO", True)
+    assert c.get("/api/reports/logos").status_code == 403 and c.post("/api/reports/logos", content=PNG).status_code == 403

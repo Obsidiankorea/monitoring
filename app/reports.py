@@ -214,6 +214,64 @@ def send_tg(name: str, data: bytes, caption: str = "", client: httpx.Client | No
             c.close()
 
 
+# ── 로고 — 보고서 [로고] 칸 그림(jaenan /api/logos). 토큰은 여기 안에만, 올리기 검사는 이쪽에서도 한 번 더.
+LOGO_MAX = 2 * 1024 * 1024
+
+
+def logo_kind(data: bytes) -> str | None:
+    """그림 종류(머리 바이트로) — png · jpg · webp, 아니면 None."""
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "png"
+    if data[:3] == b"\xff\xd8\xff":
+        return "jpg"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "webp"
+    return None
+
+
+def _jaenan(method: str, path: str, client: httpx.Client | None = None, **kw) -> httpx.Response:
+    if not ready():
+        raise RuntimeError("재난상황보고서 서버 토큰(JAENAN_TOKEN)이 없다 — 설정 › API 키")
+    c = client or httpx.Client(timeout=30)
+    try:
+        r = c.request(method, f"{url()}{path}", headers={"Authorization": f"Bearer {_tok()}", **kw.pop("headers", {})}, **kw)
+    except httpx.HTTPError as e:
+        raise RuntimeError(_mask(f"보고서 서버에 닿지 못했다 — {type(e).__name__}: {e}")) from None
+    finally:
+        if client is None:
+            c.close()
+    if r.status_code != 200:
+        try:
+            why = r.json().get("error")
+        except ValueError:
+            why = ""
+        raise (ValueError if r.status_code == 400 else RuntimeError)(_mask(why or f"보고서 서버 {r.status_code}"))
+    return r
+
+
+def logos(client: httpx.Client | None = None) -> dict:
+    j = _jaenan("GET", "/api/logos", client).json()
+    return {"logos": [{"name": x["name"], "user": bool(x.get("user"))} for x in j.get("logos") or []], "selected": j.get("selected"), "default": j.get("default")}
+
+
+def logo_select(name: str, client: httpx.Client | None = None) -> str:
+    return _jaenan("PUT", "/api/logos/selected", client, json={"name": str(name or "")[:80]}).json().get("selected") or ""
+
+
+def logo_upload(name: str, data: bytes, client: httpx.Client | None = None) -> str:
+    """그림 올리기 — PNG · JPG · WEBP, 2MB 이하(jaenan 이 PNG 로 바꿔 /config/logos 에 둔다). 저장된 이름."""
+    if not data or len(data) > LOGO_MAX:
+        raise ValueError("그림은 2MB 이하로 올려 주세요")
+    if not logo_kind(data):
+        raise ValueError("PNG · JPG · WEBP 그림만 올릴 수 있습니다")
+    return _jaenan("POST", "/api/logos", client, params={"name": str(name or "로고")[:80]}, content=data,
+                   headers={"Content-Type": "application/octet-stream"}).json().get("name") or ""
+
+
+def logo_img(name: str, client: httpx.Client | None = None) -> bytes:
+    return _jaenan("GET", "/api/logos/img", client, params={"name": name}).content
+
+
 def disposition(name: str) -> str:
     """첨부 머리 — 한글 이름은 RFC 5987(filename*), 옛 브라우저용 filename 은 ASCII 로."""
     ascii_ = re.sub(r"[^A-Za-z0-9._-]", "_", name) or "report.hwp"

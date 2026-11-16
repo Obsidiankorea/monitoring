@@ -2191,3 +2191,13 @@ body.sj-on > header, body.sj-on #stage, body.sj-on #tl, body.sj-on #rail { displ
 /* 고정한 지구 카드 — 주소 옆 카카오맵(좌표) 링크. 누름 자리는 넉넉히 */
 .nm small .kk { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; min-height: 32px; margin: -8px 0 -8px 2px; vertical-align: middle; color: var(--accent, #6cb4ff); border-radius: 8px; }
 .nm small .kk:hover, .nm small .kk:focus-visible { background: rgba(255,255,255,.08); }
+/* 보고서 전체 설정 — 로고 고르기(작은 그림 + 이름) · 올리기 */
+#rep .set .lgh { margin-top: 6px; } #rep .set .lgh .mute { font-weight: 400; }
+#rep .set .lg { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+#rep .set .lg button { display: grid; gap: 4px; min-height: 44px; padding: 6px; text-align: left; font: 500 12px var(--sans); color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+#rep .set .lg button.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+#rep .set .lg img { width: 100%; height: 34px; object-fit: contain; background: #fff; border-radius: 4px; }
+#rep .set .lg span { overflow-wrap: anywhere; }
+#rep .set .lgadd { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; min-height: 44px; font-size: 13px; cursor: pointer; }
+#rep .set .lgadd input { font: 12px var(--sans); color: var(--ink-2); max-width: 100%; }
+#rep .set .msg { border: 0; padding: 0; min-height: 1.2em; }

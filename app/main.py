@@ -1104,6 +1104,61 @@ async def api_reports_wait_file(id: str):
     return Response(data, media_type="application/x-hwp", headers={"Content-Disposition": reports.disposition(name), "Cache-Control": "no-store"})
 
 
+def _rep_logo_guard() -> None:
+    if config.DEMO:
+        raise HTTPException(403, "시연 화면에서는 로고를 보거나 올리지 않는다")
+
+
+@app.get("/api/reports/logos")
+async def api_reports_logos():
+    """보고서 [로고] 칸 그림 목록 · 고른 것 — 재난상황보고서 서버(jaenan /api/logos)를 대신 부른다(토큰은 서버 안에만)."""
+    from . import reports
+    _rep_logo_guard()
+    try:
+        return await asyncio.to_thread(reports.logos)
+    except RuntimeError as e:
+        raise HTTPException(502, reports._mask(e)[:200]) from e
+
+
+@app.put("/api/reports/logos/selected")
+async def api_reports_logo_select(body: dict):
+    from . import reports
+    _rep_logo_guard()
+    try:
+        return {"selected": await asyncio.to_thread(reports.logo_select, str(body.get("name") or ""))}
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    except RuntimeError as e:
+        raise HTTPException(502, reports._mask(e)[:200]) from e
+
+
+@app.post("/api/reports/logos")
+async def api_reports_logo_upload(request: Request, name: str = "로고"):
+    """로고 올리기 — 본문 = 그림 바이트(PNG · JPG · WEBP, 2MB 이하). 검사는 여기서도 한 번, jaenan 이 PNG 로 바꿔 둔다."""
+    from . import reports
+    _rep_logo_guard()
+    if int(request.headers.get("content-length") or 0) > reports.LOGO_MAX:
+        raise HTTPException(400, "그림은 2MB 이하로 올려 주세요")
+    data = await request.body()
+    try:
+        return {"name": await asyncio.to_thread(reports.logo_upload, name, data)}
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    except RuntimeError as e:
+        raise HTTPException(502, reports._mask(e)[:200]) from e
+
+
+@app.get("/api/reports/logos/img")
+async def api_reports_logo_img(name: str):
+    from . import reports
+    _rep_logo_guard()
+    try:
+        data = await asyncio.to_thread(reports.logo_img, name)
+    except (ValueError, RuntimeError) as e:
+        raise HTTPException(404, reports._mask(e)[:200]) from e
+    return Response(data, media_type="image/png", headers={"Cache-Control": "private, max-age=300"})
+
+
 async def _reports_tick() -> None:
     """17시 대기 — 걸린 것이 있을 때만 한 바퀴(1분마다). 시연에서는 돌지 않는다."""
     from . import reports

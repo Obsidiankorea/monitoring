@@ -67,7 +67,28 @@ function repSettings() {
   const d = REP.d || {}, p = repPref();
   return `<div class="set" id="rep-set"><b>전체 설정</b>`
     + `<label class="ck"><input type="checkbox" id="rep-tg"${p.tg ? " checked" : ""}${d.tg ? "" : " disabled"}> 받을 때 텔레그램에도 보내기${d.tg ? "" : ` <span class="mute">— 텔레그램 키가 없다</span>`}</label>`
-    + `<p class="mute">보고서별 옵션은 타일을 오른쪽 눌러(또는 타일의 ⚙) 연다 · 이 브라우저에만 기억한다.</p></div>`;
+    + `<p class="mute">보고서별 옵션은 타일을 오른쪽 눌러(또는 타일의 ⚙) 연다 · 이 브라우저에만 기억한다.</p>` + repLogos() + `</div>`;
+}
+/* 로고 — 보고서 [로고] 칸 그림(재난상황보고서 서버 /config/logos + 기본). 고르면 서버 전체에 걸린다(이 브라우저만이 아니다) */
+function repLogos() {
+  const d = REP.d || {}, L = REP.logos;
+  const body = d.demo ? `<p class="mute">시연 화면에서는 로고를 보거나 올리지 않는다</p>` : !d.ready ? `<p class="mute">재난상황보고서 서버 토큰이 없어 로고를 못 본다</p>`
+    : !L ? `<p class="mute">로고 목록을 받는 중…</p>` : L.err ? `<p class="mute">로고 목록을 받지 못했다 — ${escH(L.err)}</p>`
+    : `<div class="lg" role="radiogroup" aria-label="로고 고르기">${L.logos.map(x => `<button type="button" role="radio" aria-checked="${x.name === L.selected}" data-logo="${escH(x.name)}" class="${x.name === L.selected ? "on" : ""}" title="${escH(x.name)}${x.user ? " · 올린 로고" : " · 기본 로고"}">`
+      + `<img src="/api/reports/logos/img?name=${encodeURIComponent(x.name)}" alt=""><span>${x.name === L.selected ? "✓ " : ""}${escH(x.name)}</span></button>`).join("")}</div>`
+      + `<label class="lgadd"><input type="file" id="rep-logo" accept="image/png,image/jpeg,image/webp"> 로고 추가 <span class="mute">PNG · JPG · WEBP, 2MB 이하 — 서버가 PNG 로 바꿔 둔다</span></label>`;
+  return `<b class="lgh">로고 <span class="mute">[로고] 칸이 있는 보고서에 높이 11mm 로 — 서버 설정이라 모두에게 같다</span></b>${body}<p class="msg" id="rep-lm" role="status"></p>`;
+}
+async function repLogoLoad() {
+  if (!REP.d?.ready || REP.d?.demo) return;
+  try { REP.logos = await getJson("/api/reports/logos"); } catch (e) { REP.logos = { err: e.message }; }
+  if (REP.set && !$("rep").hidden && !REP.op) repDraw();
+}
+async function repLogoSend(res, ok) {
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) { $("rep-lm").textContent = `안 됐다 — ${j.detail || res.status}`; $("rep-lm").className = "msg bad"; return; }
+  await repLogoLoad();
+  if ($("rep-lm")) $("rep-lm").textContent = ok(j);
 }
 /* 옵션창 — 등록부 opts 정의대로(묶음 = sec). 일시 · 수 · 고르기 · 여러 개 · 켜고 끄기 · 글 */
 const repDt = v => (v && v.length === 12 ? `${v.slice(0, 4)}-${v.slice(4, 6)}-${v.slice(6, 8)}T${v.slice(8, 10)}:${v.slice(10, 12)}` : "");
@@ -236,7 +257,12 @@ $("rep").addEventListener("click", ev => {
   }
   if (t.id === "rep") return closeRep();                     /* 바깥(어두운 뒤판) 누름 */
   if (t.closest("#rep-x")) return closeRep();
-  if (t.closest("#rep-cog")) { REP.set = !REP.set; repDraw(); return $("rep-cog").focus(); }
+  if (t.closest("#rep-cog")) { REP.set = !REP.set; repDraw(); if (REP.set && !REP.logos) repLogoLoad(); return $("rep-cog").focus(); }
+  const lg = t.closest("[data-logo]");
+  if (lg) {
+    return fetch("/api/reports/logos/selected", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: lg.dataset.logo }) })
+      .then(res => repLogoSend(res, j => `로고를 「${j.selected}」 로 골랐다 — 다음에 만드는 보고서부터`));
+  }
   const g = t.closest("[data-g]");
   if (g) { REP.g = g.dataset.g; repDraw(); return $("rep").querySelector(`[data-g="${CSS.escape(REP.g)}"]`)?.focus(); }
   const op = t.closest("[data-op]");
@@ -252,7 +278,17 @@ $("rep").addEventListener("contextmenu", ev => {
   ev.preventDefault();
   repOpOpen(tile.dataset.id);
 });
-$("rep").addEventListener("change", ev => { if (ev.target.id === "rep-tg") repSave({ tg: ev.target.checked }); });
+$("rep").addEventListener("change", ev => {
+  if (ev.target.id === "rep-tg") repSave({ tg: ev.target.checked });
+  if (ev.target.id === "rep-logo") {                          /* 로고 올리기 — 종류 · 크기는 여기서 먼저(서버도 다시 본다) */
+    const f = ev.target.files[0];
+    if (!f) return;
+    if (!/^image\/(png|jpeg|webp)$/.test(f.type) || f.size > 2 * 1024 * 1024) { $("rep-lm").textContent = "PNG · JPG · WEBP 그림, 2MB 이하만 올릴 수 있다"; $("rep-lm").className = "msg bad"; return; }
+    $("rep-lm").textContent = "올리는 중…";
+    fetch(`/api/reports/logos?name=${encodeURIComponent(f.name.replace(/\.[^.]+$/, ""))}`, { method: "POST", headers: { "content-type": "application/octet-stream" }, body: f })
+      .then(res => repLogoSend(res, j => `「${j.name}」 을 올렸다 — 목록에서 골라 쓴다`));
+  }
+});
 /* Esc — 옵션창부터 닫기 · Tab 가두기(위에 뜬 창 안에서) · 메뉴 키 · Shift+F10 = 옵션. 창이 열려 있으면 지도 단축키로 넘기지 않는다 */
 document.addEventListener("keydown", ev => {
   if ($("rep").hidden) return;
