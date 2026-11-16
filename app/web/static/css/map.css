@@ -2097,3 +2097,46 @@ body.sj-on > header, body.sj-on #stage, body.sj-on #tl, body.sj-on #rail { displ
 #sj .tt .tr span { color: var(--ink-3); } #sj .tt .tr b { font-weight: 500; color: var(--ink); }
 #tip .hud .tfs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 1em .7em; }
 #tip .hud .tf { font-size: .78em; }
+/* 보고서 창(js/08b-reports.js) — 타일 = 등록부 한 줄(A4 썸네일 + 이름 + 한 줄 설명), 구석 단추는 텔레그램으로만 */
+#rep { position: fixed; inset: 0; z-index: 21; display: flex; align-items: center; justify-content: center; background: rgba(4, 8, 14, .55); }
+#rep[hidden] { display: none; }
+#rep .box { zoom: var(--k, 1); width: 900px; max-width: calc(100vw - 32px); max-height: calc(100vh / var(--k, 1) - 48px); display: flex; flex-direction: column;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 24px 80px rgba(0,0,0,.45); outline: none; font-family: var(--sans); color: var(--ink); }
+#rep .top { display: flex; align-items: center; gap: 10px; padding: 14px 18px 10px; border-bottom: 1px solid var(--line); }
+#rep .top b { font-size: 18px; } #rep .top .sp { flex: 1; } #rep .mute { color: var(--ink-3); font-size: 12px; }
+#rep .top button { width: 44px; height: 44px; border-radius: 10px; background: transparent; border: 1px solid transparent; color: var(--ink-2); font-size: 20px; cursor: pointer; }
+#rep .top button:hover, #rep .top button.on { border-color: var(--line); color: var(--ink); background: var(--panel-2); }
+#rep button:focus-visible, #rep input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#rep .note { margin: 10px 18px 0; padding: 8px 12px; font-size: 13px; color: var(--ink); border-left: 3px solid var(--lv-watch); background: var(--panel-2); border-radius: 6px; }
+#rep .set { margin: 10px 18px 0; padding: 10px 14px; display: grid; gap: 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); font-size: 13px; }
+#rep .set .ck { display: flex; gap: 8px; align-items: center; min-height: 44px; cursor: pointer; } #rep .set .ck input { width: 18px; height: 18px; accent-color: var(--accent); }
+#rep .set .op { display: grid; gap: 4px; } #rep .set .op span { color: var(--ink-2); }
+#rep .set .op input { height: 40px; max-width: 240px; padding: 0 10px; font: 600 14px var(--mono); color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+#rep .set p { margin: 0; }
+#rep nav { display: flex; gap: 6px; flex-wrap: wrap; padding: 12px 18px 0; }
+#rep nav button { min-height: 36px; padding: 0 12px; font: 600 13px var(--sans); color: var(--ink-2); background: transparent; border: 1px solid var(--line); border-radius: 999px; cursor: pointer; }
+#rep nav button i { font-style: normal; color: var(--ink-3); font-weight: 500; }
+#rep nav button.on { color: var(--ink); border-color: var(--accent); background: color-mix(in oklab, var(--accent) 18%, transparent); }
+#rep .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 14px; padding: 14px 18px; overflow: auto; }
+#rep .rt { position: relative; min-width: 0; }
+#rep .rt-main { display: flex; flex-direction: column; gap: 8px; width: 100%; padding: 8px; text-align: left; color: inherit; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; cursor: pointer; font: inherit; }
+#rep .rt-main:hover:not(:disabled) { border-color: var(--accent); }
+#rep .rt-main:disabled { cursor: default; } #rep .rt-main:disabled .th img { opacity: .55; } #rep .rt.busy .rt-main { border-color: var(--accent); }
+#rep .th { position: relative; display: block; aspect-ratio: 210 / 297; overflow: hidden; border-radius: 6px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+#rep .th img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top; z-index: 1; }
+#rep .th .ph { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 7%; padding: 14% 12%; }   /* 그림이 없는 보고서 — 문서 모양 자리표시 */
+#rep .th .ph b { height: 7%; width: 70%; align-self: center; background: #C9D4E1; border-radius: 2px; }
+#rep .th .ph u { height: 3%; background: #E3E9F0; border-radius: 2px; } #rep .th .ph u:nth-child(odd) { width: 80%; }
+#rep .th em { position: absolute; z-index: 2; font-style: normal; font-size: 12px; font-weight: 700; }
+#rep .th .soon { left: 8px; top: 8px; padding: 2px 8px; border-radius: 6px; color: var(--ink); background: var(--panel); border: 1px solid var(--line); }
+#rep .th .run { left: 0; right: 0; bottom: 0; display: grid; gap: 6px; padding: 10px; color: #fff; background: rgba(4, 8, 14, .72); }
+#rep .th .run .sec { font-variant-numeric: tabular-nums; }
+#rep .nm { display: grid; gap: 2px; } #rep .nm b { font-size: 14px; } #rep .nm small { font-size: 12px; color: var(--ink-2); line-height: 1.35; }
+#rep .rt.off .nm { color: var(--ink-3); }
+#rep .rt-tg { position: absolute; top: 14px; right: 14px; z-index: 3; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%;
+  color: var(--accent); background: var(--panel); border: 1px solid var(--line); box-shadow: 0 2px 6px rgba(0,0,0,.25); cursor: pointer; }
+#rep .rt-tg svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+#rep .rt-tg:disabled { color: var(--ink-3); cursor: default; opacity: .7; }
+#rep .msg { margin: 0; padding: 10px 18px 14px; font-size: 13px; color: var(--ink-2); border-top: 1px solid var(--line); }
+#rep .msg.bad { color: var(--lv-fail); }
+@media (max-width: 480px) { #rep .box { max-width: calc(100vw - 16px); } #rep .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 12px; } #rep .top .mute { display: none; } }

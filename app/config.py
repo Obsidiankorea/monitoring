@@ -79,7 +79,7 @@ def _load_keys() -> dict[str, str]:
                 continue
             out[k.strip()] = v
     for k in ("ORG_API_KEY", "LAW_OC", "DATA_GO_KR_KEY", "HRFCO_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
-              "DISABLE_SSL_VERIFICATION", "BANGJAE_ID", "BANGJAE_PW",
+              "JAENAN_URL", "JAENAN_TOKEN", "DISABLE_SSL_VERIFICATION", "BANGJAE_ID", "BANGJAE_PW",
               "BANGJAE_BASE"):
         if os.environ.get(k):
             out[k] = os.environ[k]

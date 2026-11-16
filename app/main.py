@@ -1026,6 +1026,44 @@ async def api_ai_alert_put(body: dict):
     return aiwatch.status()
 
 
+@app.get("/api/reports")
+async def api_reports():
+    """보고서 창 — 등록부(app/reports.py REG) · 재난상황보고서 서버 토큰이 있나 · 텔레그램이 준비됐나. 키 값은 내지 않는다."""
+    from . import reports
+    return reports.listing()
+
+
+@app.post("/api/reports/run")
+async def api_reports_run(body: dict):
+    """{id, opts, tg, dl} — 언레이드 jaenan-weather 에서 한글 보고서를 만들어 받는다. dl 이면 첨부로(텔레그램 결과는 X-Tg: ok|fail|off),
+    dl=false 면 텔레그램만 보내고 JSON {ok, name, tg}. 시연(DEMO)에서는 만들지 않는다."""
+    from . import reports
+    if config.DEMO:
+        raise HTTPException(403, "시연 화면에서는 보고서를 만들지 않는다 — 목록만 보인다")
+    rid, tg, dl = str(body.get("id") or ""), body.get("tg") is True, body.get("dl") is not False
+    if not dl and not tg:
+        raise HTTPException(400, "받기나 텔레그램 중 하나는 골라 주세요")
+    try:
+        name, data = await asyncio.to_thread(reports.run, rid, body.get("opts") if isinstance(body.get("opts"), dict) else {})
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    except RuntimeError as e:
+        raise HTTPException(502, reports._mask(e)[:300]) from e
+    st, why = "off", ""
+    if tg:
+        try:
+            await asyncio.to_thread(reports.send_tg, name, data, f"📄 {reports.BY_ID[rid]['name']} — 경남 강수 지도에서 보냄")
+            st = "ok"
+        except RuntimeError as e:
+            st, why = "fail", reports._mask(e)[:200]
+    if not dl:
+        if st == "fail":
+            raise HTTPException(502, why)
+        return {"ok": True, "name": name, "tg": st}
+    return Response(data, media_type="application/x-hwp", headers={"Content-Disposition": reports.disposition(name), "X-Tg": st,
+                                                                   "Access-Control-Expose-Headers": "X-Tg, Content-Disposition", "Cache-Control": "no-store"})
+
+
 @app.post("/api/ai/alert-test")
 async def api_ai_alert_test():
     """시험 발송 — 누르는 사람이 직접 한 번. 기준 판정과 무관한 짧은 글 한 줄."""

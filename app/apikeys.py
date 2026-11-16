@@ -25,6 +25,8 @@ EDITABLE = [
     ("VWORLD_KEY", "브이월드 지오코더", "지구 주소 → 좌표(서버가 켜질 때, 메모리에만) — 지구별 강수 · 산점도", "vworld"),
     ("TELEGRAM_BOT_TOKEN", "텔레그램 봇 토큰", "AI 알림 · 법령 알림", "telegram"),
     ("TELEGRAM_CHAT_ID", "텔레그램 채팅 번호", "알림 받을 곳", "telegram"),
+    ("JAENAN_URL", "재난상황보고서 서버 주소", "보고서 창 — 언레이드 jaenan-weather(비우면 http://100.106.116.92:8765)", "jaenan"),
+    ("JAENAN_TOKEN", "재난상황보고서 서버 토큰", "보고서 창 — 한글 보고서 만들기 · 받기", "jaenan"),
 ]
 NAMES = {n for n, *_ in EDITABLE}
 DOCS = config.ROOT / "docs" / "api"
