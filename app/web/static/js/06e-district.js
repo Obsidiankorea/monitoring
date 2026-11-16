@@ -367,7 +367,7 @@ function districtTip(r, pin = false) {
   const p = dzPct(r), w = DZ_PCT?.[r.id]?.where, col = dzColVar(dzLv(p)), m = dzMiniPlane(r);
   const row = (k, v) => v && v !== "–" ? `<dt>${k}</dt><dd>${escH(v)}</dd>` : "";
   return `<div class="hud${m ? "" : " sm"}">`
-    + `<div class="hd"><span class="bdg">${escH(r.kind || r.fam)}</span><div class="nm"><b>${escH(name)}</b><small>${escH(r.sigun)} ${escH(r.emd)} ${escH(where)}</small></div>`
+    + `<div class="hd"><span class="bdg">${escH(r.kind || r.fam)}</span><div class="nm"><b>${escH(name)}</b><small>${escH(r.sigun)} ${escH(r.emd)} ${escH(where)}${r.pos ? ` <a class="kk" href="https://map.kakao.com/link/map/${encodeURIComponent(name.replace(/[,/]/g, " "))},${(+r.pos[0]).toFixed(5)},${(+r.pos[1]).toFixed(5)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="카카오맵에서 이 자리 보기(지구 좌표)" aria-label="카카오맵에서 ${escH(name)} 자리 보기 — 새 창"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.500C5 14.800 12 21 12 21z"/><circle cx="12" cy="9.500" r="2.500"/></svg></a>` : ""}</small></div>`
     + (p != null ? `<div class="pc" style="--c:${col}"><b>${p}<i>%</i></b><small>${ACC_BASIS === "grid" ? "격자" : "AWS"} 기준${w === "읍면동" ? " · 읍면동 값" : ""}</small></div>` : "") + `</div>`
     + (m ? `<div class="dzs">${m.strip}</div>`
       + `<div class="bd"><div class="lf">${m.bars}${m.two}<div class="goal">${m.head}</div>`

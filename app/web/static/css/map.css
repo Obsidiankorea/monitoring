@@ -2187,3 +2187,7 @@ body.sj-on > header, body.sj-on #stage, body.sj-on #tl, body.sj-on #rail { displ
 #b-rep.w-waiting::after, #b-rep.w-ready::after { content: ""; position: absolute; top: 4px; right: 4px; width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--panel); }
 #b-rep.w-waiting::after { background: var(--lv-watch); } #b-rep.w-ready::after { background: var(--lv-ok); }
 @media (max-width: 480px) { #rep .op .of { flex-wrap: wrap; } #rep .op .of .sp { display: none; } #rep .op .of button { flex: 1 1 auto; } }
+
+/* 고정한 지구 카드 — 주소 옆 카카오맵(좌표) 링크. 누름 자리는 넉넉히 */
+.nm small .kk { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; min-height: 32px; margin: -8px 0 -8px 2px; vertical-align: middle; color: var(--accent, #6cb4ff); border-radius: 8px; }
+.nm small .kk:hover, .nm small .kk:focus-visible { background: rgba(255,255,255,.08); }
