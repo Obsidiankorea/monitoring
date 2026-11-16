@@ -57,7 +57,7 @@ def test_token_never_leaks(keys, monkeypatch):
 
 
 def test_api_download_korean_name_and_tg(keys, monkeypatch):
-    monkeypatch.setattr(reports, "run", lambda rid, opts: ("풍수해보고_202611161358.hwp", HWP))
+    monkeypatch.setattr(reports, "fetch", lambda rid, opts, picked=None: [("풍수해보고_202611161358.hwp", HWP)])
     sent = []
     monkeypatch.setattr(reports, "send_tg", lambda name, data, cap="": sent.append(name))
     c = TestClient(main.app)
@@ -76,10 +76,11 @@ def test_api_download_korean_name_and_tg(keys, monkeypatch):
 
 def test_demo_does_not_make(keys, monkeypatch):
     monkeypatch.setattr(config, "DEMO", True)
-    monkeypatch.setattr(reports, "run", lambda *a: pytest.fail("시연에서 만들면 안 된다"))
+    monkeypatch.setattr(reports, "fetch", lambda *a, **k: pytest.fail("시연에서 만들면 안 된다"))
     c = TestClient(main.app)
     assert c.post("/api/reports/run", json={"id": "weather"}).status_code == 403
     assert c.get("/api/reports").json()["demo"] is True
+    assert c.get("/api/reports/phrases").status_code == 403                             # 시연 — 문구 후보도 안 부른다
 
 
 def test_send_tg_masks_token(monkeypatch):
@@ -209,3 +210,76 @@ def test_logos_api_demo_and_upload(keys, monkeypatch):
     assert c.post("/api/reports/logos?name=새 로고", content=PNG).json() == {"name": f"새 로고:{len(PNG)}"}
     monkeypatch.setattr(config, "DEMO", True)
     assert c.get("/api/reports/logos").status_code == 403 and c.post("/api/reports/logos", content=PNG).status_code == 403
+
+
+def test_meeting_posts_picked_items_and_validates(keys):
+    seen = []
+    files = reports.fetch("meeting", {"kinds": ["호우", "폭염", "눈"], "title": "x" * 99}, _fake(seen),
+                          picked={"중점유의사항": [{"text": " 가 **나** ", "subs": ["- 다", ""]}, {"text": ""}, "bad"],
+                                  "조치계획": [{"text": "라"}] * 99, "evil": [{"text": "x"}]})
+    req = seen[0]
+    assert req.method == "POST" and files[0][1] == HWP
+    assert req.url.params["kinds"] == "호우,폭염" and req.url.params["title"] == "x" * 60
+    import json as _j
+    b = _j.loads(req.content)
+    assert b["중점유의사항"] == [{"text": "가 **나**", "subs": ["- 다"]}] and len(b["조치계획"]) == reports.ITEM_MAX and "evil" not in b
+    by = {r["id"]: r for r in reports.listing()["reports"]}
+    assert by["meeting"]["compose"] == "meeting" and by["meeting"]["thumb"] and by["nature"]["compose"] == ""
+
+
+def _multi(seen: list):
+    def h(req):
+        seen.append(req)
+        if req.url.path.startswith("/api/run/"):
+            ns = ["20261117_010101_combo_combo_1.png", "20261117_010101_combo_combo_2.png"]
+            return httpx.Response(200, json={"ok": True, "names": ns, "files": [f"/files/{n}" for n in ns]})
+        return httpx.Response(200, content=PNG + req.url.path.encode())
+    return httpx.Client(transport=httpx.MockTransport(h))
+
+
+def test_picture_jobs_fetch_all_files_zip_and_tg_each(keys, monkeypatch):
+    files = reports.fetch("combo", {"pages": "2", "theme": "dark"}, _multi(seen := []))
+    assert [n for n, _ in files] == ["combo_1.png", "combo_2.png"] and seen[0].method == "GET"
+    assert dict(seen[0].url.params) == {"pages": "2", "theme": "dark"}
+    with pytest.raises(ValueError):
+        reports.fetch("combo", {"theme": "x"}, _multi([]))
+    import io
+    import zipfile
+    name, data = reports.bundle(files, reports.BY_ID["combo"])
+    assert name.startswith("강수현황 종합_") and name.endswith(".zip")
+    assert zipfile.ZipFile(io.BytesIO(data)).namelist() == ["combo_1.png", "combo_2.png"]
+    assert reports.bundle(files[:1]) == files[0]                                          # 하나면 그대로
+    sent = []
+    monkeypatch.setattr(reports, "fetch", lambda rid, opts, picked=None: files)
+    monkeypatch.setattr(reports, "send_tg", lambda n, d, cap="": sent.append((n, cap)))
+    r = TestClient(main.app).post("/api/reports/run", json={"id": "combo", "tg": True})
+    assert r.headers["content-type"] == "application/zip" and r.headers["x-tg"] == "ok"
+    assert [n for n, _ in sent] == ["combo_1.png", "combo_2.png"] and sent[0][1] and sent[1][1] == ""   # 설명은 첫 장에만
+
+
+def test_send_tg_picks_method_by_type(monkeypatch):
+    monkeypatch.setitem(config.KEYS, "TELEGRAM_BOT_TOKEN", "123:tg-secret")
+    monkeypatch.setitem(config.KEYS, "TELEGRAM_CHAT_ID", "-100")
+    got = []
+    c = httpx.Client(transport=httpx.MockTransport(lambda r: got.append(r) or httpx.Response(200)))
+    for n in ("a.png", "b.gif", "c.hwp", "d.zip"):
+        reports.send_tg(n, b"x", "", c)
+    assert [r.url.path.rsplit("/", 1)[1] for r in got] == ["sendPhoto", "sendAnimation", "sendDocument", "sendDocument"]
+    assert b'name="photo"' in got[0].content and b'name="animation"' in got[1].content
+
+
+def test_phrases_proxy_cached_and_filtered(keys, monkeypatch):
+    monkeypatch.setattr(reports, "_PH", {"t": 0.0, "v": None})
+    calls = []
+
+    def h(req):
+        calls.append(req)
+        assert req.url.path == "/api/phrases/meeting"
+        return httpx.Response(200, json={"ok": True, "유의사항": [{"text": "가", "kinds": ["호우", "눈"], "subs": [], "src": "u"}, {"x": 1}],
+                                         "조치계획": [{"text": "나", "kinds": ["폭염"], "subs": ["- 다"]}]})
+    c = httpx.Client(transport=httpx.MockTransport(h))
+    v = reports.phrases(c)
+    assert v == {"유의사항": [{"text": "가", "kinds": ["호우"], "subs": []}], "조치계획": [{"text": "나", "kinds": ["폭염"], "subs": ["- 다"]}]}
+    assert reports.phrases(c) == v and len(calls) == 1                                    # 5분 캐시
+    monkeypatch.setattr(reports, "phrases", lambda: v)
+    assert TestClient(main.app).get("/api/reports/phrases").json() == v

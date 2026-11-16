@@ -1,7 +1,9 @@
 """보고서 창 — 언레이드 jaenan-weather(재난상황보고서 서버, :8765)가 만드는 한글 보고서를 지도에서 받기 · 텔레그램으로 보내기.
 
   · 등록부 REG — 보고서 한 줄 = {id, name, group, job, desc, opts, ready}. **보고서가 늘면 여기 한 줄**(썸네일은 static/img/reports/<id>.png, 없으면 자리표시).
-  · run(id, opts) → (파일 이름, 바이트). jaenan `GET /api/run/<job>` → `GET /files/<이름>`(둘 다 Authorization: Bearer).
+  · fetch(id, opts, items) → [(파일 이름, 바이트)…]. jaenan `GET /api/run/<job>`(작성 창이 있는 보고서는 POST — 고른 문구를 본문 JSON 으로)
+    → `GET /files/<이름>`(둘 다 Authorization: Bearer). 한글 보고서는 .hwp 하나, 그림 작업(움짤 · 종합 · 특보 · 기온표)은 만든 파일 전부.
+    run() = fetch 를 한 파일로(여럿이면 zip) — 받기 · 17시 대기용. 텔레그램은 파일마다(send_tg — 그림은 사진 · 움짤은 애니메이션).
     jaenan 은 한 번에 한 작업(잠금) · 같은 인자 2분 캐시 — 풍수해는 1분 안팎이라 넉넉히 기다린다.
   · 텔레그램은 gn-monitor 가 직접 sendDocument(키는 aiwatch 와 같은 TELEGRAM_BOT_TOKEN · TELEGRAM_CHAT_ID).
   · 옵션 — 런처(윈도우 앱) 옵션 가운데 서버에서 뜻이 있는 것(jaenan server/jobs.py 인자정의 와 같은 키 · 범위). 화면은 정의대로 그린다.
@@ -24,7 +26,8 @@ from . import config
 
 URL0 = "http://100.106.116.92:8765"
 TIMEOUT = 300                                      # 풍수해보고는 1분 안팎 · 다른 작업이 잠금을 쥐고 있으면 그만큼 더
-GROUPS = ("풍수해", "폭염", "일상", "긴급")
+GROUPS = ("풍수해", "폭염", "일상", "긴급", "그림")
+KINDS = ("호우", "태풍", "강풍", "풍랑", "대설", "한파", "폭염")       # 상황판단회의 재난 종류(문구 kinds 와 같은 말)
 
 
 def _o(key, label, kind, default="", sec="", hint="", **k) -> dict:
@@ -71,7 +74,25 @@ REG = [
               _o("fc_hours", "예측 시간", "choice", "1", "초단기예측", values=[[x, f"{x}시간"] for x in ("1", "2", "3", "6")]),
               _o("fc_per", "시군당 읍면동", "int", 5, "초단기예측", min=1, max=20),
               _o("fc_max", "최대 줄", "int", 50, "초단기예측", min=1, max=200)]},
+    {"id": "meeting", "name": "상황판단회의", "group": "풍수해", "job": "meeting", "ready": True, "compose": "meeting",
+     "desc": "기상전망 · 예상강우 · 특보 + 고른 중점 유의사항 · 조치계획",
+     "opts": [_o("kinds", "재난 종류", "multi", ["호우"], "회의", values=[[x, x] for x in KINDS]),
+              _o("title", "회의 제목", "text", "", "회의", "비우면 「기간 종류 대비」", max=60),
+              _o("start", "기간 시작", "datetime", sec="기간", hint="비우면 전일 00시"),
+              _o("end", "기간 끝", "datetime", sec="기간", hint="비우면 지금")]},
     {"id": "heat", "name": "폭염 상황보고", "group": "폭염", "job": "", "desc": "준비 중 — 재난상황보고서 서버에 아직 없다", "opts": [], "ready": False},
+    {"id": "temp", "name": "3일 기온표", "group": "폭염", "job": "temp", "ready": True,
+     "desc": "시군별 일 최고기온(11~3월은 최저) 3일 + 내일 예상 · 대표지점 외 AWS (그림) — 런처 특보이미지의 기온표",
+     "opts": [_TM, _o("extra_n", "대표지점 외 AWS", "int", 6, "목록", "표 아래 몇 곳", min=0, max=20)]},
+    {"id": "gif", "name": "강수 예측 움짤", "group": "그림", "job": "gif", "ready": True, "opts": [],
+     "desc": "앞으로 N시간 분포도 + 예측 표 (GIF) — 범위 · 시간은 런처 긴급보고서 설정"},
+    {"id": "combo", "name": "강수현황 종합", "group": "그림", "job": "combo", "ready": True,
+     "desc": "지금까지 · 최근 1시간 · 앞으로 · 특보 — 휴대폰 화면 1~2장 (그림)",
+     "opts": [_o("pages", "장 수", "choice", "", "종합", values=[["", "런처 설정대로"], ["1", "1장"], ["2", "2장"]]),
+              _o("theme", "바탕", "choice", "", "종합", values=[["", "런처 설정대로"], ["light", "밝게"], ["dark", "어둡게"]])]},
+    {"id": "alert", "name": "특보이미지", "group": "그림", "job": "alert", "ready": True,
+     "desc": "특보 지도 모자이크 + 지역 목록 (그림) — 표기는 런처 특보이미지 설정",
+     "opts": [_o("wrn", "넣을 특보", "multi", [], "특보", "비우면 런처 설정대로", values=_CODES)]},
 ]
 BY_ID = {r["id"]: r for r in REG}
 THUMBS = config.ROOT / "app" / "web" / "static" / "img" / "reports"   # 썸네일 <id>.png — 없으면 화면이 문서 모양 자리표시
@@ -105,6 +126,7 @@ def _mask(text: object) -> str:
 
 def listing() -> dict:
     return {"reports": [{**{k: r[k] for k in ("id", "name", "group", "desc", "opts", "ready")}, "wait": bool(r.get("wait")),
+                         "compose": r.get("compose") or "",
                          "thumb": (THUMBS / f"{r['id']}.png").is_file()} for r in REG],
             "groups": list(GROUPS),
             "ready": ready(), "tg": tg_ready(), "demo": config.DEMO,
@@ -154,13 +176,74 @@ def file_name(stored: str, r: dict) -> str:
     return m.group(1) if m else (stored or f"{r['name']}_{datetime.now():%Y%m%d%H%M}.hwp")
 
 
+ITEM_MAX, TEXT_MAX, SUB_MAX = 30, 300, 6
+GROUPS_ITEMS = ("중점유의사항", "조치계획")                     # 상황판단회의 Ⅱ장 두 칸(jaenan 서식 칸 이름)
+
+
+def items(raw) -> dict:
+    """작성 창이 고른 문구 → {칸: [{text, subs}]} — 개수 · 길이만 자르고 모르는 꼴은 버린다(jaenan 이 한 번 더 거른다)."""
+    out = {}
+    for g in GROUPS_ITEMS:
+        got = []
+        for x in ((raw or {}).get(g) if isinstance(raw, dict) else None) or []:
+            if not isinstance(x, dict) or not str(x.get("text") or "").strip():
+                continue
+            subs = [str(y).strip()[:TEXT_MAX] for y in (x.get("subs") or []) if str(y).strip()] if isinstance(x.get("subs"), list) else []
+            got.append({"text": str(x["text"]).strip()[:TEXT_MAX], "subs": subs[:SUB_MAX]})
+        out[g] = got[:ITEM_MAX]
+    return out
+
+
+_PH: dict = {"t": 0.0, "v": None}
+PH_TTL = 300                                       # 문구 후보 — 5분 동안 다시 묻지 않는다(jaenan 파일이 바뀌는 일은 드물다)
+
+
+def phrases(client: httpx.Client | None = None) -> dict:
+    """상황판단회의 문구 후보(jaenan GET /api/phrases/meeting) — {유의사항: [...], 조치계획: [...]}, 항목 = {text, kinds, subs}."""
+    import time
+    if _PH["v"] is not None and time.time() - _PH["t"] < PH_TTL:
+        return _PH["v"]
+    j = _jaenan("GET", "/api/phrases/meeting", client).json()
+    pick = lambda xs: [{"text": str(x.get("text") or ""), "kinds": [k for k in x.get("kinds") or [] if k in KINDS],   # noqa: E731
+                        "subs": [str(y) for y in x.get("subs") or []]} for x in xs or [] if isinstance(x, dict) and x.get("text")]
+    v = {"유의사항": pick(j.get("유의사항")), "조치계획": pick(j.get("조치계획"))}
+    _PH.update(t=time.time(), v=v)
+    return v
+
+
+MEDIA = {".hwp": "application/x-hwp", ".hwpx": "application/x-hwp", ".png": "image/png", ".gif": "image/gif", ".zip": "application/zip"}
+
+
+def media(name: str) -> str:
+    return MEDIA.get(name[name.rfind("."):].lower() if "." in name else "", "application/octet-stream")
+
+
+def bundle(files: list[tuple[str, bytes]], r: dict | None = None) -> tuple[str, bytes]:
+    """여러 파일 → zip 하나(이름 = '<보고서>_<시각>.zip'), 하나면 그대로."""
+    if len(files) == 1:
+        return files[0]
+    import io
+    import zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as z:          # 그림 · GIF 는 이미 눌려 있다
+        for n, d in files:
+            z.writestr(n, d)
+    return f"{(r or {}).get('name') or '보고서'}_{datetime.now():%Y%m%d%H%M}.zip", buf.getvalue()
+
+
 class Waiting(Exception):
     """17시 대기 — jaenan 이 '아직 17시 발표 전'(waiting)이라고 답했다. 글 = 지금 상태('통보문 11시 · 단기예보 11시')."""
 
 
 def run(rid: str, opts: dict | None = None, client: httpx.Client | None = None, wait1700: bool = False) -> tuple[str, bytes]:
-    """보고서 하나를 jaenan 에서 만들어 받는다 → (내려받을 이름, 바이트). 실패는 RuntimeError(토큰을 지운 글).
-    wait1700 — 17시 발표가 아직이면 Waiting(만들지 않는다)."""
+    """fetch 를 한 파일로(여럿이면 zip) — (내려받을 이름, 바이트)."""
+    return bundle(fetch(rid, opts, client, wait1700), BY_ID.get(rid))
+
+
+def fetch(rid: str, opts: dict | None = None, client: httpx.Client | None = None, wait1700: bool = False,
+          picked: dict | None = None) -> list[tuple[str, bytes]]:
+    """보고서 하나를 jaenan 에서 만들어 받는다 → [(내려받을 이름, 바이트)…]. 실패는 RuntimeError(토큰을 지운 글).
+    wait1700 — 17시 발표가 아직이면 Waiting(만들지 않는다). picked — 작성 창이 고른 문구(items 꼴, compose 보고서만 — POST 본문)."""
     r = BY_ID.get(rid)
     if not r or not r["ready"]:
         raise ValueError("없거나 아직 준비 중인 보고서입니다")
@@ -172,7 +255,10 @@ def run(rid: str, opts: dict | None = None, client: httpx.Client | None = None, 
     hd = {"Authorization": f"Bearer {_tok()}"}
     c = client or httpx.Client(timeout=TIMEOUT)
     try:
-        res = c.get(f"{url()}/api/run/{r['job']}", params=q, headers=hd)
+        if r.get("compose"):
+            res = c.post(f"{url()}/api/run/{r['job']}", params=q, headers=hd, json=items(picked))
+        else:
+            res = c.get(f"{url()}/api/run/{r['job']}", params=q, headers=hd)
         try:
             j = res.json()
         except ValueError:
@@ -181,12 +267,15 @@ def run(rid: str, opts: dict | None = None, client: httpx.Client | None = None, 
             raise Waiting(_mask(j.get("status") or "17시 발표 전"))
         if res.status_code != 200 or not j.get("ok") or not j.get("files"):
             raise RuntimeError(f"보고서 서버 {res.status_code} — {j.get('error') or '파일을 만들지 못했다'}")
-        f = next((x for x in j["files"] if x.lower().endswith((".hwp", ".hwpx"))), j["files"][0])
-        got = c.get(f"{url()}{f}", headers=hd)
-        if got.status_code != 200 or not got.content:
-            raise RuntimeError(f"보고서 파일을 받지 못했다({got.status_code})")
-        stored = (j.get("names") or [f.rsplit("/", 1)[-1]])[0]
-        return file_name(stored, r), got.content
+        pairs = list(zip(j["files"], j.get("names") or [f.rsplit("/", 1)[-1] for f in j["files"]]))
+        hwp = [x for x in pairs if x[0].lower().endswith((".hwp", ".hwpx"))]
+        out = []
+        for f, stored in hwp[:1] or pairs:          # 한글 보고서는 .hwp 하나, 그림 작업은 전부
+            got = c.get(f"{url()}{f}", headers=hd)
+            if got.status_code != 200 or not got.content:
+                raise RuntimeError(f"보고서 파일을 받지 못했다({got.status_code})")
+            out.append((file_name(stored, r), got.content))
+        return out
     except httpx.HTTPError as e:
         raise RuntimeError(_mask(f"보고서 서버에 닿지 못했다 — {type(e).__name__}: {e}")) from None
     except RuntimeError as e:
@@ -196,15 +285,20 @@ def run(rid: str, opts: dict | None = None, client: httpx.Client | None = None, 
             c.close()
 
 
+TG_KIND = {"image/png": ("sendPhoto", "photo"), "image/gif": ("sendAnimation", "animation")}   # 그 밖은 sendDocument
+
+
 def send_tg(name: str, data: bytes, caption: str = "", client: httpx.Client | None = None) -> None:
-    """텔레그램으로 파일 보내기(sendDocument) — 실패는 RuntimeError(토큰을 지운 글)."""
+    """텔레그램으로 파일 보내기 — 그림은 사진(sendPhoto) · GIF 는 움짤(sendAnimation) · 한글 등은 파일(sendDocument).
+    실패는 RuntimeError(토큰을 지운 글)."""
     tok, chat = config.KEYS.get("TELEGRAM_BOT_TOKEN"), config.KEYS.get("TELEGRAM_CHAT_ID")
     if not tok or not chat:
         raise RuntimeError("텔레그램 키(TELEGRAM_BOT_TOKEN · TELEGRAM_CHAT_ID)가 없다")
     c = client or httpx.Client(timeout=60, verify=config.VERIFY_SSL)
     try:
-        r = c.post(f"https://api.telegram.org/bot{tok}/sendDocument", data={"chat_id": chat, "caption": caption[:1000]},
-                   files={"document": (name, data, "application/octet-stream")})
+        m, field = TG_KIND.get(media(name), ("sendDocument", "document"))
+        r = c.post(f"https://api.telegram.org/bot{tok}/{m}", data={"chat_id": chat, "caption": caption[:1000]},
+                   files={field: (name, data, media(name))})
         if r.status_code != 200:
             raise RuntimeError(f"텔레그램 {r.status_code}")
     except httpx.HTTPError as e:

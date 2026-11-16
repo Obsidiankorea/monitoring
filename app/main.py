@@ -1037,8 +1037,9 @@ async def api_reports():
 
 @app.post("/api/reports/run")
 async def api_reports_run(body: dict):
-    """{id, opts, tg, dl} — 언레이드 jaenan-weather 에서 한글 보고서를 만들어 받는다. dl 이면 첨부로(텔레그램 결과는 X-Tg: ok|fail|off),
-    dl=false 면 텔레그램만 보내고 JSON {ok, name, tg}. 시연(DEMO)에서는 만들지 않는다."""
+    """{id, opts, items, tg, dl} — 언레이드 jaenan-weather 에서 보고서를 만들어 받는다. dl 이면 첨부로(파일이 여럿이면 zip,
+    텔레그램 결과는 X-Tg: ok|fail|off), dl=false 면 텔레그램만 보내고 JSON {ok, name, tg}. 텔레그램은 파일마다.
+    items = 작성 창(상황판단회의)이 고른 문구 {중점유의사항: [{text, subs}], 조치계획: [...]}. 시연(DEMO)에서는 만들지 않는다."""
     from . import reports
     if config.DEMO:
         raise HTTPException(403, "시연 화면에서는 보고서를 만들지 않는다 — 목록만 보인다")
@@ -1046,7 +1047,8 @@ async def api_reports_run(body: dict):
     if not dl and not tg:
         raise HTTPException(400, "받기나 텔레그램 중 하나는 골라 주세요")
     try:
-        name, data = await asyncio.to_thread(reports.run, rid, body.get("opts") if isinstance(body.get("opts"), dict) else {})
+        files = await asyncio.to_thread(reports.fetch, rid, body.get("opts") if isinstance(body.get("opts"), dict) else {},
+                                        picked=body.get("items") if isinstance(body.get("items"), dict) else None)
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
     except RuntimeError as e:
@@ -1054,16 +1056,30 @@ async def api_reports_run(body: dict):
     st, why = "off", ""
     if tg:
         try:
-            await asyncio.to_thread(reports.send_tg, name, data, f"📄 {reports.BY_ID[rid]['name']} — 경남 강수 지도에서 보냄")
+            for i, (n, d) in enumerate(files):
+                await asyncio.to_thread(reports.send_tg, n, d, f"📄 {reports.BY_ID[rid]['name']} — 경남 강수 지도에서 보냄" if not i else "")
             st = "ok"
         except RuntimeError as e:
             st, why = "fail", reports._mask(e)[:200]
+    name, data = reports.bundle(files, reports.BY_ID.get(rid))
     if not dl:
         if st == "fail":
             raise HTTPException(502, why)
         return {"ok": True, "name": name, "tg": st}
-    return Response(data, media_type="application/x-hwp", headers={"Content-Disposition": reports.disposition(name), "X-Tg": st,
+    return Response(data, media_type=reports.media(name), headers={"Content-Disposition": reports.disposition(name), "X-Tg": st,
                                                                    "Access-Control-Expose-Headers": "X-Tg, Content-Disposition", "Cache-Control": "no-store"})
+
+
+@app.get("/api/reports/phrases")
+async def api_reports_phrases():
+    """상황판단회의 작성 창의 문구 후보 — 재난상황보고서 서버(jaenan /api/phrases/meeting)를 대신 부른다(5분 캐시, 토큰은 서버 안에만)."""
+    from . import reports
+    if config.DEMO:
+        raise HTTPException(403, "시연 화면에서는 문구 후보를 불러오지 않는다")
+    try:
+        return await asyncio.to_thread(reports.phrases)
+    except (RuntimeError, ValueError) as e:
+        raise HTTPException(502, reports._mask(e)[:200]) from e
 
 
 @app.get("/api/reports/wait")

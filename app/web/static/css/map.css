@@ -2201,3 +2201,23 @@ body.sj-on > header, body.sj-on #stage, body.sj-on #tl, body.sj-on #rail { displ
 #rep .set .lgadd { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; min-height: 44px; font-size: 13px; cursor: pointer; }
 #rep .set .lgadd input { font: 12px var(--sans); color: var(--ink-2); max-width: 100%; }
 #rep .set .msg { border: 0; padding: 0; min-height: 1.2em; }
+/* 보고서 작성 창(상황판단회의) — 종류 칩 · 제목 · 기간 · 두 묶음 문구 고르기(고른 것은 그 자리에서 고친다). 창 안에서만 굴린다 */
+#rep .op.cmp { width: 720px; }
+#rep .rt-op.cm { top: 14px; }
+#rep .ob .kc { display: flex; flex-wrap: wrap; gap: 6px; }
+#rep .ob .kc button { min-width: 56px; min-height: 44px; padding: 0 14px; font: 600 14px var(--sans); color: var(--ink-2); background: transparent; border: 1px solid var(--line); border-radius: 999px; cursor: pointer; }
+#rep .ob .kc button.on { color: var(--ink); border-color: var(--accent); background: color-mix(in oklab, var(--accent) 18%, transparent); }
+#rep .ob #rep-cm-title { flex: 2 1 260px; }
+#rep .ob .lnk { padding: 0; min-height: 0; font: inherit; color: var(--accent); background: none; border: 0; text-decoration: underline; cursor: pointer; }
+#rep .ob .cm ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+#rep .ob .cm li.ci { border-radius: 8px; padding: 0 6px; }
+#rep .ob .cm li.ci.on { background: color-mix(in oklab, var(--accent) 10%, transparent); padding-bottom: 8px; }
+#rep .ob .cm .ck { align-items: flex-start; padding: 10px 0; min-height: 44px; }
+#rep .ob .cm .ck input { margin-top: 2px; flex: none; }
+#rep .ob .cm .pv { line-height: 1.45; overflow-wrap: anywhere; } #rep .ob .cm .pv b { font-weight: 800; }
+#rep .ob .cm .pv small { display: block; margin-top: 2px; color: var(--ink-2); font-size: 12px; }
+#rep .ob .cm .ed { display: grid; gap: 6px; padding-left: 26px; }
+#rep .ob .cm textarea { width: 100%; min-height: 44px; padding: 8px 10px; resize: vertical; font: 500 13px/1.45 var(--sans); color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; color-scheme: dark light; }
+#rep .ob .cm textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+#rep .ob .cm legend .cnt { font-style: normal; font-weight: 500; color: var(--ink-3); margin-left: 6px; } #rep .ob .cm legend .cnt.warn { color: var(--lv-watch); }
+@media (max-width: 480px) { #rep .ob .cm .ed { padding-left: 0; } }
