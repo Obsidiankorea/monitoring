@@ -101,7 +101,7 @@ async function loadDistrict() {
   drawDistrict(); districtLegend();
   DZ_T = setTimeout(loadDistrict, 5 * 60 * 1000);
 }
-const dzOne = b => b && { v: [b.top, ...(b.series?.v || [])], xy: b.series?.xy || {}, t: b.series?.t || [], pl: b.series?.pl || [], pp: b.series?.pp || [], site: b.series?.site || [], fc: b.fc, obs: b.obs };
+const dzOne = b => b && { st: b.st, v: [b.top, ...(b.series?.v || [])], xy: b.series?.xy || {}, t: b.series?.t || [], pl: b.series?.pl || [], pp: b.series?.pp || [], site: b.series?.site || [], fc: b.fc, obs: b.obs };
 /* 고르지 않은 시군 지구에 마우스를 올리면 — 그 시군 시간별 줄을 그때 받는다(경남 전체 시간별은 수십 초라 미리 받지 않는다). 시군마다 5분에 한 번 */
 const DZ_SQ = new Map();
 function dzSerLoad(sg) {
@@ -316,8 +316,19 @@ function dzTerrainRows(g) {
     + row("취약지역", g.sv ? `산사태취약지역(${escH(g.sv.ty)}) ${g.sv.d}m${g.sv.n > 1 ? ` · 300m 안 ${g.sv.n}곳` : ""}` : "")
     + row("노후", g.bk ? `<span title="사용승인 30년 넘은 목 · 벽돌 · 블록 · 조적 · 석 구조 — 300m 안, 건축물대장이 붙은 ${g.bk}동 가운데(대장 없는 옛집은 못 센다)">오래된 약한 구조 ${g.bo || 0}동${g.bb ? ` · 지하층 ${g.bb}동` : ""} <small>/ 대장 ${g.bk}동</small></span>` : "");
 }
-/* 담당자 연락처 — 고정한 카드에서만(상황판단과 같은 /api/contacts · 잠금 번호). AI 쪽 코드는 부르지 않는다 */
+/* 담당자 연락처 — 고정한 카드에서만(상황판단과 같은 /api/contacts · 잠금 번호). AI 쪽 코드는 부르지 않는다.
+   휴대폰 번호 줄에는 문자 단추 — 상황판단과 같은 회신 링크 문자 미리보기(07b sjRp, 기록은 문자 앱 열기 · 복사 때). 현장 회신 상태도 한 줄(/api/reply/list, 잠금 뒤) */
 const DZ_CT = new Map();
+let DZ_RPL = null;                                           // 현장 회신 현황 {at, by: {지구ID: round}} — 카드를 고정할 때 1분에 한 번만
+const dzMobile = t => /^01\d{8,9}$/.test(String(t || "").replace(/\D/g, ""));   // reply._mobile 과 같은 기준 — 문자를 받을 수 있는 번호
+async function dzReplyState() {
+  if (DZ_RPL && Date.now() - DZ_RPL.at < 60e3) return DZ_RPL.by;
+  try {
+    const res = await fetch("/api/reply/list", { headers: { "x-pin": sjPin() }, cache: "no-store" });
+    DZ_RPL = { at: Date.now(), by: res.ok ? Object.fromEntries((await res.json()).rows.filter(x => x.round?.ask).map(x => [x.rid, x.round])) : {} };
+  } catch { DZ_RPL = { at: Date.now(), by: {} }; }
+  return DZ_RPL.by;
+}
 async function dzContacts(r) {
   const box = $("tip").querySelector(".ctb");
   if (!box) return;
@@ -329,12 +340,22 @@ async function dzContacts(r) {
       if (!c.pin && !c.err) DZ_CT.set(r.sigun, c);
     } catch (e) { c = { err: e.message }; }
   }
+  const rd = !c.pin && !c.err ? (await dzReplyState())[r.id] : null;
   if (!$("tip").contains(box)) return;
   const ppl = c.people?.[r.id] || [];
   box.innerHTML = c.pin ? `<form class="dz-pin"><input type="password" inputmode="numeric" autocomplete="off" placeholder="연락처 잠금 번호"><button>열기</button></form>`
     : c.err ? `<span class="mute">${escH(c.err)}</span>` : c.on === false ? `<span class="mute">연락처 파일이 없다</span>`
-    : ppl.map((p, n) => `<div class="tr"><span>${escH((p.who || "").replace(/담당부서\s*/g, "") || `담당${n + 1}`)}</span>${p.tel ? `<a class="tel" href="tel:${escH(p.tel.replace(/[^0-9-]/g, ""))}">📞 ${escH(p.tel)}</a>` : `<em class="mute">번호 없음</em>`}</div>`).join("")
-      || `<span class="mute">이 지구 담당자가 표에 없다</span>`;
+    : (rd ? `<div class="tr"><span>현장 회신</span><b class="${rd.warn ? "rpw" : ""}">${escH(sjRpTag(rd))}${rd.warn ? ` — ${escH(rd.warn.text)}` : ` · 요청 ${escH(rd.ask.at.slice(11))}`}</b></div>` : "")
+      + (ppl.map((p, n) => {
+        const who = (p.who || "").replace(/담당부서\s*/g, "") || `담당${n + 1}`;
+        return `<div class="tr"><span>${escH(who)}</span>${p.tel ? `<span class="ctl"><a class="tel" href="tel:${escH(p.tel.replace(/[^0-9-]/g, ""))}">📞 ${escH(p.tel)}</a>`
+          + (dzMobile(p.tel) ? `<button type="button" class="sms" data-dzsms="${n}" aria-label="${escH(who)}에게 회신 링크 문자 — 미리보기">✉ 문자</button>` : "") + `</span>` : `<em class="mute">번호 없음</em>`}</div>`;
+      }).join("") || `<span class="mute">이 지구 담당자가 표에 없다</span>`);
+  box.querySelectorAll("[data-dzsms]").forEach(b => b.addEventListener("click", ev => {
+    ev.stopPropagation();
+    sjRp(r.id, { name: dzName(r), fam: r.fam, st: dzSer(r)?.st, basis: SJ_BN[ACC_BASIS === "grid" ? "grid" : "aws"], tel: ppl[+b.dataset.dzsms]?.tel, back: b,
+      after: () => { DZ_RPL = null; dzContacts(r); } });       // 요청을 남기면 이 카드의 담당 칸만 다시
+  }));
   box.querySelector(".dz-pin")?.addEventListener("submit", ev => {
     ev.preventDefault();
     try { localStorage.setItem("gn-ct-pin", ev.target.querySelector("input").value); } catch {}
@@ -342,8 +363,7 @@ async function dzContacts(r) {
   });
 }
 function districtTip(r, pin = false) {
-  const where = [r.ri, r.jibun].filter(x => x && x !== "–").join(" ");
-  const name = r.name && !/구$/.test(r.name) && r.name !== "–" ? r.name : where || r.emd;
+  const where = [r.ri, r.jibun].filter(x => x && x !== "–").join(" "), name = dzName(r);
   const p = dzPct(r), w = DZ_PCT?.[r.id]?.where, col = dzColVar(dzLv(p)), m = dzMiniPlane(r);
   const row = (k, v) => v && v !== "–" ? `<dt>${k}</dt><dd>${escH(v)}</dd>` : "";
   return `<div class="hud${m ? "" : " sm"}">`

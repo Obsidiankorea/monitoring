@@ -1,41 +1,83 @@
 <!doctype html>
 <html lang="ko">
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex">
 <title>현장 회신</title>
-<!-- 지구 하나의 현장 페이지(app/reply.py) — 지구 카드, 상황실 요청, 단계 단추(확인 → 조치 중 → 조치 완료, 한 번 = 스탬프 하나), 진행 단계 표.
-     등록 없이 바로 누른다 — 문자를 받은 사람이 그 지구 담당자(?p= 받는 사람 자리). 맨 위에 '{직급 성명} 님' 확인, 틀리면 다시 입력.
-     ⚠️ 휴대폰 번호는 이 화면 어디에도 안 보인다(링크는 넘겨질 수 있다 — 번호는 상황실에서만). 교대 · 한 명 더 · 링크 넘기기는 맨 아래.
-     비 오는 밖에서 한 손 · 장갑으로 — 밝은 바탕 · 큰 단추(56px↑) · 바깥 자원 없음(글꼴 · 스크립트를 받지 않는다).
+<!-- 지구 하나의 현장 페이지(app/reply.py) — 아래 탭 셋: 조치(강수 카드 · 단계 아이콘 · 상황실 요청 · 단계 단추 · 최근 기록) · 현재상황(비 숫자 · 앞으로 6시간 · 기준 · 지구 카드) · 인수인계(진행 전체 · 담당 교대).
+     등록 없이 바로 누른다 — 문자를 받은 사람이 그 지구 담당자(?p= 받는 사람 자리). 오른쪽 위 이름표로 직급 · 성명을 고친다.
+     ⚠️ 휴대폰 번호는 이 화면 어디에도 안 보인다(링크는 넘겨질 수 있다 — 번호는 상황실에서만).
+     숫자는 서버(/data · /gauge — 상황판단과 같은 판정 줄)가 준 것을 그리기만 한다. 그림은 대시보드 읍면동 카드(막대 = 지금까지 + 앞으로 빗금, 꺾은선 = 지난 → 지금 → 예보)를 본떴다.
+     비 오는 밖에서 한 손 · 장갑으로 — 밝은 바탕 · 터치 44px↑ · 바깥 자원 없음(글꼴 · 스크립트 · 그림을 받지 않는다, 그림은 인라인 SVG).
      ?pv=1 — 상황판단 미리보기 · 상황실 현황에서 연 것. 열람을 찍지 않고 단추도 안 눌린다. 미리보기는 부모 창이 보내는 요청 한 줄(postMessage)을 카드로 -->
 <style>
-:root { --ground: #EEF2F7; --panel: #FFFFFF; --line: #C9D4E1; --ink: #101821; --ink-2: #47596D; --accent: #1B6FA8; --on: #FFFFFF; --ok: #12805A; --bad: #B4401A; --warn: #8A5A00; }
+:root { --ground: #EEF2F7; --panel: #FFFFFF; --line: #C9D4E1; --ink: #101821; --ink-2: #47596D; --accent: #1B6FA8; --on: #FFFFFF; --ok: #12805A; --bad: #B4401A; --warn: #8A5A00; --fc: #7FA9C9; }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--ground); color: var(--ink); font: 17px/1.45 system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
-main { max-width: 560px; margin: 0 auto; padding: 16px 16px 48px; }
+body { margin: 0; background: var(--ground); color: var(--ink); font: 17px/1.45 system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; overflow-x: hidden; }
+main { max-width: 560px; margin: 0 auto; padding: 12px 12px calc(84px + env(safe-area-inset-bottom)); }
 h1 { font-size: 22px; margin: 4px 0 0; }
-.addr { color: var(--ink-2); margin: 0 0 16px; }
-section { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin: 0 0 16px; }
-h2 { font-size: 17px; margin: 0 0 12px; }
+h2 { font-size: 17px; margin: 0 0 10px; }
+section { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin: 0 0 12px; }
 .hint { color: var(--ink-2); font-size: 16px; margin: 8px 0 0; }
-.req { border: 2px solid var(--warn); }
-.req .lab { color: var(--warn); font-weight: 700; font-size: 16px; margin: 0 0 4px; }
-.req p { margin: 0; } .req .msg { font-size: 21px; font-weight: 700; line-height: 1.35; }
-.req .at { margin-top: 6px; }
 .lab { font-weight: 600; font-size: 16px; padding: 0; margin: 0 0 8px; display: block; }
 .opt { font-weight: 400; color: var(--ink-2); }
-.shot { position: relative; display: flex; align-items: center; justify-content: center; min-height: 56px; border: 1.5px dashed var(--accent); border-radius: 10px; color: var(--accent); font-weight: 600; }
-.shot input { position: absolute; opacity: 0; width: 1px; height: 1px; }
-.shot:focus-within { outline: 3px solid var(--ink); outline-offset: 2px; }
-img { display: block; width: 100%; border-radius: 10px; margin: 8px 0; }
-img[hidden] { display: none; }
-input[type=text], input[type=tel], textarea { width: 100%; min-height: 48px; font: inherit; padding: 10px; border: 1.5px solid var(--line); border-radius: 10px; margin-top: 6px; }
-textarea { min-height: 72px; }
-button { min-height: 56px; padding: 0 14px; font: inherit; font-weight: 600; border: 1.5px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--ink); }
+.at { color: var(--ink-2); font-size: 16px; }
+button { min-height: 44px; padding: 0 14px; font: inherit; font-weight: 600; border: 1.5px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--ink); }
 button:focus-visible, a:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
 button.go { width: 100%; min-height: 56px; border: 0; background: var(--ink); color: var(--on); font-weight: 700; }
 button:disabled { opacity: .5; }
+button.link { min-height: 44px; padding: 0; border: 0; background: none; color: var(--accent); font-weight: 600; text-decoration: underline; text-align: left; }
+input[type=text], input[type=tel], textarea { width: 100%; min-height: 48px; font: inherit; padding: 10px; border: 1.5px solid var(--line); border-radius: 10px; margin-top: 6px; }
+textarea { min-height: 72px; }
+img { display: block; width: 100%; border-radius: 10px; margin: 8px 0; }
+img[hidden] { display: none; }
+details { margin-top: 8px; } summary { min-height: 44px; display: flex; align-items: center; color: var(--accent); font-weight: 600; cursor: pointer; }
+.state { margin: 8px 0 0; font-weight: 700; min-height: 1.45em; }
+.state.ok { color: var(--ok); } .state.bad { color: var(--bad); }
+ol { list-style: none; margin: 0; padding: 0; }
+/* 머리 — 지구 이름 · 주소(누르면 지도) · 오른쪽 이름표 */
+.top { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; }
+.top > div { min-width: 0; }
+#addr { font-size: 16px; color: var(--ink-2); text-decoration-color: var(--line); }
+#mechip { flex: none; max-width: 46%; min-height: 48px; padding: 6px 12px; border-radius: 999px; font-size: 16px; font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+#mechip small { display: block; font-weight: 400; font-size: 12px; color: var(--ink-2); }
+.whoami { border: 2px solid var(--accent); }
+.grid2 { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; }
+/* 탭 — 엄지가 닿는 아래에 고정 */
+.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; display: grid; grid-template-columns: repeat(3, 1fr); background: var(--panel); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
+.tabs button { min-height: 56px; border: 0; border-radius: 0; background: none; color: var(--ink-2); font-size: 16px; border-top: 3px solid transparent; }
+.tabs button[aria-selected=true] { color: var(--accent); border-top-color: var(--accent); font-weight: 800; }
+/* 강수 카드 — 대시보드 읍면동 카드 모양: 막대(지금까지 + 앞으로 빗금) · 꺾은선(지난 → 지금 → 예보) */
+#rain { cursor: pointer; }
+.rh { display: flex; align-items: center; gap: 10px; }
+.rh svg.ic { flex: none; width: 48px; height: 48px; }
+.rh .big { font-size: 34px; font-weight: 800; line-height: 1; } .rh .big small { font-size: 16px; font-weight: 600; color: var(--ink-2); margin-left: 2px; }
+.rh .sub { font-size: 12px; color: var(--ink-2); }
+.rh .q { margin-left: auto; text-align: center; border: 1px solid var(--line); border-radius: 10px; padding: 4px 10px; }
+.rh .q b { display: block; font-size: 20px; }
+.badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.badge { font-size: 14px; font-weight: 700; padding: 2px 8px; border-radius: 6px; border: 1.5px solid var(--bad); color: var(--bad); }
+.badge.w { background: var(--bad); color: var(--on); }
+.rb { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.rb .tr { position: relative; flex: 1; height: 14px; border-radius: 4px; background: var(--ground); overflow: hidden; }
+.rb .tr i { position: absolute; top: 0; bottom: 0; }
+.rb .tr i.a { left: 0; background: var(--accent); }
+.rb .tr i.f { background: repeating-linear-gradient(135deg, var(--fc) 0 3px, transparent 3px 6px); border: 1px solid var(--fc); }
+.rb b { font-size: 16px; white-space: nowrap; } .rb b small { color: var(--accent); font-weight: 700; }
+.rl2 { font-size: 12px; color: var(--ink-2); margin-top: 2px; }
+svg.sp { display: block; width: 100%; height: 86px; margin-top: 8px; overflow: visible; }
+/* 단계 아이콘 — 넘은 단계는 채운 색 + '필요' 글자 */
+.stg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; }
+.stg div { border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 4px; text-align: center; min-width: 0; }
+.stg svg { width: 28px; height: 28px; display: block; margin: 0 auto 2px; }
+.stg b { display: block; font-size: 16px; } .stg span { display: block; font-size: 14px; color: var(--ink-2); overflow-wrap: anywhere; }
+.stg .need { background: var(--bad); border-color: var(--bad); color: var(--on); } .stg .need span { color: var(--on); font-weight: 800; font-size: 16px; }
+.stg .soon { border-color: var(--warn); } .stg .soon span { color: var(--warn); font-weight: 700; }
+/* 상황실 요청 · 단추 */
+.req { border: 2px solid var(--warn); }
+.req .lab { color: var(--warn); font-weight: 700; margin: 0 0 4px; }
+.req p { margin: 0; } .req .msg { font-size: 20px; font-weight: 700; line-height: 1.35; }
+.req .at { margin-top: 4px; }
 .stp { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .stp button { min-height: 56px; padding: 4px 2px; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.2; }
 .stp button.next { background: var(--accent); border-color: var(--accent); color: var(--on); font-weight: 800; }
@@ -43,15 +85,15 @@ button:disabled { opacity: .5; }
 .stp small { font-size: 12px; font-weight: 500; }
 .mini { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 6px; }
 .mini button { min-height: 44px; padding: 0 2px; font-size: 16px; font-weight: 500; color: var(--ink-2); }
-#act h2 { margin-bottom: 8px; }
-#notebox { margin-top: 6px; } #notebox summary { min-height: 44px; font-size: 16px; }
-/* 지금 날씨 — 늘 보이는 짧은 띠(특보는 글자로) */
-#wx { margin: 0 0 16px; padding: 10px 16px; background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 12px; }
-#wx p { margin: 0; font-size: 16px; } #wx p.al { font-weight: 700; } #wx small { display: block; margin-top: 4px; font-size: 13px; color: var(--ink-2); }
-/* 지금 비와 기준 — 막대(100% 선) · 숫자 · 글자 함께. 기본은 요약 한 줄 */
-#gauge { margin: 0 0 16px; padding: 4px 16px 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
-#gauge summary { font-size: 16px; color: var(--ink); font-weight: 600; flex-wrap: wrap; gap: 4px; }
-#gauge summary span { color: var(--ink-2); font-weight: 400; }
+.shot { position: relative; display: flex; align-items: center; justify-content: center; min-height: 56px; border: 1.5px dashed var(--accent); border-radius: 10px; color: var(--accent); font-weight: 600; }
+.shot input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.shot:focus-within { outline: 3px solid var(--ink); outline-offset: 2px; }
+#recent li { padding: 4px 0; font-size: 16px; border-top: 1px solid var(--line); } #recent li:first-child { border-top: 0; }
+/* 현재상황 */
+.nums { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.nums div { text-align: center; border: 1px solid var(--line); border-radius: 10px; padding: 6px 2px; }
+.nums b { display: block; font-size: 20px; } .nums span { font-size: 12px; color: var(--ink-2); }
+svg.hb { display: block; width: 100%; height: 120px; }
 .gs { margin: 10px 0 4px; }
 .gs .h { display: flex; justify-content: space-between; gap: 8px; font-weight: 700; }
 .gs .h em { font-style: normal; font-weight: 600; color: var(--ink-2); } .gs .h em.met { color: var(--bad); }
@@ -60,19 +102,19 @@ button:disabled { opacity: .5; }
 .bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 6px; background: var(--accent); }
 .bar i.met { background: var(--bad); }
 .bar::after { content: "100%"; position: absolute; left: 100%; top: -4px; padding-left: 4px; font-size: 11px; color: var(--ink-2); border-left: 2px solid var(--ink); height: 18px; }
+details.gs > summary { display: block; min-height: 44px; cursor: pointer; list-style: none; color: inherit; font-weight: inherit; }
+details.gs > summary::-webkit-details-marker { display: none; }
+details.gs > summary .h::after { content: "▾"; margin-left: 6px; color: var(--ink-2); } details.gs[open] > summary .h::after { content: "▴"; }
 .gp { font-size: 14px; color: var(--ink-2); margin: 4px 0 0; }
 .gsv { display: block; width: 100%; height: 64px; margin-top: 6px; }
 .gm { font-size: 13px; color: var(--ink-2); margin: 8px 0 0; }
-.who { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
-.who:first-of-type { border-top: 0; padding-top: 0; }
-.who b { flex: 1 1 100%; } .who a { color: var(--accent); font-weight: 600; flex: 1; min-height: 48px; display: flex; align-items: center; }
-.me { font-size: 14px; font-weight: 600; color: var(--ok); border: 1px solid var(--ok); border-radius: 999px; padding: 0 8px; margin-left: 6px; }
-.state { margin: 10px 0 0; font-weight: 700; min-height: 1.45em; }
-.state.ok { color: var(--ok); } .state.bad { color: var(--bad); }
-ol { list-style: none; margin: 0; padding: 0; }
-.at { color: var(--ink-2); font-size: 16px; }
-.grid2 { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; }
-/* 단계 표 — 지난 단계는 시각과 함께 채우고, 다음 단계를 강조 */
+.card dl { margin: 0; } .card dl div { display: grid; grid-template-columns: 76px 1fr; gap: 8px; padding: 4px 0; font-size: 16px; }
+.card dt { color: var(--ink-2); } .card dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.card dd.clip { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.card dd button.link { display: inline-flex; align-items: center; margin-right: 10px; }
+.card > button { margin-top: 4px; color: var(--accent); border-color: var(--accent); }
+#wxl p { margin: 0 0 4px; font-size: 14px; color: var(--ink-2); } #wxl p.al { color: var(--ink); font-weight: 700; font-size: 16px; }
+/* 인수인계 */
 .tl li { position: relative; padding: 0 0 14px 30px; }
 .tl li::before { content: ""; position: absolute; left: 7px; top: 4px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line); background: var(--panel); }
 .tl li::after { content: ""; position: absolute; left: 14px; top: 22px; bottom: 0; width: 2px; background: var(--line); }
@@ -85,33 +127,25 @@ ol { list-style: none; margin: 0; padding: 0; }
 .ev { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 8px; }
 .ev li { padding: 6px 0; font-size: 16px; }
 .ev li.x { text-decoration: line-through; color: var(--ink-2); }
-.card { margin: 0 0 16px; padding: 12px 16px; }
-.card dl { margin: 0; } .card div { display: grid; grid-template-columns: 76px 1fr; gap: 8px; padding: 4px 0; font-size: 16px; }
-.card dt { color: var(--ink-2); } .card dd { margin: 0; }
-.card dd.clip { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.card button { min-height: 44px; margin-top: 4px; color: var(--accent); border-color: var(--accent); }
-.top { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; }
-.top > div { min-width: 0; }
-#mechip { flex: none; max-width: 46%; min-height: 48px; padding: 6px 12px; border-radius: 999px; font-size: 16px; font-weight: 600; text-align: right; overflow-wrap: anywhere; }
-#mechip small { display: block; font-weight: 400; font-size: 12px; color: var(--ink-2); }
-.whoami { border: 2px solid var(--accent); }
-.whoami .line { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.whoami .line b { flex: 1 1 100%; font-size: 19px; }
-.whoami .line button { flex: 1; }
-.whoami .line button.ok { background: var(--accent); border-color: var(--accent); color: var(--on); }
-.whoami.done { border-width: 1px; padding: 8px 16px; }
-.whoami.done .line b { flex: 1; font-size: 16px; font-weight: 600; } .whoami.done .line button { flex: none; min-height: 48px; }
+.who { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+.who:first-of-type { border-top: 0; padding-top: 0; }
+.who b { flex: 1 1 100%; }
+.me { font-size: 14px; font-weight: 600; color: var(--ok); border: 1px solid var(--ok); border-radius: 999px; padding: 0 8px; margin-left: 6px; }
 .foot { color: var(--ink-2); font-size: 14px; text-align: center; margin: 8px 0 0; }
-details { margin-top: 12px; } summary { min-height: 48px; display: flex; align-items: center; color: var(--accent); font-weight: 600; cursor: pointer; }
+/* 지도 고르기 — 아래에서 올라오는 작은 판 */
+#maps { position: fixed; left: 0; right: 0; bottom: 0; z-index: 9; margin: 0; border-radius: 16px 16px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); box-shadow: 0 -8px 24px rgba(16, 24, 33, .18); }
+#maps a { display: flex; align-items: center; justify-content: center; min-height: 48px; margin: 6px 0; border: 1.5px solid var(--accent); border-radius: 10px; color: var(--accent); font-weight: 700; text-decoration: none; }
+#maps p { margin: 0 0 6px; font-size: 16px; overflow-wrap: anywhere; }
+#maps button { width: 100%; margin-top: 4px; }
 </style>
 <main>
   <header class="top"><div><h1 id="name">불러오는 중…</h1>
-  <p class="addr" id="addr"></p></div>
-  <button type="button" id="mechip" hidden></button></header>
+    <button type="button" class="link" id="addr" aria-label="지구 위치 — 지도 앱에서 보기"></button></div>
+    <button type="button" id="mechip" hidden></button></header>
   <section class="whoami" id="whoami" hidden>
     <div class="line" id="wholine"></div>
     <form id="join" hidden>
-      <h3 id="joinhead" style="font-size:16px;margin:12px 0 8px"></h3>
+      <h3 id="joinhead" style="font-size:16px;margin:0 0 8px"></h3>
       <div class="grid2">
         <label class="lab">직급<input type="text" name="rank" maxlength="20" autocomplete="organization-title"></label>
         <label class="lab">성명<input type="text" name="name" maxlength="20" autocomplete="name" required></label>
@@ -121,71 +155,112 @@ details { margin-top: 12px; } summary { min-height: 48px; display: flex; align-i
     </form>
     <p class="state" id="wstate" role="status"></p>
   </section>
-  <section class="card" id="card" hidden></section>
-  <section id="wx" hidden aria-label="지금 날씨"></section>
-  <details id="gauge" hidden><summary></summary><div id="gbody"></div></details>
 
-  <section class="req" id="req" hidden></section>
+  <div id="t-act" role="tabpanel" aria-labelledby="tb-act">
+    <section id="rain" hidden role="link" tabindex="0" aria-label="지금 비 — 누르면 현재상황"></section>
+    <section id="stg" hidden aria-label="지금 필요한 조치"></section>
+    <section class="req" id="req" hidden></section>
+    <section id="act">
+      <div id="btns"></div>
+      <p class="state" id="astate" role="status"></p>
+      <details id="notebox"><summary>사진 · 메모 덧붙이기</summary>
+      <form id="note">
+        <span class="lab">방금 누른 것에 덧붙이기 <span class="opt">(없어도 됩니다)</span></span>
+        <img id="shotimg" alt="보낼 현장 사진" hidden>
+        <label class="shot"><input type="file" id="shot" accept="image/*" capture="environment"><span id="shotlab">사진 찍기</span></label>
+        <label class="lab" style="margin-top:12px">덧붙일 말<textarea name="memo" maxlength="500" style="font-weight:400"></textarea></label>
+        <button class="go" style="margin-top:8px">덧붙이기</button>
+        <p class="state" id="nstate" role="status"></p>
+      </form></details>
+    </section>
+    <section id="recentbox" hidden><h2>최근 기록</h2><ol id="recent"></ol><button type="button" class="link" id="allrec">전체 보기</button></section>
+  </div>
 
-  <section id="act">
-    <h2>지금 상황 누르기</h2>
-    <div id="btns"></div>
-    <p class="state" id="astate" role="status"></p>
-    <details id="notebox"><summary>사진 · 메모 덧붙이기</summary>
-    <form id="note">
-      <span class="lab">방금 누른 것에 덧붙이기 <span class="opt">(없어도 됩니다)</span></span>
-      <img id="shotimg" alt="보낼 현장 사진" hidden>
-      <label class="shot"><input type="file" id="shot" accept="image/*" capture="environment"><span id="shotlab">사진 찍기</span></label>
-      <label class="lab" style="margin-top:12px">덧붙일 말<textarea name="memo" maxlength="500" style="font-weight:400"></textarea></label>
-      <button class="go" style="margin-top:8px">덧붙이기</button>
-      <p class="state" id="nstate" role="status"></p>
-    </form></details>
-  </section>
+  <div id="t-now" role="tabpanel" aria-labelledby="tb-now" hidden>
+    <section id="nums" hidden></section>
+    <section id="hours" hidden></section>
+    <section id="std" hidden></section>
+    <section class="card" id="card" hidden></section>
+    <div id="wxl"></div>
+  </div>
 
-  <section><h2>진행</h2><div id="tl"></div></section>
+  <div id="t-log" role="tabpanel" aria-labelledby="tb-log" hidden>
+    <section><h2>진행</h2><div id="tl"></div></section>
+    <section id="people-box">
+      <h2>등록한 담당자</h2>
+      <div id="people"></div>
+      <button id="add" style="width:100%;margin-top:8px">함께 맡는 사람 한 명 더 등록</button>
+      <p class="state" id="pstate" role="status"></p>
+      <button id="share" style="width:100%">이 링크를 다른 담당자에게 넘기기</button>
+      <p class="hint">담당자는 2명까지입니다. 직급 · 성명은 이 링크를 가진 사람에게 보이고, 휴대폰 번호는 재난상황실에만 보입니다.</p>
+    </section>
+    <section id="pastbox" hidden><h2>지난 담당자</h2><ol id="past"></ol></section>
+    <p class="foot">이 링크를 받은 분이 담당자로 기록됩니다.</p>
+  </div>
 
-  <details id="duty"><summary>담당이 바뀌었나요? — 교대 · 한 명 더 · 링크 넘기기</summary>
-  <section id="people-box">
-    <h2>등록한 담당자</h2>
-    <div id="people"></div>
-    <button id="add" style="width:100%;margin-top:8px">함께 맡는 사람 한 명 더 등록</button>
-    <p class="state" id="pstate" role="status"></p>
-    <button id="share" style="width:100%">이 링크를 다른 담당자에게 넘기기</button>
-    <p class="hint">담당자는 2명까지입니다. 직급 · 성명은 이 링크를 가진 사람에게 보이고, 휴대폰 번호는 재난상황실에만 보입니다.</p>
-  </section>
-
-  <section id="pastbox" hidden><h2>지난 담당자</h2><ol id="past"></ol></section>
-  </details>
-  <p class="foot">이 링크를 받은 분이 담당자로 기록됩니다.</p>
+  <section id="maps" hidden role="dialog" aria-modal="true" aria-label="지도 앱 고르기"></section>
 </main>
+<nav class="tabs" role="tablist" aria-label="화면 고르기">
+  <button type="button" role="tab" id="tb-act" data-t="act" aria-controls="t-act">조치</button>
+  <button type="button" role="tab" id="tb-now" data-t="now" aria-controls="t-now">현재상황</button>
+  <button type="button" role="tab" id="tb-log" data-t="log" aria-controls="t-log">인수인계</button>
+</nav>
 <script>
 const Q = new URLSearchParams(location.search), base = location.pathname.replace(/\/$/, ""), KEY = "me:" + base, PV = Q.has("pv"), P = Q.get("p") || "";
 const $ = s => document.querySelector(s);
 const el = (tag, text, cls) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; };
+const svgEl = html => { const t = document.createElement("template"); t.innerHTML = html.trim(); return t.content.firstChild; };   // 숫자만 넣은 인라인 그림
 const say = (id, cls, text) => { $(id).className = "state " + cls; $(id).textContent = text; };
 const day = s => `${+s.slice(5, 7)}.${+s.slice(8, 10)}. ${s.slice(11)}`;
 const ago = s => { const m = Math.max(0, Math.round((Date.now() - new Date(s.replace(" ", "T"))) / 60000)); return m < 60 ? `${m}분 전` : `${Math.floor(m / 60)}시간 ${m % 60}분 전`; };
+const num = v => (v == null ? "—" : +(+v).toFixed(v >= 10 ? 0 : 1));
 const LAB = { ack: "확인했습니다", doing: "조치 중", done: "조치 완료", na: "해당 없음", help: "지원 필요" };
-let me = null, photo = null, D = null, PVNOTE = null, CARDOPEN = false, FORM = null;   // FORM — 이름 칸: fix(아닙니다) · add(한 명 더) · null
+let me = null, photo = null, D = null, G = null, PVNOTE = null, CARDOPEN = false, FORM = null;   // FORM — 이름 칸: fix(다시 입력) · add(한 명 더) · null
 try { me = +localStorage.getItem(KEY) || null; } catch {}
 const setMe = id => { me = id; try { id ? localStorage.setItem(KEY, id) : localStorage.removeItem(KEY); } catch {} };
-const okKey = () => (me ? `u${me}` : P);                          // '맞습니다'를 누른 자리 — 이 휴대폰에 기억
-const isOk = () => { try { return !!okKey() && localStorage.getItem(KEY + ":ok") === okKey(); } catch { return false; } };
+const okKey = () => (me ? `u${me}` : P);
 const setOk = () => { try { localStorage.setItem(KEY + ":ok", okKey()); } catch {} };
 
-/* 본인 확인 — 링크의 받는 사람(p) 또는 이 휴대폰에서 등록한 사람. 확인을 안 눌러도 단추는 눌린다(그 이름으로 기록) */
+/* 탭 — 고른 것은 이 세션 동안만 기억 */
+function tab(t) {
+  document.querySelectorAll(".tabs [role=tab]").forEach(b => b.setAttribute("aria-selected", b.dataset.t === t));
+  for (const k of ["act", "now", "log"]) $(`#t-${k}`).hidden = k !== t;
+  try { sessionStorage.setItem("tab:" + base, t); } catch {}
+}
+document.querySelectorAll(".tabs [role=tab]").forEach(b => { b.onclick = () => { tab(b.dataset.t); scrollTo(0, 0); }; });
+tab((() => { try { return sessionStorage.getItem("tab:" + base) || "act"; } catch { return "act"; } })());
+
+/* 지도 앱으로 — 웹 주소만(앱 전용 스킴은 앱이 없으면 죽는다). 좌표가 정확하면 좌표, 아니면 지명 검색. 개인정보는 넣지 않는다(지명 · 좌표만) */
+function mapLinks(q, pos, name) {
+  const e = encodeURIComponent;
+  return [["카카오맵", pos ? `https://map.kakao.com/link/map/${e(name)},${pos[0]},${pos[1]}` : `https://map.kakao.com/link/search/${e(q)}`],
+    ["네이버 지도", `https://map.naver.com/p/search/${e(q)}`],
+    ["구글 지도", pos ? `https://www.google.com/maps/search/?api=1&query=${pos[0]},${pos[1]}` : `https://www.google.com/maps/search/?api=1&query=${e(q)}`]];
+}
+const NOTPLACE = /^\s*$|해당\s*없|^\s*없음\s*$|^\s*[-–—]\s*$|\d+\s*개소/;   // 장소 이름이 아닌 값 — 링크를 달지 않는다
+const places = s => String(s || "").split(/\s*[,·ㆍ\n]\s*/).filter(x => !NOTPLACE.test(x));
+function openMaps(title, q, pos, name) {
+  if (PV) return;
+  const box = $("#maps");
+  box.replaceChildren(el("p", title), ...mapLinks(q, pos, name).map(([n, href]) => { const a = el("a", n); a.href = href; a.target = "_blank"; a.rel = "noopener"; return a; }),
+    Object.assign(el("button", "닫기"), { type: "button", onclick: () => { box.hidden = true; } }));
+  box.hidden = false;
+  box.querySelector("a").focus();
+}
+addEventListener("keydown", e => { if (e.key === "Escape") $("#maps").hidden = true; });
+const area = () => (D?.addr || "").split(" ").slice(0, 2).join(" ");      // '창원시 북면' — 대피장소 검색어 앞에 붙여 엉뚱한 곳을 덜 찾게
+$("#addr").onclick = () => D && openMaps(`${D.name} — ${D.addr}`, `${D.addr} ${D.name}`, G?.pos && !G.pos.some(x => x == null) ? G.pos : null, D.name);
+
+/* 이름표 · 이름 고치기 — 단추는 늘 바로 눌린다(그 이름으로 기록) */
 function drawWho(d) {
   const box = $("#whoami"), mine = d.people.find(p => p.id === me), w = mine || d.pwho, name = w ? `${w.rank} ${w.name}`.trim() : "";
-  // 오른쪽 위 이름표 — 지금 누구 이름으로 기록되는지. 누르면 직급 · 성명을 고친다(확인 단계는 없다 — 단추는 바로 눌린다)
   const chip = $("#mechip");
   chip.hidden = PV;
   chip.replaceChildren(name || "담당자", el("small", name ? "바꾸기" : "이름 넣기"));
   chip.setAttribute("aria-label", `${name || "담당자"} 이름으로 기록됩니다 — 눌러서 바꾸기`);
   chip.onclick = () => { FORM = FORM ? null : "fix"; draw(D); };
   box.hidden = PV || !FORM;
-  $("#wholine").replaceChildren();
-  const open = !!FORM;
-  $("#join").hidden = !open;
+  $("#join").hidden = !FORM;
   $("#joinhead").textContent = FORM === "add" ? "함께 맡는 사람 한 명 더" : w ? "직급 · 성명을 다시 넣어 주세요" : "담당자 직급 · 성명을 넣어 주세요";
 }
 
@@ -196,6 +271,7 @@ async function post(path, body) {
 }
 
 /* 단계 표 — 서버(reply.rounds)가 센 것을 그리기만 한다(상황판단 · 현황 화면도 같은 목록) */
+const evText = x => `${x.t} · ${x.who ? x.who + " · " : ""}${x.label}${x.x ? " (취소됨)" : ""}${x.memo ? " — " + x.memo : ""}`;
 function tlList(r) {
   const ol = el("ol", null, "tl");
   for (const s of r.steps) {
@@ -207,7 +283,7 @@ function tlList(r) {
   const ev = el("ol", null, "ev");
   for (const x of r.ev) {
     if (x.k === "view") continue;
-    const li = el("li", `${x.t} · ${x.who ? x.who + " · " : ""}${x.label}${x.x ? " (취소됨)" : ""}${x.memo ? " — " + x.memo : ""}`, x.x ? "x" : "");
+    const li = el("li", evText(x), x.x ? "x" : "");
     if (x.photo) { const im = el("img"); im.src = `${base}/photo/${x.id}`; im.alt = `${x.t} 현장 사진`; im.loading = "lazy"; li.append(im); }
     ev.append(li);
   }
@@ -222,22 +298,7 @@ function draw(d) {
   document.title = d.name + " — 현장 회신";
   $("#name").textContent = d.name; $("#addr").textContent = d.addr;
   if (!d.people.some(p => p.id === me)) setMe(null);            // 내가 빠졌거나 다른 휴대폰
-  // 지구 카드 — 위키 우려지역 표(공개 자료). 긴 대피기준은 두 줄까지, 펼치기
-  const c = d.card || {}, rows = [["유형", c.kind], ["대피기준", c.rule], ["대피장소", c.shelter]].filter(x => x[1]);
-  $("#card").hidden = !rows.length;
-  const dl = el("dl");
-  dl.append(...rows.map(([k, v]) => {
-    const div = el("div"), dd = el("dd", v, k === "대피기준" ? (CARDOPEN ? "rule" : "rule clip") : "");
-    div.append(el("dt", k), dd);
-    return div;
-  }));
-  $("#card").replaceChildren(dl);
-  const clip = $("#card dd.rule");
-  if (clip && (CARDOPEN || clip.scrollHeight > clip.clientHeight + 2)) {
-    const more = el("button", CARDOPEN ? "접기" : "펼치기");
-    more.onclick = () => { CARDOPEN = !CARDOPEN; draw(D); };
-    $("#card").append(more);
-  }
+  drawCard(d);
   const r = d.rounds[0], a = r?.ask;
   $("#req").hidden = !a && PVNOTE == null;
   if (PVNOTE != null) $("#req").replaceChildren(el("p", "상황실 요청 — 보내기 전 미리보기", "lab"), el("p", PVNOTE, "msg"), el("p", "보내면 이 글이 요청으로 남습니다", "at"));
@@ -252,6 +313,10 @@ function draw(d) {
   }));
   mini.append(btn("na", "해당 없음"), btn("help", "지원 필요"), btn("undo", "취소"));
   $("#btns").replaceChildren(stp, mini);
+  // 최근 기록 두 줄 — 전체는 인수인계 탭
+  const rec = (r?.ev || []).filter(x => x.k !== "view").slice(-2).reverse();
+  $("#recentbox").hidden = !rec.length;
+  $("#recent").replaceChildren(...rec.map(x => el("li", evText(x), x.x ? "x" : "")));
   $("#tl").replaceChildren(...(d.rounds.length ? [tlList(r), ...d.rounds.slice(1).map(x => {
     const dt = el("details");
     dt.append(el("summary", `지난 요청 ${x.ask ? day(x.ask.at) : "요청 없이"} — ${x.now}`), tlList(x));
@@ -276,6 +341,30 @@ function draw(d) {
   $("#past").replaceChildren(...d.past.map(p => el("li", `${p.rank} ${p.name}`.trim() + ` · ${day(p.since)} ~ ${day(p.until)}`)));
 }
 
+/* 지구 카드 — 위키 우려지역 표(공개 자료). 긴 대피기준은 두 줄까지, 대피장소는 누르면 지도 앱 */
+function drawCard(d) {
+  const c = d.card || {}, rows = [["유형", c.kind], ["대피기준", c.rule], ["대피장소", c.shelter]].filter(x => x[1]);
+  $("#card").hidden = !rows.length;
+  const dl = el("dl");
+  dl.append(...rows.map(([k, v]) => {
+    const div = el("div"), dd = el("dd", k === "대피장소" ? null : v, k === "대피기준" ? (CARDOPEN ? "rule" : "rule clip") : "");
+    if (k === "대피장소") {
+      const ps = places(v);
+      if (!ps.length || PV) dd.textContent = v;
+      else dd.append(...ps.map(n => { const b = el("button", n, "link"); b.type = "button"; b.setAttribute("aria-label", `${n} — 지도 앱에서 보기`); b.onclick = () => openMaps(`대피장소 — ${n}`, `${area()} ${n}`, null, n); return b; }));
+    }
+    div.append(el("dt", k), dd);
+    return div;
+  }));
+  $("#card").replaceChildren(el("h2", "지구"), dl);
+  const clip = $("#card dd.rule");
+  if (clip && (CARDOPEN || clip.scrollHeight > clip.clientHeight + 2)) {
+    const more = el("button", CARDOPEN ? "접기" : "펼치기");
+    more.onclick = () => { CARDOPEN = !CARDOPEN; drawCard(D); };
+    $("#card").append(more);
+  }
+}
+
 async function press(step) {
   try {
     const j = await post("/stamp", { id: me, p: P, step });
@@ -285,46 +374,139 @@ async function press(step) {
   } catch (e) { say("#astate", "bad", `기록하지 못했습니다. ${e.message}`); }
 }
 
-/* 지금 비와 기준 — /gauge 가 준 그 지구 판정 줄(상황판단 상세와 같은 숫자). 못 받으면 칸을 숨긴다 */
-function drawWx(w) {                                            // 서버(reply.weather)가 만든 문장을 그대로 — 대시보드가 가진 값만
-  const box = $("#wx"), hm = t => (t ? `${t.slice(8, 10)}:${t.slice(10, 12)}` : "");
-  box.hidden = !w?.lines?.length;
-  if (box.hidden) return;
-  box.replaceChildren(...w.lines.map((t, i) => el("p", t, i === 0 && w.alerts?.length ? "al" : "")),
-    el("small", ["지금 날씨", w.tm && `실황 ${hm(w.tm)}`, w.tmfc && `예보 ${hm(w.tmfc)} 발표`].filter(Boolean).join(" · ")));
+/* 그림 — 서버(/gauge — 판정 줄)가 준 숫자만 */
+const ICN = ["비 없음", "약한 비", "비", "강한 비"];
+function rainIcon(lv) {                                          // 구름 + 빗줄기 0~3개(이모지는 기종마다 달라 쓰지 않는다)
+  const drops = [[18, 34], [26, 36], [34, 34]].slice(0, lv).map(([x, y]) => `<line x1="${x}" y1="${y}" x2="${x - 3}" y2="${y + 8}" stroke="#1B6FA8" stroke-width="${lv >= 3 ? 3 : 2.2}" stroke-linecap="round"/>`).join("");
+  return `<svg class="ic" viewBox="0 0 48 48" role="img" aria-label="${ICN[lv]}"><path d="M14 30h22a8 8 0 0 0 0-16 11 11 0 0 0-21-2A9 9 0 0 0 14 30z" fill="${lv ? "#9FB3C8" : "#D5DEE8"}" stroke="#47596D" stroke-width="1.5"/>${drops}</svg>`;
 }
+function spark(g) {                                              // 지난(실선) → 지금(세로 점선 · 점 · 값) → 예보(점선), 기준선(가로 점선 · 값)
+  const past = g.past || [], nx = (g.next || []).map(x => x.mm), now = g.now?.h1;
+  if (now == null || !(past.length + nx.length)) return null;
+  const v = [...past, now, ...nx], i0 = past.length, W = 300, H = 70, T = 14;
+  const top = Math.max(10, g.hline || 0, ...v) * 1.15, x = i => 4 + (i / (v.length - 1)) * (W - 8), y = p => T + (H - T) * (1 - p / top);
+  const pts = (a, b) => v.slice(a, b + 1).map((p, k) => `${x(a + k).toFixed(1)},${y(p).toFixed(1)}`).join(" ");
+  const tick = (i, t) => `<text x="${x(i)}" y="10" font-size="11" fill="#47596D" text-anchor="${i === 0 ? "start" : i === v.length - 1 ? "end" : "middle"}">${t}</text>`;
+  return `<svg class="sp" viewBox="0 0 ${W} ${H}" role="img" aria-label="시간당 비 — 지난 ${past.length}시간, 지금 ${num(now)}㎜, 앞으로 ${nx.length}시간 예보${g.hline ? `, 기준 ${g.hline}㎜` : ""}">`
+    + (g.hline ? `<line x1="0" x2="${W}" y1="${y(g.hline)}" y2="${y(g.hline)}" stroke="#B4401A" stroke-dasharray="4 3"/><text x="${W}" y="${y(g.hline) - 3}" font-size="11" fill="#B4401A" text-anchor="end">기준 ${g.hline}</text>` : "")
+    + (i0 ? `<polyline fill="none" stroke="#1B6FA8" stroke-width="2" points="${pts(0, i0)}"/>` : "")
+    + (nx.length ? `<polyline fill="none" stroke="#1B6FA8" stroke-width="2" stroke-dasharray="4 3" points="${pts(i0, v.length - 1)}"/>` : "")
+    + `<line x1="${x(i0)}" x2="${x(i0)}" y1="${T}" y2="${H}" stroke="#47596D" stroke-dasharray="2 3"/><circle cx="${x(i0)}" cy="${y(now)}" r="3.5" fill="#1B6FA8"/>`
+    + `<text x="${x(i0) + 5}" y="${y(now) - 5}" font-size="12" font-weight="700" fill="#101821">${num(now)}</text>`
+    + (i0 ? tick(0, `-${i0}시간`) : "") + tick(i0, "지금") + (nx.length ? tick(v.length - 1, `${g.next[nx.length - 1].t}시`) : "") + `</svg>`;
+}
+const STG_IC = {                                                 // 통제 = 막는 줄 · 사전대피 = 걷는 사람 · 긴급대피 = 느낌표 세모
+  통제: '<rect x="3" y="11" width="22" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 11l-4 7M14 11l-4 7M20 11l-4 7M7 18v6M21 18v6" stroke="currentColor" stroke-width="2"/>',
+  사전대피: '<circle cx="15" cy="5" r="3" fill="currentColor"/><path d="M14 9l-4 7 5 2-2 8M14 9l4 5 5 1M10 16l-5 2" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
+  긴급대피: '<path d="M14 3L26 25H2z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><path d="M14 11v7M14 21v1" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>',
+};
 function drawGauge(g) {
-  drawWx(g?.weather);
-  const box = $("#gauge");
-  box.hidden = !g || !g.st;
-  if (box.hidden) return;
-  const SG = ["통제", "사전대피", "긴급대피"].filter(k => g.st[k]), pc = c => (c.unk ? "모름" : `${c.pct}%`);
-  box.querySelector("summary").replaceChildren("지금 비와 기준 ", el("span", SG.map(k => `${k} ${pc(g.st[k])}`).join(" · ") + (g.site != null && !g.site_slide ? ` · 지구 기준 ${g.site}%` : "")));
-  const one = (name, c, rule, parts, note) => {
-    const w = el("div", null, "gs"), h = el("div", null, "h"), bar = el("div", null, "bar"), i = el("i", null, c.met ? "met" : "");
-    i.style.width = `${Math.min(100, c.unk ? 0 : c.pct)}%`;
-    bar.append(i); bar.setAttribute("role", "img"); bar.setAttribute("aria-label", `${name} ${pc(c)}`);
-    h.append(el("span", `${name} ${pc(c)}`), el("em", c.met ? "넘음" : note || "", c.met ? "met" : ""));
-    w.append(h, el("div", rule, "rl"), bar, ...parts.filter(q => q.now != null || q.need != null).map(q =>
-      el("p", `${q.label || ""} ${q.now ?? "모름"} / ${q.need ?? "—"}${q.unit || ""}${q.pct != null ? ` (${q.pct}%)` : ""}`, "gp")));
-    return w;
-  };
-  const body = [];                                              // 지금 비는 위 날씨 띠에
-  body.push(...SG.map(k => one(k, g.st[k], g.st[k].rule, g.st[k].parts || [], g.st[k].eta ? `${g.st[k].eta}시쯤 닿음` : "")));
-  if (g.site != null) body.push(one("지구 자체 기준", { pct: g.site, met: g.site >= 100 }, g.rule, g.site_slide ? [] : g.site_parts, g.site_slide ? (g.site >= 100 ? "산사태 예보 발령 중" : "발령 없음") : ""));
-  if (g.series.v.length > 1) {                                   // 앞으로 시간마다 가장 높은 단계 % — 작은 꺾은선, 100% 점선
-    const v = g.series.v, top = Math.max(100, ...v) * 1.1, W = 300, H = 64, x = i => (i / (v.length - 1)) * W, y = p => H - (p / top) * H;
-    const svg = `<svg class="gsv" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="앞으로 ${v.length}시간 — 가장 높은 단계 % ${v[0]}%에서 ${v[v.length - 1]}%">`
-      + `<line x1="0" x2="${W}" y1="${y(100)}" y2="${y(100)}" stroke="#101821" stroke-dasharray="4 3" stroke-width="1"/>`
-      + `<polyline fill="none" stroke="#1B6FA8" stroke-width="2.5" vector-effect="non-scaling-stroke" points="${v.map((p, i) => `${x(i).toFixed(1)},${y(p).toFixed(1)}`).join(" ")}"/></svg>`;
-    const sv = el("div");
-    sv.innerHTML = svg;                                          // 숫자만 넣은 그림(바깥 자원 없음)
-    body.push(el("p", `앞으로 — ${g.series.t[0]}시 ${v[0]}% → ${g.series.t[v.length - 1]}시 ${v[v.length - 1]}% (점선 100%)`, "gp"), sv);
+  G = g && g.st ? g : null;
+  const has = !!G;
+  // 조치 탭 — 강수 카드
+  const card = $("#rain");
+  card.hidden = !has || G.now?.h1 == null;
+  if (!card.hidden) {
+    const w = G.weather || {}, acc = G.acc?.mm, fc = G.fc6;
+    const head = el("div", null, "rh"), big = el("div"), n = el("div", String(num(G.now.h1)), "big");
+    n.append(el("small", "㎜/h"));
+    big.append(n, el("div", `지금 시간당 · ${ICN[G.now.icon ?? 0]}`, "sub"));
+    head.append(svgEl(rainIcon(G.now.icon ?? 0)), big);
+    if (G.now.m15 != null) { const q = el("div", null, "q"); q.append(el("b", String(num(G.now.m15))), el("span", "15분 ㎜", "sub")); head.append(q); }
+    const parts = [head];
+    const al = w.alerts || [];
+    if (al.length) { const bd = el("div", null, "badges"); bd.append(...al.map(x => el("span", x.name, "badge" + (/경보/.test(x.name) ? " w" : "")))); parts.push(bd); }
+    if (acc != null) {                                         // 지금까지(채운 색) + 앞으로(빗금) — '45 +115'
+      const tot = Math.max((acc || 0) + (fc || 0), 50) * 1.1, rb = el("div", null, "rb"), tr = el("div", null, "tr"), ia = el("i", null, "a"), ifc = el("i", null, "f");
+      ia.style.width = `${(acc / tot) * 100}%`; ifc.style.left = `${(acc / tot) * 100}%`; ifc.style.width = `${((fc || 0) / tot) * 100}%`;
+      tr.append(ia, ifc); tr.setAttribute("role", "img"); tr.setAttribute("aria-label", `지난 ${G.acc.label} ${num(acc)}㎜, 앞으로 6시간 ${num(fc || 0)}㎜ 예보`);
+      const b = el("b", String(num(acc)));
+      if (fc) b.append(" ", el("small", `+${num(fc)}`));
+      rb.append(tr, b);
+      parts.push(rb, el("div", `지난 ${G.acc.label} 누적${fc != null ? " · 빗금 = 앞으로 6시간 예보" : ""}`, "rl2"));
+    }
+    const sp = spark(G);
+    if (sp) parts.push(svgEl(sp));
+    card.replaceChildren(...parts);
   }
-  body.push(el("p", `${g.basis} 기준 · ${g.where === "지구" ? "이 지구 자리 비" : "읍면동에서 가장 많이 온 칸"} · ${g.at ? g.at.slice(11, 16) + " 계산" : ""} — 예보로 닿는 시각은 예보대로 올 때`, "gm"));
-  $("#gbody").replaceChildren(...body);
+  // 단계 아이콘 — 그 지구 유형에 있는 단계만
+  const st = $("#stg"), ss = has ? G.stages || [] : [];
+  st.hidden = !ss.length;
+  if (ss.length) {
+    const box = el("div", null, "stg");
+    box.append(...ss.map(s => {
+      const t = s.state === "need" ? "필요" : s.state === "soon" ? `곧 · ${s.eta}시쯤` : s.state === "unk" ? "모름" : `아직 ${s.pct}%`, c = el("div", null, s.state);
+      c.append(svgEl(`<svg viewBox="0 0 28 28" aria-hidden="true">${STG_IC[s.k] || ""}</svg>`), el("b", s.k), el("span", t));
+      c.setAttribute("aria-label", `${s.k} ${t}`);
+      return c;
+    }));
+    st.replaceChildren(box);
+  }
+  drawNow(G);
+}
+/* 현재상황 탭 — 숫자 칸 · 앞으로 6시간 막대 · 기준 막대 · 특보 문장 */
+const GOPEN = new Set();                                         // 펼쳐 둔 기준 줄 — 1분마다 다시 그려도 유지
+function drawNow(g) {
+  const w = g?.weather || {}, rn = g?.rain || {};
+  $("#nums").hidden = !g;
+  if (g) {
+    const box = el("div", null, "nums");
+    box.append(...[["1시간", rn["1h"]], ["3시간", rn["3h"]], ["24시간", rn["24h"]], ["15분", g.now?.m15]].map(([k, v]) => { const c = el("div"); c.append(el("b", String(num(v))), el("span", `${k} ㎜`)); return c; }));
+    $("#nums").replaceChildren(el("h2", "지금까지 온 비"), box);
+  }
+  const nx = g?.next || [];
+  $("#hours").hidden = !nx.length;
+  if (nx.length) {                                               // 앞으로 시간별 막대 · 값 라벨 · 기준선
+    const W = 300, H = 110, top = Math.max(10, g.hline || 0, ...nx.map(x => x.mm)) * 1.2, bw = W / nx.length, y = p => 16 + (H - 34) * (1 - p / top);
+    const bars = nx.map((x, i) => `<rect x="${i * bw + bw * .2}" y="${y(x.mm)}" width="${bw * .6}" height="${H - 18 - y(x.mm)}" fill="url(#hz)" stroke="#7FA9C9"/>`
+      + `<text x="${i * bw + bw / 2}" y="${y(x.mm) - 3}" font-size="12" text-anchor="middle" fill="#101821">${num(x.mm)}</text>`
+      + `<text x="${i * bw + bw / 2}" y="${H - 3}" font-size="12" text-anchor="middle" fill="#47596D">${x.t}시</text>`).join("");
+    $("#hours").replaceChildren(el("h2", `앞으로 ${nx.length}시간 — ${num(g.fc6)}㎜`), svgEl(`<svg class="hb" viewBox="0 0 ${W} ${H}" role="img" aria-label="앞으로 시간별 예보 ${nx.map(x => `${x.t}시 ${num(x.mm)}㎜`).join(", ")}">`
+      + `<defs><pattern id="hz" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="3" height="6" fill="#7FA9C9"/></pattern></defs>${bars}`
+      + (g.hline ? `<line x1="0" x2="${W}" y1="${y(g.hline)}" y2="${y(g.hline)}" stroke="#B4401A" stroke-dasharray="4 3"/><text x="2" y="${y(g.hline) - 3}" font-size="11" fill="#B4401A">기준 ${g.hline}㎜/h</text>` : "") + `</svg>`));
+  }
+  const box = $("#std");
+  box.hidden = !g;
+  if (g) {
+    const SG = ["통제", "사전대피", "긴급대피"].filter(k => g.st[k]), pc = c => (c.unk ? "모름" : `${c.pct}%`);
+    const one = (name, c, rule, parts, note) => {
+      const w2 = el("details", null, "gs"), sm = el("summary"), h = el("div", null, "h"), bar = el("div", null, "bar"), i = el("i", null, c.met ? "met" : "");
+      w2.open = GOPEN.has(name); w2.ontoggle = () => (w2.open ? GOPEN.add(name) : GOPEN.delete(name));   /* 처음에는 이름 · % · 막대만 — 누르면 기준 문구 · 조건별 값 */
+      i.style.width = `${Math.min(100, c.unk ? 0 : c.pct)}%`;
+      bar.append(i); bar.setAttribute("role", "img"); bar.setAttribute("aria-label", `${name} ${pc(c)}`);
+      h.append(el("span", `${name} ${pc(c)}`), el("em", c.met ? "넘음" : note || "", c.met ? "met" : ""));
+      sm.append(h, bar);
+      w2.append(sm, el("div", rule, "rl"), ...parts.filter(q => q.now != null || q.need != null).map(q =>
+        el("p", `${q.label || ""} ${q.now ?? "모름"} / ${q.need ?? "—"}${q.unit || ""}${q.pct != null ? ` (${q.pct}%)` : ""}`, "gp")));
+      return w2;
+    };
+    const body = [el("h2", "기준까지")];
+    body.push(...SG.map(k => one(k, g.st[k], g.st[k].rule, g.st[k].parts || [], g.st[k].eta ? `${g.st[k].eta}시쯤 닿음` : "")));
+    if (g.site != null) body.push(one("지구 자체 기준", { pct: g.site, met: g.site >= 100 }, g.rule, g.site_slide ? [] : g.site_parts, g.site_slide ? (g.site >= 100 ? "산사태 예보 발령 중" : "발령 없음") : ""));
+    const more = el("details", null, "gs"), msm = el("summary");
+    msm.append(el("div", "앞으로 추이 · 계산 기준", "h"));
+    more.open = GOPEN.has("more"); more.ontoggle = () => (more.open ? GOPEN.add("more") : GOPEN.delete("more"));
+    more.append(msm);
+    const tail = [];
+    if (g.series.v.length > 1) {                                 // 앞으로 시간마다 가장 높은 단계 % — 작은 꺾은선, 100% 점선
+      const v = g.series.v, top = Math.max(100, ...v) * 1.1, W = 300, H = 64, x = i => (i / (v.length - 1)) * W, y = p => H - (p / top) * H;
+      tail.push(el("p", `앞으로 — ${g.series.t[0]}시 ${v[0]}% → ${g.series.t[v.length - 1]}시 ${v[v.length - 1]}% (점선 100%)`, "gp"),
+        svgEl(`<svg class="gsv" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="앞으로 ${v.length}시간 — 가장 높은 단계 % ${v[0]}%에서 ${v[v.length - 1]}%">`
+          + `<line x1="0" x2="${W}" y1="${y(100)}" y2="${y(100)}" stroke="#101821" stroke-dasharray="4 3" stroke-width="1"/>`
+          + `<polyline fill="none" stroke="#1B6FA8" stroke-width="2.5" vector-effect="non-scaling-stroke" points="${v.map((p, i) => `${x(i).toFixed(1)},${y(p).toFixed(1)}`).join(" ")}"/></svg>`));
+    }
+    tail.push(el("p", `${g.basis} 기준 · ${g.where === "지구" ? "이 지구 자리 비" : "읍면동에서 가장 많이 온 칸"} · ${g.at ? g.at.slice(11, 16) + " 계산" : ""} — 예보로 닿는 시각은 예보대로 올 때`, "gm"));
+    more.append(...tail); body.push(more);
+    box.replaceChildren(...body);
+  }
+  const hm = t => (t ? `${t.slice(8, 10)}:${t.slice(10, 12)}` : "");   // 특보 · 날씨 문장(서버 reply.weather) — 작은 글
+  $("#wxl").replaceChildren(...(w.lines || []).map((t, i) => el("p", t, i === 0 && w.alerts?.length ? "al" : "")),
+    ...(w.lines?.length ? [el("p", ["실황", w.tm && hm(w.tm), w.tmfc && `· 예보 ${hm(w.tmfc)} 발표`].filter(Boolean).join(" "))] : []));
 }
 const loadGauge = () => fetch(base + "/gauge").then(r => (r.ok ? r.json() : null)).then(drawGauge, () => drawGauge(null));
+$("#rain").onclick = () => { tab("now"); scrollTo(0, 0); };
+$("#rain").onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("#rain").click(); } };
+$("#allrec").onclick = () => { tab("log"); scrollTo(0, 0); };
 
 async function load() {
   const r = await fetch(base + "/data" + (P ? `?p=${encodeURIComponent(P)}` : ""));
@@ -342,10 +524,10 @@ $("#join").onsubmit = async e => {
   } catch (err) { say("#wstate", "bad", `기록하지 못했습니다. ${err.message}`); }
 };
 
-$("#add").onclick = () => { FORM = "add"; draw(D); $("#whoami").scrollIntoView({ behavior: "smooth" }); };
+$("#add").onclick = () => { FORM = "add"; draw(D); scrollTo(0, 0); };
 
 $("#share").onclick = async () => {
-  const url = location.origin + base;                           // 미리보기 표시(?pv)는 넘기지 않는다
+  const url = location.origin + base;                           // 미리보기 표시(?pv) · 받는 사람 자리(?p)는 넘기지 않는다
   try {
     if (navigator.share) await navigator.share({ title: document.title, url });
     else { await navigator.clipboard.writeText(url); say("#pstate", "ok", "링크를 복사했습니다. 문자나 메신저에 붙여 보내세요."); }

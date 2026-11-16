@@ -271,7 +271,8 @@ def test_gauge_is_the_judge_row(tdb, tmp_path, monkeypatch):
                  "parts": [{"label": "24시간", "now": 86, "need": 200, "unit": "㎜", "pct": 43}]}}
     row = {"id": A, "emd": "북면", "fam": "산사태", "rule": "누적강우 250mm이상", "where": "지구", "b": {"grid": {
         "rain": {"1h": 4, "3h": 10, "24h": 86}, "top": 43, "site": 34, "site_parts": [{"label": "누적", "now": 86, "need": 250.0, "unit": "㎜", "pct": 34}],
-        "st": st, "series": {"t": ["19", "20"], "v": [45, 51], "xy": {}}}, "aws": None}}
+        "st": st, "series": {"t": ["19", "20"], "v": [45, 51], "xy": {}, "pl": [[86, 4, 1.5], [90, 4, None], [98, 8, None]],
+                             "pp": [[70, 2, None], [82, 12, None]], "site": [{"kind": "band", "y": 50.0}]}}, "aws": None}, "pos": [35.3, 128.5]}
     calls = []
     monkeypatch.setattr(ai, "_get", lambda *a, **k: (_ for _ in ()).throw(OSError("대시보드 꺼짐")))   # 날씨 묶음은 못 받은 문장만 빠진다
     monkeypatch.setattr(judge, "cached", lambda *a: calls.append(a) or {"rows": [row], "computed_at": "2026-11-15T12:00:00", "tm": "202611151200"})
@@ -281,6 +282,12 @@ def test_gauge_is_the_judge_row(tdb, tmp_path, monkeypatch):
     assert calls[0][0] == "창원" and calls[0][5:8] == (True, "grid", 0.0)              # 시군 하나 · 시간별 · 격자
     j = g.json()
     assert j["st"] == st and j["top"] == 43 and j["site"] == 34 and j["series"] == {"t": ["19", "20"], "v": [45, 51]} and j["at"]
+    # 강수 카드 · 단계 아이콘 — 판정 줄의 지금 점 · 지난 자취 · 앞으로를 그대로(새로 계산하지 않는다)
+    assert j["now"] == {"h1": 4, "m15": 1.5, "icon": 2} and j["acc"] == {"mm": 86, "label": "24시간"}
+    assert j["next"] == [{"t": "19", "mm": 4}, {"t": "20", "mm": 8}] and j["fc6"] == 12 and j["past"] == [2, 12] and j["hline"] == 50.0
+    assert j["stages"] == [{"k": "통제", "state": "soon", "pct": 43, "eta": "내일 02"}] and j["pos"] == [35.3, 128.5]
+    assert reply.rain_card({**row, "approx": True}, {**row["b"]["grid"], "series": {}})["now"]["m15"] is None   # 값이 없으면 빠진다
+    assert "pos" not in reply.rain_card({**row, "approx": True}, row["b"]["grid"]) and [reply._icon(x) for x in (0, 1, 5, 20, None)] == [0, 1, 2, 3, None]
     assert "김파일" not in g.text and "0000" not in g.text
     assert pub.get("/r/nope/gauge").status_code == 404
 
@@ -306,3 +313,14 @@ def test_weather_band(monkeypatch):
     w = reply.weather("창원", "b", "동읍", {"1h": None, "3h": None, "24h": None}, None)
     assert w["lines"] == ["특보 없음.", "앞으로 6시간 비 예보 없음."]                      # 값이 없는 문장은 뺀다
     assert set(w) == {"alerts", "pending", "rain", "fc", "lines", "tm", "tmfc"} and "김파일" not in str(w)   # 연락처는 섞이지 않는다
+
+
+def test_link_page_tabs_and_map_links():
+    """링크 페이지 — 탭 셋(조치 · 현재상황 · 인수인계) · 대피장소 · 지구 위치는 지도 앱 웹 주소로(앱 전용 스킴 없음),
+    장소 이름이 아닌 값(해당없음 · N개소 · -)은 링크를 달지 않고, 여러 곳은 쉼표 · 가운뎃점 · 줄바꿈으로 나눈다."""
+    r = (Path(main.__file__).parent / "web" / "static" / "r.html").read_text("utf-8")
+    assert all(f'data-t="{t}"' in r for t in ("act", "now", "log")) and 'role="tablist"' in r
+    assert "https://map.kakao.com/link/search/" in r and "https://map.naver.com/p/search/" in r and "https://www.google.com/maps/search/?api=1&query=" in r
+    assert "nmap://" not in r and "kakaomap://" not in r and 'a.rel = "noopener"' in r
+    assert r"const NOTPLACE = /^\s*$|해당\s*없|^\s*없음\s*$|^\s*[-–—]\s*$|\d+\s*개소/;" in r and r'split(/\s*[,·ㆍ\n]\s*/)' in r
+    assert "if (PV) return;" in r                                            # 미리보기에서는 지도 판을 열지 않는다

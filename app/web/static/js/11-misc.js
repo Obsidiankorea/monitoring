@@ -729,6 +729,7 @@ document.addEventListener("keydown", ev => {
   if (CAM_EDIT && (ev.key === "Escape" || ev.key === "Enter")) { camEdit(false); return; }
   if (CAM_EDIT && ev.key === "0") { camReset(); return; }
   if (ev.key === "Escape") {
+    if (SJ_RP.rid) { sjRp(null); return; }                   // 회신 문자 미리보기만 닫는다(고정한 지구 카드 · 상세는 그대로)
     if (DZ_PICK) { const id = DZ_PICK; DZ_PICK = null; dzDlg(true, id); return; }
     if (TIP_PIN) { tipUnpin(); return; }
     if (dzDlgOpen()) { dzDlg(false); return; }

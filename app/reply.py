@@ -283,7 +283,39 @@ def gauge(token: str) -> dict:
     return {"weather": weather(sg, dash_base(), r["emd"], b["rain"], d.get("tm")), "at": d.get("computed_at"), "tm": d.get("tm"), "basis": "기상청 격자", "fam": r["fam"], "rule": r.get("rule") or "", "where": r.get("where"),
             "rain": b["rain"], "top": b["top"], "site": b.get("site"), "site_slide": bool(b.get("site_slide")), "site_parts": b.get("site_parts") or [],
             "st": {k: {x: v.get(x) for x in ("pct", "met", "unk", "eta", "eta_h", "rule", "partial", "parts")} for k, v in b["st"].items()},
-            "series": {"t": sr.get("t") or [], "v": sr.get("v") or []}}
+            "series": {"t": sr.get("t") or [], "v": sr.get("v") or []}, **rain_card(r, b)}
+
+
+def _icon(h1) -> int | None:
+    """날씨 그림 등급 — 0 비 없음 · 1 약한 비 · 2 비 · 3 강한 비(시간당 ㎜).
+    shortcut: 0 / 3 / 15 ㎜ 문턱은 이 화면이 정한 것(기상청 강수강도 구분과 다를 수 있다) — 위키에 기준이 생기면 그것으로."""
+    return None if h1 is None else 0 if h1 <= 0 else 1 if h1 < 3 else 2 if h1 < 15 else 3
+
+
+def rain_card(r: dict, b: dict) -> dict:
+    """링크 페이지 강수 카드 · 단계 아이콘에 쓸 것 — 판정 줄(series 의 지금 점 pl[0] · 지난 자취 pp · 앞으로 pl)에서 그대로 꺼낸다(새로 계산하지 않는다).
+    못 구한 것은 뺀다. pos 는 정확한 지구 좌표일 때만(리 · 읍면동 가운데 근사는 빼서 화면이 주소로 찾게)."""
+    sr, rain = b.get("series") or {}, b["rain"]
+    pl, t = sr.get("pl") or [], sr.get("t") or []
+    out: dict = {"stages": [{"k": k, "state": "need" if c["met"] else "unk" if c["unk"] else "soon" if c.get("eta") else "wait",
+                             "pct": c["pct"], "eta": c.get("eta")} for k, c in b["st"].items()]}
+    h1 = rain.get("1h")
+    out["now"] = {"h1": h1, "m15": pl[0][2] if pl else None, "icon": _icon(h1)}
+    if pl and pl[0][0] is not None:
+        out["acc"] = {"mm": pl[0][0], "label": "24시간" if r["fam"] == "산사태" else "48시간까지"}   # 판정 평면의 가로(series_of acc)
+    nx = [{"t": t[i], "mm": pl[i + 1][1]} for i in range(min(6, len(t), len(pl) - 1)) if pl[i + 1][1] is not None]
+    if nx:
+        out["next"] = nx
+        out["fc6"] = round(sum(x["mm"] for x in nx), 1)
+    past = [x[1] for x in (sr.get("pp") or [])[-6:] if x[1] is not None]
+    if past:
+        out["past"] = past                                       # 지난 시간별(오래된 것부터, 지금 바로 앞까지)
+    ys = [a["y"] for a in sr.get("site") or [] if a.get("kind") in ("band", "rect") and a.get("y")]
+    if ys:
+        out["hline"] = min(ys)                                   # 그 지구 기준의 시간당 문턱
+    if r.get("pos") and not r.get("approx"):
+        out["pos"] = r["pos"]
+    return out
 
 
 def _mm(v) -> str:

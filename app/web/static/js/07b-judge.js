@@ -392,8 +392,7 @@ function sjDpop() {
 function sjBd() {
   let bd = $("sj-bd");
   if (!bd) { bd = document.createElement("div"); bd.id = "sj-bd"; bd.className = "sj-bd"; $("sj").append(bd); }
-  bd.hidden = !$("sj").classList.contains("dpop") && !SJ_RP.rid;
-  bd.classList.toggle("top", !!SJ_RP.rid);                 // 미리보기는 상세 팝업 위에
+  bd.hidden = !$("sj").classList.contains("dpop");
 }
 /* Esc — 회신 문자 미리보기 → 상세 팝업 순서로 닫는다(11-misc 의 Esc 가 먼저 부른다). 닫았으면 true */
 function sjEsc() {
@@ -402,17 +401,24 @@ function sjEsc() {
   return false;
 }
 /* 회신 링크 문자 — 미리보기는 기록 없이(preview), [문자 앱 열기] · [복사] 를 누를 때 요청을 남긴다. 글 · 링크는 reply.html 과 같은 /api/reply/ask
-   링크 바깥 주소는 reply.html 에 넣은 것(localStorage reply-base — 같은 출처라 함께 쓴다). 이름 · 번호는 잠금 번호 뒤, AI 로 넘기지 않는다 */
-const SJ_RP = { rid: null, note: "", j: null, done: false, pi: 0, tab: "sms", info: "" };
+   링크 바깥 주소는 reply.html 에 넣은 것(localStorage reply-base — 같은 출처라 함께 쓴다). 이름 · 번호는 잠금 번호 뒤, AI 로 넘기지 않는다.
+   한 벌을 두 창에서 — 상황판단(지구 상세의 단추)과 지도(고정한 지구 카드의 문자 단추, 06e). 상자 · 뒤판은 body 에 붙는다(#sj 가 숨은 지도 창에서도).
+   sjRp(rid, ctx) — ctx {name, fam, st 단계별 판정, basis 기준 이름, tel 미리 고를 받는 사람, back 닫으면 돌아갈 단추, after 요청을 남긴 뒤} */
+const SJ_RP = { rid: null, note: "", j: null, done: false, pi: 0, tab: "sms", info: "", name: "", tel: "", back: null, after: null };
 /* 요청 한 줄 기본값 — 그 지구에서 지금 닿은(넘은) 가장 높은 단계 · 유형으로. 결정 단추(SJ_ACT)와 같은 말. % 는 문자에 넣지 않고 기록(info)에만 */
 const SJ_RQ = { 산사태: "위험 구간 출입을 통제", 하천: "하천변 · 둔치 출입을 통제", 지하공간: "지하차도 · 지하공간 출입을 통제", "침수·해안": "침수 우려 도로 · 해안 출입을 통제" };
-function sjRpNote(r) {
-  const b = r && sjB(r), s = b && [...SJ_STG].reverse().find(k => b.st[k]?.met);
-  const top = b && SJ_STG.map(k => [k, b.st[k]]).filter(([, c]) => c).sort((x, y) => y[1].pct - x[1].pct)[0];
-  SJ_RP.info = top ? `${top[0]} ${top[1].pct}% · ${r.fam} · ${SJ_BN[SJ.basis]}` : "";
+function sjRpNote(fam, st, basis) {                         // st = 판정 줄 b.st({통제: {pct, met}, …}) — 두 창이 같은 모양을 넘긴다
+  st = st || {};
+  const s = [...SJ_STG].reverse().find(k => st[k]?.met);
+  const top = SJ_STG.map(k => [k, st[k]]).filter(([, c]) => c).sort((x, y) => y[1].pct - x[1].pct)[0];
+  SJ_RP.info = top ? `${top[0]} ${top[1].pct}% · ${fam} · ${basis}` : "";
   return s === "긴급대피" ? "즉시 대피 조치하고 알려 주세요" : s === "사전대피" ? "주민 사전대피를 안내하고 알려 주세요"
-    : s === "통제" ? `${SJ_RQ[r.fam] || "현장 출입을 통제"}하고 알려 주세요` : "지금 현장 조치 여부를 알려 주세요";
+    : s === "통제" ? `${SJ_RQ[fam] || "현장 출입을 통제"}하고 알려 주세요` : "지금 현장 조치 여부를 알려 주세요";
 }
+const sjRpCtx = rid => {                                      // 상황판단 창 — 고른 지구 줄에서
+  const r = (SJ.d?.rows || []).find(x => x.id === rid);
+  return { name: r ? sjName(r) : rid, fam: r?.fam, st: r && sjB(r).st, basis: SJ_BN[SJ.basis], after: async () => { await sjRpList(); sjRender(); } };
+};
 const sjRpBase = () => { try { return localStorage.getItem("reply-base") || ""; } catch { return ""; } };
 async function sjRpAsk(commit) {
   const res = await fetch("/api/reply/ask", { method: "POST", headers: { "content-type": "application/json", "x-pin": sjPin() },
@@ -421,22 +427,37 @@ async function sjRpAsk(commit) {
   if (!res.ok) throw new Error(j.detail || res.status);
   return j;
 }
-async function sjRp(rid) {
-  let box = $("sj-rp");
+async function sjRp(rid, ctx) {
+  let box = $("sj-rp"), bd = $("rp-bd");
   if (!box) {
-    box = document.createElement("div"); box.id = "sj-rp"; box.className = "sj-rp"; box.tabIndex = -1;
-    box.setAttribute("role", "dialog"); box.setAttribute("aria-modal", "true"); box.setAttribute("aria-label", "회신 링크 문자 미리보기"); $("sj").append(box);
+    bd = document.createElement("div"); bd.id = "rp-bd"; bd.className = "rp-bd"; bd.hidden = true;
+    bd.addEventListener("click", () => sjRp(null));          // 바깥 누름 — 미리보기만 닫는다(뒤의 상세 · 지도 카드는 그대로)
+    box = document.createElement("div"); box.id = "sj-rp"; box.className = "sj-rp"; box.tabIndex = -1; box.hidden = true;
+    box.setAttribute("role", "dialog"); box.setAttribute("aria-modal", "true"); box.setAttribute("aria-label", "회신 링크 문자 미리보기");
+    box.addEventListener("click", sjRpClick); box.addEventListener("change", sjRpChange); box.addEventListener("input", sjRpInput);
+    document.body.append(bd, box);
   }
-  if (rid !== undefined) Object.assign(SJ_RP, { rid, j: null, done: false, pi: 0, tab: "sms", note: sjRpNote((SJ.d?.rows || []).find(x => x.id === rid)) });
-  box.hidden = !SJ_RP.rid;
-  sjBd();
+  if (rid === null) {                                         // 닫기 — 연 단추로 포커스를 돌려준다
+    const back = SJ_RP.back;
+    Object.assign(SJ_RP, { rid: null, j: null, back: null, after: null });
+    box.hidden = bd.hidden = true;
+    if (back?.isConnected) back.focus();
+    return;
+  }
+  if (rid !== undefined) {
+    const c = ctx || sjRpCtx(rid);
+    Object.assign(SJ_RP, { rid, j: null, done: false, pi: 0, tab: "sms", name: c.name || rid, tel: c.tel || "", back: c.back || document.activeElement, after: c.after || null,
+      note: sjRpNote(c.fam, c.st, c.basis || "") });
+  }
   if (!SJ_RP.rid) return;
-  const r = (SJ.d?.rows || []).find(x => x.id === SJ_RP.rid);
-  const head = `<header><b>회신 링크 문자 — ${escH(r ? sjName(r) : SJ_RP.rid)}</b><span class="mute">${SJ_RP.done ? "요청을 남겼다" : "미리보기 — 아직 기록이 남지 않았다"}</span><button class="dx" data-rpx aria-label="미리보기 닫기 (Esc)">✕</button></header>`;
+  box.hidden = bd.hidden = false;
+  const head = `<header><b>회신 링크 문자 — ${escH(SJ_RP.name)}</b><span class="mute">${SJ_RP.done ? "요청을 남겼다" : "미리보기 — 아직 기록이 남지 않았다"}</span><button class="dx" data-rpx aria-label="미리보기 닫기 (Esc)">✕</button></header>`;
   if (!SJ_RP.j) {
     box.innerHTML = `${head}<p class="mute">문자 글을 만드는 중…</p>`;
     if (rid !== undefined) box.focus();
     try { SJ_RP.j = await sjRpAsk(false); } catch (e) { box.innerHTML = `${head}<p class="mute">문자 글을 만들지 못했다 — ${escH(e.message)}</p>`; return; }
+    const dg = t => String(t || "").replace(/\D/g, ""), at = SJ_RP.tel && SJ_RP.j.people.findIndex(p => dg(p.tel) === dg(SJ_RP.tel));
+    if (at > 0) SJ_RP.pi = at;                                // 지도 카드에서 누른 사람을 받는 사람으로 미리 고른다
   }
   const j = SJ_RP.j, ln = j.links[0], base = sjRpBase();
   if (!ln) { box.innerHTML = `${head}<p class="mute">이 지구는 회신 링크를 만들 수 없다(위키 · 연락처 표에 지역ID 가 없다)</p>`; return; }
@@ -489,8 +510,23 @@ function sjRpCommit() {
   if (SJ_RP.j.demo) return toast("시연에서는 요청 기록을 남기지 않는다 — 문자 앱 · 복사만");
   if (SJ_RP.done) return;
   SJ_RP.done = true;
-  sjRpAsk(true).then(async () => { toast("요청을 남겼다 — 현장 회신 기록"); await sjRpList(); sjRender(); }, e => { SJ_RP.done = false; toast(`요청을 남기지 못했다 — ${e.message}`); });
+  sjRpAsk(true).then(async () => { toast("요청을 남겼다 — 현장 회신 기록"); await SJ_RP.after?.(); }, e => { SJ_RP.done = false; toast(`요청을 남기지 못했다 — ${e.message}`); });
 }
+function sjRpClick(ev) {
+  const t = ev.target;
+  if (t.closest("[data-rpx]")) return sjRp(null);
+  const rt = t.closest("[data-rptab], [data-rpopen]");
+  if (rt) { ev.preventDefault(); return sjRpTab(rt.dataset.rptab || "page"); }   // 말풍선 속 링크 — 둘째 화면으로
+  const rg = t.closest("[data-rpgo], [data-rpcp]");
+  if (!rg) return;
+  if (rg.dataset.rpcp != null) {
+    const p = SJ_RP.j.people[+rg.dataset.rpcp];
+    navigator.clipboard.writeText(p ? sjRpSms(p) : SJ_RP.j.links[0].url).then(() => { rg.textContent = "복사했다"; }, () => { rg.textContent = "복사하지 못했다"; });
+  }
+  sjRpCommit();                                             // 문자 앱 열기는 그대로 sms: 로 간다
+}
+function sjRpChange(ev) { if (ev.target.name === "sj-rpp") { SJ_RP.pi = +ev.target.value; sjRpText(); } }
+function sjRpInput(ev) { if (ev.target.id === "sj-rpn") sjRpNoteIn(ev.target.value); }
 async function sjDecide(body) {
   try {
     const r = await fetch("/api/ai/decisions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -531,18 +567,7 @@ if (SJ_BC) SJ_BC.onmessage = ev => {
 };
 $("sj").addEventListener("click", async ev => {
   const t = ev.target;
-  if (t.closest("#sj-bd")) return sjEsc();               // 바깥 누름 — 위에 뜬 것부터 닫는다
-  if (t.closest("[data-rpx]")) return sjRp(null);
-  const rt = t.closest("[data-rptab], [data-rpopen]");
-  if (rt) { ev.preventDefault(); return sjRpTab(rt.dataset.rptab || "page"); }   // 말풍선 속 링크 — 둘째 화면으로
-  const rg = t.closest("[data-rpgo], [data-rpcp]");
-  if (rg) {
-    if (rg.dataset.rpcp != null) {
-      const p = SJ_RP.j.people[+rg.dataset.rpcp];
-      navigator.clipboard.writeText(p ? sjRpSms(p) : SJ_RP.j.links[0].url).then(() => { rg.textContent = "복사했다"; }, () => { rg.textContent = "복사하지 못했다"; });
-    }
-    return sjRpCommit();                                   // 문자 앱 열기는 그대로 sms: 로 간다
-  }
+  if (t.closest("#sj-bd")) return sjEsc();               // 바깥 누름 — 상세 팝업을 닫는다
   if (t.closest("[data-rpl]")) return sjRp(SJ.sel);
   if (t.closest("[data-dpop]")) {
     SJ.dpop = !SJ.dpop;
@@ -593,7 +618,6 @@ let SJ_KT = 0;
 $("sj").addEventListener("change", ev => {
   if (ev.target.id === "sj-ev") { SJ.ev = ev.target.value; return sjTab("판단 기록"); }
   const id = ev.target.id;
-  if (ev.target.name === "sj-rpp") { SJ_RP.pi = +ev.target.value; return sjRpText(); }
   if (id === "sj-sg") return sjPick(ev.target.value);
   if (id === "sj-min") return sjMin(+ev.target.value);
   if (id === "sj-cut" || id === "sj-cutp") {
@@ -607,7 +631,6 @@ $("sj").addEventListener("change", ev => {
   }
 });
 $("sj").addEventListener("input", ev => {
-  if (ev.target.id === "sj-rpn") return sjRpNoteIn(ev.target.value);
   if (ev.target.id !== "sj-k") return;
   SJ.k = +ev.target.value / 100;
   ev.target.nextElementSibling.textContent = `×${SJ.k.toFixed(1)}`;
