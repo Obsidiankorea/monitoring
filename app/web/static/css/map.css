@@ -2211,7 +2211,17 @@ body.sj-on > header, body.sj-on #stage, body.sj-on #tl, body.sj-on #rail { displ
 #rep .ob .lnk { padding: 0; min-height: 0; font: inherit; color: var(--accent); background: none; border: 0; text-decoration: underline; cursor: pointer; }
 #rep .ob .cm ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
 #rep .ob .cm li.ci { border-radius: 8px; padding: 0 6px; }
-#rep .ob .cm li.ci.on { background: color-mix(in oklab, var(--accent) 10%, transparent); padding-bottom: 8px; }
+#rep .ob .cm li.ci { display: grid; grid-template-columns: 1fr auto; align-items: start; }
+#rep .ob .cm li.ci.open { background: color-mix(in oklab, var(--accent) 8%, transparent); padding-bottom: 8px; }
+#rep .ob .cm .eb { min-width: 44px; min-height: 44px; border: 0; background: none; color: var(--ink-3); font-size: 14px; border-radius: 8px; cursor: pointer; opacity: .55; }
+#rep .ob .cm li.ci:hover .eb, #rep .ob .cm .eb:focus-visible, #rep .ob .cm li.open .eb { opacity: 1; color: var(--ink-2); }
+#rep .ob .cm .eb:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+#rep .ob .cm .ed { grid-column: 1 / -1; }
+#rep .ob .ps { display: grid; gap: 6px; margin-bottom: 10px; }
+#rep .ob .ps select { min-height: 44px; flex: 2 1 220px; }
+#rep .ob .psm > summary { cursor: pointer; color: var(--ink-3); font-size: 12.5px; min-height: 32px; display: flex; align-items: center; }
+#rep .ob .psm .row { display: flex; gap: 8px; align-items: center; margin-top: 6px; } #rep .ob .psm .row input { flex: 1 1 160px; min-height: 44px; min-width: 0; }
+#rep .ob .psm .pm { justify-content: space-between; color: var(--ink-2); font-size: 13px; }
 #rep .ob .cm .ck { align-items: flex-start; padding: 10px 0; min-height: 44px; }
 #rep .ob .cm .ck input { margin-top: 2px; flex: none; }
 #rep .ob .cm .pv { line-height: 1.45; overflow-wrap: anywhere; } #rep .ob .cm .pv b { font-weight: 800; }
