@@ -147,3 +147,23 @@ def test_board_groups_by_sigun_without_names(app_, monkeypatch):
     assert (g["n"], g["warn"], g["steps"]["조치 완료"]) == (2, 1, 1)
     assert g["rows"][0]["name"] == "나지구" and "확인 없음" in g["rows"][0]["warn"]   # 확인 없는 지구가 위로
     assert "people" not in g["rows"][0] and "tel" not in str(g)                      # 이름 · 번호 없음
+
+
+def test_sigun_request_is_recorded_with_sender_and_visible_to_do(app_, monkeypatch):
+    main, auth = app_
+    from app import reply, contacts
+    auth.add("cw", "password-3", "sigun", "창원 담당", sigun="창원")
+    auth.add("do1", "password-2", "do", "도 상황실")
+    monkeypatch.setattr(main, "_contacts_pin", lambda pin: None)
+    monkeypatch.setattr(reply, "_districts", lambda: {"r1": ("창원시", "가지구", "창원시 진동면", "창원시 진동면", {})})
+    monkeypatch.setattr(contacts, "_rows", lambda: {"r1": {"담당1": "김", "담당1_연락처": "010-1234-5678"}})
+    c = TestClient(main.app)
+    _login(c, "cw", "password-3")
+    j = c.post("/api/reply/ask", json={"rids": ["r1"], "note": "현장 확인"}).json()
+    assert j["people"][0]["sms"].startswith("[창원시 재난상황실]")             # 문자 머리글은 보낸 시군
+    d = TestClient(main.app)
+    _login(d, "do1", "password-2")
+    b = d.get("/api/reply/board").json()["siguns"]
+    assert b[0]["sigun"] == "창원" and b[0]["rows"][0]["by"] == "창원시 · 창원 담당"   # 도 현황판에서 누가 보냈는지 보인다
+    j = d.post("/api/reply/ask", json={"rids": ["r1"], "note": "재확인"}).json()
+    assert j["people"][0]["sms"].startswith("[경남도 재난상황실]")             # 도도 같은 지구에 보낼 수 있다

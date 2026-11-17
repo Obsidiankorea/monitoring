@@ -96,16 +96,18 @@ def current_by_sigun(sigun_full: str | None) -> dict[str, list[dict]]:
     return out
 
 
-def sms_one(name: str, place: str, note: str, url: str) -> str:
+def sms_one(name: str, place: str, note: str, url: str, org: str = "경남도") -> str:
     """지구 하나에 고정된 문자 글(상황판단에서 보낼 때) — 화면은 이것을 그대로 쓴다(글을 따로 만들지 않는다). % 같은 숫자는 넣지 않는다."""
-    return f"[경남도 재난상황실] {name}({place}) — {note or NOTE}\n{url}"
+    return f"[{org} 재난상황실] {name}({place}) — {note or NOTE}\n{url}"
 
 
-def ask(rids: list[str], note: str, base: str, preview: bool = False, single: bool = False, info: str = "") -> dict:
+def ask(rids: list[str], note: str, base: str, preview: bool = False, single: bool = False, info: str = "",
+        by: str = "상황실", org: str = "경남도") -> dict:
     """지구들에 회신 요청 — 지구 링크를 (없으면) 만들고 기록에 요청을 남긴다.
     {people: [{who, tel, names, sms}] 번호마다 문자 하나(맡은 지구 링크를 모아), nophone: [{name, url}] 번호를 모르는 지구, links: [{rid, name, url}]}.
     preview — 요청(ask)을 남기지 않고 글 · 링크만(상황판단 미리보기). 링크는 지구마다 하나라 없으면 만든다(현황 rows 에는 기록이 생겨야 나온다).
-    single — 지구마다 따로(같은 번호가 다른 지구를 맡아도 묶지 않는다) · 글은 sms_one. info — 그때의 단계 · %(요청 기록의 more 칸, 현장에는 안 보인다)."""
+    single — 지구마다 따로(같은 번호가 다른 지구를 맡아도 묶지 않는다) · 글은 sms_one. info — 그때의 단계 · %(요청 기록의 more 칸, 현장에는 안 보인다).
+    by — 요청한 곳 · 사람(기록 · 도 현황판 · 현장 화면 '요청' 칸, 예: '창원시 · 홍길동'), org — 문자 머리글('[창원시 재난상황실]')."""
     from . import contacts
     dz, csvrows = _districts(), contacts._rows()
     note = (note or "").strip()[:200]
@@ -123,7 +125,7 @@ def ask(rids: list[str], note: str, base: str, preview: bool = False, single: bo
             links.append({"rid": rid, "name": name, "url": url})
             if not preview:
                 con.execute("INSERT INTO duty_log(rid, at, kind, who, more, memo) VALUES(?,?,?,?,?,?)",
-                            (rid, at, "ask", "상황실", (info or "").strip()[:60] or None, note))
+                            (rid, at, "ask", (by or "상황실")[:60], (info or "").strip()[:60] or None, note))
             # 받는 사람 자리 p — 링크에 붙여 누가 눌렀는지 안다(u<id> 현장 등록 담당 · 1 · 2 연락처 파일 담당1 · 2)
             people = [(_who(p), p["tel"], f"u{p['id']}") for p in _current(con, rid) if p["tel"]]   # 번호 없이 등록한 담당은 문자를 못 받는다
             if not people:                                       # 아직 아무도 등록 안 한 지구 — 연락처 파일의 번호로
@@ -132,10 +134,10 @@ def ask(rids: list[str], note: str, base: str, preview: bool = False, single: bo
                           if (t := _mobile(r.get(f"담당{i}_연락처_정규화") or r.get(f"담당{i}_연락처") or ""))]
             for who, tel, pk in people:
                 u = f"{url}?p={pk}"
-                by_tel.setdefault((tel, rid) if single else tel, {"who": who, "tel": tel, "items": [], "one": sms_one(name, place, note, u)})["items"].append((name, u))
+                by_tel.setdefault((tel, rid) if single else tel, {"who": who, "tel": tel, "items": [], "one": sms_one(name, place, note, u, org)})["items"].append((name, u))
             if not people:
                 nophone.append({"name": name, "url": url})
-    head = f"[경남도 재난상황실] {note or NOTE}"
+    head = f"[{org} 재난상황실] {note or NOTE}"
     return {"nophone": nophone, "links": links, "people": [
         {"who": p["who"], "tel": p["tel"], "names": [n for n, _ in p["items"]],
          "sms": p["one"] if single else "\n".join([head] + [u if len(p["items"]) == 1 else f"{n} {u}" for n, u in p["items"]])}
@@ -157,7 +159,7 @@ def rounds(con, rid: str, n: int = 5, now: str | None = None) -> list[dict]:
     for lid, at, kind, who, action, more, memo, photo in con.execute(
             "SELECT id, at, kind, who, action, more, memo, photo FROM duty_log WHERE rid=? ORDER BY id", (rid,)):
         if kind == "ask":
-            cur = {"ask": {"at": at, "memo": memo or NOTE, "info": more}, "ev": []}
+            cur = {"ask": {"at": at, "memo": memo or NOTE, "info": more, "by": who or "상황실"}, "ev": []}
             out.append(cur)
             continue
         if cur is None:
@@ -184,7 +186,7 @@ def rounds(con, rid: str, n: int = 5, now: str | None = None) -> list[dict]:
         top = max([i for i, (k, _) in enumerate(STEPS) if first.get(k)] + [0 if a else -1])
         r["steps"] = []
         for i, (k, lab) in enumerate(STEPS):
-            x = {"at": a["at"], "who": "상황실"} if k == "ask" and a else first.get(k)
+            x = {"at": a["at"], "who": a.get("by") or "상황실"} if k == "ask" and a else first.get(k)
             st = "done" if x else "skip" if i < top else "next" if i == top + 1 else "todo"
             r["steps"].append({"k": k, "label": lab, "st": st, "who": (x or {}).get("who", ""),
                                "t": _t(x["at"], a and a["at"]) if x else "", "plus": _mins(a["at"], x["at"]) if x and a else None})
@@ -219,7 +221,7 @@ def rows() -> list[dict]:
             rd = rounds(con, rid, 1)
             out.append({"rid": rid, "token": token, "name": name, "addr": addr, "round": rd[0] if rd else None,
                         "people": [{"who": _who(p), "tel": p["tel"]} for p in _current(con, rid)],
-                        "asked_at": a and a[1], "note": a and a[5], "info": a and a[4],
+                        "asked_at": a and a[1], "asked_by": a and a[2], "note": a and a[5], "info": a and a[4],
                         "reply": r and {"id": r[0], "at": r[1], "who": r[2], "action": r[3], "more": r[4], "memo": r[5], "photo": bool(r[6])},
                         "waiting": bool(a and (not r or r[0] < a[0]))})     # 마지막 요청 뒤로 회신이 없다
     out.sort(key=lambda x: x["asked_at"] or "", reverse=True)
@@ -611,7 +613,8 @@ def board(hours: int = 24, now: str | None = None) -> list[dict]:
             g["warn"] += bool(r["warn"])
             g["help"] += "지원 필요" in r["side"]
             g["last"] = max(g["last"], r["ask"]["at"])
-            g["rows"].append({"rid": rid, "name": name, "now": r["now"], "asked": r["ask"]["at"], "warn": r["warn"] and r["warn"]["text"],
+            g["rows"].append({"rid": rid, "name": name, "now": r["now"], "asked": r["ask"]["at"], "by": r["ask"]["by"],
+                              "warn": r["warn"] and r["warn"]["text"],
                               "side": r["side"], "steps": [{"label": s["label"], "st": s["st"], "t": s["t"]} for s in r["steps"]]})
     order = list(ai.SIGUN_FULL)
     out = sorted(by.values(), key=lambda g: (-g["warn"], -g["help"], order.index(g["sigun"]) if g["sigun"] in order else 99))

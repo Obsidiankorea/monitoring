@@ -582,8 +582,13 @@ async def api_reply_ask(body: dict, request: Request, x_pin: str | None = Header
     if config.DEMO and not preview:                        # 시연 — 미리보기(가짜 연락처 · 링크)는 보여 주고 요청 기록은 남기지 않는다
         raise HTTPException(403, "시연 화면에서는 요청을 만들지 않는다")
     base = str(body.get("base") or "").strip() or str(request.base_url)
+    from . import ai
+    u = getattr(request.state, "user", None) or {}
+    org = ai.SIGUN_FULL.get(mine, mine) if mine else "경남도"          # 문자 머리글 — 보낸 곳
+    who = (u.get("name") or u.get("login")) if u and not u.get("local") else ""
+    by = f"{org if mine else '도'} · {who}" if who else (org if mine else "상황실")   # 기록 · 도 현황판 · 현장 화면의 '요청' 칸
     out = await asyncio.to_thread(reply.ask, [str(x) for x in body.get("rids") or []], str(body.get("note") or ""), base, preview,
-                                  body.get("single") is True, str(body.get("info") or ""))
+                                  body.get("single") is True, str(body.get("info") or ""), by, org)
     return JSONResponse({**out, "demo": config.DEMO}, headers={"Cache-Control": "no-store"})
 
 
