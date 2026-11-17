@@ -65,7 +65,7 @@ def listing(limit: int = 30) -> list[dict]:
 
 
 def detail(eid: int) -> dict | None:
-    """사건 하나 — 단계 이력과 판단 기록을 시각 순으로 한 줄에(kind = stage · decision)."""
+    """사건 하나 — 단계 이력 · 판단 기록 · 현장 요청과 회신을 시각 순으로 한 줄에(kind = stage · decision · field)."""
     with db.tx() as con:
         ev = con.execute("SELECT * FROM event WHERE id=?", (eid,)).fetchone()
         if not ev:
@@ -73,5 +73,7 @@ def detail(eid: int) -> dict | None:
         a, b = _span(ev)
         rows = [{"kind": "stage", **dict(r)} for r in con.execute("SELECT * FROM stage_log WHERE event=?", (eid,))]
         rows += [{"kind": "decision", **dict(r)} for r in con.execute("SELECT * FROM decision WHERE at>=? AND at<=? AND gone IS NULL", (a, b))]
+    from . import reply
+    rows += reply.field_log(a, b)                            # 그 사이 현장 요청 · 회신(이름 · 메모 글 없이)
     rows.sort(key=lambda r: (r["at"], r["kind"]))
     return {"id": ev["id"], "start": ev["start"], "end": ev["end"], "last": ev["last"], "alerts": json.loads(ev["alerts"]), "rows": rows}

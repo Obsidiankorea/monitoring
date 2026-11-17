@@ -1797,6 +1797,14 @@ body.sj-on > header, body.sj-on #stage, body.sj-on #tl, body.sj-on #rail { displ
 .sj-rp .rp1 label { display: inline-flex; gap: 5px; align-items: center; color: var(--ink-2); cursor: pointer; } .sj-rp .rp1 input { accent-color: var(--accent); } .sj-rp .rp1 b { font: 600 12.5px var(--mono); margin-right: auto; }
 .sj-rp .rp1 a, .sj-rp .rp1 button, .sj-rp .rpt p button { cursor: pointer; padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-2); color: var(--ink); text-decoration: none; font-size: 12px; }
 .sj-rp .rp1 a { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+.rph { margin-top: 8px; } .rph > summary { cursor: pointer; font-size: 12px; color: var(--accent); }
+.rphl section { border-top: 1px solid var(--line); padding: 6px 0; } .rphl h6 { margin: 0 0 2px; font-size: 12px; font-weight: 600; }
+.rphl p { margin: 0 0 2px; font-size: 11.5px; } .rphl .ev { margin: 0; padding-left: 18px; font-size: 12px; } .rphl .ev li.x { text-decoration: line-through; opacity: .6; }
+.sj-rp .rpman { border-top: 1px dashed var(--line); margin-top: 4px; padding-top: 8px; }
+.sj-rp .rpman input[type=tel] { flex: 1 1 140px; min-width: 0; height: 32px; padding: 0 8px; font: 600 13px var(--mono); color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; }
+.sj-rp .rpman input[type=tel]:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.sj-rp .rpman a[aria-disabled=true] { opacity: .5; }
+.sj-rp .rpmh { margin: 2px 0 0; font-size: 11.5px; }
 .sj-rp .rps { margin: 0; padding: 8px 10px; white-space: pre-wrap; word-break: break-all; font: 12.5px/1.5 var(--sans); background: var(--panel-2); border-radius: 6px; }
 .sj-rp .rpu { margin: 0; font: 12px var(--mono); word-break: break-all; }
 .sj-rp .rpw { margin: 8px 0; padding: 6px 10px; font-size: 12px; border-left: 3px solid var(--lv-watch); background: var(--panel-2); } .sj-rp .rpw a { color: var(--accent); }

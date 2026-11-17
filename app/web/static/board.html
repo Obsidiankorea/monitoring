@@ -32,6 +32,7 @@
   .st { display: flex; gap: 4px; flex-wrap: wrap; } .st span { padding: 0 6px; border-radius: 4px; font-size: 12px; background: #1b2635; color: var(--ink-3); }
   .st span.done { background: color-mix(in oklab, var(--ok) 25%, #0e151e); color: var(--ink); } .st span.next { outline: 1px dashed var(--ink-3); }
   td.warn { color: var(--bad); font-weight: 600; } td small { color: var(--ink-3); }
+  .nt { margin: 4px 0 0; font-size: 12.5px; color: var(--ink-2); }
   .key { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--ink-2); } .key i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; }
   .empty { padding: 30px; text-align: center; color: var(--ink-2); background: var(--panel); border: 1px dashed var(--line); border-radius: 12px; }
   @media (max-width: 640px) { .sg > summary { grid-template-columns: 56px minmax(0, 1fr); } .tags { grid-column: 1 / -1; justify-content: flex-start; } td:nth-child(3), th:nth-child(3) { display: none; } }
@@ -50,10 +51,11 @@
 <script>
   const $ = id => document.getElementById(id), esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const STEPS = ["요청", "열람", "확인", "조치 중", "조치 완료"], OPEN = new Set();
+  const pin = () => { try { return localStorage.getItem("gn-ct-pin") || ""; } catch { return ""; } };   // 지도에서 넣은 연락처 잠금 번호(같은 출처)
   async function load() {
     let j;
     try {
-      const r = await fetch(`/api/reply/board?hours=${$("hours").value}`);
+      const r = await fetch(`/api/reply/board?hours=${$("hours").value}`, { headers: { "x-pin": pin() } });
       if (r.status === 401) return location.replace("/login.html?next=/board.html");
       j = await r.json();
       if (!r.ok) throw new Error(j.detail || r.status);
@@ -67,8 +69,8 @@
       <summary><h2>${esc(g.sigun)}</h2>
         <div class="bar" role="img" aria-label="${STEPS.map(s => `${s} ${g.steps[s] || 0}`).join(", ")}">${STEPS.map((s, i) => g.steps[s] ? `<i class="s${i}" style="flex:${g.steps[s]}"></i>` : "").join("")}</div>
         <div class="tags"><span class="tag">${g.n}곳</span>${g.warn ? `<span class="tag w">확인 없음 ${g.warn}</span>` : ""}${g.help ? `<span class="tag h">지원 필요 ${g.help}</span>` : ""}<span class="tag">완료 ${g.steps["조치 완료"] || 0}</span></div></summary>
-      <table><thead><tr><th>지구</th><th>단계</th><th>요청 · 보낸 곳</th><th>알림</th></tr></thead><tbody>
-        ${g.rows.map(r => `<tr><td>${esc(r.name)}</td><td><div class="st">${r.steps.map(s => `<span class="${s.st}">${esc(s.label)}${s.t ? " " + esc(s.t) : ""}</span>`).join("")}</div></td>
+      <table><thead><tr><th>지구</th><th>단계 · 마지막 조치</th><th>요청 · 보낸 곳</th><th>알림</th></tr></thead><tbody>
+        ${g.rows.map(r => `<tr><td>${esc(r.name)}</td><td><div class="st">${r.steps.map(s => `<span class="${s.st}">${esc(s.label)}${s.t ? " " + esc(s.t) : ""}</span>`).join("")}</div>${r.note ? `<p class="nt">${esc(r.note.t)} · ${esc(r.note.label)}${r.note.memo ? " — " + esc(r.note.memo) : ""}${r.note.photo ? " 📷" : ""}</p>` : ""}</td>
           <td>${esc(r.asked.slice(5))}<br><small>${esc(r.by || "상황실")}</small></td><td class="${r.warn ? "warn" : ""}">${esc(r.warn || r.side.join(" · ") || "")}</td></tr>`).join("")}
       </tbody></table></details>`).join("");
   }

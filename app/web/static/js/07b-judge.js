@@ -86,8 +86,26 @@ function sjRpBox(r) {
   const ev = rd.ev.filter(e => e.k !== "view").map(e => `<li class="${e.x ? "x" : ""}">${escH(`${e.t} · ${e.who ? e.who + " · " : ""}${e.label}${e.x ? " (취소됨)" : ""}${e.memo ? " — " + e.memo : ""}`)}${e.photo ? " 📷" : ""}</li>`).join("");
   return `<details class="rpx${rd.warn ? " w" : ""}"><summary><b>현장 회신</b> ${escH(rd.now)}${rd.side.length ? ` · ${escH(rd.side.join(" · "))}` : ""}`
     + `${rd.warn ? ` <em>⚠ ${escH(rd.warn.text)}</em>` : ""}<span class="mute">요청 ${escH(rd.ask.at.slice(11))}${rd.ask.info ? ` · ${escH(rd.ask.info)}` : ""}</span></summary>`
-    + `<p class="mute">요청: ${escH(rd.ask.memo)}</p><ol class="tl">${st}</ol>${ev ? `<ol class="ev">${ev}</ol>` : ""}</details>`;
+    + `<p class="mute">요청: ${escH(rd.ask.memo)}</p><ol class="tl">${st}</ol>${ev ? `<ol class="ev">${ev}</ol>` : ""}`
+    + `<details class="rph" data-rph="${escH(r.id)}"><summary>이 지구 기록 전부 — 지난 요청까지</summary><div class="mute">펼치면 읽는다</div></details></details>`;
 }
+/* 이 지구 기록 전부 — 펼칠 때 받는다(/api/reply/history, 잠금 번호 뒤). 요청마다 한 묶음: 요청(누가 · 무엇을) → 단계 → 메모 · 사진 */
+document.addEventListener("toggle", async ev => {
+  const d = ev.target;
+  if (!d.matches?.("details[data-rph]") || !d.open || d.dataset.got) return;
+  const box = d.querySelector("div");
+  try {
+    const res = await fetch(`/api/reply/history?rid=${encodeURIComponent(d.dataset.rph)}`, { headers: { "x-pin": sjPin() }, cache: "no-store" });
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.detail || res.status);
+    d.dataset.got = "1";
+    box.className = "rphl";
+    box.innerHTML = j.rounds.map(rd => `<section><h6>${rd.ask ? `${escH(rd.ask.at.slice(5))} 요청 · ${escH(rd.ask.by)}` : "요청 없이 남은 기록"} <span class="mute">→ ${escH(rd.now)}</span></h6>`
+      + (rd.ask ? `<p class="mute">${escH(rd.ask.memo)}${rd.ask.info ? ` · ${escH(rd.ask.info)}` : ""}</p>` : "")
+      + `<ol class="ev">${rd.ev.filter(e => e.k !== "view").map(e => `<li class="${e.x ? "x" : ""}">${escH(`${e.t} · ${e.who ? e.who + " · " : ""}${e.label}${e.x ? " (취소됨)" : ""}${e.memo ? " — " + e.memo : ""}`)}${e.photo ? " 📷" : ""}</li>`).join("") || `<li class="mute">회신 없음</li>`}</ol></section>`).join("")
+      || `<p class="mute">기록이 없다</p>`;
+  } catch (e) { box.textContent = `읽지 못했다 — ${e.message}`; }
+}, true);
 /* 묶음 — 시군 · 읍면동 · 유형. 상태: 결정 필요(넘었는데 기록 없음) · 곧(3시간 안) · 결정함 · 지켜볼 곳 */
 function sjGroups() {
   const by = new Map();
@@ -317,10 +335,13 @@ async function sjTab(name) {
     // 지난 호우(사건 묶음) — 고르면 그 호우의 단계 이력과 판단 기록을 시각 순으로 한 줄에
     const hm = t => (t || "").slice(5, 16).replace("T", " "), evs = (await getJson("/api/events").catch(() => ({ rows: [] }))).rows;
     const pick = `<select id="sj-ev" aria-label="호우 고르기"><option value="">지금 — 판단 기록</option>` + evs.map(e => `<option value="${e.id}"${String(SJ.ev) === String(e.id) ? " selected" : ""}>`
-      + `${hm(e.start)} ~ ${e.end ? hm(e.end) : "진행 중"} · ${escH(e.alerts.join(" · ") || "특보 없음")} · 단계 ${e.log} · 결정 ${e.decisions}</option>`).join("") + `</select>`;
+      + `${hm(e.start)} ~ ${e.end ? hm(e.end) : "진행 중"} · ${escH(e.alerts.join(" · ") || "특보 없음")} · 단계 ${e.log} · 결정 ${e.decisions}</option>`).join("") + `</select>`
+      + `<p class="mute">한 줄에 시각 순으로 — 단계 · ✍ 판단 · 📨 현장 요청 · 회신(📝 메모 · 📷 사진은 지구 상세 '이 지구 기록 전부'에서)</p>`;
     if (SJ.ev && evs.some(e => String(e.id) === String(SJ.ev))) {
       const d = await getJson(`/api/events/${SJ.ev}`);
-      bd.innerHTML = pick + (d.rows.map(x => x.kind === "stage"
+      bd.innerHTML = pick + (d.rows.map(x => x.kind === "field"
+        ? `<div class="lg fd"><time>${hm(x.at)}</time>📨 <b>현장 ${escH(x.step)}</b> ${escH(x.sigun)} ${escH(x.name)}${x.memo ? " 📝" : ""}${x.photo ? " 📷" : ""}</div>`
+        : x.kind === "stage"
         ? `<div class="lg ev"><time>${hm(x.at)}</time>${STG_EMO[x.stage] || ""} <b>${escH(x.stage || "")} ${x.st === "met" ? "충족" : "근접"}</b> ${escH(x.sigun)} ${escH(x.emd || "")} ${escH(x.fam || "")}${x.pct != null ? ` ${x.pct}%` : ""} <span class="mute">${escH(x.rule || "")}</span></div>`
         : `<div class="lg dc"><time>${hm(x.at)}</time>✍ <b>${escH(x.act)}</b> ${escH(x.sigun)} ${escH(x.emd || "")} ${escH(x.fam || "")} ${escH(x.stage || "")}${x.pct != null ? ` ${x.pct}%` : ""}${x.note ? ` — ${escH(x.note)}` : ""}</div>`).join("")
         || `<p class="mute">이 호우에는 단계가 바뀐 기록도 결정도 없다</p>`);
@@ -404,7 +425,7 @@ function sjEsc() {
    링크 바깥 주소는 reply.html 에 넣은 것(localStorage reply-base — 같은 출처라 함께 쓴다). 이름 · 번호는 잠금 번호 뒤, AI 로 넘기지 않는다.
    한 벌을 두 창에서 — 상황판단(지구 상세의 단추)과 지도(고정한 지구 카드의 문자 단추, 06e). 상자 · 뒤판은 body 에 붙는다(#sj 가 숨은 지도 창에서도).
    sjRp(rid, ctx) — ctx {name, fam, st 단계별 판정, basis 기준 이름, tel 미리 고를 받는 사람, back 닫으면 돌아갈 단추, after 요청을 남긴 뒤} */
-const SJ_RP = { rid: null, note: "", j: null, done: false, pi: 0, tab: "sms", info: "", name: "", tel: "", back: null, after: null };
+const SJ_RP = { rid: null, note: "", j: null, done: false, pi: 0, tab: "sms", info: "", name: "", tel: "", mtel: "", back: null, after: null };   // pi "m" = 직접 넣은 번호(mtel)
 /* 요청 한 줄 기본값 — 그 지구에서 지금 닿은(넘은) 가장 높은 단계 · 유형으로. 결정 단추(SJ_ACT)와 같은 말. % 는 문자에 넣지 않고 기록(info)에만 */
 const SJ_RQ = { 산사태: "위험 구간 출입을 통제", 하천: "하천변 · 둔치 출입을 통제", 지하공간: "지하차도 · 지하공간 출입을 통제", "침수·해안": "침수 우려 도로 · 해안 출입을 통제" };
 function sjRpNote(fam, st, basis) {                         // st = 판정 줄 b.st({통제: {pct, met}, …}) — 두 창이 같은 모양을 넘긴다
@@ -446,7 +467,7 @@ async function sjRp(rid, ctx) {
   }
   if (rid !== undefined) {
     const c = ctx || sjRpCtx(rid);
-    Object.assign(SJ_RP, { rid, j: null, done: false, pi: 0, tab: "sms", name: c.name || rid, tel: c.tel || "", back: c.back || document.activeElement, after: c.after || null,
+    Object.assign(SJ_RP, { rid, j: null, done: false, pi: 0, mtel: "", tab: "sms", name: c.name || rid, tel: c.tel || "", back: c.back || document.activeElement, after: c.after || null,
       note: sjRpNote(c.fam, c.st, c.basis || "") });
   }
   if (!SJ_RP.rid) return;
@@ -458,6 +479,7 @@ async function sjRp(rid, ctx) {
     try { SJ_RP.j = await sjRpAsk(false); } catch (e) { box.innerHTML = `${head}<p class="mute">문자 글을 만들지 못했다 — ${escH(e.message)}</p>`; return; }
     const dg = t => String(t || "").replace(/\D/g, ""), at = SJ_RP.tel && SJ_RP.j.people.findIndex(p => dg(p.tel) === dg(SJ_RP.tel));
     if (at > 0) SJ_RP.pi = at;                                // 지도 카드에서 누른 사람을 받는 사람으로 미리 고른다
+    if (!SJ_RP.j.people.length) SJ_RP.pi = "m";               // 표에 번호가 없으면 직접 넣기부터
   }
   const j = SJ_RP.j, ln = j.links[0], base = sjRpBase();
   if (!ln) { box.innerHTML = `${head}<p class="mute">이 지구는 회신 링크를 만들 수 없다(위키 · 연락처 표에 지역ID 가 없다)</p>`; return; }
@@ -466,7 +488,9 @@ async function sjRp(rid, ctx) {
     <label class="rpn">요청 한 줄<input id="sj-rpn" maxlength="200" value="${escH(SJ_RP.note)}"></label>
     <h5>받는 사람 <span class="mute">번호마다 문자 하나 — 사람이 직접 보낸다 · 고른 사람의 문자가 오른쪽에</span></h5>
     ${j.people.map((p, i) => `<div class="rp1"><label><input type="radio" name="sj-rpp" value="${i}"${i === SJ_RP.pi ? " checked" : ""}>${escH(p.who || "담당")}</label><b>${escH(p.tel)}</b><a class="btn" data-rpgo="${i}">문자 앱 열기</a><button data-rpcp="${i}">문자 글 복사</button></div>`).join("")
-      || `<p class="mute">휴대폰 번호를 아는 담당자가 없다 — 링크를 복사해 전한다 <button data-rpcp="-1">링크 복사</button></p>`}
+      || `<p class="mute">휴대폰 번호를 아는 담당자가 없다 — 아래에 번호를 넣거나 링크를 복사해 전한다 <button data-rpcp="-1">링크 복사</button></p>`}
+    <div class="rp1 rpman"><label><input type="radio" name="sj-rpp" value="m"${SJ_RP.pi === "m" ? " checked" : ""}>직접 입력</label><input id="sj-rptel" type="tel" inputmode="tel" autocomplete="off" maxlength="13" placeholder="010-0000-0000" value="${escH(SJ_RP.mtel)}" aria-label="받는 사람 휴대폰 번호 직접 입력"><a class="btn" data-rpgo="m">문자 앱 열기</a><button data-rpcp="m">문자 글 복사</button></div>
+    <p class="mute rpmh">표의 번호가 틀렸거나 다른 사람에게 보낼 때 — 번호는 저장하지 않는다(문자 앱에만 넘긴다)</p>
     <h5>보낼 문자 글</h5><pre class="rps"></pre>
     <h5>링크 주소</h5><p class="rpu">${escH(ln.url)}</p>
     ${base ? "" : `<p class="rpw">밖에서 닿는 주소가 아직 없다 — 지금 이 주소(${escH(location.origin)})로 만들어 같은 망 밖 휴대폰에서는 안 열린다. <a href="/reply.html" target="_blank" rel="noopener">현장 회신 화면</a>에서 주소를 넣는다</p>`}
@@ -483,7 +507,8 @@ function sjRpPost() {
   $("sj-rp")?.querySelector("iframe")?.contentWindow?.postMessage({ type: "gn-rp-note", note: SJ_RP.note }, location.origin);
 }
 /* 요청 한 줄 · 고른 사람이 바뀌면 글만 고친다(입력 칸 포커스를 지키려고 다시 그리지 않는다). 글은 서버가 만든 것 그대로 */
-const sjRpSms = p => (p ? p.sms : SJ_RP.j.links[0].url);    // 글은 서버(reply.sms_one)가 만든 것 그대로
+const sjRpSms = p => (p ? p.sms : SJ_RP.j.links[0].sms || SJ_RP.j.links[0].url);    // 글은 서버(reply.sms_one)가 만든 것 그대로 — 직접 넣은 번호는 받는 사람 자리 없는 글
+const sjRpTel = () => { const d = SJ_RP.mtel.replace(/\D/g, ""); return /^01\d{8,9}$/.test(d) ? d : ""; };   // 직접 넣은 번호 — 휴대폰만
 let SJ_RPT = 0;
 function sjRpNoteIn(v) {                                  // 요청 한 줄 — 칠 때마다 잠깐 뒤 미리보기(기록 없음)를 다시 받아 글만 바꾼다
   Object.assign(SJ_RP, { note: v.trim().slice(0, 200) || "지금 현장 조치 여부를 알려 주세요", done: false });
@@ -495,10 +520,13 @@ function sjRpNoteIn(v) {                                  // 요청 한 줄 — 
   }, 300);
 }
 function sjRpText() {
-  const box = $("sj-rp"), ps = SJ_RP.j.people, txt = sjRpSms(ps[SJ_RP.pi] || ps[0]);
+  const box = $("sj-rp"), ps = SJ_RP.j.people, txt = sjRpSms(SJ_RP.pi === "m" ? null : ps[SJ_RP.pi] || ps[0]);
   box.querySelector(".rps").textContent = txt;
   box.querySelector(".rpbub").innerHTML = escH(txt).replace(/https?:\/\/[^\s<]+/g, u => `<a href="#" data-rpopen>${u}</a>`);
-  box.querySelectorAll("[data-rpgo]").forEach(a => { const p = ps[+a.dataset.rpgo]; a.href = `sms:${p.tel}?&body=${encodeURIComponent(sjRpSms(p))}`; });
+  box.querySelectorAll("[data-rpgo]").forEach(a => {
+    if (a.dataset.rpgo === "m") { const t = sjRpTel(); a.href = t ? `sms:${t}?&body=${encodeURIComponent(sjRpSms(null))}` : "#"; a.setAttribute("aria-disabled", String(!t)); return; }
+    const p = ps[+a.dataset.rpgo]; a.href = `sms:${p.tel}?&body=${encodeURIComponent(sjRpSms(p))}`;
+  });
 }
 function sjRpTab(t) {
   SJ_RP.tab = t;
@@ -519,14 +547,28 @@ function sjRpClick(ev) {
   if (rt) { ev.preventDefault(); return sjRpTab(rt.dataset.rptab || "page"); }   // 말풍선 속 링크 — 둘째 화면으로
   const rg = t.closest("[data-rpgo], [data-rpcp]");
   if (!rg) return;
+  if (rg.dataset.rpgo === "m" && !sjRpTel()) {               // 번호가 아직 없거나 휴대폰 번호가 아니다
+    ev.preventDefault();
+    toast("받는 사람 휴대폰 번호를 010… 으로 넣어 주세요");
+    return $("sj-rptel")?.focus();
+  }
   if (rg.dataset.rpcp != null) {
-    const p = SJ_RP.j.people[+rg.dataset.rpcp];
-    navigator.clipboard.writeText(p ? sjRpSms(p) : SJ_RP.j.links[0].url).then(() => { rg.textContent = "복사했다"; }, () => { rg.textContent = "복사하지 못했다"; });
+    const p = rg.dataset.rpcp === "m" ? null : SJ_RP.j.people[+rg.dataset.rpcp];
+    navigator.clipboard.writeText(p || rg.dataset.rpcp === "m" ? sjRpSms(p) : SJ_RP.j.links[0].url).then(() => { rg.textContent = "복사했다"; }, () => { rg.textContent = "복사하지 못했다"; });
   }
   sjRpCommit();                                             // 문자 앱 열기는 그대로 sms: 로 간다
 }
-function sjRpChange(ev) { if (ev.target.name === "sj-rpp") { SJ_RP.pi = +ev.target.value; sjRpText(); } }
-function sjRpInput(ev) { if (ev.target.id === "sj-rpn") sjRpNoteIn(ev.target.value); }
+function sjRpChange(ev) { if (ev.target.name === "sj-rpp") { SJ_RP.pi = ev.target.value === "m" ? "m" : +ev.target.value; sjRpText(); } }
+function sjRpInput(ev) {
+  if (ev.target.id === "sj-rpn") return sjRpNoteIn(ev.target.value);
+  if (ev.target.id === "sj-rptel") {                         // 번호를 치면 그 줄을 받는 사람으로
+    SJ_RP.mtel = ev.target.value;
+    const r = $("sj-rp").querySelector('input[name="sj-rpp"][value="m"]');
+    if (r && !r.checked) r.checked = true;
+    SJ_RP.pi = "m";
+    sjRpText();
+  }
+}
 async function sjDecide(body) {
   try {
     const r = await fetch("/api/ai/decisions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });

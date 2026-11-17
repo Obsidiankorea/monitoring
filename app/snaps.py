@@ -302,9 +302,9 @@ def start(**kw) -> dict:
 # ── 시연 파견 현황 — 사람 기록을 지우고 가짜 요청 · 회신을 넣는다(이름 · 번호 없음) ────────────────────────
 # 시연을 띄울 때 사본 DB 에. 특보가 걸린 시군의 지구 몇 곳에 단계가 고루 보이게(조치 완료 · 조치 중 · 지원 필요 · 확인 없음 …).
 # (요청 몇 분 전, [(몇 분 전, 회신 단계 | view)]) — 단계 이름은 reply.STEPS · STAMPS
-SCRIPT = ((42, [(38, "view"), (35, "ack"), (30, "doing"), (12, "done")]),
-          (40, [(36, "view"), (33, "ack"), (25, "doing")]),
-          (35, [(30, "view"), (28, "ack"), (20, "help")]),
+SCRIPT = ((42, [(38, "view"), (35, "ack"), (30, "doing"), (12, "done"), (11, "note:통제선 설치 · 주민 3세대 대피 안내 완료")]),
+          (40, [(36, "view"), (33, "ack"), (25, "doing"), (24, "note:하천변 산책로 출입 통제 중")]),
+          (35, [(30, "view"), (28, "ack"), (20, "help"), (19, "note:배수펌프 1대 추가 필요")]),
           (25, []),
           (18, [(15, "view")]),
           (30, [(27, "view"), (25, "ack"), (20, "doing"), (6, "done")]),
@@ -338,6 +338,9 @@ def add_dispatch(now: datetime) -> int:
             con.execute("INSERT INTO duty_log(rid, at, kind, who, more, memo) VALUES(?,?,?,?,?,?)",
                         (rid, f(ask_m), "ask", by, None, reply.NOTE))
             for m, k in evs:
+                if k.startswith("note:"):                   # 조치 메모(가짜)
+                    con.execute("INSERT INTO duty_log(rid, at, kind, who, memo) VALUES(?,?,?,?,?)", (rid, f(m), "note", "현장 담당(시연)", k[5:]))
+                    continue
                 con.execute("INSERT INTO duty_log(rid, at, kind, who, action, memo) VALUES(?,?,?,?,?,?)",
                             (rid, f(m), "view" if k == "view" else "reply", "" if k == "view" else "현장 담당(시연)",
                              None if k == "view" else k, ""))

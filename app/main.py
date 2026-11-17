@@ -640,14 +640,29 @@ async def api_reply_list(request: Request, x_pin: str | None = Header(None)):
 
 
 @app.get("/api/reply/board")
-async def api_reply_board(request: Request, hours: int = Query(24, ge=1, le=168)):
-    """도 파견 현황판 — 시군별 요청 · 단계 · 미확인 경고(이름 · 번호 없음). 시군 사용자는 자기 시군만."""
-    from . import reply
-    out = await asyncio.to_thread(reply.board, hours)
+async def api_reply_board(request: Request, hours: int = Query(24, ge=1, le=168), x_pin: str | None = Header(None)):
+    """도 파견 현황판 — 시군별 요청 · 단계 · 미확인 경고(이름 · 번호 없음). 시군 사용자는 자기 시군만.
+    잠금 번호가 맞으면(또는 잠금이 없으면) 지구 줄에 마지막 조치 메모 · 사진 표시도(메모에 이름이 들 수 있다)."""
+    from . import contacts, reply
+    out = await asyncio.to_thread(reply.board, hours, None, contacts.pin_ok(x_pin))
     mine = _my_sigun(request)
     if mine:
         out = [g for g in out if g["sigun"] == mine]
     return JSONResponse({"siguns": out, "hours": hours}, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/reply/history")
+async def api_reply_history(rid: str, request: Request, x_pin: str | None = Header(None)):
+    """지구 하나의 현장 기록 전부(요청마다 단계 표 · 메모 · 사진 표시) — 잠금 번호 뒤, 시군 사용자는 자기 시군 지구만."""
+    from . import reply
+    _contacts_pin(x_pin)
+    mine = _my_sigun(request)
+    if mine and (await asyncio.to_thread(_rid_sigun)).get(rid) != mine:
+        raise HTTPException(403, f"{mine} 지구가 아니다")
+    d = await asyncio.to_thread(reply.history, rid)
+    if not d:
+        raise HTTPException(404, "이 지구에는 현장 기록이 없다")
+    return JSONResponse(d, headers={"Cache-Control": "no-store"})
 
 
 from . import reply as _reply  # noqa: E402 — 회신 화면(/r/…). 같은 망에서는 대시보드 주소로도 열린다(밖에는 app.reply 서버만)

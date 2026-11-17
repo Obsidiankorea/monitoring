@@ -139,8 +139,13 @@ def _log(now: dict) -> None:
 
 
 def log_once(base: str) -> None:
-    """시연 — 뜰 때 한 번 훑어 사건 · 단계 이력을 적는다(텔레그램은 보내지 않는다)."""
+    """시연 — 뜰 때 한 번 훑어 사건 · 단계 이력을 적는다(텔레그램은 보내지 않는다).
+    시연 시각에 막 시작한 사건으로 적히므로 시작을 3시간 앞으로 — 그 앞의 가짜 현장 요청 · 회신(snaps.add_dispatch)이 사건 안에 든다."""
+    from datetime import timedelta
     _log(_scan(base))
+    with db.tx() as con:
+        con.execute("UPDATE event SET start=? WHERE id=(SELECT MAX(id) FROM event) AND start=last",
+                    ((clock.now() - timedelta(hours=3)).isoformat(timespec="seconds"),))
 
 
 def _msg(new: list, tm: str) -> str:

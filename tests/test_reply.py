@@ -174,6 +174,8 @@ def test_single_district_sms_and_info(tdb, tmp_path, monkeypatch):
     assert a["tel"] == b["tel"] and a["names"] == ["가지구"] and b["names"] == ["나지구"]
     assert a["sms"] == reply.sms_one("가지구", "창원시 북면", "즉시 대피 조치하고 알려 주세요", j["links"][0]["url"] + "?p=1")
     assert a["sms"].startswith("[경남도 재난상황실] 가지구(창원시 북면) — 즉시 대피") and a["sms"].count("https://") == 1 and "%" not in a["sms"]
+    ln = j["links"][0]                                      # 직접 넣은 번호로 보낼 글 — 같은 글, 받는 사람 자리(?p=) 없이
+    assert ln["sms"] == reply.sms_one("가지구", "창원시 북면", "즉시 대피 조치하고 알려 주세요", ln["url"]) and "?p=" not in ln["sms"]
     row = next(x for x in c.get("/api/reply/list").json()["rows"] if x["rid"] == A)
     assert row["info"] == "긴급대피 104% · 산사태" and row["round"]["ask"]["memo"].startswith("즉시 대피")
     tok = j["links"][0]["url"].rsplit("/", 1)[1]
@@ -343,3 +345,40 @@ def test_link_page_tabs_and_map_links():
     assert "nmap://" not in r and "kakaomap://" not in r and 'a.rel = "noopener"' in r
     assert r"const NOTPLACE = /^\s*$|해당\s*없|^\s*없음\s*$|^\s*[-–—]\s*$|\d+\s*개소/;" in r and r'split(/\s*[,·ㆍ\n]\s*/)' in r
     assert "if (PV) return;" in r                                            # 미리보기에서는 지도 판을 열지 않는다
+
+
+def test_history_board_note_and_event_flow(tdb, tmp_path, monkeypatch):
+    """도가 보는 지구 기록 — ① 지난 요청까지 전부(잠금 뒤) ② 현황판 지구 줄에 마지막 조치 메모(잠금 번호가 맞을 때만)
+    ③ 호우 사건 이력에 현장 요청 · 회신(이름 · 메모 글 없이)."""
+    from datetime import datetime
+    from app import contacts as ct, events
+    _setup(tmp_path, monkeypatch)
+    c, pub = TestClient(main.app), TestClient(reply.public_app)
+    T = ["2026-11-18 10:00"]
+    monkeypatch.setattr(reply, "_now", lambda: T[0])
+    url = c.post("/api/reply/ask", json={"rids": [A], "base": "https://r.example", "single": True, "note": "첫 요청"}).json()["links"][0]["url"]
+    tok = url.rsplit("/", 1)[1]
+    T[0] = "2026-11-18 10:05"
+    pub.post(f"/r/{tok}/stamp", json={"p": "1", "step": "done"})
+    pub.post(f"/r/{tok}/note", json={"p": "1", "memo": "통제선 설치 완료"})
+    T[0] = "2026-11-18 11:00"
+    c.post("/api/reply/ask", json={"rids": [A], "base": "https://r.example", "single": True, "note": "두 번째 요청"})
+    T[0] = "2026-11-18 11:04"
+    pub.post(f"/r/{tok}/note", json={"p": "1", "memo": "물 빠짐"})
+    h = c.get("/api/reply/history", params={"rid": A}).json()
+    assert [r["ask"]["memo"] for r in h["rounds"]] == ["두 번째 요청", "첫 요청"]
+    assert any(e["memo"] == "통제선 설치 완료" for e in h["rounds"][1]["ev"])           # 지난 요청의 메모도 보인다
+    rows = [r for g in c.get("/api/reply/board").json()["siguns"] for r in g["rows"]]
+    assert rows[0]["note"]["memo"] == "물 빠짐"                                         # 잠금이 없으면 보인다
+    ct.set_pin("", "4321")
+    assert c.get("/api/reply/history", params={"rid": A}).status_code == 401
+    rows = [r for g in c.get("/api/reply/board").json()["siguns"] for r in g["rows"]]
+    assert "note" not in rows[0]                                                        # 잠금 번호 없이는 메모를 안 준다
+    rows = [r for g in c.get("/api/reply/board", headers={"x-pin": "4321"}).json()["siguns"] for r in g["rows"]]
+    assert rows[0]["note"]["memo"] == "물 빠짐"
+    with tdb.tx() as con:
+        con.execute("INSERT INTO event(start, last, alerts) VALUES('2026-11-18T09:00:00','2026-11-18T12:00:00','[]')")
+    d = events.detail(1)
+    f = [x for x in d["rows"] if x["kind"] == "field"]
+    assert [x["step"] for x in f] == ["요청", "조치 완료", "덧붙임", "요청", "덧붙임"] and f[2]["memo"] is True
+    assert "통제선" not in str(d) and "김파일" not in str(d)                             # 사건 이력은 잠금 없이 열린다

@@ -122,7 +122,7 @@ def ask(rids: list[str], note: str, base: str, preview: bool = False, single: bo
             con.execute("INSERT OR IGNORE INTO duty_link(rid, token, sigun, name, addr) VALUES(?,?,?,?,?)",
                         (rid, secrets.token_urlsafe(9), sigun, name, addr))
             url = f"{base.rstrip('/')}/r/{con.execute('SELECT token FROM duty_link WHERE rid=?', (rid,)).fetchone()[0]}"
-            links.append({"rid": rid, "name": name, "url": url})
+            links.append({"rid": rid, "name": name, "url": url, "sms": sms_one(name, place, note, url, org)})   # 직접 넣은 번호로 보낼 글(받는 사람 자리 없이)
             if not preview:
                 con.execute("INSERT INTO duty_log(rid, at, kind, who, more, memo) VALUES(?,?,?,?,?,?)",
                             (rid, at, "ask", (by or "상황실")[:60], (info or "").strip()[:60] or None, note))
@@ -596,7 +596,41 @@ if __name__ == "__main__":
     uvicorn.run(public_app, host=os.environ.get("HOST", "127.0.0.1"), port=int(os.environ.get("GN_REPLY_PORT", "8010")))
 
 
-def board(hours: int = 24, now: str | None = None) -> list[dict]:
+def history(rid: str, n: int = 50) -> dict | None:
+    """지구 하나의 기록 전부 — 요청마다 묶은 단계 표(rounds), 새 요청부터 n 개. 이름이 들어 있다(잠금 번호 뒤)."""
+    with db.tx() as con:
+        got = con.execute("SELECT name, addr FROM duty_link WHERE rid=?", (rid,)).fetchone()
+        if not got:
+            return None
+        return {"rid": rid, "name": got[0], "addr": got[1], "rounds": rounds(con, rid, n)}
+
+
+def _last_note(r: dict) -> dict | None:
+    """요청 한 번에서 마지막으로 남긴 메모 · 사진 — 파견 현황판 지구 줄(잠금 번호를 넣은 화면만)."""
+    x = next((e for e in reversed(r["ev"]) if (e.get("memo") or e.get("photo")) and not e.get("x")), None)
+    return x and {"t": x["t"], "label": x["label"], "memo": x["memo"], "photo": x["photo"]}
+
+
+def field_log(a: str, b: str) -> list[dict]:
+    """사건 기간(ISO a~b)의 현장 기록 — 요청 · 단계 · 덧붙임(열람 · 담당 등록은 뺀다). 이름 · 메모 글은 넣지 않는다(사건 이력은 잠금 없이 열린다)."""
+    from . import ai
+    short = {v: k for k, v in ai.SIGUN_FULL.items()}
+    lab = dict(STEPS, **SIDE)
+    a_, b_ = a.replace("T", " ")[:16], b.replace("T", " ")[:16]
+    with db.tx() as con:
+        got = con.execute("SELECT l.at, l.kind, l.action, l.memo, l.photo, k.sigun, k.name FROM duty_log l JOIN duty_link k ON k.rid = l.rid"
+                          " WHERE l.at >= ? AND l.at <= ? AND l.kind IN ('ask', 'reply', 'note') ORDER BY l.id", (a_, b_)).fetchall()
+    out = []
+    for at, kind, action, memo, photo, sg, name in got:
+        if kind == "reply" and action == "undo":
+            continue
+        step = "요청" if kind == "ask" else "덧붙임" if kind == "note" else lab.get({"not": "ack"}.get(action, action), action)
+        out.append({"kind": "field", "at": at.replace(" ", "T") + ":00", "sigun": short.get(sg, sg), "name": name, "step": step,
+                    "memo": bool(memo) and kind != "ask", "photo": bool(photo)})
+    return out
+
+
+def board(hours: int = 24, now: str | None = None, notes: bool = False) -> list[dict]:
     """도 파견 현황판 — 최근 hours 시간 안에 요청한 지구를 시군별로: 단계 셈 · 미확인 경고 · 지구 줄.
     이름 · 번호는 넣지 않는다(현황판은 진행만 — 사람은 회신 현황(잠금 뒤)에서)."""
     from . import ai
@@ -620,7 +654,8 @@ def board(hours: int = 24, now: str | None = None) -> list[dict]:
             g["last"] = max(g["last"], r["ask"]["at"])
             g["rows"].append({"rid": rid, "name": name, "now": r["now"], "asked": r["ask"]["at"], "by": r["ask"]["by"],
                               "warn": r["warn"] and r["warn"]["text"],
-                              "side": r["side"], "steps": [{"label": s["label"], "st": s["st"], "t": s["t"]} for s in r["steps"]]})
+                              "side": r["side"], "steps": [{"label": s["label"], "st": s["st"], "t": s["t"]} for s in r["steps"]],
+                              **({"note": _last_note(r)} if notes else {})})
     order = list(ai.SIGUN_FULL)
     out = sorted(by.values(), key=lambda g: (-g["warn"], -g["help"], order.index(g["sigun"]) if g["sigun"] in order else 99))
     for g in out:
