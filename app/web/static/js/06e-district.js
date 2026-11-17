@@ -97,6 +97,10 @@ async function loadDistrict() {
     const one = dzOne;
     DZ_REG = j.regions || DZ_REG;
     DZ_PCT = Object.fromEntries(j.rows.map(r => [r.id, { grid: one(r.b.grid), aws: one(r.b.aws), where: r.where }]));
+    // 새로 만든 DZ_PCT 에는 마우스로 받아 둔 시군 시간별 줄이 없다 — 받은 기록도 지워야 다음 마우스에 다시 받는다
+    // (안 지우면 5분 동안 '예보를 못 받았다'로 보였다). 고정한 카드의 시군은 바로 다시
+    DZ_SQ.clear();
+    if (TIP_PIN?.fam && TIP_PIN.sigun && !SELS.includes(TIP_PIN.sigun)) dzSerLoad(TIP_PIN.sigun);
   } catch { DZ_PCT = DZ_PCT || {}; }
   drawDistrict(); districtLegend();
   DZ_T = setTimeout(loadDistrict, 5 * 60 * 1000);
