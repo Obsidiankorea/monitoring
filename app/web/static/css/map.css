@@ -2202,35 +2202,71 @@ body.sj-on > header, body.sj-on #stage, body.sj-on #tl, body.sj-on #rail { displ
 #rep .set .lgadd input { font: 12px var(--sans); color: var(--ink-2); max-width: 100%; }
 #rep .set .msg { border: 0; padding: 0; min-height: 1.2em; }
 /* 보고서 작성 창(상황판단회의) — 종류 칩 · 제목 · 기간 · 두 묶음 문구 고르기(고른 것은 그 자리에서 고친다). 창 안에서만 굴린다 */
-#rep .op.cmp { width: 720px; }
+#rep .op.cmp { width: min(1400px, calc(94vw / var(--k, 1))); height: calc(90vh / var(--k, 1)); max-width: none; }
 #rep .rt-op.cm { top: 14px; }
-#rep .ob .kc { display: flex; flex-wrap: wrap; gap: 6px; }
-#rep .ob .kc button { min-width: 56px; min-height: 44px; padding: 0 14px; font: 600 14px var(--sans); color: var(--ink-2); background: transparent; border: 1px solid var(--line); border-radius: 999px; cursor: pointer; }
-#rep .ob .kc button.on { color: var(--ink); border-color: var(--accent); background: color-mix(in oklab, var(--accent) 18%, transparent); }
+#rep .ob .kc, #rep .cmr .kc { display: flex; flex-wrap: wrap; gap: 6px; }
+#rep .kc button { min-width: 56px; min-height: 44px; padding: 0 14px; font: 600 14px var(--sans); color: var(--ink-2); background: transparent; border: 1px solid var(--line); border-radius: 999px; cursor: pointer; }
+#rep .kc button.on { color: var(--ink); border-color: var(--accent); background: color-mix(in oklab, var(--accent) 18%, transparent); }
+#rep .kc.sm { padding: 0 12px 6px; gap: 4px; } #rep .kc.sm button { min-width: 0; min-height: 32px; padding: 0 10px; font-size: 12.5px; }
 #rep .ob #rep-cm-title { flex: 2 1 260px; }
-#rep .ob .lnk { padding: 0; min-height: 0; font: inherit; color: var(--accent); background: none; border: 0; text-decoration: underline; cursor: pointer; }
-#rep .ob .cm ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
-#rep .ob .cm li.ci { border-radius: 8px; padding: 0 6px; }
-#rep .ob .cm li.ci { display: grid; grid-template-columns: 1fr auto; align-items: start; }
-#rep .ob .cm li.ci.open { background: color-mix(in oklab, var(--accent) 8%, transparent); padding-bottom: 8px; }
-#rep .ob .cm .eb { min-width: 44px; min-height: 44px; border: 0; background: none; color: var(--ink-3); font-size: 14px; border-radius: 8px; cursor: pointer; opacity: .55; }
-#rep .ob .cm li.ci:hover .eb, #rep .ob .cm .eb:focus-visible, #rep .ob .cm li.open .eb { opacity: 1; color: var(--ink-2); }
-#rep .ob .cm .eb:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-#rep .ob .cm .ed { grid-column: 1 / -1; }
-#rep .ob .ps { display: grid; gap: 6px; margin-bottom: 10px; }
-#rep .ob .ps select { min-height: 44px; flex: 2 1 220px; }
+#rep .lnk { padding: 0; min-height: 0; font: inherit; color: var(--accent); background: none; border: 0; text-decoration: underline; cursor: pointer; }
 #rep .ob .psm > summary { cursor: pointer; color: var(--ink-3); font-size: 12.5px; min-height: 32px; display: flex; align-items: center; }
 #rep .ob .psm .row { display: flex; gap: 8px; align-items: center; margin-top: 6px; } #rep .ob .psm .row input { flex: 1 1 160px; min-height: 44px; min-width: 0; }
 #rep .ob .psm .pm { justify-content: space-between; color: var(--ink-2); font-size: 13px; }
-#rep .ob .cm .ck { align-items: flex-start; padding: 10px 0; min-height: 44px; }
-#rep .ob .cm .ck input { margin-top: 2px; flex: none; }
-#rep .ob .cm .pv { line-height: 1.45; overflow-wrap: anywhere; } #rep .ob .cm .pv b { font-weight: 800; }
-#rep .ob .cm .pv small { display: block; margin-top: 2px; color: var(--ink-2); font-size: 12px; }
-#rep .ob .cm .ed { display: grid; gap: 6px; padding-left: 26px; }
-#rep .ob .cm textarea { width: 100%; min-height: 44px; padding: 8px 10px; resize: vertical; font: 500 13px/1.45 var(--sans); color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; color-scheme: dark light; }
-#rep .ob .cm textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-#rep .ob .cm legend .cnt { font-style: normal; font-weight: 500; color: var(--ink-3); margin-left: 6px; } #rep .ob .cm legend .cnt.warn { color: var(--lv-watch); }
-@media (max-width: 480px) { #rep .ob .cm .ed { padding-left: 0; } }
+/* 머리 요약 줄 — 프리셋 · 제목 · 종류 · 기간 · 자료, 자세한 것은 설정을 펴서 */
+#rep .cmh { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; flex: none; }
+#rep .cmh select { height: 40px; max-width: 100%; padding: 0 10px; font: 500 13px var(--sans); color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; color-scheme: dark light; }
+#rep .cmh .sum { flex: 1 1 260px; min-width: 0; color: var(--ink-2); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#rep .cmh .sum b { color: var(--ink); font-weight: 600; }
+#rep .cmh button, #rep .cml .row button { min-height: 40px; padding: 0 14px; font: 600 13px var(--sans); color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+#rep .cmx { flex: none; max-height: 40%; overflow: auto; border-bottom: 1px solid var(--line); }
+#rep .cmx[hidden] { display: none; }
+#rep .cmx .ob { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); align-items: start; gap: 0 12px; padding-bottom: 12px; }
+#rep .cmx .fl > span { flex: 0 0 auto; min-width: 72px; }
+#rep .cmx .fl > input, #rep .cmx .fl > select { flex: 1 1 180px; }
+/* 탭 — 중점 유의사항 · 조치계획, 옆 숫자는 고른 개수 */
+#rep .cmt { display: flex; gap: 4px; padding: 4px 14px 0; border-bottom: 1px solid var(--line); flex: none; }
+#rep .cmt button { min-height: 44px; padding: 0 14px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--ink-2); font: 600 14px var(--sans); cursor: pointer; }
+#rep .cmt button[aria-selected=true] { color: var(--ink); border-bottom-color: var(--accent); }
+#rep .cmt button i { font-style: normal; font-weight: 500; color: var(--ink-3); margin-left: 6px; font-variant-numeric: tabular-nums; }
+/* 고른 것(보내는 차례) + 오른쪽에서 덮어 나오는 후보 */
+#rep .cmb { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); position: relative; overflow: hidden; }
+#rep .cml { overflow: auto; padding: 6px 18px 14px; display: grid; align-content: start; gap: 10px; }
+#rep .cml .em { margin: 24px 0 8px; }
+#rep .cml .row { display: flex; gap: 8px; flex-wrap: wrap; }
+#rep .sl { list-style: none; margin: 0; padding: 0; }
+#rep .sl li.ci { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto auto; align-items: center; column-gap: 2px; border-bottom: 1px solid color-mix(in oklab, var(--line) 55%, transparent); }
+#rep .sl li.ci.open { background: color-mix(in oklab, var(--accent) 7%, transparent); }
+#rep .sl .no { color: var(--ink-3); font: 500 12px var(--mono); text-align: right; padding-right: 10px; }
+#rep .sl .pv { padding: 10px 0; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+#rep .sl .pv b { font-weight: 700; }
+#rep .sl .pv small { display: block; margin-top: 2px; color: var(--ink-3); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#rep .cmp .eb { min-width: 40px; min-height: 40px; border: 0; background: none; color: var(--ink-3); font-size: 14px; border-radius: 8px; cursor: pointer; opacity: .5; }
+#rep .sl li:hover .eb, #rep .cmp .eb:focus-visible, #rep .sl li.open .eb, #rep .cmr .eb { opacity: 1; color: var(--ink-2); }
+#rep .cmp .eb:hover { background: color-mix(in oklab, var(--ink) 8%, transparent); }
+#rep .sl .ed { grid-column: 2 / -1; display: grid; gap: 6px; padding: 0 8px 10px 0; }
+#rep .sl textarea { width: 100%; min-height: 44px; padding: 8px 10px; resize: vertical; font: 500 13px/1.45 var(--sans); color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; color-scheme: dark light; }
+#rep .mw { display: grid; gap: 4px; max-width: 420px; }
+#rep .mt { height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+#rep .mt i { display: block; height: 100%; background: var(--accent); }
+#rep .mt.over i { background: var(--lv-watch); } #rep .mt.over + small { color: var(--lv-watch); }
+#rep .cmr { position: absolute; inset: 0 0 0 auto; width: min(480px, 100%); z-index: 2; display: flex; flex-direction: column; min-height: 0;
+  border-left: 1px solid var(--line); background: var(--panel-2); box-shadow: -16px 0 40px rgba(0,0,0,.45); }
+#rep .cmr.in { animation: cmr-in .2s ease-out; }
+#rep .cmr .rh { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 14px; }
+#rep .cmr .rh b { flex: 1; font-size: 13px; } #rep .cmr .rh b i { font-style: normal; font-weight: 500; color: var(--ink-3); margin-left: 4px; }
+#rep .cmr input[type=search] { margin: 0 12px 8px; height: 40px; padding: 0 10px; font: 500 13px var(--sans); color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; color-scheme: dark light; }
+#rep .cdl { list-style: none; margin: 0; padding: 0 8px 12px; overflow: auto; flex: 1; min-height: 0; }
+#rep .cdl .gh { padding: 12px 8px 4px; font-size: 12px; font-weight: 600; color: var(--ink-3); } #rep .cdl .gh i { font-style: normal; font-weight: 500; }
+#rep .cdl .em { padding: 16px 8px; font-size: 13px; }
+#rep .cdl .cd { display: flex; gap: 10px; align-items: center; width: 100%; min-height: 40px; padding: 0 8px; border: 0; border-radius: 8px; background: none; color: var(--ink-2); font: 500 13px var(--sans); text-align: left; cursor: pointer; }
+#rep .cdl .cd:hover, #rep .cdl .cd:focus-visible { background: color-mix(in oklab, var(--accent) 14%, transparent); color: var(--ink); }
+#rep .cdl .cd > span:first-child { color: var(--accent); font-weight: 700; font-size: 15px; }
+#rep .cdl .cd .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#rep .cmp :is(button, input, select, textarea):focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+@keyframes cmr-in { from { transform: translateX(40px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { #rep .cmr.in { animation: none; } }
+@media (max-width: 480px) { #rep .sl li.ci { grid-template-columns: 22px minmax(0, 1fr) auto auto; } #rep .sl .ed { grid-column: 1 / -1; } }
 /* 자료 기준 시각 팝업 — 만들기가 끝나면(기상청 자료의 발표 · 기준 시각은 문서에 안 넣고 여기만) */
 #rep .op.bs { width: 520px; }
 #rep .op.bs dl { margin: 0; padding: 10px 14px; display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; font-size: 13px; }

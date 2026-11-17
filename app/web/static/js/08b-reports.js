@@ -192,13 +192,6 @@ function repCmTitle(v) {
     : a.getMonth() === b.getMonth() ? `~${b.getDate()}.` : `~${b.getMonth() + 1}. ${b.getDate()}.`);
   return `「${span} ${(v.kinds || []).join("·") || "재난"} 대비」`;
 }
-/* 묶음 하나의 줄들 — 후보(거른 것 + 고른 것) 다음에 직접 추가한 것 */
-function repCmRows(g, kinds, c) {
-  const all = REP.ph?.[g] || [], sel = c.sel[g];
-  const rows = all.map((p, i) => ({ p, i, si: sel.findIndex(x => x.k === p.text) }))
-    .filter(x => x.si >= 0 || !kinds.length || (x.p.kinds || []).some(k => kinds.includes(k)));
-  return rows.concat(sel.map((s, si) => ({ p: null, si })).filter(x => !all.some(p => p.text === sel[x.si].k)));   /* 직접 추가 · 파일에서 빠진 것 */
-}
 /* 보낼 것 — 문구 파일 차례대로 고른 것, 그다음 직접 추가한 것 · 파일에서 빠진 것(빈 글은 뺀다) */
 function repCmItems() {
   const c = repCm(), out = {};
@@ -209,63 +202,101 @@ function repCmItems() {
   }
   return out;
 }
-function repCmGroup(g, title, kinds, c) {
-  const sel = c.sel[g], n = repCmItems()[REP_CM.find(x => x[0] === g)[1]].length;
-  const li = ({ p, si }) => {
-    const s = si >= 0 ? sel[si] : null, text = s ? s.text : p.text, subs = s ? s.subs : p.subs, key = s ? `${g}|${si}` : "", open = !!s && REP_CMO.has(`${g}|${s.k}`);
-    return `<li class="ci${s ? " on" : ""}${open ? " open" : ""}"><label class="ck"><input type="checkbox" ${s ? `data-cx="${escH(key)}" checked` : `data-ca="${escH(g)}|${escH(p.text)}"`}>`
-      + `<span class="pv" ${s ? `data-pv="${escH(key)}"` : ""}>${repBold(text) || `<i class="mute">(빈 줄 — 연필을 눌러 쓴다)</i>`}${subs.length ? `<small>${subs.map(repBold).join("<br>")}</small>` : ""}</span></label>`
-      + (s ? `<button type="button" class="eb" data-eo="${escH(key)}" aria-expanded="${open}" aria-label="이 문구 고쳐 쓰기 ${open ? "접기" : "펴기"}" title="고쳐 쓰기 — 날짜 · 시군 수 · 세부 줄">${open ? "▴" : "✎"}</button>` : "")
-      + (s && open ? `<div class="ed"><textarea rows="2" aria-label="${escH(title)} 글" data-ed="${escH(key)}">${escH(s.text)}</textarea>`
-        + `<textarea rows="${Math.max(1, s.subs.length)}" aria-label="${escH(title)} 세부 · 주석" placeholder="세부 · 주석 — 한 줄에 하나(- 세부 · ※ 주석)" data-es="${escH(key)}">${escH(s.subs.join("\n"))}</textarea></div>` : "")
-      + `</li>`;
-  };
-  const rows = repCmRows(g, kinds, c);
-  return `<fieldset class="sec cm"><legend>${escH(title)} <i class="cnt${g === "유의사항" && n > 9 ? " warn" : ""}">${n}개 고름</i></legend>`
-    + (g === "유의사항" ? `<small class="mute">유의사항은 7개 안팎이 한 쪽 — 넘치면 표어 상자가 다음 쪽으로 밀린다</small>` : "")
-    + `<ul>${rows.map(li).join("") || `<li class="mute">${REP.ph?.[g] ? "고른 종류에 맞는 문구가 없다 — 종류를 바꾸거나 직접 추가" : ""}</li>`}</ul>`
-    + `<div class="row"><button type="button" data-cadd="${escH(g)}">직접 추가</button></div></fieldset>`;
+/* 작성 창 화면 상태 — 탭(묶음) · 후보 검색 · 설정 펴기 · 후보 패널(오른쪽에서 덮어 나온다, 처음엔 닫힘) */
+const REP_CMV = { tab: "유의사항", q: "", set: false, pn: false, anim: false };
+const repCmPn = () => REP_CMV.pn;
+/* 기간 칸 미리 채우기 — 비운 칸은 서버 기본과 같게(시작 = 전일 00시, 끝 = 지금) 12자리로 */
+function repCmPeriod(v) {
+  const n = new Date(), y = new Date(n.getFullYear(), n.getMonth(), n.getDate() - 1), f = d => [d.getFullYear(), d.getMonth() + 1, d.getDate(), d.getHours(), d.getMinutes()].map((x, i) => String(x).padStart(i ? 2 : 4, "0")).join("");
+  return { start: v.start || f(y), end: v.end || f(n) };
 }
+const repPlain = t => String(t || "").replace(/\*\*/g, "");
+const repCmPv = s => { const subs = s.subs.filter(y => y.trim()); return (repBold(s.text) || `<i class="mute">(빈 줄 — 연필을 눌러 쓴다)</i>`) + (subs.length ? `<small>${subs.map(repBold).join(" · ")}</small>` : ""); };
+/* 왼쪽 — 고른 것만, 보내는 차례(문구 파일 차례 → 직접 쓴 것)로 번호. ✎ 고쳐 쓰기 · ✕ 빼기 */
+function repCmSel(g, c) {
+  const sel = c.sel[g], all = REP.ph?.[g] || [];
+  const ord = all.map(p => sel.findIndex(x => x.k === p.text)).filter(i => i >= 0).concat(sel.map((x, i) => i).filter(i => !all.some(p => p.text === sel[i].k)));
+  return ord.map((si, n) => {
+    const s = sel[si], key = `${g}|${si}`, open = REP_CMO.has(`${g}|${s.k}`), nm = repPlain(s.text).slice(0, 24) || "빈 줄";
+    return `<li class="ci${open ? " open" : ""}"><span class="no">${n + 1}</span><span class="pv" data-pv="${escH(key)}">${repCmPv(s)}</span>`
+      + `<button type="button" class="eb" data-eo="${escH(key)}" aria-expanded="${open}" aria-label="「${escH(nm)}」 고쳐 쓰기 ${open ? "접기" : "펴기"}" title="고쳐 쓰기 — 날짜 · 시군 수 · 세부 줄">${open ? "▴" : "✎"}</button>`
+      + `<button type="button" class="eb" data-cx="${escH(key)}" aria-label="「${escH(nm)}」 빼기" title="빼기 — 후보로 돌아간다">✕</button>`
+      + (open ? `<div class="ed"><textarea rows="2" aria-label="문구 글" data-ed="${escH(key)}">${escH(s.text)}</textarea>`
+        + `<textarea rows="${Math.max(1, s.subs.length)}" aria-label="세부 · 주석" placeholder="세부 · 주석 — 한 줄에 하나(- 세부 · ※ 주석)" data-es="${escH(key)}">${escH(s.subs.join("\n"))}</textarea></div>` : "")
+      + `</li>`;
+  }).join("");
+}
+/* 오른쪽 — 아직 안 고른 후보. 회의 종류로 거르고(안 고르면 전부) 검색어로 한 번 더, 종류별로 묶는다. 누르면 바로 왼쪽으로 */
+function repCmCand(g, kinds) {
+  const sel = repCm().sel[g], q = REP_CMV.q.trim();
+  const list = (REP.ph?.[g] || []).filter(p => !sel.some(x => x.k === p.text) && (!kinds.length || (p.kinds || []).some(k => kinds.includes(k)))
+    && (!q || repPlain(`${p.text} ${(p.subs || []).join(" ")}`).includes(q)));
+  const grp = new Map();
+  for (const p of list) { const k = (p.kinds || []).find(x => kinds.includes(x)) || (p.kinds || [])[0] || "공통"; grp.set(k, [...(grp.get(k) || []), p]); }
+  const rank = k => (kinds.indexOf(k) + 1) || 99;
+  const html = [...grp.keys()].sort((a, b) => rank(a) - rank(b)).map(k => `<li class="gh">${escH(k)} <i>${grp.get(k).length}</i></li>`
+    + grp.get(k).map(p => `<li><button type="button" class="cd" data-ca="${escH(g)}|${escH(p.text)}" title="${escH(repPlain(p.text))}"><span aria-hidden="true">+</span><span class="t">${escH(repPlain(p.text))}</span></button></li>`).join("")).join("")
+    || `<li class="mute em">${!REP.ph ? "문구 후보를 받는 중…" : REP.ph.err ? `후보를 받지 못했다 — ${escH(REP.ph.err)}` : q ? "찾는 말이 든 후보가 없다" : "남은 후보가 없다 — 종류를 바꾸거나 직접 쓰기"}</li>`;
+  return { html, n: list.length };
+}
+const repCmN = g => repCmItems()[REP_CM.find(x => x[0] === g)[1]].length;
+const repCmMeter = n => `<div class="mw"><div class="mt${n > 7 ? " over" : ""}"><i style="width:${Math.min(100, n / 7 * 100)}%"></i></div><small class="mute">${n} / 7 — ${n > 7 ? "한 쪽을 넘쳐 표어 상자가 다음 쪽으로 밀린다" : "한 쪽에 들어간다"}</small></div>`;
 /* 다시 그린 뒤 초점을 돌려줄 곳 — 같은 단추 · 칸(id 나 data-*) */
 function repCmFocusSel(el, box) {
   if (!el || !box.contains(el)) return null;
   if (el.id) return `#${CSS.escape(el.id)}`;
-  for (const a of ["kind", "cadd", "cx", "ca", "eo", "ed", "es"]) if (el.dataset[a] != null) return `[data-${a}="${CSS.escape(el.dataset[a])}"]`;
+  for (const a of ["kind", "cadd", "cx", "ca", "eo", "ed", "es", "tab", "pn"]) if (el.dataset[a] != null) return `[data-${a}="${CSS.escape(el.dataset[a])}"]`;
   return null;
 }
 function repCmDraw(r, focus) {
   const box = $("rep-op"), d = REP.d || {}, v = repVals(r), c = repCm(), kinds = v.kinds || [], why = repWhy(r);
-  const old = box.querySelector(".ob"), top = old ? old.scrollTop : 0, fk = focus || repCmFocusSel(document.activeElement, box);
-  const kOpt = r.opts.find(o => o.key === "kinds"), sug = repCmTitle(v);
-  const ph = REP.ph?.err ? `<p class="note">문구 후보를 받지 못했다 — ${escH(REP.ph.err)} · 직접 추가는 된다</p>` : !REP.ph ? `<p class="mute">문구 후보를 받는 중…</p>` : "";
+  const sc = Object.fromEntries([".cml", ".cdl", ".cmx"].map(k => [k, box.querySelector(k)?.scrollTop || 0]));
+  const fk = focus || repCmFocusSel(document.activeElement, box);
+  const kOpt = r.opts.find(o => o.key === "kinds"), sug = repCmTitle(v), g = REP_CMV.tab, pn = repCmPn(), cand = repCmCand(g, kinds);
+  const dt = s => (s && s.length === 12 ? `${+s.slice(4, 6)}.${+s.slice(6, 8)} ${s.slice(8, 10)}:${s.slice(10, 12)}` : "");
+  const pv = REP_CMV.def = repCmPeriod(v);
+  const title = c.auto ? sug : v.title || sug, nex = REP_EX.filter(([k]) => c.ex[k]).length, nSel = repCmN(g);
+  const chips = cls => `<div class="kc${cls}" role="group" aria-label="${escH(kOpt.label)}">${kOpt.values.map(([x]) => `<button type="button" data-kind="${escH(x)}" aria-pressed="${kinds.includes(x)}" class="${kinds.includes(x) ? "on" : ""}">${escH(x)}</button>`).join("")}</div>`;
   box.hidden = false;
   box.innerHTML = `<div class="op cmp" role="dialog" aria-modal="true" aria-labelledby="rep-op-t" tabindex="-1">
     <div class="oh">${r.thumb ? `<img src="img/reports/${escH(r.id)}.png" alt="">` : `<i class="ph" aria-hidden="true"></i>`}<div><b id="rep-op-t">${escH(r.name)} 작성</b><small class="mute">${escH(r.desc)}</small></div>
       <button type="button" id="rep-opx" aria-label="작성 창 닫기 (Esc)" title="닫기 (Esc) — 고른 것은 기억한다">✕</button></div>
-    <form class="ob" id="rep-of" onsubmit="return false">
+    <div class="cmh"><select id="rep-cm-ps" aria-label="프리셋 불러오기"><option value="">프리셋 불러오기…</option>
+        <optgroup label="계절 · 시기">${REP_CMP.map(([n], i) => `<option value="s:${i}"${REP.ph && !REP.ph.err ? "" : " disabled"}>${escH(n)}</option>`).join("")}</optgroup>
+        ${repCmMine().length ? `<optgroup label="내 프리셋">${repCmMine().map((x, i) => `<option value="m:${i}">${escH(x.name)}</option>`).join("")}</optgroup>` : ""}</select>
+      <span class="sum" title="${escH(`${title} · ${kinds.join("·") || "종류 전체"}`)}"><b>${escH(title)}</b> · ${escH(kinds.join("·") || "종류 전체")} · ${escH(`${dt(pv.start)} ~ ${v.end ? dt(v.end) : "지금"}`)} · 자료 ${nex}/${REP_EX.length}</span>
+      <button type="button" id="rep-cm-set" aria-expanded="${REP_CMV.set}" aria-controls="rep-cm-x">설정 ${REP_CMV.set ? "▴" : "▾"}</button></div>
+    <div class="cmx" id="rep-cm-x"${REP_CMV.set ? "" : " hidden"}><form class="ob" id="rep-of" onsubmit="return false">
       <fieldset class="sec"><legend>회의</legend>
-        <div class="ps"><label class="fl" for="rep-cm-ps"><span>프리셋</span><select id="rep-cm-ps"><option value="">불러오기…</option>
-          <optgroup label="계절 · 시기">${REP_CMP.map(([n], i) => `<option value="s:${i}"${REP.ph && !REP.ph.err ? "" : " disabled"}>${escH(n)}</option>`).join("")}</optgroup>
-          ${repCmMine().length ? `<optgroup label="내 프리셋">${repCmMine().map((x, i) => `<option value="m:${i}">${escH(x.name)}</option>`).join("")}</optgroup>` : ""}</select></label>
-          <details class="psm"><summary>지금 고른 것을 프리셋으로</summary>
-            <div class="row"><input id="rep-cm-psn" type="text" maxlength="30" placeholder="이름 — 예: 장마 초기대응" aria-label="프리셋 이름"><button type="button" id="rep-cm-pss">저장</button></div>
-            ${repCmMine().map(x => `<div class="row pm"><span>${escH(x.name)}</span><button type="button" class="lnk" data-psd="${escH(x.name)}" aria-label="${escH(x.name)} 프리셋 지우기">지우기</button></div>`).join("")}
-          </details></div>
-        <div class="kc" role="group" aria-label="${escH(kOpt.label)}">${kOpt.values.map(([x]) => `<button type="button" data-kind="${escH(x)}" aria-pressed="${kinds.includes(x)}" class="${kinds.includes(x) ? "on" : ""}">${escH(x)}</button>`).join("")}</div>
-        <small class="mute">고른 종류의 문구만 보인다(안 고르면 전부) · 제목 제안 · 서버의 특보 이력에도 쓴다</small>
-        <label class="fl" for="rep-cm-title"><span>회의 제목</span><input id="rep-cm-title" type="text" maxlength="60" value="${escH(c.auto ? sug : v.title || sug)}"></label>
-        <small class="mute">${c.auto ? "종류 · 기간을 따라 바뀐다 — 고치면 그대로 둔다" : `고친 제목 — <button type="button" class="lnk" id="rep-cm-auto">제안으로 돌리기(${escH(sug)})</button>`}</small>
-      </fieldset>
-      <fieldset class="sec"><legend>기간</legend>${r.opts.filter(o => o.sec === "기간").map(o => repField(o, v[o.key])).join("")}</fieldset>
-      <fieldset class="sec"><legend>특보 시군 자료(자동)</legend>${REP_EX.map(([k, t, h]) => `<label class="ck"><input type="checkbox" data-cex="${escH(k)}"${c.ex[k] ? " checked" : ""}> ${escH(t)} <small class="mute">${escH(h)}</small></label>`).join("")}</fieldset>
-      ${ph}${REP_CM.map(([g, , t]) => repCmGroup(g, t, kinds, c)).join("")}
-    </form>
+        ${chips("")}
+        <label class="fl" for="rep-cm-title"><span>회의 제목</span><input id="rep-cm-title" type="text" maxlength="60" value="${escH(title)}"></label>
+        ${c.auto ? "" : `<small class="mute">고친 제목 — <button type="button" class="lnk" id="rep-cm-auto">제안으로 돌리기(${escH(sug)})</button></small>`}
+        <details class="psm"><summary>지금 고른 것을 프리셋으로</summary>
+          <div class="row"><input id="rep-cm-psn" type="text" maxlength="30" placeholder="장마 초기대응" aria-label="프리셋 이름"><button type="button" id="rep-cm-pss">저장</button></div>
+          ${repCmMine().map(x => `<div class="row pm"><span>${escH(x.name)}</span><button type="button" class="lnk" data-psd="${escH(x.name)}" aria-label="${escH(x.name)} 프리셋 지우기">지우기</button></div>`).join("")}
+        </details></fieldset>
+      <fieldset class="sec"><legend>기간</legend>${r.opts.filter(o => o.sec === "기간").map(o => repField(o, pv[o.key])).join("")}</fieldset>
+      <fieldset class="sec"><legend>특보 시군 자료(자동)</legend>${REP_EX.map(([k, t, h]) => `<label class="ck" title="${escH(h)}"><input type="checkbox" data-cex="${escH(k)}"${c.ex[k] ? " checked" : ""}> ${escH(t)}</label>`).join("")}</fieldset>
+    </form></div>
+    <div class="cmt" role="tablist" aria-label="Ⅱ장 묶음">${REP_CM.map(([k, , t]) => `<button type="button" role="tab" data-tab="${escH(k)}" aria-selected="${k === g}">${escH(t)}<i>${repCmN(k)}</i></button>`).join("")}</div>
+    <div class="cmb${pn ? " pn" : ""}">
+      <section class="cml" aria-label="고른 ${escH(g)} — 보고서에 이 차례로 들어간다">
+        ${nSel || c.sel[g].length ? `<ol class="sl">${repCmSel(g, c)}</ol>` : `<p class="em mute">아직 고른 문구가 없다 — ${pn ? "오른쪽 후보를 눌러 넣는다" : "‘문구 고르기’로 후보를 연다"}</p>`}
+        ${g === "유의사항" ? repCmMeter(nSel) : ""}
+        <div class="row">${pn ? "" : `<button type="button" data-pn="1" aria-expanded="false" aria-controls="rep-cm-r">+ 문구 고르기</button>`}<button type="button" data-cadd="${escH(g)}">직접 쓰기</button></div>
+      </section>
+      ${pn ? `<aside class="cmr${REP_CMV.anim ? " in" : ""}" id="rep-cm-r" aria-label="후보 문구">
+        <div class="rh"><b>후보 <i>${cand.n}</i></b><button type="button" class="eb" data-pn="0" aria-expanded="true" aria-label="후보 접기" title="후보 접기">»</button></div>
+        <input id="rep-cm-q" type="search" placeholder="후보에서 찾기" aria-label="후보 문구 찾기" value="${escH(REP_CMV.q)}">
+        ${chips(" sm")}
+        <ul class="cdl">${cand.html}</ul></aside>` : ""}
+    </div>
     <p class="msg" id="rep-om" role="status">${why ? escH(why) : ""}</p>
     <div class="of"><span class="sp"></span><button type="button" id="rep-ctg"${why || !d.tg ? " disabled" : ""} title="${escH(d.tg ? "텔레그램으로 보내기만" : "텔레그램 키가 없다 — 설정 › API 키")}">텔레그램으로</button>
       <button type="button" id="rep-cgo" class="pri"${why ? " disabled" : ""}>만들어 받기</button></div></div>`;
-  const ob = box.querySelector(".ob");
-  ob.scrollTop = top;
-  ((fk && box.querySelector(fk)) || box.querySelector(".op")).focus();
+  REP_CMV.anim = false;
+  for (const [k, t] of Object.entries(sc)) { const el = box.querySelector(k); if (el) el.scrollTop = t; }
+  ((fk && [...box.querySelectorAll(fk)].find(x => x.offsetParent)) || box.querySelector(".op")).focus();
   if (!REP.ph) repCmLoad();
 }
 async function repCmLoad() {
@@ -277,6 +308,11 @@ async function repCmLoad() {
   const r = repById(REP.op);
   if (r?.compose) repCmDraw(r);
 }
+/* 후보 패널 열기 · 닫기 */
+function repCmPanel(r, open) {
+  REP_CMV.pn = open; REP_CMV.anim = open;
+  repCmDraw(r, open ? "#rep-cm-q" : '[data-pn="1"]');
+}
 /* 작성 창 안 누름 · 고침 */
 function repCmClick(t, r) {
   const kb = t.closest("[data-kind]");
@@ -284,6 +320,29 @@ function repCmClick(t, r) {
     const v = repVals(r), k = kb.dataset.kind, ks = (v.kinds || []).includes(k) ? v.kinds.filter(x => x !== k) : [...(v.kinds || []), k];
     repCmOpts(r, { kinds: r.opts.find(o => o.key === "kinds").values.map(x => x[0]).filter(x => ks.includes(x)) });
     return repCmDraw(r);
+  }
+  const tb = t.closest("[data-tab]");
+  if (tb) { REP_CMV.tab = tb.dataset.tab; return repCmDraw(r, `[data-tab="${CSS.escape(tb.dataset.tab)}"]`); }
+  if (t.closest("#rep-cm-set")) { REP_CMV.set = !REP_CMV.set; return repCmDraw(r, "#rep-cm-set"); }
+  const pnb = t.closest("[data-pn]");
+  if (pnb) return repCmPanel(r, pnb.dataset.pn === "1");
+  if (repCmPn() && t.closest(".cml")) return repCmPanel(r, false);   /* 덮은 후보 밖을 누르면 닫는다 */
+  const ca = t.closest("[data-ca]");
+  if (ca) {                                                   /* 후보 넣기 — 문구 그대로 복사해 고칠 수 있게. 초점은 다음 후보로(이어서 고르게) */
+    const c = repCm(), [g, ...rest] = ca.dataset.ca.split("|"), text = rest.join("|"), p = (REP.ph?.[g] || []).find(x => x.text === text);
+    if (!p) return;
+    const bs = [...$("rep-op").querySelectorAll("[data-ca]")], i = bs.indexOf(ca), nx = bs[i + 1] || bs[i - 1];
+    c.sel[g].push({ k: p.text, text: p.text, subs: [...(p.subs || [])] });
+    repCmSave(c);
+    return repCmDraw(r, nx ? `[data-ca="${CSS.escape(nx.dataset.ca)}"]` : "#rep-cm-q");
+  }
+  const cx = t.closest("[data-cx]");
+  if (cx) {                                                   /* 빼기(고친 글도 버린다) — 초점은 같은 자리의 다음 ✕ */
+    const c = repCm(), [g, si] = cx.dataset.cx.split("|"), n = [...$("rep-op").querySelectorAll("[data-cx]")].indexOf(cx), [x] = c.sel[g].splice(+si, 1);
+    REP_CMO.delete(`${g}|${x.k}`);
+    repCmSave(c); repCmDraw(r);
+    const xs = $("rep-op").querySelectorAll("[data-cx]");
+    return (xs[n] || xs[n - 1] || $("rep-op").querySelector("[data-cadd]")).focus();
   }
   if (t.closest("#rep-cm-auto")) { const c = repCm(); c.auto = true; repCmSave(c); repCmOpts(r, { title: "" }); return repCmDraw(r); }
   const eo = t.closest("[data-eo]");
@@ -322,6 +381,12 @@ function repCmClick(t, r) {
 function repCmInput(t, r) {
   const c = repCm();
   if (t.id === "rep-cm-title") { c.auto = false; repCmSave(c); return repCmOpts(r, { title: t.value.trim() }); }
+  if (t.id === "rep-cm-q") {
+    REP_CMV.q = t.value;
+    const cand = repCmCand(REP_CMV.tab, repVals(r).kinds || []), box = $("rep-op");
+    box.querySelector(".cdl").innerHTML = cand.html; box.querySelector(".cmr .rh i").textContent = cand.n;
+    return;
+  }
   const key = t.dataset.ed || t.dataset.es;
   if (!key) return;
   const [g, si] = key.split("|"), s = c.sel[g]?.[+si];
@@ -329,37 +394,32 @@ function repCmInput(t, r) {
   if (t.dataset.ed) s.text = t.value.replace(/\n+/g, " ");
   else s.subs = t.value.split("\n");
   repCmSave(c);
-  const pv = $("rep-op").querySelector(`[data-pv="${CSS.escape(key)}"]`), subs = s.subs.filter(y => y.trim());
-  if (pv) pv.innerHTML = (repBold(s.text) || `<i class="mute">(빈 줄 — 연필을 눌러 쓴다)</i>`) + (subs.length ? `<small>${subs.map(repBold).join("<br>")}</small>` : "");
-  const n = repCmItems()[REP_CM.find(x => x[0] === g)[1]].length, cnt = t.closest(".cm")?.querySelector(".cnt");
-  if (cnt) cnt.textContent = `${n}개 고름`;
+  const box = $("rep-op"), pv = box.querySelector(`[data-pv="${CSS.escape(key)}"]`), n = repCmN(g);
+  if (pv) pv.innerHTML = repCmPv(s);
+  const cnt = box.querySelector(`[data-tab="${CSS.escape(g)}"] i`), mw = box.querySelector(".cml .mw");
+  if (cnt) cnt.textContent = n;
+  if (mw && g === "유의사항") mw.outerHTML = repCmMeter(n);
 }
 function repCmChange(t, r) {
   const c = repCm();
-  let focus = null;
   if (t.dataset.cex) { c.ex[t.dataset.cex] = t.checked; return repCmSave(c); }
-  if (t.dataset.ca) {                                         /* 후보 고르기 — 문구 그대로 복사해 고칠 수 있게 */
-    const [g, ...rest] = t.dataset.ca.split("|"), text = rest.join("|"), p = (REP.ph?.[g] || []).find(x => x.text === text);
-    if (!p) return;
-    c.sel[g].push({ k: p.text, text: p.text, subs: [...p.subs] });
-    focus = `[data-cx="${CSS.escape(`${g}|${c.sel[g].length - 1}`)}"]`;
-  } else if (t.dataset.cx) {                                  /* 고른 것 빼기(고친 글도 버린다) */
-    const [g, si] = t.dataset.cx.split("|"), [x] = c.sel[g].splice(+si, 1);
-    focus = x.k.startsWith("+") ? `[data-cadd="${CSS.escape(g)}"]` : `[data-ca="${CSS.escape(`${g}|${x.k}`)}"]`;
-  } else if (t.id === "rep-cm-ps") {                          /* 프리셋 불러오기 — 종류 · 고른 문구를 통째로 바꾼다(제목은 제안으로) */
+  if (t.id === "rep-cm-ps") {                          /* 프리셋 불러오기 — 종류 · 고른 문구를 통째로 바꾼다(제목은 제안으로) */
     const [kind, i] = t.value.split(":"), mine = repCmMine()[+i], std = REP_CMP[+i];
     if (kind === "m" && mine) { c.sel = { 유의사항: [], 조치계획: [], ...JSON.parse(JSON.stringify(mine.sel || {})) }; repCmOpts(r, { kinds: mine.kinds || [], title: "" }); }
     else if (kind === "s" && std && REP.ph && !REP.ph.err) { c.sel = { 유의사항: repCmPick("유의사항", std[1], 7), 조치계획: repCmPick("조치계획", std[1], 5) }; repCmOpts(r, { kinds: std[1], title: "" }); }
     else return;
     c.auto = true; REP_CMO.clear();
     repCmSave(c); repCmDraw(r, "#rep-cm-ps");
-    $("rep-om").textContent = `「${kind === "m" ? mine.name : std[0]}」 을 불러왔다 — 문구는 아래에서 더 고르거나 뺀다`; $("rep-om").className = "msg";
+    $("rep-om").textContent = `「${kind === "m" ? mine.name : std[0]}」 을 불러왔다 — 후보에서 더 넣거나 ✕ 로 뺀다`; $("rep-om").className = "msg";
     return;
   } else if (t.type === "datetime-local") {
-    try { repCmOpts(r, repOpRead({ opts: r.opts.filter(x => x.sec === "기간") })); } catch {}
+    try {                                                     /* 미리 채운 값 그대로면 비워 둔다 — 다음에 열 때 그때 기준으로 다시 채운다 */
+      const o = repOpRead({ opts: r.opts.filter(x => x.sec === "기간") });
+      for (const k of ["start", "end"]) if (o[k] === REP_CMV.def?.[k]) o[k] = "";
+      repCmOpts(r, o);
+    } catch {}
     return repCmDraw(r);
-  } else return;
-  repCmSave(c); repCmDraw(r, focus);
+  }
 }
 function repDraw() {
   const d = REP.d, list = d?.reports || [], gs = ["전체", ...(d?.groups || [])];
@@ -527,7 +587,12 @@ $("rep").addEventListener("change", ev => {
 document.addEventListener("keydown", ev => {
   if ($("rep").hidden) return;
   ev.stopPropagation();
-  if (ev.key === "Escape") { ev.preventDefault(); return REP.bs ? repBsClose() : REP.op ? repOpClose() : closeRep(); }
+  if (ev.key === "Escape") {
+    ev.preventDefault();
+    const r = repById(REP.op);
+    if (!REP.bs && r?.compose && repCmPn()) return repCmPanel(r, false);
+    return REP.bs ? repBsClose() : REP.op ? repOpClose() : closeRep();
+  }
   if (!REP.op && (ev.key === "ContextMenu" || (ev.shiftKey && ev.key === "F10"))) {
     const tile = document.activeElement?.closest?.(".rt[data-id]");
     if (tile) { ev.preventDefault(); return repOpOpen(tile.dataset.id); }
