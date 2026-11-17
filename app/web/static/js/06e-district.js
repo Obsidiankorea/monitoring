@@ -225,12 +225,21 @@ function dzMiniPlane(r) {
   }).join("");
   // ② 세 단계 막대 — 0~143% 를 막대 너비로, 70 · 100 눈금
   const BW = 150, bx = v => Math.min(v ?? 0, PLANE_MAX) / PLANE_MAX * BW;
+  // 막대 밑 한 줄 — 지금 이 % 를 만든 조건과 그 값(0% 면 뺀다). 재생 중(DZ_TI>0)은 지금 값이 아니라 뺀다
+  // 조건 토막 하나 — 어느 지점(무엇)이 몇 % 인지 먼저, 지금 값 / 기준은 작게
+  const dzPart = q => `<span class="pt" style="--c:${dzColVar(dzLv(q.pct))}">${escH(q.label)} <b>${q.pct}%</b><i>${escH(`${q.now} / ${q.need}${q.unit}`)}</i></span>`;
+  const dzWhy = x => {
+    const c = DZ_TI === 0 && s.st?.[x];
+    if (!c || !(c.pct > 0)) return "";
+    const ps = (c.parts || []).filter(q => q.pct != null && q.now != null && q.need != null);
+    return `<div class="dzw" style="--c:${dzColVar(dzLv(c.pct))}"><small>${escH(c.rule)}</small>${ps.map(dzPart).join("")}</div>`;
+  };
   const bars = ph.st.map(x => {
     const v = ph.at(x, DZ_TI), j = ph.eta(x), lv = dzLv(v);
     return `<div class="dzb"><span>${x}</span><svg width="${BW}" height="10"><rect width="${BW}" height="10" fill="var(--line)"/>`
       + `<rect width="${bx(v).toFixed(1)}" height="10" fill="${dzColVar(lv)}"/><line x1="${bx(70)}" x2="${bx(70)}" y1="0" y2="10" stroke="var(--t70)"/>`
       + `<line x1="${bx(100)}" x2="${bx(100)}" y1="0" y2="10" stroke="var(--t100)" stroke-width="1.5"/></svg>`
-      + `<em style="color:${dzColVar(lv)}">${v ?? "—"}%</em><small>${v >= 100 ? "넘음" : j != null ? `${at(j)} 도달` : "안 닿음"}</small></div>`;
+      + `<em style="color:${dzColVar(lv)}">${v ?? "—"}%</em><small>${v >= 100 ? "넘음" : j != null ? `${at(j)} 도달` : "안 닿음"}</small></div>` + dzWhy(x);
   }).join("");
   // ③ 오른쪽 — 단계 영역 평면(셋을 한 평면에, 지금 다음 단계를 진하게) · 지구 원문 기준 자홍 흐르는 점선 · 비가 아닌 조건은 글로
   const reg = DZ_REG?.[r.fam], n = (s.pl || []).length;
@@ -250,7 +259,11 @@ function dzMiniPlane(r) {
       + `<text x="225" y="${190 - 4}" text-anchor="end" fill="${PP_INK3}" font-size="9.5">${reg.x}(㎜) →</text></svg>`
       + `<div class="dzk lt">${run.length > 1 ? `<button class="pp-play" type="button" title="지난 ${past.length}시간 → 지금 → 예보 끝까지 점이 움직인다">▶</button>` : ""}${past.length ? `<span class="pk">━ 지난 ${past.length}시간</span>` : ""}<span>지금</span><i></i><span>${escH(at(n - 1))}</span></div></div>`;
   }
-  const texts = (reg?.texts || []).map(x => `<div class="d">· ${escH(x.stage)}: ${escH(x.text)}</div>`).join("");
+  const texts = (reg?.texts || []).map(x => {                // 지금 그 단계 % 를 만든 조건이면 강조 + 그 %
+    const c = DZ_TI === 0 && s.st?.[x.stage], hot = c && c.rule === x.text && c.pct > 0;
+    const pts = hot ? (c.parts || []).filter(q => q.pct != null).map(q => `${q.label} ${q.pct}%`).join(" · ") : "";
+    return `<div class="d${hot ? " hot" : ""}"${hot ? ` style="--c:${dzColVar(dzLv(c.pct))}"` : ""}>· ${escH(x.stage)}: ${escH(x.text)}${hot ? ` <b>${escH(pts || `${c.pct}%`)}</b>` : ""}</div>`;
+  }).join("");
   const head = ph.skip ? `<b style="color:var(--t100)">⚠ ${ph.skip}가 ${ph.next}보다 더 찼다 — 단계를 건너뛸 수 있음(국지성 폭우)</b>`
     : ph.next ? `다음 단계 <b>${ph.next}</b>${ph.eta(ph.next) != null ? ` · ${at(ph.eta(ph.next))} 도달 예상` : " · 내일까지 안 닿음"}` : `<b style="color:var(--t100)">${ph.cur} 기준까지 넘음</b>`;
   const site = s.site?.length ? siteText(s.site, reg).replace("이 지구 자체 기준: ", "") : "";
@@ -370,10 +383,11 @@ function districtTip(r, pin = false) {
     + `<div class="hd"><span class="bdg">${escH(r.kind || r.fam)}</span><div class="nm"><b>${escH(name)}</b><small>${escH(r.sigun)} ${escH(r.emd)} ${escH(where)}${r.pos ? ` <a class="kk" href="https://map.kakao.com/link/map/${encodeURIComponent(name.replace(/[,/]/g, " "))},${(+r.pos[0]).toFixed(5)},${(+r.pos[1]).toFixed(5)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="카카오맵에서 이 자리 보기(지구 좌표)" aria-label="카카오맵에서 ${escH(name)} 자리 보기 — 새 창"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.500C5 14.800 12 21 12 21z"/><circle cx="12" cy="9.500" r="2.500"/></svg></a>` : ""}</small></div>`
     + (p != null ? `<div class="pc" style="--c:${col}"><b>${p}<i>%</i></b><small>${ACC_BASIS === "grid" ? "격자" : "AWS"} 기준${w === "읍면동" ? " · 읍면동 값" : ""}</small></div>` : "") + `</div>`
     + (m ? `<div class="dzs">${m.strip}</div>`
-      + `<div class="bd"><div class="lf">${m.bars}${m.two}<div class="goal">${m.head}</div>`
-      + (m.texts ? `<div class="sub">비가 아닌 조건</div>${m.texts}` : "")
-      + (r.tg ? `<div class="sub">지형</div><div class="tgs">${dzTerrainRows(r.tg)}</div>` : "")
-      + (pin ? `<div class="sub">담당</div><div class="ctb tgs"><span class="mute">불러오는 중…</span></div>` : "") + `</div><div class="rt">${m.plane}</div></div>`
+      + `<div class="bd"><div class="lf">${m.bars}${m.two}<div class="goal">${m.head}</div></div><div class="rt">${m.plane}</div></div>`
+      // 아래 띠 — 두 칸(왼쪽 조건 · 담당, 오른쪽 지형)이라 평면 밑이 비지 않는다
+      + `<div class="bd2"><div class="lf">${m.texts ? `<div class="sub">비가 아닌 조건</div>${m.texts}` : ""}`
+      + (pin ? `<div class="sub">담당</div><div class="ctb tgs"><span class="mute">불러오는 중…</span></div>` : "") + `</div>`
+      + `<div>${r.tg ? `<div class="sub">지형</div><div class="tgs">${dzTerrainRows(r.tg)}</div>` : ""}</div></div>`
       + (m.site ? `<div class="site"><span>지구 기준</span><b>${escH(m.site)}</b></div>` : "")
       : `<div class="d">${(dzSerLoad(r.sigun), DZ_SQ.get(r.sigun)?.ing) ? "단계 그래프 받는 중… (마우스를 다시 올리면 나온다)" : DZ_FAM.slice(0, 3).includes(r.fam) ? "단계 그래프를 그릴 자료가 없다 — 예보를 못 받았다" : "단계 그래프가 없다 — 이 유형은 행안부 지침 별표 4(산사태 · 하천 · 지하공간)에 없고, 이 지구의 시군 기준도 비의 양으로 읽히지 않는다"}</div>`)
     + (r.tf?.length ? `<div class="tfs">${r.tf.map(f => `<em class="tf${f.lv === "w" ? "" : " i"}">${escH(f.t)}</em>`).join("")}</div>` : "")   // 지역 여건(app/terrain.py)

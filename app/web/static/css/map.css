@@ -2018,6 +2018,17 @@ body.sj-on > header, body.sj-on #stage, body.sj-on #tl, body.sj-on #rail { displ
 #tip .hud .dzb > span { width: 4.6em; font-weight: 700; color: var(--ink-2); }
 #tip .hud .dzb em { font-size: .95em; width: 3em; }
 #tip .hud .dzb small { white-space: nowrap; }
+/* 막대 밑 — 이 % 를 만든 조건(색 = 그 % 의 단계 색) · 비가 아닌 조건 중 지금 % 를 만든 줄 */
+#tip .hud .dzw { display: flex; flex-wrap: wrap; gap: .25em .4em; align-items: center; margin: -.25em 0 .6em 4.6em; padding-left: 8px; border-left: 2px solid var(--c); font-size: .78em; line-height: 1.35; font-family: var(--sans); }
+#tip .hud .dzw > small { flex-basis: 100%; color: var(--ink-3); font-size: .95em; }
+#tip .hud .dzw .pt { display: inline-flex; align-items: baseline; gap: .35em; padding: .1em .5em; border-radius: 4px; color: var(--ink); background: color-mix(in oklab, var(--c) 14%, transparent); }
+#tip .hud .dzw .pt b { color: var(--c); font: 800 1.05em var(--mono); }
+#tip .hud .dzw .pt i { font: 500 .9em var(--mono); font-style: normal; color: var(--ink-3); }
+#tip .hud .bd2 { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 0 1.4em; padding: 0 1em .8em; border-top: 1px solid var(--line); }
+#tip .hud .bd2:not(:has(.sub)) { display: none; }
+#tip .hud .bd2 .sub:first-child { margin-top: .7em; }
+#tip .hud .lf .d.hot { color: var(--ink); font-weight: 600; border-left: 2px solid var(--c); padding-left: 6px; margin-left: -8px; background: color-mix(in oklab, var(--c) 10%, transparent); border-radius: 0 4px 4px 0; }
+#tip .hud .lf .d.hot b { display: block; color: var(--c); font-family: var(--mono); }
 #tip .hud .dz2 { display: flex; align-items: baseline; gap: .5em; font-size: .85em; margin: 0 0 .2em; }
 #tip .hud .dz2 > span { width: 4.6em; color: var(--ink-3); } #tip .hud .dz2 b { font-family: var(--mono); width: 3em; text-align: right; } #tip .hud .dz2 small { color: var(--ink-2); }
 #sj #sj-ev { width: 100%; margin: 0 0 6px; font-size: 12px; } #sj .lg.dc { background: var(--panel-2, transparent); }
