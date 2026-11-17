@@ -22,13 +22,19 @@
   table { width: 100%; border-collapse: collapse; } th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
   th { font-size: 12px; color: var(--ink-3); font-weight: 600; } td small { color: var(--ink-3); }
   tr.off td { opacity: .5; } td .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-  .msg { min-height: 1.3em; font-size: 13px; } .msg.bad { color: var(--bad); } .msg.ok { color: var(--ok); }
+  .msg { min-height: 1.3em; font-size: 13px; } label.ck { display: flex; align-items: center; gap: 8px; min-height: 40px; font-size: 14px; color: var(--ink); cursor: pointer; }
+  label.ck input { width: 18px; height: 18px; accent-color: var(--accent); } .msg.bad { color: var(--bad); } .msg.ok { color: var(--ok); }
   @media (max-width: 640px) { thead { display: none; } tr { display: grid; padding: 8px 0; border-bottom: 1px solid var(--line); } td { border: 0; padding: 3px 0; } }
 </style>
 </head>
 <body>
 <main>
   <header><h1>계정 관리</h1><span id="me"></span><a href="/map.html">지도로</a></header>
+  <section>
+    <h2>들어오는 방법</h2>
+    <label class="ck"><input type="checkbox" id="sg-open"> 시군 담당자는 아이디 · 비밀번호 없이 시군만 골라 들어온다</label>
+    <p class="msg" id="o-msg" role="status">끄면 그렇게 들어와 있던 시군 접속도 끊기고, 시군도 여기서 만든 계정으로 로그인한다.</p>
+  </section>
   <section>
     <h2>계정 만들기</h2>
     <form class="add" id="add" novalidate>
@@ -108,6 +114,12 @@
     META = await call("/api/auth/me");
     $("a-role").innerHTML = Object.entries(META.roles).map(([k, n]) => `<option value="${k}">${esc(n)}</option>`).join("");
     $("a-sigun").innerHTML = META.siguns.map(s => `<option>${s}</option>`).join("");
+    $("sg-open").checked = !!META.sigun_open;
+    $("sg-open").addEventListener("change", async e => {
+      try { await call("/api/settings/sigun-open", "PUT", { on: e.target.checked });
+            say("o-msg", e.target.checked ? "시군은 비밀번호 없이 들어온다" : "시군도 계정으로 로그인한다 — 비밀번호 없이 들어와 있던 접속을 끊었다"); }
+      catch (err) { e.target.checked = !e.target.checked; say("o-msg", err.message, 1); }
+    });
     if (META.user) $("me").textContent = `${META.user.name || META.user.login} · ${META.roles[META.user.role] || ""}`;
     draw().catch(e => say("l-msg", e.message, 1));
   })();

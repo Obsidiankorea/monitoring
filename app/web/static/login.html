@@ -18,6 +18,11 @@
   button { height: 46px; font-family: inherit; font-size: 15px; font-weight: 700; color: #06121f; background: var(--accent); border: 0; border-radius: 10px; cursor: pointer; }
   button:disabled { opacity: .6; cursor: default; }
   #msg { min-height: 1.3em; color: var(--bad); font-size: 13px; }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0 12px; }
+  select { height: 44px; padding: 0 10px; font-family: inherit; font-size: 15px; color: var(--ink); background: #0e151e; border: 1px solid var(--line); border-radius: 8px; }
+  button.sub { width: 100%; margin-top: 8px; color: var(--ink); background: #1b2635; border: 1px solid var(--line); }
+  #sg-box { display: grid; gap: 0; }
+  p.demo { text-align: center; } p.demo a { display: inline-block; padding: 10px 4px; color: var(--accent); }
 </style>
 </head>
 <body>
@@ -31,12 +36,23 @@
   <div id="msg" role="alert"></div>
   <button id="go" type="submit">로그인</button>
   <p id="hint">계정은 도 관리자에게 받습니다.</p>
+  <div id="sg-box" hidden>
+    <hr>
+    <label>시군 담당자 — 시군을 골라 들어가기(비밀번호 없음) <select id="sg"><option value="">시군 고르기</option></select></label>
+    <button type="button" id="sg-go" class="sub">시군 화면으로</button>
+  </div>
+  <p class="demo"><a id="demo" href="/">시연 화면 보기(가짜 자료 · 로그인 없음)</a></p>
 </form>
 <script>
   const $ = id => document.getElementById(id);
   const next = (() => { const n = new URLSearchParams(location.search).get("next") || "/map.html"; return n.startsWith("/") && !n.startsWith("//") ? n : "/map.html"; })();
-  let SETUP = false;                                    // 계정이 하나도 없는 서버 — 첫 관리자를 만든다
+  $("demo").href = `${location.protocol}//${location.hostname}:8001/map.html`;   // 시연 서버는 같은 주소의 8001
+  let SETUP = false;                                   // 계정이 하나도 없는 서버 — 첫 관리자를 만든다
   fetch("/api/auth/me").then(r => r.json()).then(j => {
+    if (j.sigun_open && !j.open) {                       // 시군은 비밀번호 없이(관리자가 끌 수 있다)
+      $("sg").insertAdjacentHTML("beforeend", (j.siguns || []).map(s => `<option>${s}</option>`).join(""));
+      $("sg-box").hidden = false;
+    }
     if (!j.open) return;
     SETUP = true;
     for (const id of ["setup-note", "name-l", "pw2-l"]) $(id).hidden = false;
@@ -68,6 +84,15 @@
       $("pw").select();
     } catch { $("msg").textContent = "서버에 닿지 않습니다 — 잠시 뒤 다시"; }
     $("go").disabled = false;
+  });
+  $("sg-go").addEventListener("click", async () => {
+    const sigun = $("sg").value;
+    if (!sigun) { $("msg").textContent = "시군을 골라 주세요"; return $("sg").focus(); }
+    try {
+      const r = await fetch("/api/auth/sigun", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sigun }) });
+      if (r.ok) return location.replace("/map.html");
+      $("msg").textContent = (await r.json().catch(() => ({}))).detail || "들어가지 못했습니다";
+    } catch { $("msg").textContent = "서버에 닿지 않습니다"; }
   });
   $("login").addEventListener("input", () => { $("msg").textContent = ""; });
   $("pw").addEventListener("input", () => { $("msg").textContent = ""; });

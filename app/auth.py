@@ -70,7 +70,7 @@ def _check(role: str, sigun: str | None) -> str | None:
 
 def users() -> list[dict]:
     with db.tx() as con:
-        return [_row(r) for r in con.execute("SELECT * FROM app_user ORDER BY role, sigun, login")]
+        return [_row(r) for r in con.execute(f"SELECT * FROM app_user WHERE pw<>'{NOPW}' ORDER BY role, sigun, login")]
 
 
 def add(login: str, pw: str, role: str, name: str = "", sigun: str | None = None) -> dict:
@@ -89,13 +89,46 @@ def add(login: str, pw: str, role: str, name: str = "", sigun: str | None = None
 
 
 _SETUP = threading.Lock()
+NOPW = "!"                                         # 비밀번호 없는 시군 손님 계정 — check_pw 가 늘 실패하는 값(아이디로는 못 들어온다)
+
+
+def sigun_open() -> bool:
+    """시군은 비밀번호 없이 들어오기(로그인 화면에서 시군만 고른다) — 관리자가 끈다. 지금은 기본 켬."""
+    return bool(db.get_setting("sigun_open", True))
+
+
+def set_sigun_open(on: bool) -> None:
+    db.put_setting("sigun_open", bool(on))
+    if not on:                                     # 끄면 그렇게 들어와 있던 접속도 끊는다
+        with db.tx() as con:
+            con.execute(f"DELETE FROM app_session WHERE user_id IN (SELECT id FROM app_user WHERE pw='{NOPW}')")
+    _forget()
+
+
+def guest_sigun(sigun: str, ip: str = "") -> tuple[str, dict]:
+    """시군 손님 접속 — 그 시군의 비밀번호 없는 계정(없으면 만든다)으로 쿠키를 준다."""
+    if not sigun_open():
+        raise PermissionError("시군도 아이디 · 비밀번호로 들어온다 — 도 관리자에게 계정을 받는다")
+    if sigun not in SIGUNS:
+        raise ValueError("시군을 고른다")
+    login_ = f"시군-{sigun}"
+    with db.tx() as con:
+        r = con.execute("SELECT * FROM app_user WHERE login=?", (login_,)).fetchone()
+        if not r:
+            con.execute("INSERT INTO app_user (login, name, role, sigun, pw, created) VALUES (?,?,?,?,?,?)",
+                        (login_, f"{sigun} 담당", "sigun", sigun, NOPW, _now()))
+            r = con.execute("SELECT * FROM app_user WHERE login=?", (login_,)).fetchone()
+        tok = secrets.token_urlsafe(32)
+        con.execute("INSERT INTO app_session VALUES (?,?,?,?,?)", (_h(tok), r["id"], _now(), _later(), (ip or "")[:64]))
+        con.execute("UPDATE app_user SET last_login=? WHERE id=?", (_now(), r["id"]))
+    return tok, _row(r)
 
 
 def first_admin(login: str, pw: str, name: str = "") -> dict:
     """처음 관리자 — 계정이 하나도 없을 때만. 둘이 동시에 눌러도 하나만 된다(잠금 + 표 안에서 다시 본다)."""
     with _SETUP:
         with db.tx() as con:
-            if con.execute("SELECT 1 FROM app_user LIMIT 1").fetchone():
+            if con.execute(f"SELECT 1 FROM app_user WHERE pw<>'{NOPW}' LIMIT 1").fetchone():
                 raise PermissionError("이미 계정이 있다 — 관리자에게 계정을 받는다")
         return add(login, pw, "admin", name or "관리자")
 
@@ -172,7 +205,7 @@ def any_user() -> bool:
     if time.time() - _ANY["t"] > 10 or _ANY.get("db") != str(db.DB_PATH):     # DB 를 바꾸면(시험) 다시 본다
         try:
             with db.tx() as con:
-                v = bool(con.execute("SELECT 1 FROM app_user WHERE active=1 LIMIT 1").fetchone())
+                v = bool(con.execute(f"SELECT 1 FROM app_user WHERE active=1 AND pw<>'{NOPW}' LIMIT 1").fetchone())
         except sqlite3.OperationalError:                   # 표가 아직 없다(db.init 전) = 계정 없음
             v = False
         _ANY.update(t=time.time(), db=str(db.DB_PATH), v=v)
@@ -219,12 +252,13 @@ def _later(days: int = DAYS) -> str:
 
 
 # ── 요청 거르기(main.py 미들웨어가 부른다) ─────────────────
-OPEN = ("/login.html", "/api/auth/login", "/api/auth/me", "/api/auth/setup", "/api/status", "/favicon.ico", "/r/")
+OPEN = ("/login.html", "/api/auth/login", "/api/auth/me", "/api/auth/setup", "/api/auth/sigun", "/api/status", "/favicon.ico", "/r/")
 ADMIN_ONLY = ("/api/settings", "/api/keys", "/api/update", "/api/server-update", "/api/origin", "/api/storage",
               "/api/snaps", "/api/ai/wiki", "/api/ai/task", "/api/ai/llm", "/api/districts/geo", "/api/auth/users", "/admin.html")
 NO_MACHINE = ("/api/contacts", "/api/reply", "/api/auth")
 MACHINE = {"login": "machine", "name": "기계 열쇠", "role": "do", "sigun": None, "machine": True}
 LOCAL = {"login": "local", "name": "이 컴퓨터", "role": "admin", "sigun": None, "local": True}
+DEMO = {"login": "demo", "name": "시연", "role": "do", "sigun": None, "demo": True}   # 시연 서버(8001) — 로그인 없이 도 사용자로
 
 
 def machine_key() -> str:
@@ -235,6 +269,8 @@ def decide(path: str, method: str, host: str, cookie: str | None, key: str | Non
     """→ (0 = 통과 | 401 로그인 필요 | 403 권한 없음, 사용자). 계정이 없으면 늘 통과."""
     if any(path == p or (p.endswith("/") and path.startswith(p)) for p in OPEN):
         return 0, None
+    if config.DEMO:                                 # 시연 — 가짜 자료뿐이라 막지 않는다(계정 · 설정 쓰기는 시연이 따로 막는다)
+        return 0, DEMO
     if host in ("127.0.0.1", "::1"):
         return 0, LOCAL
     if not any_user():

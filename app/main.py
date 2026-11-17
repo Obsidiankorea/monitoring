@@ -1691,8 +1691,32 @@ async def api_me(request: Request):
     """지금 누구인가 — 계정이 없는 서버면 {open: true}(로그인 없이 쓰는 중)."""
     u = await asyncio.to_thread(_auth.decide, "/api/x", "GET", request.client.host if request.client else "",
                                 request.cookies.get(_auth.COOKIE), None)
+    if config.DEMO:                                       # 시연은 늘 도 사용자로 바로 열린다(로그인 · 처음 설정 없음)
+        return {"open": False, "user": _auth.DEMO, "roles": _auth.ROLES, "siguns": _auth.SIGUNS, "sigun_open": False}
     return {"open": not await asyncio.to_thread(_auth.any_user), "user": u[1] if u[0] == 0 else None,
-            "roles": _auth.ROLES, "siguns": _auth.SIGUNS}
+            "roles": _auth.ROLES, "siguns": _auth.SIGUNS, "sigun_open": await asyncio.to_thread(_auth.sigun_open)}
+
+
+@app.post("/api/auth/sigun")
+async def api_sigun_guest(body: dict, request: Request):
+    """시군 담당 — 비밀번호 없이 시군만 골라 들어온다(관리자가 '시군은 비밀번호 없이' 를 끄면 403)."""
+    try:
+        tok, u = await asyncio.to_thread(_auth.guest_sigun, str(body.get("sigun") or ""),
+                                         request.client.host if request.client else "")
+    except PermissionError as e:
+        raise HTTPException(403, str(e)) from e
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    r = JSONResponse({"user": u})
+    r.set_cookie(_auth.COOKIE, tok, max_age=_auth.DAYS * 86400, httponly=True, samesite="lax", path="/")
+    return r
+
+
+@app.put("/api/settings/sigun-open")
+async def api_sigun_open(body: dict):
+    """관리자 — 시군은 비밀번호 없이 들어오기 켜고 끄기(/api/settings 아래라 관리자만)."""
+    await asyncio.to_thread(_auth.set_sigun_open, body.get("on") is True)
+    return {"sigun_open": body.get("on") is True}
 
 
 @app.post("/api/auth/setup")

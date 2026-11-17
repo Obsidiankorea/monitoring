@@ -167,3 +167,41 @@ def test_sigun_request_is_recorded_with_sender_and_visible_to_do(app_, monkeypat
     assert b[0]["sigun"] == "창원" and b[0]["rows"][0]["by"] == "창원시 · 창원 담당"   # 도 현황판에서 누가 보냈는지 보인다
     j = d.post("/api/reply/ask", json={"rids": ["r1"], "note": "재확인"}).json()
     assert j["people"][0]["sms"].startswith("[경남도 재난상황실]")             # 도도 같은 지구에 보낼 수 있다
+
+
+def test_sigun_without_password_until_admin_turns_it_off(app_):
+    main, auth = app_
+    auth.add("boss", "password-1", "admin")
+    c = TestClient(main.app)
+    assert c.get("/api/auth/me").json()["sigun_open"] is True
+    r = c.post("/api/auth/sigun", json={"sigun": "창원"})
+    assert r.status_code == 200 and (r.json()["user"]["role"], r.json()["user"]["sigun"]) == ("sigun", "창원")
+    assert c.get("/api/auth/me").json()["user"]["sigun"] == "창원"
+    assert c.get("/api/contacts?sigun=진주").status_code == 403           # 손님도 자기 시군만
+    assert c.post("/api/auth/sigun", json={"sigun": "서울"}).status_code == 400
+    assert all(u["login"] != "시군-창원" for u in auth.users())            # 계정 목록에는 안 보인다
+    assert auth.any_user() and TestClient(main.app).post("/api/auth/setup", json={"login": "x", "password": "password-9"}).status_code == 403
+    a = TestClient(main.app)
+    _login(a, "boss", "password-1")
+    assert a.put("/api/settings/sigun-open", json={"on": False}).status_code == 200
+    assert c.get("/api/alerts").status_code == 401                         # 끄면 들어와 있던 시군 접속도 끊긴다
+    assert TestClient(main.app).post("/api/auth/sigun", json={"sigun": "창원"}).status_code == 403
+    with pytest.raises(ValueError):
+        auth.login("시군-창원", "!")
+
+
+def test_guest_does_not_count_as_account(app_):
+    main, auth = app_
+    auth.guest_sigun("창원")                                                # 계정이 없을 때 손님이 생겨도
+    assert auth.any_user() is False                                        # 서버는 여전히 '계정 없음'(처음 설정 가능)
+
+
+def test_demo_opens_as_do_user(app_, monkeypatch):
+    main, auth = app_
+    from app import config
+    auth.add("boss", "password-1", "admin")
+    monkeypatch.setattr(config, "DEMO", True)
+    c = TestClient(main.app)
+    me = c.get("/api/auth/me").json()
+    assert me["open"] is False and me["user"]["role"] == "do" and me["user"]["demo"]
+    assert c.get("/map.html", follow_redirects=False).status_code == 200   # 로그인 화면으로 보내지 않는다
