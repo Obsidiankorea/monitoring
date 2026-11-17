@@ -26,7 +26,7 @@ import json
 import os
 import re
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
@@ -587,3 +587,34 @@ if __name__ == "__main__":
 
     db.init()
     uvicorn.run(public_app, host=os.environ.get("HOST", "127.0.0.1"), port=int(os.environ.get("GN_REPLY_PORT", "8010")))
+
+
+def board(hours: int = 24, now: str | None = None) -> list[dict]:
+    """도 파견 현황판 — 최근 hours 시간 안에 요청한 지구를 시군별로: 단계 셈 · 미확인 경고 · 지구 줄.
+    이름 · 번호는 넣지 않는다(현황판은 진행만 — 사람은 회신 현황(잠금 뒤)에서)."""
+    from . import ai
+    now = now or _now()
+    short = {v: k for k, v in ai.SIGUN_FULL.items()}
+    where = {rid: short.get(v[0], v[0]) for rid, v in _districts().items()}
+    since = (datetime.strptime(now, "%Y-%m-%d %H:%M") - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M")
+    by: dict[str, dict] = {}
+    with db.tx() as con:
+        for rid, name in con.execute("SELECT rid, name FROM duty_link").fetchall():
+            rd = rounds(con, rid, 1, now)
+            r = rd[0] if rd else None
+            if not r or not r["ask"] or r["ask"]["at"] < since:
+                continue
+            sg = where.get(rid) or "기타"
+            g = by.setdefault(sg, {"sigun": sg, "n": 0, "steps": {lab: 0 for _, lab in STEPS}, "warn": 0, "help": 0, "last": "", "rows": []})
+            g["n"] += 1
+            g["steps"][r["now"]] = g["steps"].get(r["now"], 0) + 1
+            g["warn"] += bool(r["warn"])
+            g["help"] += "지원 필요" in r["side"]
+            g["last"] = max(g["last"], r["ask"]["at"])
+            g["rows"].append({"rid": rid, "name": name, "now": r["now"], "asked": r["ask"]["at"], "warn": r["warn"] and r["warn"]["text"],
+                              "side": r["side"], "steps": [{"label": s["label"], "st": s["st"], "t": s["t"]} for s in r["steps"]]})
+    order = list(ai.SIGUN_FULL)
+    out = sorted(by.values(), key=lambda g: (-g["warn"], -g["help"], order.index(g["sigun"]) if g["sigun"] in order else 99))
+    for g in out:
+        g["rows"].sort(key=lambda x: (not x["warn"], x["asked"]))
+    return out

@@ -2284,3 +2284,9 @@ body.sj-on > header, body.sj-on #stage, body.sj-on #tl, body.sj-on #rail { displ
 #rep .op.bs dt { color: var(--ink-2); } #rep .op.bs dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 #rep .op.bs .bsn { margin: 0; padding: 0 14px 8px; }
 @media (max-width: 480px) { #rep .op.bs dl { grid-template-columns: 1fr; gap: 2px; } #rep .op.bs dd { margin-bottom: 6px; } }
+/* 로그인한 사람 띠(12-auth.js) — 아래 왼쪽, 지도 조작을 가리지 않게 작게 */
+#who { position: fixed; left: 10px; bottom: 10px; z-index: 30; display: flex; align-items: center; gap: 8px; padding: 4px 6px 4px 10px;
+  font: 500 12px var(--sans); color: var(--ink-2); background: color-mix(in oklab, var(--panel) 88%, transparent); border: 1px solid var(--line); border-radius: 999px; }
+#who a, #who button { min-height: 28px; padding: 0 8px; font: 600 12px var(--sans); color: var(--accent); background: none; border: 0; border-radius: 999px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }
+#who a:hover, #who button:hover { background: color-mix(in oklab, var(--accent) 14%, transparent); }
+#who :is(a, button):focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }

@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>계정 관리 — 경남 기상지도</title>
+<style>
+  :root { --bg: #0b1017; --panel: #121a24; --line: #253244; --ink: #e8eef6; --ink-2: #a9b6c7; --ink-3: #7c8a9c; --accent: #6cb4ff; --bad: #ff8a80; --ok: #7ad19b; }
+  * { box-sizing: border-box; } [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 "Pretendard", "Malgun Gothic", system-ui, sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 20px 16px 40px; display: grid; gap: 16px; }
+  header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 20px; flex: 1; } header a { color: var(--accent); }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  h2 { margin: 0 0 12px; font-size: 15px; color: var(--ink-2); }
+  .add { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; align-items: end; }
+  label { display: grid; gap: 4px; font-size: 12.5px; color: var(--ink-2); }
+  input, select { height: 40px; padding: 0 10px; font-family: inherit; font-size: 14px; font-weight: 500; color: var(--ink); background: #0e151e; border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
+  button { height: 40px; padding: 0 14px; font-family: inherit; font-size: 13px; font-weight: 600; color: var(--ink); background: #1b2635; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+  button.pri { background: var(--accent); color: #06121f; border-color: var(--accent); }
+  :is(input, select, button):focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  table { width: 100%; border-collapse: collapse; } th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { font-size: 12px; color: var(--ink-3); font-weight: 600; } td small { color: var(--ink-3); }
+  tr.off td { opacity: .5; } td .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .msg { min-height: 1.3em; font-size: 13px; } .msg.bad { color: var(--bad); } .msg.ok { color: var(--ok); }
+  @media (max-width: 640px) { thead { display: none; } tr { display: grid; padding: 8px 0; border-bottom: 1px solid var(--line); } td { border: 0; padding: 3px 0; } }
+</style>
+</head>
+<body>
+<main>
+  <header><h1>계정 관리</h1><span id="me"></span><a href="/map.html">지도로</a></header>
+  <section>
+    <h2>계정 만들기</h2>
+    <form class="add" id="add" novalidate>
+      <label>아이디 <input id="a-login" autocomplete="off" maxlength="40"></label>
+      <label>이름 · 부서 <input id="a-name" maxlength="40" placeholder="자연재난과 상황실"></label>
+      <label>역할 <select id="a-role"></select></label>
+      <label id="a-sg-l" hidden>시군 <select id="a-sigun"></select></label>
+      <label>처음 비밀번호(8자 이상) <input id="a-pw" type="password" autocomplete="new-password"></label>
+      <button class="pri" type="submit">만들기</button>
+    </form>
+    <p class="msg" id="a-msg" role="status"></p>
+  </section>
+  <section>
+    <h2>계정 목록</h2>
+    <table><thead><tr><th>아이디 · 이름</th><th>역할</th><th>마지막 로그인</th><th>바꾸기</th></tr></thead><tbody id="list"></tbody></table>
+    <p class="msg" id="l-msg" role="status"></p>
+  </section>
+</main>
+<script>
+  const $ = id => document.getElementById(id), esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  let META = { roles: {}, siguns: [] };
+  const say = (id, t, bad) => { $(id).textContent = t; $(id).className = "msg " + (bad ? "bad" : "ok"); };
+  async function call(url, method = "GET", body) {
+    const r = await fetch(url, { method, headers: body ? { "content-type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
+    const j = await r.json().catch(() => ({}));
+    if (r.status === 401) location.replace("/login.html?next=/admin.html");
+    if (!r.ok) throw new Error(j.detail || `오류 ${r.status}`);
+    return j;
+  }
+  const roleSel = (v, id) => `<select ${id ? `id="${id}"` : ""} data-f="role">${Object.entries(META.roles).map(([k, n]) => `<option value="${k}"${k === v ? " selected" : ""}>${esc(n)}</option>`).join("")}</select>`;
+  const sgSel = (v, id) => `<select ${id ? `id="${id}"` : ""} data-f="sigun">${META.siguns.map(s => `<option${s === v ? " selected" : ""}>${s}</option>`).join("")}</select>`;
+  async function draw() {
+    const { users } = await call("/api/auth/users");
+    $("list").innerHTML = users.map(u => `<tr data-id="${u.id}" class="${u.active ? "" : "off"}">
+      <td><b>${esc(u.login)}</b><br><small>${esc(u.name || "")}</small></td>
+      <td><div class="row">${roleSel(u.role)}${u.role === "sigun" ? sgSel(u.sigun) : ""}</div></td>
+      <td><small>${esc(u.last_login || "—")}</small></td>
+      <td><div class="row"><button data-act="save">역할 저장</button>
+        <button data-act="pw">비밀번호 초기화</button>
+        <button data-act="active">${u.active ? "멈추기" : "다시 켜기"}</button></div></td></tr>`).join("") || `<tr><td colspan="4"><small>계정이 없다 — 위에서 처음 관리자를 만든다</small></td></tr>`;
+  }
+  $("a-role").addEventListener("change", () => { $("a-sg-l").hidden = $("a-role").value !== "sigun"; });
+  $("add").addEventListener("submit", async ev => {
+    ev.preventDefault();
+    const b = { login: $("a-login").value.trim(), name: $("a-name").value.trim(), role: $("a-role").value, sigun: $("a-sigun").value, password: $("a-pw").value };
+    if (!b.login) { say("a-msg", "아이디를 넣어 주세요", 1); return $("a-login").focus(); }
+    if (b.password.length < 8) { say("a-msg", "비밀번호는 8자 이상", 1); return $("a-pw").focus(); }
+    try { const u = await call("/api/auth/users", "POST", b); say("a-msg", `「${u.login}」 ${u.role_name}${u.sigun ? " · " + u.sigun : ""} 계정을 만들었다`); $("add").reset(); $("a-sg-l").hidden = true; draw(); }
+    catch (e) { say("a-msg", e.message, 1); }
+  });
+  $("list").addEventListener("change", ev => {                // 역할을 시군으로 바꾸면 시군 고르기를 붙인다
+    const s = ev.target.closest('[data-f="role"]'); if (!s) return;
+    const row = s.closest(".row"); row.querySelector('[data-f="sigun"]')?.remove();
+    if (s.value === "sigun") row.insertAdjacentHTML("beforeend", sgSel(META.siguns[0]));
+  });
+  $("list").addEventListener("click", async ev => {
+    const b = ev.target.closest("[data-act]"); if (!b) return;
+    const tr = b.closest("tr"), id = tr.dataset.id, login = tr.querySelector("b").textContent;
+    try {
+      if (b.dataset.act === "save") {
+        await call(`/api/auth/users/${id}`, "PUT", { role: tr.querySelector('[data-f="role"]').value, sigun: tr.querySelector('[data-f="sigun"]')?.value || null });
+        say("l-msg", `「${login}」 역할을 바꿨다 — 그 사람은 다시 로그인한다`);
+      } else if (b.dataset.act === "pw") {
+        const pw = prompt(`「${login}」 의 새 비밀번호(8자 이상)`); if (pw === null) return;
+        await call(`/api/auth/users/${id}`, "PUT", { password: pw });
+        say("l-msg", `「${login}」 비밀번호를 바꿨다 — 본인에게 따로 알려 준다`);
+      } else {
+        const off = !tr.classList.contains("off");
+        if (off && !confirm(`「${login}」 계정을 멈출까요? 지금 접속도 끊긴다`)) return;
+        await call(`/api/auth/users/${id}`, "PUT", { active: !off });
+        say("l-msg", `「${login}」 ${off ? "멈췄다" : "다시 켰다"}`);
+      }
+      draw();
+    } catch (e) { say("l-msg", e.message, 1); }
+  });
+  (async () => {
+    META = await call("/api/auth/me");
+    $("a-role").innerHTML = Object.entries(META.roles).map(([k, n]) => `<option value="${k}">${esc(n)}</option>`).join("");
+    $("a-sigun").innerHTML = META.siguns.map(s => `<option>${s}</option>`).join("");
+    if (META.user) $("me").textContent = `${META.user.name || META.user.login} · ${META.roles[META.user.role] || ""}`;
+    draw().catch(e => say("l-msg", e.message, 1));
+  })();
+</script>
+</body>
+</html>

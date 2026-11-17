@@ -35,6 +35,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from . import aiwatch, apikeys, events, geocode, heat, its, lawwatch, river, safety, tide, clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, serverupdate, sites, snaps, update
+from . import auth as _auth  # 로그인(도 관리자 · 도 사용자 · 시군 사용자)
 from .collectors import alerts, bangjae_rain, forecast, grid_rain, qpf, rain, shortfc
 from .config import CACHE, INTERVALS, POLL_DEFAULT
 
@@ -140,6 +141,7 @@ async def _judge_warm() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.init()
+    _auth.init()
     # 지구 좌표 — 켤 때마다 브이월드에 묻고 메모리에만(약관: 저장 금지, app/geocode.py). 수집기와 상관없이
     asyncio.create_task(geocode.run())
     if config.DEMO and config.SNAP:
@@ -538,10 +540,27 @@ def _contacts_pin(pin: str | None) -> None:
         raise HTTPException(401, "잠금 번호가 필요하다")
 
 
+def _my_sigun(request: Request) -> str | None:
+    """시군 사용자면 그 시군(두 글자), 아니면 None(도 · 관리자 · 로그인 없는 서버)."""
+    u = getattr(request.state, "user", None)
+    return u["sigun"] if u and u.get("role") == "sigun" else None
+
+
+def _rid_sigun() -> dict[str, str]:
+    """지역ID → 시군(두 글자) — 시군 사용자가 자기 시군 지구만 다루게."""
+    from . import ai, reply
+    short = {v: k for k, v in ai.SIGUN_FULL.items()}
+    return {rid: short.get(v[0], v[0]) for rid, v in reply._districts().items()}
+
+
 @app.get("/api/contacts")
-async def api_contacts(sigun: str, x_pin: str | None = Header(None)):
-    """상황판단 모드 전용 — 시군 우려지역 담당자 연락처(상태 폴더 contacts.csv). AI 쪽 코드는 이것을 부르지 않는다."""
+async def api_contacts(sigun: str, request: Request, x_pin: str | None = Header(None)):
+    """상황판단 모드 전용 — 시군 우려지역 담당자 연락처(상태 폴더 contacts.csv). AI 쪽 코드는 이것을 부르지 않는다.
+    시군 사용자는 자기 시군만."""
     from . import contacts
+    mine = _my_sigun(request)
+    if mine and sigun != mine:
+        raise HTTPException(403, f"{mine} 사용자는 {mine} 연락처만 본다")
     _contacts_pin(x_pin)
     return JSONResponse(await asyncio.to_thread(contacts.of_sigun, sigun), headers={"Cache-Control": "no-store"})
 
@@ -553,6 +572,12 @@ async def api_reply_ask(body: dict, request: Request, x_pin: str | None = Header
     preview=true 면 요청 기록 없이 글 · 링크만(상황판단 미리보기 — 문자 앱 열기 · 복사를 누를 때 preview 없이 다시 부른다)."""
     from . import reply
     _contacts_pin(x_pin)
+    mine = _my_sigun(request)
+    if mine:                                               # 시군 사용자는 자기 시군 지구에만 요청한다
+        where = await asyncio.to_thread(_rid_sigun)
+        other = [r for r in body.get("rids") or [] if where.get(str(r)) != mine]
+        if other:
+            raise HTTPException(403, f"{mine} 지구가 아닌 것이 섞였다 — {len(other)}곳")
     preview = body.get("preview") is True
     if config.DEMO and not preview:                        # 시연 — 미리보기(가짜 연락처 · 링크)는 보여 주고 요청 기록은 남기지 않는다
         raise HTTPException(403, "시연 화면에서는 요청을 만들지 않는다")
@@ -563,11 +588,29 @@ async def api_reply_ask(body: dict, request: Request, x_pin: str | None = Header
 
 
 @app.get("/api/reply/list")
-async def api_reply_list(x_pin: str | None = Header(None)):
-    """현장 회신 현황 — 요청한 것 전부와 회신(조치 여부 · 추가 배치 · 사진 유무)."""
+async def api_reply_list(request: Request, x_pin: str | None = Header(None)):
+    """현장 회신 현황 — 요청한 것 전부와 회신(조치 여부 · 추가 배치 · 사진 유무). 시군 사용자는 자기 시군 지구만."""
     from . import reply
     _contacts_pin(x_pin)
-    return JSONResponse({"rows": await asyncio.to_thread(reply.rows)}, headers={"Cache-Control": "no-store"})
+    rows = await asyncio.to_thread(reply.rows)
+    mine = _my_sigun(request)
+    if mine:
+        where = await asyncio.to_thread(_rid_sigun)
+        rows = [r for r in rows if where.get(r["rid"]) == mine]
+    return JSONResponse({"rows": rows}, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/reply/board")
+async def api_reply_board(request: Request, hours: int = Query(24, ge=1, le=168)):
+    """도 파견 현황판 — 시군별 요청 · 단계 · 미확인 경고(이름 · 번호 없음). 시군 사용자는 자기 시군만."""
+    from . import reply
+    if config.DEMO:
+        return {"siguns": [], "demo": True}
+    out = await asyncio.to_thread(reply.board, hours)
+    mine = _my_sigun(request)
+    if mine:
+        out = [g for g in out if g["sigun"] == mine]
+    return JSONResponse({"siguns": out, "hours": hours}, headers={"Cache-Control": "no-store"})
 
 
 from . import reply as _reply  # noqa: E402 — 회신 화면(/r/…). 같은 망에서는 대시보드 주소로도 열린다(밖에는 app.reply 서버만)
@@ -1589,6 +1632,108 @@ async def terrain_tile(layer: str, z: int, x: int, y: int):
     fp = config.TERRAIN / layer / str(z) / str(x) / f"{y}.png"
     hdr = {"Cache-Control": "public, max-age=86400"}
     return FileResponse(fp, media_type="image/png", headers=hdr) if fp.is_file() else Response(_BLANK_PNG, media_type="image/png", headers=hdr)
+
+
+# ── 로그인(app/auth.py) — 계정이 하나라도 생기면 로그인을 요구한다. 맨 바깥 미들웨어(아래 것이 먼저 돈다) ──
+@app.middleware("http")
+async def need_login(request: Request, call_next):
+    path = request.url.path
+    host = request.client.host if request.client else ""
+    code, user = await asyncio.to_thread(_auth.decide, path, request.method, host,
+                                         request.cookies.get(_auth.COOKIE), request.headers.get("x-gn-key"))
+    if code == 401:
+        if path.startswith("/api/") or request.method != "GET":
+            return JSONResponse({"detail": "로그인이 필요하다"}, status_code=401)
+        nxt = path + (f"?{request.url.query}" if request.url.query else "")
+        return RedirectResponse("/login.html?next=" + quote(nxt, safe=""), status_code=303)
+    if code == 403:
+        return JSONResponse({"detail": "이 계정으로는 할 수 없다"}, status_code=403)
+    request.state.user = user
+    return await call_next(request)
+
+
+def _me(request: Request) -> dict | None:
+    return getattr(request.state, "user", None)
+
+
+@app.post("/api/auth/login")
+async def api_login(body: dict, request: Request):
+    try:
+        tok, u = await asyncio.to_thread(_auth.login, str(body.get("login") or ""), str(body.get("password") or ""),
+                                         request.client.host if request.client else "")
+    except PermissionError as e:
+        raise HTTPException(429, str(e)) from e
+    except ValueError as e:
+        raise HTTPException(401, str(e)) from e
+    r = JSONResponse({"user": u})
+    r.set_cookie(_auth.COOKIE, tok, max_age=_auth.DAYS * 86400, httponly=True, samesite="lax",
+                 secure=request.url.scheme == "https", path="/")
+    return r
+
+
+@app.post("/api/auth/logout")
+async def api_logout(request: Request):
+    tok = request.cookies.get(_auth.COOKIE)
+    if tok:
+        await asyncio.to_thread(_auth.logout, tok)
+    r = JSONResponse({"ok": True})
+    r.delete_cookie(_auth.COOKIE, path="/")
+    return r
+
+
+@app.get("/api/auth/me")
+async def api_me(request: Request):
+    """지금 누구인가 — 계정이 없는 서버면 {open: true}(로그인 없이 쓰는 중)."""
+    u = await asyncio.to_thread(_auth.decide, "/api/x", "GET", request.client.host if request.client else "",
+                                request.cookies.get(_auth.COOKIE), None)
+    return {"open": not await asyncio.to_thread(_auth.any_user), "user": u[1] if u[0] == 0 else None,
+            "roles": _auth.ROLES, "siguns": _auth.SIGUNS}
+
+
+@app.post("/api/auth/setup")
+async def api_setup(body: dict):
+    """처음 관리자 — 계정이 하나도 없을 때만(그 뒤로는 403). 만들고 바로 로그인한 채로 돌려준다."""
+    try:
+        u = await asyncio.to_thread(_auth.first_admin, str(body.get("login") or ""), str(body.get("password") or ""),
+                                    str(body.get("name") or ""))
+    except PermissionError as e:
+        raise HTTPException(403, str(e)) from e
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    tok, u = await asyncio.to_thread(_auth.login, u["login"], str(body.get("password") or ""))
+    r = JSONResponse({"user": u})
+    r.set_cookie(_auth.COOKIE, tok, max_age=_auth.DAYS * 86400, httponly=True, samesite="lax", path="/")
+    return r
+
+
+@app.get("/api/auth/users")
+async def api_users():
+    return {"users": await asyncio.to_thread(_auth.users)}
+
+
+@app.post("/api/auth/users")
+async def api_user_add(body: dict, request: Request):
+    if not await asyncio.to_thread(_auth.any_user) and (request.client.host if request.client else "") not in ("127.0.0.1", "::1"):
+        # 계정이 없을 때는 아무나 들어온다 — 첫 관리자를 같은 망 아무 화면에서나 만들면 그 사람이 주인이 된다
+        raise HTTPException(403, "첫 관리자는 로그인 화면(/login.html)의 '처음 설정'에서 만든다")
+    try:
+        return await asyncio.to_thread(_auth.add, str(body.get("login") or ""), str(body.get("password") or ""),
+                                       str(body.get("role") or ""), str(body.get("name") or ""), body.get("sigun"))
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@app.put("/api/auth/users/{uid}")
+async def api_user_put(uid: int, body: dict):
+    kw = {k: body[k] for k in ("role", "sigun", "name", "active") if k in body}
+    if body.get("password"):
+        kw["pw"] = str(body["password"])
+    try:
+        return await asyncio.to_thread(lambda: _auth.update(uid, **kw))
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
 
 
 if STATIC.exists():

@@ -199,6 +199,15 @@ CREATE TABLE IF NOT EXISTS duty_log (
   who TEXT NOT NULL, action TEXT, more TEXT, memo TEXT NOT NULL, photo TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_duty_log ON duty_log(rid, id);
+-- 로그인(app/auth.py) — 비밀번호는 scrypt 해시, 접속은 쿠키의 sha256 만
+CREATE TABLE IF NOT EXISTS app_user (
+  id INTEGER PRIMARY KEY, login TEXT UNIQUE NOT NULL, name TEXT NOT NULL DEFAULT '',
+  role TEXT NOT NULL CHECK (role IN ('admin','do','sigun')), sigun TEXT,
+  pw TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, created TEXT, last_login TEXT
+);
+CREATE TABLE IF NOT EXISTS app_session (
+  token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL, created TEXT, expires TEXT, ip TEXT
+);
 """
 
 

@@ -332,6 +332,7 @@ function mapArea() {
   const y1 = !pl.hidden && pl.offsetHeight ? pl.getBoundingClientRect().top - st.top - 10 : V.H - 16;
   return { x0, y0, x1, y1 };
 }
+let SIGUN_LOCK = null;   /* 시군 사용자(12-auth.js) — 그 시군에 고정, 확대는 둘레 시군까지 보이게 넓게 */
 function zoomCam(sigs) {
   const emd = ESEL.length && EFEAT ? EFEAT.filter(f => ESEL.includes(f.properties.id)) : [];
   const fts = emd.length ? emd : FEAT.filter(f => sigs.includes(f.properties.sigun));
@@ -342,6 +343,10 @@ function zoomCam(sigs) {
     for (const poly of polys) for (const [x, y] of poly[0]) {
       if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
     }
+  }
+  if (SIGUN_LOCK && !emd.length) {                          // 시군 화면 — 둘레 시군도 조금 보이게(흐리게 덮인 채)
+    const mx = (x1 - x0) * 0.3, my = (y1 - y0) * 0.3;
+    x0 -= mx; x1 += mx; y0 -= my; y1 += my;
   }
   const A = mapArea(), pad = 24 * V.k;
   const aw = A.x1 - A.x0 - 2 * pad, ah = A.y1 - A.y0 - 2 * pad;
