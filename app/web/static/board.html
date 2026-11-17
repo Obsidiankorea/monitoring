@@ -46,6 +46,7 @@
   <div class="key" aria-hidden="true"><span><i class="s0"></i>요청</span><span><i class="s1"></i>열람</span><span><i class="s2"></i>확인</span><span><i class="s3"></i>조치 중</span><span><i class="s4"></i>조치 완료</span><span>빨간 테두리 = 10분 넘게 확인 없음</span></div>
   <div id="list"></div>
 </main>
+<script src="/api/clock.js"></script>
 <script>
   const $ = id => document.getElementById(id), esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const STEPS = ["요청", "열람", "확인", "조치 중", "조치 완료"], OPEN = new Set();
@@ -58,7 +59,7 @@
       if (!r.ok) throw new Error(j.detail || r.status);
     } catch (e) { $("at").textContent = `받지 못했다 — ${e.message}`; return; }
     const gs = j.siguns || [], t = k => gs.reduce((a, g) => a + (k(g) || 0), 0);
-    $("at").textContent = `${new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 기준 · 30초마다 새로`;
+    $("at").textContent = `${new Date(window.GN_NOW || Date.now()).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 기준 · 30초마다 새로`;
     $("sum").innerHTML = [["요청한 지구", t(g => g.n), ""], ["확인 없음(10분↑)", t(g => g.warn), "w"], ["지원 필요", t(g => g.help), "h"],
       ["조치 완료", t(g => g.steps["조치 완료"]), "d"], ["시군", gs.length, ""]].map(([l, v, c]) => `<div class="${c}"><b>${v}</b><span>${l}</span></div>`).join("");
     if (!gs.length) { $("list").innerHTML = `<div class="empty">${j.demo ? "시연 화면에는 파견 기록이 없다" : "이 기간에 현장 요청이 없다 — 상황판단 창에서 지구에 요청을 보내면 여기에 시군별로 모인다"}</div>`; return; }
