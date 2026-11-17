@@ -80,6 +80,8 @@ def prune_db(db: Path, now: datetime) -> dict:
     for tbl in PRIVATE:
         c.execute(f"DELETE FROM {tbl}")
     c.execute("DELETE FROM setting WHERE key='contacts_pin'")
+    if any(r[1] == "who" for r in c.execute("PRAGMA table_info(decision)")):
+        c.execute("UPDATE decision SET who=NULL")      # 판단 기록의 누른 사람 이름
     c.execute("DELETE FROM obs_minute WHERE tm > ? OR tm < ?", (T, h50))
     for tbl, col, t, n in (("fcst_rn1", "tmfc", T12, 2), ("fcst_short", "tmfc", T10, 2),
                            ("fcst_short_run", "tmfc", T10, 2), ("qpf_frame", "tmfc", T12, 1)):
@@ -328,6 +330,7 @@ def add_dispatch(now: datetime) -> int:
         for tbl in PRIVATE:
             con.execute(f"DELETE FROM {tbl}")
         con.execute("DELETE FROM setting WHERE key='contacts_pin'")
+        con.execute("UPDATE decision SET who=NULL")
         for i, ((s, full, rid, name, addr), (ask_m, evs)) in enumerate(zip(picks, SCRIPT)):
             con.execute("INSERT INTO duty_link(rid, token, sigun, name, addr) VALUES(?,?,?,?,?)",
                         (rid, secrets.token_urlsafe(9), full, name, addr))

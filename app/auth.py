@@ -255,6 +255,21 @@ def _later(days: int = DAYS) -> str:
 OPEN = ("/login.html", "/api/auth/login", "/api/auth/me", "/api/auth/setup", "/api/auth/sigun", "/api/status", "/favicon.ico", "/r/")
 ADMIN_ONLY = ("/api/settings", "/api/keys", "/api/update", "/api/server-update", "/api/origin", "/api/storage",
               "/api/snaps", "/api/ai/wiki", "/api/ai/task", "/api/ai/llm", "/api/districts/geo", "/api/auth/users", "/admin.html")
+# 관리자가 아닌 사람의 쓰기(POST · PUT · DELETE)는 여기 있는 것만 — 새 쓰기 라우트는 기본으로 관리자 전용(허용 목록)
+WRITE_OK = {
+    "sigun": ("POST /api/auth/logout", "POST /api/reply/ask", "POST /api/refresh/"),   # 현장 요청(자기 시군 지구만 — main 이 거른다)
+    "do": ("POST /api/auth/logout", "POST /api/reply/ask", "POST /api/ai/ask",
+           "POST /api/ai/decisions", "PUT /api/ai/sigunstage",                  # 판단 기록 남기기 · 도 비상단계 표시(지우기는 관리자)
+           "POST /api/reports/run", "POST /api/reports/wait", "DELETE /api/reports/wait", "POST /api/refresh/"),
+}
+
+
+def write_ok(role: str, method: str, path: str) -> bool:
+    if role == "admin" or method in ("GET", "HEAD", "OPTIONS"):
+        return True
+    return any(f"{method} {path}" == w or (w.endswith("/") and f"{method} {path}".startswith(w)) for w in WRITE_OK.get(role, ()))
+
+
 NO_MACHINE = ("/api/contacts", "/api/reply", "/api/auth")
 MACHINE = {"login": "machine", "name": "기계 열쇠", "role": "do", "sigun": None, "machine": True}
 LOCAL = {"login": "local", "name": "이 컴퓨터", "role": "admin", "sigun": None, "local": True}
@@ -265,14 +280,27 @@ def machine_key() -> str:
     return (os.environ.get("GN_API_KEY") or config.KEYS.get("GN_API_KEY") or "").strip()
 
 
-def decide(path: str, method: str, host: str, cookie: str | None, key: str | None) -> tuple[int, dict | None]:
-    """→ (0 = 통과 | 401 로그인 필요 | 403 권한 없음, 사용자). 계정이 없으면 늘 통과."""
+def _hostname(h: str | None) -> str:
+    """'localhost:8000' · '[::1]:8000' · 'http://127.0.0.1:8000' → 이름만(소문자)."""
+    h = (h or "").lower().split("://", 1)[-1].split("/", 1)[0]
+    return h[1:h.index("]")] if h.startswith("[") and "]" in h else h.rsplit(":", 1)[0] if h.count(":") == 1 else h
+
+
+LOOP_NAMES = ("localhost", "127.0.0.1", "::1")
+
+
+def decide(path: str, method: str, host: str, cookie: str | None, key: str | None,
+           hhost: str | None = None, origin: str | None = None) -> tuple[int, dict | None]:
+    """→ (0 = 통과 | 401 로그인 필요 | 403 권한 없음, 사용자). 계정이 없으면 늘 통과.
+    hhost = 요청의 Host 머리, origin = Origin 머리 — 다른 사이트가 보낸 쓰기(브라우저가 Origin 을 붙인다)는 막는다."""
+    if method not in ("GET", "HEAD", "OPTIONS") and origin and origin != "null" and hhost is not None             and origin.lower().split("://", 1)[-1].rstrip("/") != hhost.lower():
+        return 403, None
     if any(path == p or (p.endswith("/") and path.startswith(p)) for p in OPEN):
         return 0, None
     if config.DEMO:                                 # 시연 — 가짜 자료뿐이라 막지 않는다(계정 · 설정 쓰기는 시연이 따로 막는다)
         return 0, DEMO
-    if host in ("127.0.0.1", "::1"):
-        return 0, LOCAL
+    if host in ("127.0.0.1", "::1") and (hhost is None or _hostname(hhost) in LOOP_NAMES):
+        return 0, LOCAL                              # 이 컴퓨터 · 서버 자신 — 다른 이름(Host)으로 온 것(DNS 되붙이기)은 아래처럼 따진다
     if not any_user():
         return 0, None
     mk = machine_key()
@@ -287,6 +315,8 @@ def decide(path: str, method: str, host: str, cookie: str | None, key: str | Non
         # 설정 읽기(GET)는 화면이 늘 부른다 — 바꾸기(쓰기)만 관리자. 계정 · 키 · 관리 화면은 읽기도 관리자
         if method != "GET" or path.startswith(("/api/keys", "/api/auth/users", "/admin.html")):
             return 403, u
+    if not write_ok(u["role"], method, path):
+        return 403, u
     return 0, u
 
 

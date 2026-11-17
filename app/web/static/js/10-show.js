@@ -174,7 +174,7 @@ function renderShowDlg() {
     <div class="foot"><span class="msg">재생 중에는 층 · 구간을 이 화면에서만 바꾼다(다른 화면 설정은 그대로). 끝은 Esc · P · 점 위 ✕</span><span class="sp"></span>
       ${SHOW.on ? `<button class="btn" data-a="stop">재생 끝</button>` : ""}<button class="btn pri" data-a="play"${SED.items.length ? "" : " disabled"}>▶ 재생</button></div></div>`;
 }
-const esc = t => String(t ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+const esc = t => String(t ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 async function putShows(list) {
   const r = await fetch("/api/settings/map", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ shows: list }) });
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.status);

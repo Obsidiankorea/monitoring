@@ -4632,7 +4632,7 @@ document.getElementById("demo-off").addEventListener("click", demoOff);
    언레이드 예약 작업(deploy/unraid/updater.sh, 1분마다)이 deploy.sh 로 갱신하고 결과를 남긴다.
    자동 갱신은 없다 — '새 판 있음'을 보이고 누를 때만. PC 가 서버에서 받는 중이면 이 칸이 서버를 가리킨다. */
 let SRVUP = null, SRVUP_WAIT = null;
-const esc = t => String(t ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
+const esc = t => String(t ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 async function loadServerUpdate() {
   const box = document.getElementById("pf-srvup");
   try { SRVUP = await getJson("/api/server-update"); } catch { SRVUP = null; }

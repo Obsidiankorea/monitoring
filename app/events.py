@@ -58,7 +58,7 @@ def listing(limit: int = 30) -> list[dict]:
         for ev in con.execute("SELECT * FROM event ORDER BY id DESC LIMIT ?", (max(1, min(limit, 200)),)):
             a, b = _span(ev)
             lg = con.execute("SELECT COUNT(*) n, GROUP_CONCAT(DISTINCT sigun) sg FROM stage_log WHERE event=?", (ev["id"],)).fetchone()
-            dn = con.execute("SELECT COUNT(*) FROM decision WHERE at>=? AND at<=?", (a, b)).fetchone()[0]
+            dn = con.execute("SELECT COUNT(*) FROM decision WHERE at>=? AND at<=? AND gone IS NULL", (a, b)).fetchone()[0]
             out.append({"id": ev["id"], "start": ev["start"], "end": ev["end"], "last": ev["last"], "alerts": json.loads(ev["alerts"]),
                         "log": lg["n"], "siguns": (lg["sg"] or "").split(",") if lg["sg"] else [], "decisions": dn})
     return out
@@ -72,6 +72,6 @@ def detail(eid: int) -> dict | None:
             return None
         a, b = _span(ev)
         rows = [{"kind": "stage", **dict(r)} for r in con.execute("SELECT * FROM stage_log WHERE event=?", (eid,))]
-        rows += [{"kind": "decision", **dict(r)} for r in con.execute("SELECT * FROM decision WHERE at>=? AND at<=?", (a, b))]
+        rows += [{"kind": "decision", **dict(r)} for r in con.execute("SELECT * FROM decision WHERE at>=? AND at<=? AND gone IS NULL", (a, b))]
     rows.sort(key=lambda r: (r["at"], r["kind"]))
     return {"id": ev["id"], "start": ev["start"], "end": ev["end"], "last": ev["last"], "alerts": json.loads(ev["alerts"]), "rows": rows}

@@ -120,6 +120,10 @@ async def run_one(kind: str, force: bool = False) -> dict:
 
 
 async def _nightly() -> None:
+    try:
+        await asyncio.to_thread(maint.backup)              # 정리와 상관없이 매일 — 판단 기록 · 파견 기록 · 계정이 DB 에만 있다
+    except Exception:                                       # noqa: BLE001
+        log.exception("DB 백업 실패")
     if not maint.cfg().get("auto", True):
         return
     res = await asyncio.to_thread(maint.cleanup)
@@ -499,15 +503,15 @@ async def api_ai_shrt_emd(sigun: str, start: str):
 @app.get("/api/ai/decisions")
 async def api_ai_decisions(sigun: str | None = None, limit: int = 50):
     """상황판단 모드 판단 기록 — 새것부터. 서버 공유(어느 PC 에서 눌러도 같이 보인다)."""
-    q, a = "SELECT * FROM decision", []
+    q, a = "SELECT * FROM decision WHERE gone IS NULL", []
     if sigun:
-        q, a = q + " WHERE sigun=?", [sigun]
+        q, a = q + " AND sigun=?", [sigun]
     with db.tx() as con:
         return {"rows": [dict(r) for r in con.execute(q + " ORDER BY id DESC LIMIT ?", (*a, max(1, min(limit, 500))))]}
 
 
 @app.post("/api/ai/decisions")
-async def api_ai_decisions_post(body: dict):
+async def api_ai_decisions_post(body: dict, request: Request):
     """{sigun, emd, fam, stage, act, pct, eta, note} — 결정을 기록만 한다(문자 · 보고를 보내지 않는다)."""
     acts = ("통제 지시", "사전대피 권고", "대피명령 요청", "보류", "메모")
     if not body.get("sigun") or body.get("act") not in acts:
@@ -515,9 +519,9 @@ async def api_ai_decisions_post(body: dict):
     s = lambda k, n=80: (str(body.get(k) or "").strip()[:n] or None)  # noqa: E731
     pct = body.get("pct")
     with db.tx() as con:
-        con.execute("INSERT INTO decision(at, sigun, emd, fam, stage, act, pct, eta, note) VALUES(?,?,?,?,?,?,?,?,?)",
+        con.execute("INSERT INTO decision(at, sigun, emd, fam, stage, act, pct, eta, note, who) VALUES(?,?,?,?,?,?,?,?,?,?)",
                     (clock.now().isoformat(timespec="seconds"), s("sigun", 10), s("emd", 20), s("fam", 10), s("stage", 10), body["act"],
-                     int(pct) if isinstance(pct, (int, float)) else None, s("eta", 20), s("note", 300)))
+                     int(pct) if isinstance(pct, (int, float)) else None, s("eta", 20), s("note", 300), _who_str(request)))
     return await api_ai_decisions(body["sigun"])
 
 
@@ -537,11 +541,20 @@ async def api_event(eid: int):
 
 
 @app.delete("/api/ai/decisions/{did}")
-async def api_ai_decisions_del(did: int):
-    """잘못 누른 결정 하나를 지운다."""
+async def api_ai_decisions_del(did: int, request: Request):
+    """잘못 누른 결정 하나를 지운다 — 줄은 남기고 지운 표시만(언제 · 누가). 목록 · 사건 · AI 에서 빠진다(관리자만, auth.WRITE_OK)."""
     with db.tx() as con:
-        con.execute("DELETE FROM decision WHERE id=?", (did,))
+        con.execute("UPDATE decision SET gone=? WHERE id=? AND gone IS NULL",
+                    (f"{clock.now().isoformat(timespec='seconds')} · {_who_str(request)}", did))
     return {"ok": True}
+
+
+def _who_str(request: Request) -> str:
+    """기록에 남길 누른 사람 — '이름(역할)'. 로그인 없는 서버 · 이 컴퓨터는 '상황실'."""
+    u = getattr(request.state, "user", None) or {}
+    if not u or u.get("local"):
+        return "상황실"
+    return f"{u.get('name') or u.get('login')}({_auth.ROLES.get(u.get('role'), u.get('role'))})"[:60]
 
 
 _PIN_FAIL: list[float] = []                                   # 잠금 번호 틀린 시각 — 5분에 5번 넘으면 막는다(4자리 맞히기 방지)
@@ -1661,7 +1674,8 @@ async def need_login(request: Request, call_next):
     path = request.url.path
     host = request.client.host if request.client else ""
     code, user = await asyncio.to_thread(_auth.decide, path, request.method, host,
-                                         request.cookies.get(_auth.COOKIE), request.headers.get("x-gn-key"))
+                                         request.cookies.get(_auth.COOKIE), request.headers.get("x-gn-key"),
+                                         request.headers.get("host") or "", request.headers.get("origin"))
     if code == 401:
         if path.startswith("/api/") or request.method != "GET":
             return JSONResponse({"detail": "로그인이 필요하다"}, status_code=401)

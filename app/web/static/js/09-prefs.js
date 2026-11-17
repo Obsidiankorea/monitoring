@@ -253,7 +253,7 @@ $("prefs").addEventListener("click", ev => { if (ev.target.id === "prefs") close
    ⚠️ 확인 실패를 '최신'으로 읽지 않는다 — 인터넷이 막힌 PC 에서 '최신이다'라고 적으면 거짓말이 된다.
    ⚠️ 설정창은 무엇을 누를 때마다 통째로 다시 그린다(openPrefs) — 그래서 상태를 UPD 에 두고 updHtml 이 거기서 그린다 */
 const UPD = { srv: null, pc: null, loading: false, msg: "", smsg: "", wait: null };
-const escH = t => String(t ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
+const escH = t => String(t ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));   // 속성값에도 쓴다
 function updHtml() {
   const row = (k, v) => `<div class="row"><span class="k">${k}</span><span class="uv">${v}</span></div>`;
   let h = "";

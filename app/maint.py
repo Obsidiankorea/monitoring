@@ -11,6 +11,8 @@
 from __future__ import annotations
 
 import logging
+import os
+import sqlite3
 from datetime import datetime, timedelta
 
 from . import db, gridstore
@@ -99,6 +101,29 @@ def usage() -> dict:
             "total_bytes": db_bytes + img_bytes + grid_bytes,
             "tables": tables, "qpf_tmfc": len(tmfcs),
             "retention": cfg()}
+
+
+BACKUP_KEEP = 2                              # 하루 한 벌 · 최근 둘(DB 가 1GB 가까이라 많이 두지 않는다)
+
+
+def backup(now: datetime | None = None, keep: int = BACKUP_KEEP):
+    """DB 한 벌을 상태 폴더 backup/ 에 — sqlite backup(쓰는 중에도 온전한 사본). 오래된 것은 keep 벌만 남긴다 → 만든 파일."""
+    now = now or datetime.now()
+    d = db.DB_PATH.parent / "backup"
+    d.mkdir(parents=True, exist_ok=True)
+    dst, tmp = d / f"gnweather-{now:%Y%m%d}.db", d / f".tmp-gnweather-{now:%Y%m%d}.db"
+    src = sqlite3.connect(db.DB_PATH, timeout=30)
+    out = sqlite3.connect(tmp)
+    try:
+        src.backup(out)
+    finally:
+        out.close()
+        src.close()
+    os.replace(tmp, dst)
+    for old in sorted(d.glob("gnweather-*.db"))[:-keep]:
+        old.unlink()
+    log.info("DB 백업 %s (%.0fMB)", dst.name, dst.stat().st_size / 1048576)
+    return dst
 
 
 def thin_minutes(now: datetime) -> int:

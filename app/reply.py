@@ -367,11 +367,16 @@ def _open() -> None:
         raise HTTPException(403, "시연 화면에서는 받지 않습니다")
 
 
+def _plain(v) -> str:
+    """현장 페이지에서 받은 직급 · 성명 — 꺾쇠 · 따옴표 · 제어 문자를 뺀다(여러 화면이 이 글을 그대로 그린다)."""
+    return re.sub(r"[<>\"'`&\x00-\x1f\x7f]", "", str(v or "")).strip()
+
+
 def join(token: str, body: dict) -> dict:
     """담당자 등록 — {rank, name, tel(선택), p, fix}. 번호를 비우면 링크의 받는 사람 자리(p) 번호를 서버 안에서 이어 쓴다(응답에 안 낸다).
     fix — '아닙니다 — 다시 입력': p 가 지금 현장 등록 담당이면 그 사람은 빠지고(교대) 새 이름으로. 지구마다 둘까지. 등록한 사람의 id."""
     _open()
-    rank, name = str(body.get("rank") or "").strip()[:20], str(body.get("name") or "").strip()[:20]
+    rank, name = (_plain(body.get(k))[:20] for k in ("rank", "name"))
     raw = str(body.get("tel") or "").strip()
     tel = _mobile(raw)
     if not name or (raw and not tel):

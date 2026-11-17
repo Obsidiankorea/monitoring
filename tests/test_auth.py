@@ -205,3 +205,53 @@ def test_demo_opens_as_do_user(app_, monkeypatch):
     me = c.get("/api/auth/me").json()
     assert me["open"] is False and me["user"]["role"] == "do" and me["user"]["demo"]
     assert c.get("/map.html", follow_redirects=False).status_code == 200   # 로그인 화면으로 보내지 않는다
+
+
+def test_writes_are_allowlisted_per_role(app_):
+    """A1 — 관리자가 아니면 허용 목록의 쓰기만. 비밀번호 없는 시군 손님은 현장 요청뿐, 판단 기록 지우기는 관리자만(지운 표시만 남는다)."""
+    from app import db
+    main, auth = app_
+    auth.add("boss", "password-1", "admin", "관리자")
+    auth.add("do1", "password-2", "do", "도담당")
+    g = TestClient(main.app)
+    assert g.post("/api/auth/sigun", json={"sigun": "창원"}).status_code == 200
+    assert g.post("/api/ai/decisions", json={"sigun": "창원", "act": "메모"}).status_code == 403
+    assert g.put("/api/ai/sigunstage", json={}).status_code == 403
+    assert g.post("/api/reports/run", json={"id": "weather"}).status_code == 403
+    assert g.post("/api/law/run").status_code == 403
+    assert auth.write_ok("sigun", "POST", "/api/reply/ask") and not auth.write_ok("sigun", "DELETE", "/api/ai/decisions/1")
+    d = TestClient(main.app)
+    _login(d, "do1", "password-2")
+    rows = d.post("/api/ai/decisions", json={"sigun": "창원", "act": "메모"}).json()["rows"]
+    assert rows[0]["who"] == "도담당(도 사용자)"
+    did = rows[0]["id"]
+    assert d.delete(f"/api/ai/decisions/{did}").status_code == 403
+    a = TestClient(main.app)
+    _login(a, "boss", "password-1")
+    assert a.delete(f"/api/ai/decisions/{did}").status_code == 200
+    assert a.get("/api/ai/decisions").json()["rows"] == []
+    with db.tx() as con:
+        assert "관리자(도 관리자)" in con.execute("SELECT gone FROM decision WHERE id=?", (did,)).fetchone()[0]   # 줄은 남는다
+
+
+def test_loopback_needs_local_host_and_same_origin(app_):
+    """A3 — 127.0.0.1 이라도 Host 가 다른 이름(DNS 되붙이기)이면 관리자로 안 보고, 다른 사이트 Origin 의 쓰기는 막는다."""
+    main, auth = app_
+    auth.add("boss", "password-1", "admin")
+    assert auth.decide("/api/alerts", "GET", "127.0.0.1", None, None, "localhost:8000")[1]["local"]
+    assert auth.decide("/api/alerts", "GET", "127.0.0.1", None, None, "[::1]:8000")[1]["local"]
+    assert auth.decide("/api/alerts", "GET", "127.0.0.1", None, None, "evil.example:8000")[0] == 401
+    assert auth.decide("/api/keys", "PUT", "127.0.0.1", None, None, "127.0.0.1:8000", "http://evil.example")[0] == 403
+    assert auth.decide("/api/keys", "PUT", "127.0.0.1", None, None, "127.0.0.1:8000", "http://127.0.0.1:8000")[0] == 0
+    c = TestClient(main.app)
+    _login(c, "boss", "password-1")
+    assert c.put("/api/settings/map", json={}, headers={"origin": "https://evil.example"}).status_code == 403
+
+
+def test_field_name_strips_markup():
+    """A4 — 현장 페이지에서 받은 직급 · 성명은 꺾쇠 · 따옴표 · 제어 문자를 뺀다(여러 화면이 그대로 그린다). 화면 escH 도 따옴표를 바꾼다."""
+    from pathlib import Path
+    from app import reply
+    assert reply._plain('<img src=x onerror="a">홍\'길`동\x01 ') == "img src=x onerror=a홍길동"
+    js = (Path(__file__).parent.parent / "app/web/static/js/09-prefs.js").read_text("utf-8")
+    assert "&quot;" in js.split("const escH", 1)[1].split("\n", 1)[0]

@@ -41,14 +41,18 @@ echo "[deploy] 판 $V"
 AI=(-e GN_AI="$GN_AI" -v "$D/config/claude:/app/config/claude:ro" -e GN_TERRAIN=/terrain -v "$D/terrain:/terrain:ro")   # 지형 조각도 같이(두 컨테이너)
 if [ -d "$WIKI" ]; then AI+=(-e GN_WIKI=/wiki -v "$WIKI:/wiki:ro"); else echo "[deploy] ⚠ 위키가 없다($WIKI) — AI 보고에 기준 · 우려지역이 빠진다"; fi
 
+PREV=$(docker inspect --format '{{.Config.Image}}' "$NAME" 2>/dev/null || true)   # 안 뜨면 이것으로 되돌린다
 docker build -q -t "$NAME:$V" -t "$NAME:latest" --build-arg APP_VERSION="$V" "$D/repo" >/dev/null
-docker rm -f "$NAME" >/dev/null 2>&1 || true
-docker run -d --name "$NAME" --restart unless-stopped --memory 2g -p "$PORT:8000" \
-  -e TZ=Asia/Seoul "${AI[@]}" \
-  -v "$D/state:/state" \
-  -v "$D/config/api_keys.txt:/app/config/api_keys.txt" \
-  -l net.unraid.docker.webui="http://[IP]:[PORT:8000]/" \
-  "$NAME:$V" >/dev/null
+run_main() {
+  docker rm -f "$NAME" >/dev/null 2>&1 || true
+  docker run -d --name "$NAME" --restart unless-stopped --memory 2g -p "$PORT:8000" \
+    -e TZ=Asia/Seoul "${AI[@]}" \
+    -v "$D/state:/state" \
+    -v "$D/config/api_keys.txt:/app/config/api_keys.txt" \
+    -l net.unraid.docker.webui="http://[IP]:[PORT:8000]/" \
+    "$1" >/dev/null
+}
+run_main "$NAME:$V"
 
 # 시연 서버 gn-demo :8001 — 굳혀 둔 것(state/snaps, 실황 화면의 '지금 저장')을 읽기 전용으로 받아 띄운다.
 #   처음엔 가장 새 것, /snap/<이름> 으로 열면 그것으로 갈아 탄다(같은 컨테이너 안에서 다시 뜬다).
@@ -57,14 +61,20 @@ for c in $(docker ps -a --format '{{.Names}}' | grep -E '^gn-demo(-[0-9]+)?$'); 
 docker run -d --name gn-demo --restart unless-stopped --memory 1g -p 8001:8000   -e TZ=Asia/Seoul "${AI[@]}" -e GN_DEMO=1 -e GN_SNAPS=/snaps -e GN_SNAP_STATE=/tmp/snap   -v "$D/state/snaps:/snaps:ro"   -l net.unraid.docker.webui="http://[IP]:[PORT:8001]/"   "$NAME:$V" >/dev/null
 echo "[deploy] 시연 gn-demo($(ls -1 "$D/state/snaps" 2>/dev/null | grep -vc '^\.tmp' || true)개) → http://<서버>:8001/"
 
-# 옛 판 이미지 정리(지금 판 · latest 만 남긴다)
-docker image ls "$NAME" --format '{{.Tag}}' | grep -vE "^($V|latest)$" \
-  | xargs -r -I{} docker rmi "$NAME:{}" >/dev/null 2>&1 || true
-
-# 뜰 때까지 기다린다(첫 수집은 뒤에서 돈다)
+# 뜰 때까지 기다린다(첫 수집은 뒤에서 돈다). 뜬 뒤에만 옛 판 이미지를 치운다 — 안 뜨면 앞 판으로 되돌린다
 for _ in $(seq 1 40); do
-  curl -fsS -o /dev/null "http://127.0.0.1:$PORT/api/status" && { echo "[deploy] $NAME $V 떴다 → http://<서버>:$PORT/"; exit 0; }
+  if curl -fsS -o /dev/null "http://127.0.0.1:$PORT/api/status"; then
+    echo "[deploy] $NAME $V 떴다 → http://<서버>:$PORT/"
+    docker image ls "$NAME" --format '{{.Tag}}' | grep -vE "^($V|latest)$" \
+      | xargs -r -I{} docker rmi "$NAME:{}" >/dev/null 2>&1 || true      # 지금 판 · latest 만 남긴다
+    exit 0
+  fi
   sleep 2
 done
 echo "[deploy] ⚠ 80초 안에 안 떴다 — docker logs $NAME"
+docker logs --tail 30 "$NAME" 2>&1 | sed 's/^/  | /'
+if [ -n "$PREV" ] && [ "$PREV" != "$NAME:$V" ]; then
+  echo "[deploy] 앞 판($PREV)으로 되돌린다"
+  run_main "$PREV"
+fi
 exit 1

@@ -610,7 +610,7 @@ def ask_free(base: str, text: str, sigun: str | None = None) -> dict:
         ctx += "\n\n[읍면동 수치]\n" + ai.brief(situation(sigun, base), top=8)
         from . import db
         with db.tx() as con:                                # 상황판단 모드에서 사람이 누른 결정 — '보류한 것' 등을 물을 수 있게
-            dec = [dict(r) for r in con.execute("SELECT * FROM decision WHERE sigun=? ORDER BY id DESC LIMIT 12", (sigun,))]
+            dec = [dict(r) for r in con.execute("SELECT id, at, sigun, emd, fam, stage, act, pct, eta, note FROM decision WHERE sigun=? AND gone IS NULL ORDER BY id DESC LIMIT 12", (sigun,))]
         # 지구 지역 여건 — 저지대 · 하천 가까움 · 급경사 · 저수지 아래 · 침수흔적(판정 % 와 별개). 공개 지구 목록 API 로(연락처 모듈은 AI 가 안 만진다)
         try:
             dz = [d for d in ai._get(base, "/api/districts/all")["rows"] if d["sigun"] == sigun]
