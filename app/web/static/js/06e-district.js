@@ -220,7 +220,7 @@ function dzMiniPlane(r) {
   const T = ["지금", ...(s.t || [])], at = i => (i <= 0 ? "지금" : `${T[i]}시`);
   // ① 지금 단계 줄
   const strip = ["평시", ...DZ_STG].map(x => {
-    const on = (ph.cur || "평시") === x, nx = ph.next === x;
+    const on = (ph.cur || "평시") === x, nx = ph.next === x && (ph.at(x, DZ_TI) ?? 0) >= 50;   // 다음 칸 점선은 50% 부터 — 한참 먼데 켜 두면 곧 통제처럼 읽힌다
     return `<span class="${on ? "on" : nx ? "nx" : ""}${on && x !== "평시" ? ` s${DZ_STG.indexOf(x)}` : ""}">${on ? "▶ " : ""}${x}</span>`;
   }).join("");
   // ② 세 단계 막대 — 0~143% 를 막대 너비로, 70 · 100 눈금

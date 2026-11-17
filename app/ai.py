@@ -343,8 +343,13 @@ def _riv(rv: dict | None, need: int) -> tuple[str, dict | None]:
         return "unknown", None
     st = "met" if rv["stage"] >= need else "near" if rv["stage"] == need - 1 else "no"
     t = rv["thr"][need - 1] if len(rv["thr"]) >= need else None
-    gap = _gap(_part(f"{rv['name']} 수위", rv["wl"], t, "m")) if (t and rv["wl"] is not None) else None
-    return st, gap
+    if not (t and rv["wl"] is not None):
+        return st, None
+    p = _part(f"{rv['name']} 수위", rv["wl"], t, "m")
+    # 수위는 0m 부터 재면 평소 물높이만으로 수십 % 가 된다 — 관심 수위를 0% 로(관심 수위가 없거나 기준 위면 0m 부터)
+    base = rv["thr"][0] if rv["thr"] and rv["thr"][0] is not None and rv["thr"][0] < t else 0
+    p["pct"] = round(max(rv["wl"] - base, 0) / (t - base) * 100)
+    return st, _gap(p)
 
 
 def ladders(r: dict, night: bool, alerts: list[str], rv: dict | None = None, fld: list[dict] | None = None,

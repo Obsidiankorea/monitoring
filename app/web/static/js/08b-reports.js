@@ -184,10 +184,10 @@ function repCmPick(g, kinds, n) {
   return all.filter(x => out.includes(x)).map(p => ({ k: p.text, text: p.text, subs: [...(p.subs || [])] }));
 }
 function repCmOpts(r, o) { const all = { ...(repPref().opts || {}) }; all[r.id] = { ...repVals(r), ...o }; repSave({ opts: all }); }
-/* 제목 제안 — 「11. 17.~18. 호우·강풍 대비」. 기간을 안 넣었으면 오늘~내일 */
+/* 제목 제안 — 「11. 17.~18. 호우·강풍 대비」. 기간 칸 날짜(비우면 전일~오늘) */
 function repCmTitle(v) {
   const dt = s => (s && s.length === 12 ? new Date(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8)) : null);
-  const a = dt(v.start) || new Date(), b = dt(v.end) || new Date(a.getTime() + 864e5);
+  const p = repCmPeriod(v), a = dt(p.start), b = dt(p.end);   // 기간 칸(비우면 전일 00시 ~ 지금)과 같은 날짜
   const span = `${a.getMonth() + 1}. ${a.getDate()}.` + (a.toDateString() === b.toDateString() ? ""
     : a.getMonth() === b.getMonth() ? `~${b.getDate()}.` : `~${b.getMonth() + 1}. ${b.getDate()}.`);
   return `「${span} ${(v.kinds || []).join("·") || "재난"} 대비」`;

@@ -125,5 +125,8 @@ def test_ai_river_rules_in_ladder():
     evac = next(c for c in lad if c["rule"].startswith("홍수경보 수준"))
     assert ctl["st"] == "met" and ctl["stage"] == "통제"
     assert evac["st"] == "near" and evac["gap"]["left"] == 0.8             # 경보 수위 5.0 − 4.2
+    assert evac["gap"]["pct"] == 60                                        # 관심 3.0 을 0% 로 — (4.2−3.0)/(5.0−3.0)
+    low = ai.ladders(row, False, [], {**rv, "stage": 0, "wl": 2.24})["하천"]
+    assert next(c for c in low if c["rule"].startswith("홍수주의보 수준"))["gap"]["pct"] == 0   # 관심 아래는 0% (0m 부터면 56%)
     assert next(c for c in ai.ladders(row, False, [], None)["하천"] if c["rule"].startswith("홍수경보"))["st"] == "unknown"
     assert "적포교 4.20m 주의보" in ai.river_text(rv) and "자료가 없다" in ai.river_text(None)
