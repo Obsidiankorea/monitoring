@@ -2231,3 +2231,9 @@ body.sj-on > header, body.sj-on #stage, body.sj-on #tl, body.sj-on #rail { displ
 #rep .ob .cm textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 #rep .ob .cm legend .cnt { font-style: normal; font-weight: 500; color: var(--ink-3); margin-left: 6px; } #rep .ob .cm legend .cnt.warn { color: var(--lv-watch); }
 @media (max-width: 480px) { #rep .ob .cm .ed { padding-left: 0; } }
+/* 자료 기준 시각 팝업 — 만들기가 끝나면(기상청 자료의 발표 · 기준 시각은 문서에 안 넣고 여기만) */
+#rep .op.bs { width: 520px; }
+#rep .op.bs dl { margin: 0; padding: 10px 14px; display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; font-size: 13px; }
+#rep .op.bs dt { color: var(--ink-2); } #rep .op.bs dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+#rep .op.bs .bsn { margin: 0; padding: 0 14px 8px; }
+@media (max-width: 480px) { #rep .op.bs dl { grid-template-columns: 1fr; gap: 2px; } #rep .op.bs dd { margin-bottom: 6px; } }

@@ -57,7 +57,7 @@ def test_token_never_leaks(keys, monkeypatch):
 
 
 def test_api_download_korean_name_and_tg(keys, monkeypatch):
-    monkeypatch.setattr(reports, "fetch", lambda rid, opts, picked=None: [("풍수해보고_202611161358.hwp", HWP)])
+    monkeypatch.setattr(reports, "fetch", lambda rid, opts, picked=None, extra=None, meta=None: [("풍수해보고_202611161358.hwp", HWP)])
     sent = []
     monkeypatch.setattr(reports, "send_tg", lambda name, data, cap="": sent.append(name))
     c = TestClient(main.app)
@@ -70,7 +70,7 @@ def test_api_download_korean_name_and_tg(keys, monkeypatch):
     assert r.status_code == 200 and r.content == HWP and r.headers["x-tg"] == "ok" and sent == ["풍수해보고_202611161358.hwp"]
     assert "filename*=UTF-8''" in cd and unquote(cd.split("UTF-8''")[1]) == "풍수해보고_202611161358.hwp" and cd.isascii()
     j = c.post("/api/reports/run", json={"id": "nature", "tg": True, "dl": False}).json()
-    assert j == {"ok": True, "name": "풍수해보고_202611161358.hwp", "tg": "ok"}
+    assert j == {"ok": True, "name": "풍수해보고_202611161358.hwp", "tg": "ok", "basis": []}
     assert c.post("/api/reports/run", json={"id": "nature", "tg": False, "dl": False}).status_code == 400
 
 
@@ -250,7 +250,7 @@ def test_picture_jobs_fetch_all_files_zip_and_tg_each(keys, monkeypatch):
     assert zipfile.ZipFile(io.BytesIO(data)).namelist() == ["combo_1.png", "combo_2.png"]
     assert reports.bundle(files[:1]) == files[0]                                          # 하나면 그대로
     sent = []
-    monkeypatch.setattr(reports, "fetch", lambda rid, opts, picked=None: files)
+    monkeypatch.setattr(reports, "fetch", lambda rid, opts, picked=None, extra=None, meta=None: files)
     monkeypatch.setattr(reports, "send_tg", lambda n, d, cap="": sent.append((n, cap)))
     r = TestClient(main.app).post("/api/reports/run", json={"id": "combo", "tg": True})
     assert r.headers["content-type"] == "application/zip" and r.headers["x-tg"] == "ok"
@@ -283,3 +283,49 @@ def test_phrases_proxy_cached_and_filtered(keys, monkeypatch):
     assert reports.phrases(c) == v and len(calls) == 1                                    # 5분 캐시
     monkeypatch.setattr(reports, "phrases", lambda: v)
     assert TestClient(main.app).get("/api/reports/phrases").json() == v
+
+
+def test_meeting_sends_river_levels_in_column_order(keys, monkeypatch):
+    from app import river
+    rows = [{"kind": "wl", "name": "합천군(적포교)", "v": 9.51, "stage": 0, "t": "202611170940"},
+            {"kind": "wl", "name": "하동군(읍내리)", "v": 11.2, "stage": 1, "t": "202611170950"},
+            {"kind": "wl", "name": "밀양시(남포동)", "v": 3.0, "stage": 0, "t": "202611170940", "stale": True}]
+    monkeypatch.setattr(river, "status", lambda: {"rows": rows})
+    got = reports.river_rows(reports.BY_ID["meeting"]["river"])
+    assert len(got) == 10 and got[0]["v"] is None and got[0]["st"] == "-"            # 성하리 — 지도에 없으면 '-'
+    assert got[1] == {"name": "적포교", "v": 9.51, "st": "정상", "t": "202611170940", "late": False, "thr": []}
+    assert got[2]["v"] is None and got[2]["late"] and got[2]["t"] == "202611170940"   # 늦은 값(stale)은 안 쓰고 각주에 시각
+    assert got[9]["st"] == "관심"
+    import json as _j
+    from app import meeting
+    monkeypatch.setattr(meeting, "extras", lambda kinds, on: ({"과거사례": [{"text": "x", "subs": []}]}, [{"name": "조위", "at": "t"}]))
+    meta = {}
+    reports.fetch("meeting", {}, _fake(seen := []), picked={}, meta=meta)
+    b = _j.loads(seen[0].content)
+    assert b["수위"][1]["v"] == 9.51 and b["과거사례"][0]["text"] == "x"
+    assert meta["basis"] == [{"name": "하천 수위(홍수통제소)", "at": "2026-11-17 09:50 관측"}, {"name": "조위", "at": "t"}]
+
+
+def test_basis_passed_to_screen(keys, monkeypatch):
+    """jaenan 이 실은 기상청 자료 시각 → 받기는 X-Basis 머리(퍼센트 인코딩 JSON), 텔레그램만은 JSON basis."""
+    import json as _j
+
+    def fake(rid, opts, picked=None, extra=None, meta=None):
+        meta["basis"] = [{"name": "통보문", "at": "11.17. 05:00 발표"}]
+        return [("a.hwp", HWP)]
+    monkeypatch.setattr(reports, "fetch", fake)
+    monkeypatch.setattr(reports, "send_tg", lambda *a, **k: None)
+    c = TestClient(main.app)
+    r = c.post("/api/reports/run", json={"id": "nature"})
+    assert _j.loads(unquote(r.headers["x-basis"])) == [{"name": "통보문", "at": "11.17. 05:00 발표"}] and r.headers["x-basis"].isascii()
+    assert c.post("/api/reports/run", json={"id": "nature", "tg": True, "dl": False}).json()["basis"][0]["name"] == "통보문"
+
+
+def test_fetch_basis_from_jaenan(keys):
+    def h(req):
+        if req.url.path.startswith("/api/run/"):
+            return httpx.Response(200, json={"ok": True, "names": ["x.hwp"], "files": ["/files/x.hwp"], "basis": [{"name": "특보", "at": "a"}, "bad"]})
+        return httpx.Response(200, content=HWP)
+    meta = {}
+    reports.fetch("nature", {}, httpx.Client(transport=httpx.MockTransport(h)), meta=meta)
+    assert meta["basis"] == [{"name": "특보", "at": "a"}]

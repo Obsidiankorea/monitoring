@@ -25,6 +25,7 @@ if __name__ == "__main__" and ("--snap" in sys.argv or "--demo" in sys.argv):
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
+from urllib.parse import quote
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, Header, HTTPException, Query
@@ -1047,8 +1048,10 @@ async def api_reports_run(body: dict):
     if not dl and not tg:
         raise HTTPException(400, "받기나 텔레그램 중 하나는 골라 주세요")
     try:
+        meta: dict = {}
         files = await asyncio.to_thread(reports.fetch, rid, body.get("opts") if isinstance(body.get("opts"), dict) else {},
-                                        picked=body.get("items") if isinstance(body.get("items"), dict) else None)
+                                        picked=body.get("items") if isinstance(body.get("items"), dict) else None,
+                                        extra=body.get("extra") if isinstance(body.get("extra"), dict) else None, meta=meta)
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
     except RuntimeError as e:
@@ -1065,9 +1068,11 @@ async def api_reports_run(body: dict):
     if not dl:
         if st == "fail":
             raise HTTPException(502, why)
-        return {"ok": True, "name": name, "tg": st}
-    return Response(data, media_type=reports.media(name), headers={"Content-Disposition": reports.disposition(name), "X-Tg": st,
-                                                                   "Access-Control-Expose-Headers": "X-Tg, Content-Disposition", "Cache-Control": "no-store"})
+        return {"ok": True, "name": name, "tg": st, "basis": meta.get("basis") or []}
+    # 자료 기준 시각(화면 팝업) — 한글이라 퍼센트 인코딩한 JSON 하나
+    xb = quote(json.dumps(meta.get("basis") or [], ensure_ascii=False))
+    return Response(data, media_type=reports.media(name), headers={"Content-Disposition": reports.disposition(name), "X-Tg": st, "X-Basis": xb,
+                                                                   "Access-Control-Expose-Headers": "X-Tg, X-Basis, Content-Disposition", "Cache-Control": "no-store"})
 
 
 @app.get("/api/reports/phrases")

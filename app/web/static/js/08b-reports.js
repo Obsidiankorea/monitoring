@@ -162,9 +162,13 @@ function repOpSave(r) {
 /* ── 작성 창(등록부 compose — 상황판단회의): 재난 종류 · 회의 제목 · 기간 + Ⅱ장 두 묶음(중점 유의사항 · 조치계획) 문구 고르기.
    후보는 재난상황보고서 서버의 문구 파일(/api/reports/phrases), 고른 종류로 거른다(안 고르면 전부 · 고른 것은 늘 보인다).
    고른 것은 그 자리에서 고친다(** 는 굵게) · 직접 추가. 보내는 차례는 목록 차례(끌어 옮기기 없음). 고른 것 · 고친 글 · 옵션은 이 브라우저에 기억 */
+/* 특보 시군 자료 셋 — 내용은 지도 서버가 자동으로(편집 없음), 여기서는 켜고 끄기만 */
+const REP_EX = [["특보지역현황", "특보지역 현황", "특보 시군의 인명피해 우려지구 · 둘레 건물 · 지금 판정"], ["과거사례", "과거 유사 사건", "특보 시군의 피해 큰 사건(위키 이력)"],
+  ["조위현황", "조위 현황", "태풍 · 풍랑 · 호우이거나 해안 시군일 때만 — 아니면 빠진다"]];
+const REP_EX0 = Object.fromEntries(REP_EX.map(([k]) => [k, true]));
 const REP_CM = [["유의사항", "중점유의사항", "중점 유의사항"], ["조치계획", "조치계획", "조치계획"]];   /* [문구 묶음, 서식 칸, 제목] */
 const repBold = t => escH(t).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
-const repCm = () => { const c = repPref().cm || {}; return { auto: c.auto !== false, sel: { 유의사항: [], 조치계획: [], ...(c.sel || {}) } }; };
+const repCm = () => { const c = repPref().cm || {}; return { auto: c.auto !== false, sel: { 유의사항: [], 조치계획: [], ...(c.sel || {}) }, ex: { ...REP_EX0, ...(c.ex || {}) } }; };
 const repCmSave = c => repSave({ cm: c });
 const REP_CMO = new Set();                                       /* 고쳐 쓰기 칸을 펴 둔 줄(묶음|문구 열쇠) — 처음엔 다 접혀 있다 */
 /* 계절 · 시기 프리셋 — 재난 종류만 정해 두고, 문구는 문구 파일에서 그 종류에 맞는 것을 종류마다 돌아가며 고른다(유의사항 7 · 조치계획 5) */
@@ -253,6 +257,7 @@ function repCmDraw(r, focus) {
         <small class="mute">${c.auto ? "종류 · 기간을 따라 바뀐다 — 고치면 그대로 둔다" : `고친 제목 — <button type="button" class="lnk" id="rep-cm-auto">제안으로 돌리기(${escH(sug)})</button>`}</small>
       </fieldset>
       <fieldset class="sec"><legend>기간</legend>${r.opts.filter(o => o.sec === "기간").map(o => repField(o, v[o.key])).join("")}</fieldset>
+      <fieldset class="sec"><legend>특보 시군 자료(자동)</legend>${REP_EX.map(([k, t, h]) => `<label class="ck"><input type="checkbox" data-cex="${escH(k)}"${c.ex[k] ? " checked" : ""}> ${escH(t)} <small class="mute">${escH(h)}</small></label>`).join("")}</fieldset>
       ${ph}${REP_CM.map(([g, , t]) => repCmGroup(g, t, kinds, c)).join("")}
     </form>
     <p class="msg" id="rep-om" role="status">${why ? escH(why) : ""}</p>
@@ -332,6 +337,7 @@ function repCmInput(t, r) {
 function repCmChange(t, r) {
   const c = repCm();
   let focus = null;
+  if (t.dataset.cex) { c.ex[t.dataset.cex] = t.checked; return repCmSave(c); }
   if (t.dataset.ca) {                                         /* 후보 고르기 — 문구 그대로 복사해 고칠 수 있게 */
     const [g, ...rest] = t.dataset.ca.split("|"), text = rest.join("|"), p = (REP.ph?.[g] || []).find(x => x.text === text);
     if (!p) return;
@@ -371,8 +377,9 @@ function repDraw() {
       return `<button type="button" data-g="${escH(g)}" aria-pressed="${g === REP.g}" class="${g === REP.g ? "on" : ""}">${escH(g)} <i>${n}</i></button>`; }).join("")}</nav>
     <div class="grid">${shown.map(repTile).join("") || `<p class="mute">이 묶음에는 아직 보고서가 없다</p>`}</div>
     <p class="msg${REP.msg && !REP.msg.ok ? " bad" : ""}" role="status">${escH(REP.msg?.text || (REP.busy ? "보고서 서버가 만드는 중 — 풍수해보고는 1분 안팎 걸린다" : "타일을 누르면 받는다 · 오른쪽 누름(⚙)은 옵션 · 구석 단추는 텔레그램으로 보내기만"))}</p></div>
-    <div class="opbg" id="rep-op" hidden></div>`;
-  if (REP.op) repOpDraw();
+    <div class="opbg" id="rep-op" hidden></div>${repBsHtml()}`;
+  if (REP.bs) $("rep-bs").querySelector(".op").focus();
+  else if (REP.op) repOpDraw();
   else if (!$("rep").hidden && !$("rep").contains(document.activeElement)) $("rep").querySelector(".box").focus();   /* 다시 그려 초점이 빠졌으면 창 안으로 */
 }
 async function repSaveFile(res, fallback) {
@@ -397,19 +404,39 @@ async function repRun(id, mode) {
   REP.busy = id; REP.t0 = Date.now(); REP.msg = null; repDraw();
   REP.tick = setInterval(() => { const e = $("rep").querySelector(".rt.busy .sec"); if (e) e.textContent = Math.round((Date.now() - REP.t0) / 1000); }, 1000);
   try {
-    const res = await fetch("/api/reports/run", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, opts: repSend(r), items: r.compose ? repCmItems() : undefined, tg, dl }) });
+    const res = await fetch("/api/reports/run", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, opts: repSend(r), items: r.compose ? repCmItems() : undefined, extra: r.compose ? repCm().ex : undefined, tg, dl }) });
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || `오류 ${res.status}`);
     if (dl) {
       const t = res.headers.get("X-Tg"), name = await repSaveFile(res, `${id}.hwp`);
       REP.msg = { ok: t !== "fail", text: `받았다 — ${name}${t === "ok" ? " · 텔레그램에도 보냈다" : t === "fail" ? " · 텔레그램은 보내지 못했다" : ""}` };
+      let b = [];
+      try { b = JSON.parse(decodeURIComponent(res.headers.get("X-Basis") || "[]")); } catch {}
+      repBasis(r.name, name, b);
     } else {
       const j = await res.json();
       REP.msg = { ok: true, text: `텔레그램으로 보냈다 — ${j.name}` };
+      repBasis(r.name, j.name, j.basis);
     }
   } catch (e) { REP.msg = { ok: false, text: `만들지 못했다 — ${e.message}` }; }
   clearInterval(REP.tick); REP.busy = null;
   if (!$("rep").hidden) repDraw();
 }
+/* 자료 기준 시각 팝업 — 만들기가 끝나면 이번 파일에 쓴 기상청 자료의 발표 · 기준 시각(문서에는 안 넣는다) + 우리 자료 시각.
+   서버가 보낸 것만(없으면 안 띄운다). 닫기 · Esc · 바깥 누름 */
+function repBasis(title, file, list) {
+  REP.bs = Array.isArray(list) && list.length ? { title, file, list } : null;
+}
+function repBsHtml() {
+  const b = REP.bs;
+  if (!b) return "";
+  return `<div class="opbg" id="rep-bs"><div class="op bs" role="dialog" aria-modal="true" aria-labelledby="rep-bs-t" tabindex="-1">
+    <div class="oh"><div><b id="rep-bs-t">자료 기준 시각</b><small class="mute">${escH(b.title)} — ${escH(b.file || "")}</small></div>
+      <button type="button" id="rep-bsx" aria-label="닫기 (Esc)" title="닫기 (Esc)">✕</button></div>
+    <dl class="ob">${b.list.map(x => `<dt>${escH(x.name)}</dt><dd>${escH(x.at)}</dd>`).join("")}</dl>
+    <p class="mute bsn">기상청 자료 시각은 문서에 넣지 않았다 — 이 창으로만 알린다. 수위 · 우려지역 · 조위는 문서 각주에도 있다.</p>
+    <div class="of"><span class="sp"></span><button type="button" id="rep-bsok" class="pri">확인</button></div></div></div>`;
+}
+function repBsClose() { REP.bs = null; $("rep-bs")?.remove(); $("rep").querySelector(".box")?.focus(); }
 /* 17시 대기 걸기 · 취소 — 상태는 서버(STATE)에 남는다 */
 async function repWait(id, on) {
   const r = repById(id), m = $("rep-om");
@@ -444,6 +471,7 @@ setInterval(() => { if (Object.keys(REP.w).length && !document.hidden) repPoll()
 setTimeout(repPoll, 4000);
 $("rep").addEventListener("click", ev => {
   const t = ev.target, r = repById(REP.op);
+  if (REP.bs) { if (t.id === "rep-bs" || t.closest("#rep-bsx, #rep-bsok")) repBsClose(); return; }
   if (REP.op) {                                              /* 옵션창 — 바깥(옵션창 뒤판) 누름은 옵션창만 닫는다 */
     if (t.id === "rep-op" || t.closest("#rep-opx")) return repOpClose();
     if (r?.compose) return repCmClick(t, r);
@@ -499,13 +527,13 @@ $("rep").addEventListener("change", ev => {
 document.addEventListener("keydown", ev => {
   if ($("rep").hidden) return;
   ev.stopPropagation();
-  if (ev.key === "Escape") { ev.preventDefault(); return REP.op ? repOpClose() : closeRep(); }
+  if (ev.key === "Escape") { ev.preventDefault(); return REP.bs ? repBsClose() : REP.op ? repOpClose() : closeRep(); }
   if (!REP.op && (ev.key === "ContextMenu" || (ev.shiftKey && ev.key === "F10"))) {
     const tile = document.activeElement?.closest?.(".rt[data-id]");
     if (tile) { ev.preventDefault(); return repOpOpen(tile.dataset.id); }
   }
   if (ev.key !== "Tab") return;
-  const box = REP.op ? $("rep-op").querySelector(".op") : $("rep").querySelector(".box");
+  const box = REP.bs ? $("rep-bs").querySelector(".op") : REP.op ? $("rep-op").querySelector(".op") : $("rep").querySelector(".box");
   const fs = [...box.querySelectorAll("button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex='0']")].filter(x => x.offsetParent !== null);
   if (!fs.length) return;
   const i = fs.indexOf(document.activeElement);

@@ -23,6 +23,7 @@ log = logging.getLogger("river")
 
 BASE = "https://api.hrfco.go.kr"
 INFO_FILE = config.STATE / "cache" / "river_info.json"
+INFO_V = 2                                                 # 고르는 규칙이 바뀌면 올린다 — 하루 묵힌 제원 파일을 버리고 다시 받는다
 STAGES = ("정상", "관심", "주의보", "경보", "심각")        # 수위 단계 — 홍수통제소 제원의 이름 그대로
 HIST_KEEP = 40                                             # 지점당 10분 값 40개(약 6시간)
 STALE_MIN = 90                                             # 마지막 값이 이보다 오래되면 '지연'
@@ -63,6 +64,9 @@ def _sigun(addr: str, name: str) -> str | None:
     return None
 
 
+UP_WL = ("성하리", "일중리")          # 경남 밖 위쪽 수위 지점 — 낙동강(대구 달성) · 섬진강(임실), 상황판단회의 하천 수위 표에 있다
+
+
 def pick(infos: dict[str, list[dict]]) -> list[dict]:
     """제원 목록에서 경남에 영향을 주는 곳만 — 수위: 경남 안 / 댐: 경남 안 + 낙동강 본류권역(코드 20…) 위쪽 / 보: 낙동강 본류(코드 2…, 하굿둑 뺌)."""
     out = []
@@ -71,6 +75,8 @@ def pick(infos: dict[str, list[dict]]) -> list[dict]:
         nm = r.get("obsnm") or ""
         if (r.get("addr") or "").startswith("경상남도") and not any(k in nm for k in ("댐", "방수로")):   # 댐 자리의 수위계는 댐 표식과 겹친다
             out.append(_st("wl", r["wlobscd"], r, sg, False))
+        elif any(f"({n})" in nm for n in UP_WL):
+            out.append(_st("wl", r["wlobscd"], r, None, True))
     for r in infos.get("dam", []):
         code, ad = r["dmobscd"], r.get("addr") or ""
         if ad.startswith("경상남도"):
@@ -147,7 +153,7 @@ async def _infos(cli: httpx.AsyncClient) -> list[dict]:
     """제원은 거의 안 바뀐다 — 하루 한 번 받아 파일에 둔다."""
     try:
         d = json.loads(INFO_FILE.read_text("utf-8"))
-        if datetime.fromisoformat(d["at"]) > datetime.now() - timedelta(hours=24) and d.get("stations"):
+        if d.get("v") == INFO_V and datetime.fromisoformat(d["at"]) > datetime.now() - timedelta(hours=24) and d.get("stations"):
             return d["stations"]
     except (OSError, ValueError, KeyError):
         pass
@@ -155,7 +161,7 @@ async def _infos(cli: httpx.AsyncClient) -> list[dict]:
     sts = pick(infos)
     try:
         INFO_FILE.parent.mkdir(parents=True, exist_ok=True)
-        INFO_FILE.write_text(json.dumps({"at": datetime.now().isoformat(timespec="seconds"), "stations": sts}, ensure_ascii=False), "utf-8")
+        INFO_FILE.write_text(json.dumps({"v": INFO_V, "at": datetime.now().isoformat(timespec="seconds"), "stations": sts}, ensure_ascii=False), "utf-8")
     except OSError:
         pass
     return sts

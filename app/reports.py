@@ -79,7 +79,9 @@ REG = [
      "opts": [_o("kinds", "재난 종류", "multi", ["호우"], "회의", values=[[x, x] for x in KINDS]),
               _o("title", "회의 제목", "text", "", "회의", "비우면 「기간 종류 대비」", max=60),
               _o("start", "기간 시작", "datetime", sec="기간", hint="비우면 전일 00시"),
-              _o("end", "기간 끝", "datetime", sec="기간", hint="비우면 지금")]},
+              _o("end", "기간 끝", "datetime", sec="기간", hint="비우면 지금")],
+     # 서식 하천 수위 표의 열 차례(현수위1~10 · 수위상태1~10) — 홍수통제소 지점 이름의 괄호 안
+     "river": ["성하리", "적포교", "남포동", "삼랑진교", "소랑교", "덕오리", "대사교", "황강교", "일중리", "읍내리"]},
     {"id": "heat", "name": "폭염 상황보고", "group": "폭염", "job": "", "desc": "준비 중 — 재난상황보고서 서버에 아직 없다", "opts": [], "ready": False},
     {"id": "temp", "name": "3일 기온표", "group": "폭염", "job": "temp", "ready": True,
      "desc": "시군별 일 최고기온(11~3월은 최저) 3일 + 내일 예상 · 대표지점 외 AWS (그림) — 런처 특보이미지의 기온표",
@@ -194,6 +196,23 @@ def items(raw) -> dict:
     return out
 
 
+RIVER_ST = {0: "정상", 1: "관심", 2: "주의", 3: "경계", 4: "심각"}   # 서식 표의 행 이름(심각 · 경계 · 주의 · 관심)과 같은 말로
+
+
+def river_rows(names: list[str]) -> list[dict]:
+    """지도 서버가 10분마다 받는 홍수통제소 수위 → 서식 열 차례대로 [{name, v, st, t, late, thr}]. 못 찾은 지점 · 값 없음 · 늦은 값(90분)은 v=None.
+    단계 · 기준 수위(thr = 관심 · 주의보 · 경보 · 심각)는 홍수통제소 제원 — 서식 표의 기준 수위 칸도 이것으로 채운다."""
+    from . import river
+    rows = [r for r in river.status().get("rows") or [] if r.get("kind") == "wl"]
+    out = []
+    for n in names:
+        r = next((x for x in rows if f"({n})" in (x.get("name") or "")), None)
+        v = r.get("v") if r and not r.get("stale") else None
+        out.append({"name": n, "v": v, "st": RIVER_ST.get(r.get("stage"), "-") if v is not None else "-", "t": r.get("t") if r else None,
+                    "late": bool(r and r.get("stale")), "thr": (r or {}).get("thr") or []})
+    return out
+
+
 _PH: dict = {"t": 0.0, "v": None}
 PH_TTL = 300                                       # 문구 후보 — 5분 동안 다시 묻지 않는다(jaenan 파일이 바뀌는 일은 드물다)
 
@@ -241,7 +260,7 @@ def run(rid: str, opts: dict | None = None, client: httpx.Client | None = None, 
 
 
 def fetch(rid: str, opts: dict | None = None, client: httpx.Client | None = None, wait1700: bool = False,
-          picked: dict | None = None) -> list[tuple[str, bytes]]:
+          picked: dict | None = None, extra: dict | None = None, meta: dict | None = None) -> list[tuple[str, bytes]]:
     """보고서 하나를 jaenan 에서 만들어 받는다 → [(내려받을 이름, 바이트)…]. 실패는 RuntimeError(토큰을 지운 글).
     wait1700 — 17시 발표가 아직이면 Waiting(만들지 않는다). picked — 작성 창이 고른 문구(items 꼴, compose 보고서만 — POST 본문)."""
     r = BY_ID.get(rid)
@@ -254,9 +273,24 @@ def fetch(rid: str, opts: dict | None = None, client: httpx.Client | None = None
         q["wait1700"] = "1"
     hd = {"Authorization": f"Bearer {_tok()}"}
     c = client or httpx.Client(timeout=TIMEOUT)
+    local: list[dict] = []
     try:
         if r.get("compose"):
-            res = c.post(f"{url()}/api/run/{r['job']}", params=q, headers=hd, json=items(picked))
+            body = items(picked)
+            basis = []
+            if r.get("river") and not config.DEMO:
+                body["수위"] = river_rows(r["river"])
+                ts = [x["t"] for x in body["수위"] if x["v"] is not None and x.get("t")]
+                if ts:
+                    t = max(ts)
+                    basis.append({"name": "하천 수위(홍수통제소)", "at": f"{t[:4]}-{t[4:6]}-{t[6:8]} {t[8:10]}:{t[10:12]} 관측"})
+            if r["compose"] == "meeting" and not config.DEMO:     # 특보 시군 자료 셋(켠 것만) — 계산은 여기(자료가 지도 서버에 있다)
+                from . import meeting
+                more, b = meeting.extras((q.get("kinds") or "호우").split(","), extra)
+                body |= more
+                basis += b
+            local = basis
+            res = c.post(f"{url()}/api/run/{r['job']}", params=q, headers=hd, json=body)
         else:
             res = c.get(f"{url()}/api/run/{r['job']}", params=q, headers=hd)
         try:
@@ -275,6 +309,9 @@ def fetch(rid: str, opts: dict | None = None, client: httpx.Client | None = None
             if got.status_code != 200 or not got.content:
                 raise RuntimeError(f"보고서 파일을 받지 못했다({got.status_code})")
             out.append((file_name(stored, r), got.content))
+        if meta is not None:                       # 화면 팝업 — 이번 파일에 쓴 기상청 자료 시각(jaenan) + 이번 요청에 넣은 우리 자료 시각
+            meta["basis"] = [{"name": str(x.get("name"))[:60], "at": str(x.get("at"))[:120]}
+                             for x in j.get("basis") or [] if isinstance(x, dict)][:20] + local
         return out
     except httpx.HTTPError as e:
         raise RuntimeError(_mask(f"보고서 서버에 닿지 못했다 — {type(e).__name__}: {e}")) from None
