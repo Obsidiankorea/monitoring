@@ -215,21 +215,22 @@ def test_writes_are_allowlisted_per_role(app_):
     auth.add("do1", "password-2", "do", "도담당")
     g = TestClient(main.app)
     assert g.post("/api/auth/sigun", json={"sigun": "창원"}).status_code == 200
-    assert g.post("/api/ai/decisions", json={"sigun": "창원", "act": "메모"}).status_code == 403
+    assert g.post("/api/ai/decisions", json={"sigun": "창원", "act": "메모"}).status_code == 200      # 자기 시군 판단은 남긴다
+    assert g.post("/api/ai/decisions", json={"sigun": "김해", "act": "메모"}).status_code == 403
     assert g.put("/api/ai/sigunstage", json={}).status_code == 403
     assert g.post("/api/reports/run", json={"id": "weather"}).status_code == 403
     assert g.post("/api/law/run").status_code == 403
-    assert auth.write_ok("sigun", "POST", "/api/reply/ask") and not auth.write_ok("sigun", "DELETE", "/api/ai/decisions/1")
+    assert auth.write_ok("sigun", "POST", "/api/reply/ask") and auth.write_ok("sigun", "POST", "/api/ai/ask") and not auth.write_ok("sigun", "DELETE", "/api/ai/decisions/1")
     d = TestClient(main.app)
     _login(d, "do1", "password-2")
-    rows = d.post("/api/ai/decisions", json={"sigun": "창원", "act": "메모"}).json()["rows"]
+    rows = d.post("/api/ai/decisions", json={"sigun": "진주", "act": "메모"}).json()["rows"]
     assert rows[0]["who"] == "도담당(도 사용자)"
     did = rows[0]["id"]
     assert d.delete(f"/api/ai/decisions/{did}").status_code == 403
     a = TestClient(main.app)
     _login(a, "boss", "password-1")
     assert a.delete(f"/api/ai/decisions/{did}").status_code == 200
-    assert a.get("/api/ai/decisions").json()["rows"] == []
+    assert a.get("/api/ai/decisions", params={"sigun": "진주"}).json()["rows"] == []
     with db.tx() as con:
         assert "관리자(도 관리자)" in con.execute("SELECT gone FROM decision WHERE id=?", (did,)).fetchone()[0]   # 줄은 남는다
 

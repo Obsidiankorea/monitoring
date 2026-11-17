@@ -516,6 +516,9 @@ async def api_ai_decisions_post(body: dict, request: Request):
     acts = ("통제 지시", "사전대피 권고", "대피명령 요청", "보류", "메모")
     if not body.get("sigun") or body.get("act") not in acts:
         raise HTTPException(400, f"sigun 과 act({' · '.join(acts)}) 가 필요하다")
+    mine = _my_sigun(request)
+    if mine and body.get("sigun") != mine:                 # 시군 사용자는 자기 시군 판단만 남긴다
+        raise HTTPException(403, f"{mine} 판단만 남길 수 있다")
     s = lambda k, n=80: (str(body.get(k) or "").strip()[:n] or None)  # noqa: E731
     pct = body.get("pct")
     with db.tx() as con:
