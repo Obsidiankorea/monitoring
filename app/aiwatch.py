@@ -109,7 +109,7 @@ def snapshot(base: str) -> dict:
         d = sg.setdefault(i["sigun"], {"met": 0, "near": 0, "top": 0})
         d[i["st"]] += 1
         d["top"] = max(d["top"], STAGE_RANK.get(i["stage"], 0) * 10 + RANK[i["st"]])
-    out = {"at": datetime.now().strftime("%m.%d %H:%M"), "n": len(items), "stage": stage["emd"] if stage else None,
+    out = {"at": clock.now().strftime("%m.%d %H:%M"), "n": len(items), "stage": stage["emd"] if stage else None,
            "sigun": sg, "items": items, "stages": dict(_STAGES), "do": _DO["v"]}
     _SNAP.update(t=now_t, v=out)
     return out
@@ -136,6 +136,11 @@ def _log(now: dict) -> None:
     events.record(clock.now(), _GROUPS["v"], any(not k.startswith("stage|") for k in now), new,
                   {i: _GAP.get(by.get(x), {}).get("pct") for i, (_, x) in enumerate(new)})
     db.put_setting("ai_stage_state", state)
+
+
+def log_once(base: str) -> None:
+    """시연 — 뜰 때 한 번 훑어 사건 · 단계 이력을 적는다(텔레그램은 보내지 않는다)."""
+    _log(_scan(base))
 
 
 def _msg(new: list, tm: str) -> str:

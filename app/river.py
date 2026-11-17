@@ -16,7 +16,7 @@ from pathlib import Path
 
 import httpx
 
-from . import config, db
+from . import clock, config, db
 from .domain.gridproj import hr_xy
 
 log = logging.getLogger("river")
@@ -259,7 +259,7 @@ def _row(s: dict, r: dict | None) -> dict:
         return o | {"t": None, "v": None, "stage": -1}
     h = _HIST.get(s["id"], [])
     o["t"] = r["ymdhm"]
-    o["stale"] = (datetime.now() - datetime.strptime(r["ymdhm"], "%Y%m%d%H%M")).total_seconds() > STALE_MIN * 60
+    o["stale"] = (clock.now() - datetime.strptime(r["ymdhm"], "%Y%m%d%H%M")).total_seconds() > STALE_MIN * 60
     if s["kind"] == "wl":
         wl = _f(r.get("wl"))
         st, nxt = stage(wl, s["thr"])

@@ -138,6 +138,15 @@ async def _judge_warm() -> None:
         log.warning("상황판단 미리 계산 실패: %s", e)
 
 
+async def _demo_events() -> None:
+    """시연 — 수집기가 없어 단계 이력(사건)이 안 쌓인다. 뜬 뒤 한 번 그 시각으로 훑어 적는다."""
+    await asyncio.sleep(20)
+    try:
+        await asyncio.to_thread(aiwatch.log_once, f"http://127.0.0.1:{os.environ.get('PORT', '8000')}")
+    except Exception:                                       # noqa: BLE001
+        log.exception("시연 단계 이력 실패")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.init()
@@ -147,6 +156,15 @@ async def lifespan(app: FastAPI):
     if config.DEMO and config.SNAP:
         snaps.add_bangjae(config.DB_PATH, config.SNAP)   # 서버 시연에 없는 경남 AWS(내부망에서 받아 둔 것)
         snaps.add_scene(config.SNAP)
+        try:
+            snaps.add_dispatch(clock.now())                 # 파견 현황 · 회신(가짜, 이름 · 번호 없음)
+        except Exception:                                   # noqa: BLE001 — 시연 화면은 그래도 뜬다
+            log.exception("시연 파견 기록 실패")
+        try:
+            await asyncio.to_thread(snaps.add_ante)          # 선행 강우 5일 — 굳힌 72시간 앞을 가짜로
+        except Exception:                                   # noqa: BLE001
+            log.exception("시연 선행 강우 실패")
+        asyncio.create_task(_demo_events())
     if os.environ.get("NO_COLLECT") == "1":
         # 화면만 띄운다(개발용). ⚠️ 같은 PC 에서 수집기가 둘 돌면 기상청 호출이 두 배가 된다.
         log.info("수집기 끔(NO_COLLECT) — 저장된 자료만 보여 준다")
@@ -609,8 +627,6 @@ async def api_reply_list(request: Request, x_pin: str | None = Header(None)):
 async def api_reply_board(request: Request, hours: int = Query(24, ge=1, le=168)):
     """도 파견 현황판 — 시군별 요청 · 단계 · 미확인 경고(이름 · 번호 없음). 시군 사용자는 자기 시군만."""
     from . import reply
-    if config.DEMO:
-        return {"siguns": [], "demo": True}
     out = await asyncio.to_thread(reply.board, hours)
     mine = _my_sigun(request)
     if mine:
@@ -1127,8 +1143,8 @@ async def api_reports_run(body: dict):
 async def api_reports_phrases():
     """상황판단회의 작성 창의 문구 후보 — 재난상황보고서 서버(jaenan /api/phrases/meeting)를 대신 부른다(5분 캐시, 토큰은 서버 안에만)."""
     from . import reports
-    if config.DEMO:
-        raise HTTPException(403, "시연 화면에서는 문구 후보를 불러오지 않는다")
+    if config.DEMO:                                       # 시연 — 받아 둔 후보(일반 문구뿐, 이름 · 번호 없음)
+        return json.loads((config.DATA / "demo" / "meeting_phrases.json").read_text("utf-8"))
     try:
         return await asyncio.to_thread(reports.phrases)
     except (RuntimeError, ValueError) as e:

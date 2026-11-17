@@ -145,6 +145,25 @@ def test_demo_preview_only(tdb, tmp_path, monkeypatch):
     assert c.post(path + "/join", json={"name": "x", "tel": "010-1111-2222"}).status_code == 403
 
 
+def test_demo_fake_people_and_dispatch(tdb, tmp_path, monkeypatch):
+    """시연은 로그인 없이 열린다 — 연락처는 가짜 이름 · 번호, 파견 현황은 그 시각의 가짜 요청 · 회신(사람 기록은 지운다)."""
+    from datetime import datetime
+    from app import config, db, snaps
+    _setup(tmp_path, monkeypatch)
+    with db.tx() as con:                                    # 굳힌 사본에 남아 있던 진짜 담당 기록
+        con.execute("INSERT INTO duty_person(rid, rank, name, tel, since) VALUES(?,?,?,?,?)", (A, "주무관", "진짜", "010-9999-9999", "x"))
+    monkeypatch.setattr(config, "DEMO", True)
+    T = datetime(2026, 10, 19, 0, 24)
+    monkeypatch.setattr(reply, "_now", lambda: T.strftime("%Y-%m-%d %H:%M"))
+    c = TestClient(main.app)
+    assert snaps.add_dispatch(T) == 2                       # 특보 없음 → 기본 시군(창원 · 김해 …) 지구에서 — 창원 둘뿐
+    txt = c.get("/api/contacts", params={"sigun": "창원"}).text
+    assert "김파일" not in txt and "진짜" not in txt and "담당자1(시연)" in txt
+    gs = c.get("/api/reply/board").json()["siguns"]
+    rows = [r for g in gs for r in g["rows"]]
+    assert {r["now"] for r in rows} >= {"조치 완료", "조치 중"} and all("(시연)" in r["by"] for r in rows)
+
+
 def test_single_district_sms_and_info(tdb, tmp_path, monkeypatch):
     """상황판단에서 보낼 때(single) — 그 지구 이름 · 시군 읍면동이 든 글, 같은 번호가 맡은 다른 지구와 묶지 않는다. 단계 · % 는 기록에만."""
     _setup(tmp_path, monkeypatch)

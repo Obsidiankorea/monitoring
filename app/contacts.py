@@ -25,8 +25,19 @@ def _rows() -> dict[str, dict]:
         return {}
     if _C.get("key") != key:
         with open(FILE, encoding="utf-8-sig", newline="") as f:
-            _C.update(key=key, rows={r["지역ID"]: r for r in csv.DictReader(f) if r.get("지역ID")})
+            rows = {r["지역ID"]: r for r in csv.DictReader(f) if r.get("지역ID")}
+        _C.update(key=key, rows={k: _fake(r, i) for i, (k, r) in enumerate(rows.items())} if config.DEMO else rows)
     return _C["rows"]
+
+
+def _fake(r: dict, i: int) -> dict:
+    """시연(로그인 없이 열린다) — 이름 · 번호를 가짜로. 지구 · 시군 칸은 그대로(화면 모양만 보인다)."""
+    out = {k: v for k, v in r.items() if not k.startswith("담당")}
+    for n in (1, 2):
+        if r.get(f"담당{n}") or r.get(f"담당{n}_연락처"):
+            out[f"담당{n}"] = f"담당자{n}(시연)"
+            out[f"담당{n}_연락처"] = out[f"담당{n}_연락처_정규화"] = f"010-0000-{(i * 2 + n) % 10000:04d}"
+    return out
 
 
 def _h(pin: str) -> str:

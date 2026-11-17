@@ -31,7 +31,7 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 
-from . import config, db
+from . import clock, config, db
 
 DIR = config.STATE / "replies"                     # 사진 — <기록 번호>.jpg
 PAGE = config.ROOT / "app" / "web" / "static" / "r.html"
@@ -48,7 +48,7 @@ MAX_BODY = 6 * 1024 * 1024                         # 화면이 사진을 줄여 
 
 
 def _now() -> str:
-    return datetime.now().strftime("%Y-%m-%d %H:%M")
+    return clock.now().strftime("%Y-%m-%d %H:%M")          # 시연은 그 시각에 멈춘다(현황판 기간 · 미확인 분)
 
 
 def _mobile(tel: str) -> str:

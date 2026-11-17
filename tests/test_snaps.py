@@ -140,3 +140,17 @@ def test_add_bangjae_to_snapshot_copy(tmp_path, monkeypatch):
     c = _sq.connect(f)
     assert c.execute("SELECT mm FROM bangjae_hourly WHERE stn='8438'").fetchone()[0] == 25.5
     assert c.execute("SELECT ok FROM collect_log WHERE kind='bangjae'").fetchone()[0] == 1
+
+
+def test_add_ante_fills_front_hours_with_fake(tmp_path, monkeypatch):
+    """시연 선행 강우 — 정시 격자가 72시간뿐이면 앞 48시간을 72시간 뒤 격자의 40%로 채워 5일(120시간)이 찬다."""
+    from datetime import datetime, timedelta
+    from app import gridstore, gridview
+    monkeypatch.setattr(gridstore, "ROOT", tmp_path / "grid")
+    last = datetime(2026, 10, 19, 0, 0)
+    for h in range(72):
+        gridstore.save("obs60", (last - timedelta(hours=h)).strftime("%Y%m%d%H%M"), np.full(gridstore.shape("hr"), 10.0))
+    assert snaps.add_ante() == 48 and snaps.add_ante() == 0
+    assert gridstore.load("obs60", (last - timedelta(hours=119)).strftime("%Y%m%d%H%M"))[0, 0] == 4.0
+    _, have = gridview._acc_keys(120, None, last, False)
+    assert len(have) == 120

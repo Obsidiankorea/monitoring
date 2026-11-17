@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 import re
 from datetime import datetime
 
-from . import ai, contacts, safety, terrain
+from . import ai, clock, contacts, safety, terrain
 
 STAGES = ("통제", "사전대피", "긴급대피")
 FAMS = ("산사태", "하천", "지하공간")
@@ -116,7 +116,7 @@ def soil_site(rule: str, pred_lv: int | None) -> dict | None:
 def _pred_lv(sl: dict) -> int | None:
     """산림청 예측정보 — 2시간 안에 받았으면 그 시군 단계(없으면 0), 못 받았으면 None(산사태는 호우 · 태풍 특보 때만 받는다)."""
     at = safety._LIVE["at"].get("pred")
-    if not at or time.time() - datetime.fromisoformat(at).timestamp() > 2 * 3600:
+    if not at or (clock.now() - datetime.fromisoformat(at)).total_seconds() > 2 * 3600:   # 시연은 그 시각 기준
         return None
     return (sl.get("pred") or {}).get("lv") or 0
 

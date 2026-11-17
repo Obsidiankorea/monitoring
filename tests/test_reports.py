@@ -80,7 +80,7 @@ def test_demo_does_not_make(keys, monkeypatch):
     c = TestClient(main.app)
     assert c.post("/api/reports/run", json={"id": "weather"}).status_code == 403
     assert c.get("/api/reports").json()["demo"] is True
-    assert c.get("/api/reports/phrases").status_code == 403                             # 시연 — 문구 후보도 안 부른다
+    assert set(c.get("/api/reports/phrases").json()) == {"유의사항", "조치계획"}                             # 시연 — 받아 둔 문구 후보(작성 창이 열린다)
 
 
 def test_send_tg_masks_token(monkeypatch):
