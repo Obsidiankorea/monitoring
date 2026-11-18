@@ -34,8 +34,8 @@ function closeRep() {
 function repWhy(r) {
   const d = REP.d;
   if (!r.ready) return "준비 중";
-  if (d?.demo) return "시연 화면에서는 만들지 않는다";
-  if (d && !d.ready) return "재난상황보고서 서버 토큰이 없다";
+  if (d?.demo) return r.live || r.sample ? "" : "시연 샘플이 없다";   // 시연 — 기상상황보고는 지금 시각으로, 나머지는 샘플
+  if (d && !d.ready && !d.demo) return "재난상황보고서 서버 토큰이 없다";
   if (REP.busy && REP.busy !== r.id) return "다른 보고서를 만드는 중 — 서버는 한 번에 하나, 끝나면 누르세요";
   return "";
 }
@@ -302,8 +302,7 @@ function repCmDraw(r, focus) {
 async function repCmLoad() {
   if (REP.phBusy) return;
   REP.phBusy = true;
-  if (REP.d?.demo) REP.ph = { err: "시연 화면에서는 불러오지 않는다" };
-  else try { REP.ph = await getJson("/api/reports/phrases"); } catch (e) { REP.ph = { err: e.message }; }
+  try { REP.ph = await getJson("/api/reports/phrases"); } catch (e) { REP.ph = { err: e.message }; }
   REP.phBusy = false;
   const r = repById(REP.op);
   if (r?.compose) repCmDraw(r);
@@ -424,7 +423,7 @@ function repCmChange(t, r) {
 function repDraw() {
   const d = REP.d, list = d?.reports || [], gs = ["전체", ...(d?.groups || [])];
   const shown = REP.g === "전체" ? list : list.filter(r => r.group === REP.g);
-  const note = !d ? "목록을 받는 중…" : d.err ? `목록을 받지 못했다 — ${d.err}` : d.demo ? "시연 화면 — 목록만 보이고 보고서는 만들지 않는다"
+  const note = !d ? "목록을 받는 중…" : d.err ? `목록을 받지 못했다 — ${d.err}` : d.demo ? "시연 화면 — 기상상황보고는 지금 시각으로 만들고(안 되면 샘플), 나머지는 미리 만든 샘플 파일을 받는다 · 텔레그램은 안 보낸다"
     : !d.ready ? `재난상황보고서 서버 토큰(JAENAN_TOKEN)이 없다 — 설정 › API 키에서 넣는다${d.tg ? "" : " · 텔레그램 키도 없다"}`
     : !d.tg ? "텔레그램 키가 없어 받기만 된다" : "";
   $("rep").innerHTML = `<div class="box" role="dialog" aria-modal="true" aria-labelledby="rep-t" tabindex="-1">

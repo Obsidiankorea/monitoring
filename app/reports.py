@@ -126,9 +126,21 @@ def _mask(text: object) -> str:
     return t
 
 
+# 시연(8001) — 기상상황보고(LIVE)는 지금 시각으로 실제로 만들고(못 만들면 샘플), 나머지는 미리 받아 둔 샘플 파일을 준다.
+# 샘플은 저장소에 넣지 않는다 — 서버 state/snaps/_reports/<id>.<확장자>(시연이 읽기 전용으로 받는 폴더, 이름이 '_' 라 시연 목록에 안 걸린다)
+DEMO_LIVE = ("weather",)
+
+
+def sample(rid: str):
+    """시연 샘플 파일 경로(없으면 None)."""
+    d = config.SNAPS / "_reports"
+    return next((p for p in sorted(d.glob(f"{rid}.*")) if p.is_file()), None) if d.exists() else None
+
+
 def listing() -> dict:
     return {"reports": [{**{k: r[k] for k in ("id", "name", "group", "desc", "opts", "ready")}, "wait": bool(r.get("wait")),
                          "compose": r.get("compose") or "",
+                         **({"sample": bool(sample(r["id"])), "live": r["id"] in DEMO_LIVE and ready()} if config.DEMO else {}),
                          "thumb": (THUMBS / f"{r['id']}.png").is_file()} for r in REG],
             "groups": list(GROUPS),
             "ready": ready(), "tg": tg_ready(), "demo": config.DEMO,

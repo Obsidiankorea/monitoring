@@ -1137,9 +1137,9 @@ async def api_reports_run(body: dict):
     텔레그램 결과는 X-Tg: ok|fail|off), dl=false 면 텔레그램만 보내고 JSON {ok, name, tg}. 텔레그램은 파일마다.
     items = 작성 창(상황판단회의)이 고른 문구 {중점유의사항: [{text, subs}], 조치계획: [...]}. 시연(DEMO)에서는 만들지 않는다."""
     from . import reports
-    if config.DEMO:
-        raise HTTPException(403, "시연 화면에서는 보고서를 만들지 않는다 — 목록만 보인다")
     rid, tg, dl = str(body.get("id") or ""), body.get("tg") is True, body.get("dl") is not False
+    if config.DEMO:
+        return await _demo_report(rid, body)
     if not dl and not tg:
         raise HTTPException(400, "받기나 텔레그램 중 하나는 골라 주세요")
     try:
@@ -1168,6 +1168,33 @@ async def api_reports_run(body: dict):
     xb = quote(json.dumps(meta.get("basis") or [], ensure_ascii=False))
     return Response(data, media_type=reports.media(name), headers={"Content-Disposition": reports.disposition(name), "X-Tg": st, "X-Basis": xb,
                                                                    "Access-Control-Expose-Headers": "X-Tg, X-Basis, Content-Disposition", "Cache-Control": "no-store"})
+
+
+async def _demo_report(rid: str, body: dict) -> Response:
+    """시연 — 텔레그램은 보내지 않는다. 기상상황보고는 지금 시각으로 실제로(재난상황보고서 서버), 안 되면 · 나머지는 샘플."""
+    from datetime import datetime
+    from . import reports
+    if rid not in reports.BY_ID:
+        raise HTTPException(400, "모르는 보고서")
+    if rid in reports.DEMO_LIVE and reports.ready():
+        try:
+            meta: dict = {}
+            files = await asyncio.to_thread(reports.fetch, rid, body.get("opts") if isinstance(body.get("opts"), dict) else {}, meta=meta)
+            name, data = reports.bundle(files, reports.BY_ID[rid])
+            return Response(data, media_type=reports.media(name), headers={
+                "Content-Disposition": reports.disposition(name), "X-Tg": "off",
+                "X-Basis": quote(json.dumps(meta.get("basis") or [], ensure_ascii=False)),
+                "Access-Control-Expose-Headers": "X-Tg, X-Basis, Content-Disposition", "Cache-Control": "no-store"})
+        except (ValueError, RuntimeError) as e:                 # 안 되면 샘플로
+            log.warning("시연 기상상황보고 — 지금 시각으로 못 만들어 샘플로: %s", reports._mask(e)[:200])
+    f = reports.sample(rid)
+    if not f:
+        raise HTTPException(404, "이 보고서는 시연 샘플이 없다")
+    name = f"샘플_{reports.BY_ID[rid]['name']}{f.suffix}"
+    basis = [{"name": "시연 샘플 — 미리 만들어 둔 파일(지금 자료 아님)", "at": datetime.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d %H:%M")}]
+    return Response(f.read_bytes(), media_type=reports.media(name), headers={
+        "Content-Disposition": reports.disposition(name), "X-Tg": "off", "X-Basis": quote(json.dumps(basis, ensure_ascii=False)),
+        "Access-Control-Expose-Headers": "X-Tg, X-Basis, Content-Disposition", "Cache-Control": "no-store"})
 
 
 @app.get("/api/reports/phrases")

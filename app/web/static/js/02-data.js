@@ -322,7 +322,12 @@ function tlFit() {
 const ZMAX = 9;                          // 경남 전체의 몇 배까지(읍면동을 고르면 4배 더 — 필지가 보이게)
 /* 고른 읍면동(GEO.emd id) — 시군을 확대한 뒤 그 안 읍면동을 누르면(Ctrl 은 더하기 · 빼기). 비면 시군 확대 */
 let ESEL = [];
-const zoomOn = () => !!(selOn() && SET.sel_zoom !== false && FEAT && V);
+/* 보기 방식(✥ 단추) — 시군을 골랐을 때 시점 · 시군 밖. 이 화면(브라우저)에 기억(gn-view). 게임 시점 고르기처럼 프리셋, 직접 조정은 지도 위치(C)
+   fit: tight 꽉 차게 · around 주변 함께(둘레 30%) · all 경남 전체(테두리만) / out: hide 숨기기 · dim 흐리게 · show 그대로 */
+let VIEW = (() => { try { return JSON.parse(localStorage.getItem("gn-view") || "{}") || {}; } catch { return {}; } })();
+const viewFit = () => VIEW.fit || "tight";
+const viewOut = () => VIEW.out || (SIGUN_LOCK ? "hide" : "dim");      // 시군 화면은 기본으로 시군 밖을 감춘다(헷갈리지 않게)
+const zoomOn = () => !!(selOn() && SET.sel_zoom !== false && viewFit() !== "all" && FEAT && V);
 function mapArea() {
   const st = $("stage").getBoundingClientRect(), lg = $("legend").getBoundingClientRect();
   const hb = $("hud").getBoundingClientRect(), pl = $("play");
@@ -332,7 +337,7 @@ function mapArea() {
   const y1 = !pl.hidden && pl.offsetHeight ? pl.getBoundingClientRect().top - st.top - 10 : V.H - 16;
   return { x0, y0, x1, y1 };
 }
-let SIGUN_LOCK = null;   /* 시군 사용자(12-auth.js) — 그 시군에 고정, 확대는 둘레 시군까지 보이게 넓게 */
+let SIGUN_LOCK = null;   /* 시군 사용자(12-auth.js) — 그 시군에 고정 */
 function zoomCam(sigs) {
   const emd = ESEL.length && EFEAT ? EFEAT.filter(f => ESEL.includes(f.properties.id)) : [];
   const fts = emd.length ? emd : FEAT.filter(f => sigs.includes(f.properties.sigun));
@@ -344,7 +349,7 @@ function zoomCam(sigs) {
       if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
     }
   }
-  if (SIGUN_LOCK && !emd.length) {                          // 시군 화면 — 둘레 시군도 조금 보이게(흐리게 덮인 채)
+  if (viewFit() === "around" && !emd.length) {              // 주변 함께 — 둘레 시군도 조금 보이게(흐리게 덮인 채)
     const mx = (x1 - x0) * 0.3, my = (y1 - y0) * 0.3;
     x0 -= mx; x1 += mx; y0 -= my; y1 += my;
   }
@@ -506,7 +511,46 @@ function camReset() { UC = { ...UC0 }; if (CAM_EDIT) camSet(camTarget()); else c
   }, { passive: false });
   $("cam-reset").onclick = camReset;
   $("cam-done").onclick = () => camEdit(false);
-  $("b-cam").onclick = () => camEdit(!CAM_EDIT);
+  $("b-cam").onclick = () => (CAM_EDIT ? camEdit(false) : viewPop(!!$("campop").hidden));
+  $("campop").addEventListener("click", ev => {
+    const b = ev.target.closest("[data-v]");
+    if (!b) return;
+    if (b.dataset.v === "edit") { viewPop(false); return camEdit(true); }
+    const [k, v] = b.dataset.v.split(":");
+    VIEW[k] = v;
+    try { localStorage.setItem("gn-view", JSON.stringify(VIEW)); } catch {}
+    if (k === "fit" && zoomOn()) ensureEmd();
+    viewApply(); camGo(true); viewPop(true);
+  });
+  document.addEventListener("pointerdown", ev => { if (!$("campop").hidden && !ev.target.closest("#campop, #b-cam")) viewPop(false); });
+  $("campop").addEventListener("keydown", ev => { if (ev.key === "Escape") { ev.stopPropagation(); viewPop(false); $("b-cam").focus(); } });
+}
+/* 보기 방식 창 — ✥ 단추 아래. 고른 것은 눌린 모양(aria-pressed) */
+function viewPop(on) {
+  const p = $("campop");
+  p.hidden = !on;
+  $("b-cam").setAttribute("aria-expanded", String(on));
+  if (!on) return;
+  for (const b of p.querySelectorAll("[data-v]")) {
+    const [k, v] = b.dataset.v.split(":");
+    if (v) b.setAttribute("aria-pressed", String((k === "fit" ? viewFit() : viewOut()) === v));
+  }
+  p.querySelector(".vsub").textContent = selOn() ? `${selName()} — 고른 시군에 쓴다` : "시군을 고르면 그 시군에 쓴다(지금은 경남 전체)";
+  const r = $("b-cam").getBoundingClientRect(), st = $("stage").getBoundingClientRect();
+  p.style.top = `${r.bottom - st.top + 8}px`;
+  p.style.left = `${Math.max(8, Math.min(r.left - st.left - 120, st.width - p.offsetWidth - 8))}px`;
+  if (!p.contains(document.activeElement)) p.querySelector("[aria-pressed=true]")?.focus();
+}
+/* 시군 밖 — 흐리게(땅 반쯤 덮기) · 숨기기(땅을 다 덮고 글자 · 관측소 · 지구 표시도 시군 둘레로 자른다) · 그대로 */
+const VIEW_CLIP = ["walerts", "emdn", "wlab", "stns", "safg", "rivr", "tidr", "labels", "names", "tempg"];
+function viewApply() {
+  const out = selOn() ? viewOut() : "dim", hide = out === "hide";
+  if (GL_OK && GL.getLayer("selmask")) {
+    GL.setPaintProperty("selmask", "fill-opacity", hide ? 1 : out === "show" ? 0 : 0.5);
+    if (hide) GL.moveLayer("selmask");                     // 맨 위로 — 지구 표시 등 뒤에 얹힌 층까지 덮는다
+    else if (GL.getLayer("flood")) GL.moveLayer("selmask", "flood");
+  }
+  for (const id of VIEW_CLIP) { const g = $(id); if (g) hide ? g.setAttribute("clip-path", "url(#selclip)") : g.removeAttribute("clip-path"); }
 }
 
 /* 줌 보간(van Wijk & Nuij 2003, d3.interpolateZoom 과 같은 식) — 멀리 옮길 땐 살짝 물러났다 다가간다.

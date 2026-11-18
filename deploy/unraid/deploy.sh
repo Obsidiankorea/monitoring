@@ -58,7 +58,10 @@ run_main "$NAME:$V"
 #   처음엔 가장 새 것, /snap/<이름> 으로 열면 그것으로 갈아 탄다(같은 컨테이너 안에서 다시 뜬다).
 #   같은 이미지, 수집 안 함 · 시계 멈춤 · 키 없음. 실황 DB 는 연결하지 않는다 — 굳힌 것을 /tmp/snap 사본으로 떠서 쓴다.
 for c in $(docker ps -a --format '{{.Names}}' | grep -E '^gn-demo(-[0-9]+)?$'); do docker rm -f "$c" >/dev/null; done
-docker run -d --name gn-demo --restart unless-stopped --memory 1g -p 8001:8000   -e TZ=Asia/Seoul "${AI[@]}" -e GN_DEMO=1 -e GN_SNAPS=/snaps -e GN_SNAP_STATE=/tmp/snap   -v "$D/state/snaps:/snaps:ro"   -l net.unraid.docker.webui="http://[IP]:[PORT:8001]/"   "$NAME:$V" >/dev/null
+# 시연 키 — 재난상황보고서 서버 주소 · 토큰만(기상상황보고를 지금 시각으로 만들 때). 다른 키(기상청 · 텔레그램 …)는 시연에 주지 않는다
+grep -E '^(JAENAN_URL|JAENAN_TOKEN)=' "$D/config/api_keys.txt" > "$D/config/demo_keys.txt" 2>/dev/null || true
+chmod 600 "$D/config/demo_keys.txt" 2>/dev/null || true
+docker run -d --name gn-demo --restart unless-stopped --memory 1g -p 8001:8000   -e TZ=Asia/Seoul "${AI[@]}" -e GN_DEMO=1 -e GN_SNAPS=/snaps -e GN_SNAP_STATE=/tmp/snap   -v "$D/state/snaps:/snaps:ro" -v "$D/config/demo_keys.txt:/app/config/api_keys.txt:ro"   -l net.unraid.docker.webui="http://[IP]:[PORT:8001]/"   "$NAME:$V" >/dev/null
 echo "[deploy] 시연 gn-demo($(ls -1 "$D/state/snaps" 2>/dev/null | grep -vc '^\.tmp' || true)개) → http://<서버>:8001/"
 
 # 뜰 때까지 기다린다(첫 수집은 뒤에서 돈다). 뜬 뒤에만 옛 판 이미지를 치운다 — 안 뜨면 앞 판으로 되돌린다

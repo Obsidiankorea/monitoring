@@ -74,12 +74,31 @@ def test_api_download_korean_name_and_tg(keys, monkeypatch):
     assert c.post("/api/reports/run", json={"id": "nature", "tg": False, "dl": False}).status_code == 400
 
 
-def test_demo_does_not_make(keys, monkeypatch):
+def test_demo_live_weather_else_sample(keys, monkeypatch, tmp_path):
+    """시연 — 기상상황보고는 지금 시각으로 실제로(안 되면 샘플), 나머지는 샘플만(만들지 않는다). 텔레그램은 보내지 않는다."""
     monkeypatch.setattr(config, "DEMO", True)
-    monkeypatch.setattr(reports, "fetch", lambda *a, **k: pytest.fail("시연에서 만들면 안 된다"))
+    monkeypatch.setattr(config, "SNAPS", tmp_path)
+    (tmp_path / "_reports").mkdir()
+    (tmp_path / "_reports" / "weather.hwp").write_bytes(b"SAMPLE-W")
+    (tmp_path / "_reports" / "temp.png").write_bytes(b"SAMPLE-T")
+    called = []
+    monkeypatch.setattr(reports, "send_tg", lambda *a, **k: pytest.fail("시연에서 텔레그램을 보내면 안 된다"))
+    def fake(rid, *a, **k):
+        called.append(rid)
+        if called.count(rid) > 1:
+            raise RuntimeError("서버 안 됨")
+        return [("기상상황보고_202611180900.hwp", HWP)]
+    monkeypatch.setattr(reports, "fetch", fake)
     c = TestClient(main.app)
-    assert c.post("/api/reports/run", json={"id": "weather"}).status_code == 403
-    assert c.get("/api/reports").json()["demo"] is True
+    r = c.post("/api/reports/run", json={"id": "weather", "tg": True})
+    assert r.content == HWP and r.headers["x-tg"] == "off"                                          # 지금 시각으로
+    r = c.post("/api/reports/run", json={"id": "weather"})
+    assert r.content == b"SAMPLE-W" and "샘플" in unquote(r.headers["content-disposition"])          # 안 되면 샘플
+    r = c.post("/api/reports/run", json={"id": "temp"})
+    assert r.content == b"SAMPLE-T" and called == ["weather", "weather"]                            # 나머지는 만들지 않는다
+    assert c.post("/api/reports/run", json={"id": "nature"}).status_code == 404                     # 샘플 없음
+    rs = {x["id"]: x for x in c.get("/api/reports").json()["reports"]}
+    assert rs["temp"]["sample"] and not rs["nature"]["sample"] and rs["weather"]["live"]
     assert set(c.get("/api/reports/phrases").json()) == {"유의사항", "조치계획"}                             # 시연 — 받아 둔 문구 후보(작성 창이 열린다)
 
 

@@ -18,6 +18,7 @@ function drawSel() {
   const d = selF().map(f => PATH(f)).join("");
   p.setAttribute("d", d);
   $("selh").setAttribute("d", d);
+  $("selcp")?.setAttribute("d", d);                          // 보기 방식 '시군 밖 숨기기'가 글자 · 관측소를 자르는 둘레
   // 고른 시군(읍면동) 밖을 어둡게(GL 층 'selmask') — 아주 큰 네모에 고른 곳 바깥 둘레를 구멍으로
   glData("selmask", SELS.join() + "|" + ESEL.join(), () => {
     const sel = selF(), B = 1e4;
@@ -25,6 +26,7 @@ function drawSel() {
     const holes = sel.flatMap(f => (f.geometry.type === "Polygon" ? [f.geometry.coordinates] : f.geometry.coordinates).map(p => p[0]));
     return [glF(glPoly([[[GC[0] - B, GC[1] - B], [GC[0] + B, GC[1] - B], [GC[0] + B, GC[1] + B], [GC[0] - B, GC[1] + B], [GC[0] - B, GC[1] - B]], ...holes]))];
   });
+  viewApply();
 }
 /* 지도·카드에서 시군을 눌렀다 — 그냥 누르면 그 시군 하나(이미 그것 하나면 풂), Ctrl 이면 더하거나 뺀다 */
 function pickSig(sg, add) {
