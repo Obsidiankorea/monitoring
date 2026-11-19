@@ -8,6 +8,7 @@ def app_(tdb, monkeypatch):
     from app import auth, main
     auth.init()
     auth._FAIL.clear()
+    main._HITS.clear()
     monkeypatch.setenv("GN_API_KEY", "machine-test-key")
     return main, auth
 
@@ -169,31 +170,51 @@ def test_sigun_request_is_recorded_with_sender_and_visible_to_do(app_, monkeypat
     assert j["people"][0]["sms"].startswith("[경남도 재난상황실]")             # 도도 같은 지구에 보낼 수 있다
 
 
-def test_sigun_without_password_until_admin_turns_it_off(app_):
+def test_signup_needs_admin_approval(app_):
+    """시군 · 도 담당은 로그인 화면에서 계정을 신청하고, 관리자가 승인해야 로그인된다(비밀번호 없는 시군 접속은 없앴다)."""
     main, auth = app_
-    auth.add("boss", "password-1", "admin")
     c = TestClient(main.app)
-    assert c.get("/api/auth/me").json()["sigun_open"] is True
-    r = c.post("/api/auth/sigun", json={"sigun": "창원"})
-    assert r.status_code == 200 and (r.json()["user"]["role"], r.json()["user"]["sigun"]) == ("sigun", "창원")
-    assert c.get("/api/auth/me").json()["user"]["sigun"] == "창원"
-    assert c.get("/api/contacts?sigun=진주").status_code == 403           # 손님도 자기 시군만
-    assert c.post("/api/auth/sigun", json={"sigun": "서울"}).status_code == 400
-    assert all(u["login"] != "시군-창원" for u in auth.users())            # 계정 목록에는 안 보인다
-    assert auth.any_user() and TestClient(main.app).post("/api/auth/setup", json={"login": "x", "password": "password-9"}).status_code == 403
+    assert c.post("/api/auth/signup", json={"login": "cw", "password": "password-3", "name": "창원 담당", "role": "sigun", "sigun": "창원"}).status_code == 403   # 계정 없는 서버는 처음 설정으로
+    auth.add("boss", "password-1", "admin")
+    assert c.get("/api/auth/me").json()["signup"] is True and c.post("/api/auth/sigun", json={"sigun": "창원"}).status_code in (401, 404, 405)
+    assert c.post("/api/auth/signup", json={"login": "x", "password": "password-3", "name": "x", "role": "admin"}).status_code == 400   # 관리자는 신청 못 한다
+    assert c.post("/api/auth/signup", json={"login": "cw", "password": "password-3", "name": "창원 담당", "role": "sigun", "sigun": "창원"}).status_code == 200
+    r = _login(c, "cw", "password-3")
+    assert r.status_code == 429 and "승인" in r.json()["detail"]                 # 비밀번호가 맞으면 '승인 대기'
+    assert _login(c, "cw", "wrong-pass-x").status_code == 401                   # 틀리면 그냥 틀렸다(있는지 흘리지 않는다)
+    assert auth.any_user() and TestClient(main.app).post("/api/auth/setup", json={"login": "z", "password": "password-9"}).status_code == 403
     a = TestClient(main.app)
     _login(a, "boss", "password-1")
-    assert a.put("/api/settings/sigun-open", json={"on": False}).status_code == 200
-    assert c.get("/api/alerts").status_code == 401                         # 끄면 들어와 있던 시군 접속도 끊긴다
-    assert TestClient(main.app).post("/api/auth/sigun", json={"sigun": "창원"}).status_code == 403
-    with pytest.raises(ValueError):
-        auth.login("시군-창원", "!")
+    (p,) = [u for u in a.get("/api/auth/users").json()["users"] if u["pending"]]
+    assert a.put(f"/api/auth/users/{p['id']}", json={"role": "sigun", "sigun": "창원", "active": True}).status_code == 200
+    r = _login(c, "cw", "password-3")
+    assert r.status_code == 200 and r.json()["user"]["sigun"] == "창원" and not r.json()["user"]["pending"]
+    assert c.post("/api/auth/signup", json={"login": "dd", "password": "password-4", "name": "도 담당", "role": "do"}).status_code == 200
+    (q,) = [u for u in a.get("/api/auth/users").json()["users"] if u["pending"]]
+    assert a.delete(f"/api/auth/users/{q['id']}").status_code == 200            # 거절 — 지운다
+    assert a.delete(f"/api/auth/users/{p['id']}").status_code == 404            # 쓰던 계정은 거절로 못 지운다
 
 
-def test_guest_does_not_count_as_account(app_):
+def test_old_passwordless_guests_are_removed(app_, tdb):
     main, auth = app_
-    auth.guest_sigun("창원")                                                # 계정이 없을 때 손님이 생겨도
-    assert auth.any_user() is False                                        # 서버는 여전히 '계정 없음'(처음 설정 가능)
+    with tdb.tx() as con:
+        con.execute("INSERT INTO app_user (login, name, role, sigun, pw, created) VALUES ('시군-창원','x','sigun','창원','!','t')")
+    auth.init()
+    with tdb.tx() as con:
+        assert con.execute("SELECT COUNT(*) FROM app_user").fetchone()[0] == 0
+
+
+def test_rate_limit_and_security_headers(app_):
+    """바깥에 열린 서버 — 같은 사람이 짧은 사이 너무 자주 부르면 429, 응답에는 보안 머리글."""
+    main, auth = app_
+    auth.add("boss", "password-1", "admin")
+    main._HITS.clear()
+    c = TestClient(main.app)
+    codes = [_login(c, "boss", "nope-nope").status_code for _ in range(21)]
+    assert codes[-1] == 429 and "자주" in _login(c, "boss", "nope-nope").json()["detail"]
+    r = c.get("/login.html")
+    assert r.headers["x-frame-options"] == "SAMEORIGIN" and r.headers["x-content-type-options"] == "nosniff"
+    main._HITS.clear()
 
 
 def test_demo_opens_as_do_user(app_, monkeypatch):
@@ -213,8 +234,9 @@ def test_writes_are_allowlisted_per_role(app_):
     main, auth = app_
     auth.add("boss", "password-1", "admin", "관리자")
     auth.add("do1", "password-2", "do", "도담당")
+    auth.add("cw", "password-3", "sigun", "창원 담당", sigun="창원")
     g = TestClient(main.app)
-    assert g.post("/api/auth/sigun", json={"sigun": "창원"}).status_code == 200
+    _login(g, "cw", "password-3")
     assert g.post("/api/ai/decisions", json={"sigun": "창원", "act": "메모"}).status_code == 200      # 자기 시군 판단은 남긴다
     assert g.post("/api/ai/decisions", json={"sigun": "김해", "act": "메모"}).status_code == 403
     assert g.put("/api/ai/sigunstage", json={}).status_code == 403

@@ -1335,6 +1335,8 @@ async def api_ai_ask(body: dict):
     text = str(body.get("text") or "").strip()[:500]
     if not text:
         raise HTTPException(400, "q 또는 text")
+    if config.DEMO:                                       # 시연은 로그인 없이 열린다 — 자유 질문은 실제 AI(사용량)를 부른다
+        raise HTTPException(403, "시연 화면에서는 자유 질문을 받지 않는다 — 위의 예상 질문만")
     try:
         return await asyncio.to_thread(aireport.ask_free, _ai_base(body.get("base")), text, sigun)
     except FileNotFoundError as e:
@@ -1713,6 +1715,52 @@ async def terrain_tile(layer: str, z: int, x: int, y: int):
     return FileResponse(fp, media_type="image/png", headers=hdr) if fp.is_file() else Response(_BLANK_PNG, media_type="image/png", headers=hdr)
 
 
+# ── 반복 호출 제한 · 보안 머리글 — 바깥에 열린 서버(공유기 포트 · 터널). need_login 안쪽이라 누구인지 안다 ──
+# (방법, 경로 앞, 횟수, 초) — 사람 하나(로그인 아이디, 없으면 보낸 주소)마다. 이 컴퓨터 · 서버 자신(LOCAL)은 세지 않는다
+RATE = (("POST", "/api/auth/login", 20, 600), ("POST", "/api/auth/signup", 5, 3600), ("POST", "/api/auth/setup", 10, 600),
+        ("POST", "/api/reply/ask", 120, 600), ("POST", "/api/reports/run", 20, 600), ("POST", "/api/ai/ask", 30, 600))
+_HITS: dict[tuple, list[float]] = {}
+SEC_HEAD = {"X-Content-Type-Options": "nosniff", "X-Frame-Options": "SAMEORIGIN", "Referrer-Policy": "strict-origin-when-cross-origin",
+            "Permissions-Policy": "geolocation=(), microphone=(), payment=()"}
+
+
+def _who_key(request: Request) -> str:
+    """누가 — 로그인 아이디, 없으면 보낸 주소. 같은 망 안(도커 · 터널)에서 온 것이면 Cloudflare 가 붙인 원래 주소를 쓴다
+    (인터넷에서 직접 온 요청의 CF-Connecting-IP 는 믿지 않는다 — 꾸밀 수 있다)."""
+    import ipaddress
+    u = getattr(request.state, "user", None)
+    if u and not u.get("local"):
+        return "u:" + str(u.get("login"))
+    ip = request.client.host if request.client else ""
+    try:
+        if ipaddress.ip_address(ip).is_private and request.headers.get("cf-connecting-ip"):
+            ip = request.headers["cf-connecting-ip"]
+    except ValueError:
+        pass
+    return "ip:" + ip
+
+
+@app.middleware("http")
+async def rate_and_headers(request: Request, call_next):
+    import time as _t
+    u = getattr(request.state, "user", None)
+    if not (u and u.get("local")):
+        rule = next((r for r in RATE if request.method == r[0] and request.url.path.startswith(r[1])), None)
+        if rule:
+            k, now = (rule[1], _who_key(request)), _t.time()
+            hits = [t for t in _HITS.get(k, []) if now - t < rule[3]]
+            if len(hits) >= rule[2]:
+                return JSONResponse({"detail": f"너무 자주 불렀다 — {rule[3] // 60}분 안에 {rule[2]}번까지. 잠시 뒤 다시"}, status_code=429,
+                                    headers={"Retry-After": str(int(rule[3] - (now - hits[0])) + 1), **SEC_HEAD})
+            _HITS[k] = hits + [now]
+            if len(_HITS) > 5000:                          # 주소가 많이 바뀌어도 기억이 끝없이 크지 않게
+                _HITS.clear()
+    resp = await call_next(request)
+    for h, v in SEC_HEAD.items():
+        resp.headers.setdefault(h, v)
+    return resp
+
+
 # ── 로그인(app/auth.py) — 계정이 하나라도 생기면 로그인을 요구한다. 맨 바깥 미들웨어(아래 것이 먼저 돈다) ──
 @app.middleware("http")
 async def need_login(request: Request, call_next):
@@ -1767,31 +1815,24 @@ async def api_me(request: Request):
     u = await asyncio.to_thread(_auth.decide, "/api/x", "GET", request.client.host if request.client else "",
                                 request.cookies.get(_auth.COOKIE), None)
     if config.DEMO:                                       # 시연은 늘 도 사용자로 바로 열린다(로그인 · 처음 설정 없음)
-        return {"open": False, "user": _auth.DEMO, "roles": _auth.ROLES, "siguns": _auth.SIGUNS, "sigun_open": False}
-    return {"open": not await asyncio.to_thread(_auth.any_user), "user": u[1] if u[0] == 0 else None,
-            "roles": _auth.ROLES, "siguns": _auth.SIGUNS, "sigun_open": await asyncio.to_thread(_auth.sigun_open)}
+        return {"open": False, "user": _auth.DEMO, "roles": _auth.ROLES, "siguns": _auth.SIGUNS, "signup": False}
+    op = not await asyncio.to_thread(_auth.any_user)
+    return {"open": op, "user": u[1] if u[0] == 0 else None, "roles": _auth.ROLES, "siguns": _auth.SIGUNS, "signup": not op}
 
 
-@app.post("/api/auth/sigun")
-async def api_sigun_guest(body: dict, request: Request):
-    """시군 담당 — 비밀번호 없이 시군만 골라 들어온다(관리자가 '시군은 비밀번호 없이' 를 끄면 403)."""
+@app.post("/api/auth/signup")
+async def api_signup(body: dict):
+    """계정 신청(로그인 화면) — 도 사용자 · 시군 사용자. 관리자가 계정 관리에서 승인하면 로그인된다. 계정이 없는 서버는 '처음 설정'으로."""
+    if config.DEMO or not await asyncio.to_thread(_auth.any_user):
+        raise HTTPException(403, "지금은 신청을 받지 않는다")
     try:
-        tok, u = await asyncio.to_thread(_auth.guest_sigun, str(body.get("sigun") or ""),
-                                         request.client.host if request.client else "")
+        u = await asyncio.to_thread(_auth.signup, str(body.get("login") or ""), str(body.get("password") or ""),
+                                    str(body.get("name") or "")[:40], str(body.get("role") or ""), body.get("sigun"))
     except PermissionError as e:
-        raise HTTPException(403, str(e)) from e
+        raise HTTPException(429, str(e)) from e
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
-    r = JSONResponse({"user": u})
-    r.set_cookie(_auth.COOKIE, tok, max_age=_auth.DAYS * 86400, httponly=True, samesite="lax", path="/")
-    return r
-
-
-@app.put("/api/settings/sigun-open")
-async def api_sigun_open(body: dict):
-    """관리자 — 시군은 비밀번호 없이 들어오기 켜고 끄기(/api/settings 아래라 관리자만)."""
-    await asyncio.to_thread(_auth.set_sigun_open, body.get("on") is True)
-    return {"sigun_open": body.get("on") is True}
+    return {"ok": True, "login": u["login"]}
 
 
 @app.post("/api/auth/setup")
@@ -1825,6 +1866,16 @@ async def api_user_add(body: dict, request: Request):
                                        str(body.get("role") or ""), str(body.get("name") or ""), body.get("sigun"))
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
+
+
+@app.delete("/api/auth/users/{uid}")
+async def api_user_reject(uid: int):
+    """신청 거절 — 승인 전 것만(관리자, /api/auth/users 아래)."""
+    try:
+        await asyncio.to_thread(_auth.reject, uid)
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
+    return {"ok": True}
 
 
 @app.put("/api/auth/users/{uid}")
@@ -1865,4 +1916,4 @@ if __name__ == "__main__":
             os.environ["GN_SNAP"] = argv[argv.index("--snap") + 1]
         os.environ.setdefault("PORT", "8001")
     uvicorn.run("app.main:app", host=os.environ.get("HOST", "127.0.0.1"),
-                port=int(os.environ.get("PORT", "8000")))
+                port=int(os.environ.get("PORT", "8000")), server_header=False)   # 'server: uvicorn' 을 내지 않는다

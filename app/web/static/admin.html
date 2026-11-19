@@ -30,10 +30,10 @@
 <body>
 <main>
   <header><h1>계정 관리</h1><span id="me"></span><a href="/map.html">지도로</a></header>
-  <section>
-    <h2>들어오는 방법</h2>
-    <label class="ck"><input type="checkbox" id="sg-open"> 시군 담당자는 아이디 · 비밀번호 없이 시군만 골라 들어온다</label>
-    <p class="msg" id="o-msg" role="status">끄면 그렇게 들어와 있던 시군 접속도 끊기고, 시군도 여기서 만든 계정으로 로그인한다.</p>
+  <section id="pend-s" hidden>
+    <h2>승인 기다리는 신청 <span id="pend-n"></span></h2>
+    <table><thead><tr><th>아이디 · 이름 · 부서</th><th>소속(바꿀 수 있다)</th><th>신청</th><th></th></tr></thead><tbody id="pend"></tbody></table>
+    <p class="msg" id="p-msg" role="status"></p>
   </section>
   <section>
     <h2>계정 만들기</h2>
@@ -67,7 +67,12 @@
   const roleSel = (v, id) => `<select ${id ? `id="${id}"` : ""} data-f="role">${Object.entries(META.roles).map(([k, n]) => `<option value="${k}"${k === v ? " selected" : ""}>${esc(n)}</option>`).join("")}</select>`;
   const sgSel = (v, id) => `<select ${id ? `id="${id}"` : ""} data-f="sigun">${META.siguns.map(s => `<option${s === v ? " selected" : ""}>${s}</option>`).join("")}</select>`;
   async function draw() {
-    const { users } = await call("/api/auth/users");
+    const all = (await call("/api/auth/users")).users, users = all.filter(u => !u.pending), pend = all.filter(u => u.pending);
+    $("pend-s").hidden = !pend.length;
+    $("pend-n").textContent = pend.length ? `${pend.length}건` : "";
+    $("pend").innerHTML = pend.map(u => `<tr data-id="${u.id}"><td><b>${esc(u.login)}</b><br><small>${esc(u.name || "")}</small></td>
+      <td><div class="row">${roleSel(u.role)}${u.role === "sigun" ? sgSel(u.sigun) : ""}</div></td><td><small>${esc(u.created || "")}</small></td>
+      <td><div class="row"><button class="pri" data-pa="ok">승인</button><button data-pa="no">거절</button></div></td></tr>`).join("");
     $("list").innerHTML = users.map(u => `<tr data-id="${u.id}" class="${u.active ? "" : "off"}">
       <td><b>${esc(u.login)}</b><br><small>${esc(u.name || "")}</small></td>
       <td><div class="row">${roleSel(u.role)}${u.role === "sigun" ? sgSel(u.sigun) : ""}</div></td>
@@ -84,6 +89,26 @@
     if (b.password.length < 8) { say("a-msg", "비밀번호는 8자 이상", 1); return $("a-pw").focus(); }
     try { const u = await call("/api/auth/users", "POST", b); say("a-msg", `「${u.login}」 ${u.role_name}${u.sigun ? " · " + u.sigun : ""} 계정을 만들었다`); $("add").reset(); $("a-sg-l").hidden = true; draw(); }
     catch (e) { say("a-msg", e.message, 1); }
+  });
+  $("pend").addEventListener("change", ev => {
+    const s = ev.target.closest('[data-f="role"]'); if (!s) return;
+    const row = s.closest(".row"); row.querySelector('[data-f="sigun"]')?.remove();
+    if (s.value === "sigun") row.insertAdjacentHTML("beforeend", sgSel(META.siguns[0]));
+  });
+  $("pend").addEventListener("click", async ev => {               // 승인 — 고른 역할 · 시군으로 켠다 / 거절 — 지운다
+    const b = ev.target.closest("[data-pa]"); if (!b) return;
+    const tr = b.closest("tr"), id = tr.dataset.id, login = tr.querySelector("b").textContent;
+    try {
+      if (b.dataset.pa === "ok") {
+        await call(`/api/auth/users/${id}`, "PUT", { role: tr.querySelector('[data-f="role"]').value, sigun: tr.querySelector('[data-f="sigun"]')?.value || null, active: true });
+        say("p-msg", `「${login}」 승인했다 — 이제 로그인한다`);
+      } else {
+        if (!confirm(`「${login}」 신청을 거절할까요? 신청 기록이 지워진다`)) return;
+        await call(`/api/auth/users/${id}`, "DELETE");
+        say("p-msg", `「${login}」 신청을 거절했다`);
+      }
+      draw();
+    } catch (e) { say("p-msg", e.message, 1); }
   });
   $("list").addEventListener("change", ev => {                // 역할을 시군으로 바꾸면 시군 고르기를 붙인다
     const s = ev.target.closest('[data-f="role"]'); if (!s) return;
@@ -114,12 +139,6 @@
     META = await call("/api/auth/me");
     $("a-role").innerHTML = Object.entries(META.roles).map(([k, n]) => `<option value="${k}">${esc(n)}</option>`).join("");
     $("a-sigun").innerHTML = META.siguns.map(s => `<option>${s}</option>`).join("");
-    $("sg-open").checked = !!META.sigun_open;
-    $("sg-open").addEventListener("change", async e => {
-      try { await call("/api/settings/sigun-open", "PUT", { on: e.target.checked });
-            say("o-msg", e.target.checked ? "시군은 비밀번호 없이 들어온다" : "시군도 계정으로 로그인한다 — 비밀번호 없이 들어와 있던 접속을 끊었다"); }
-      catch (err) { e.target.checked = !e.target.checked; say("o-msg", err.message, 1); }
-    });
     if (META.user) $("me").textContent = `${META.user.name || META.user.login} · ${META.roles[META.user.role] || ""}`;
     draw().catch(e => say("l-msg", e.message, 1));
   })();

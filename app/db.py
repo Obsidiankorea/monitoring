@@ -236,6 +236,8 @@ _ADDED_COLUMNS = {
     "obs_minute": [("rn_15m", "REAL")],
     # 판단 기록 — 누른 사람(로그인 이름 · 역할), 지우기는 표시만(gone = '시각 · 누가'). AI 쪽(aireport)에는 who 를 넘기지 않는다
     "decision": [("who", "TEXT"), ("gone", "TEXT")],
+    # 계정 신청 — 로그인 화면에서 신청하면 pending=1 · active=0, 관리자가 승인하면 pending=0 · active=1
+    "app_user": [("pending", "INTEGER NOT NULL DEFAULT 0")],
 }
 
 

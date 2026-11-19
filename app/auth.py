@@ -29,7 +29,13 @@ SIGUNS = ("창원", "진주", "통영", "사천", "김해", "밀양", "거제", 
           "함안", "창녕", "고성", "남해", "하동", "산청", "함양", "거창", "합천")
 
 def init() -> None:
-    """표는 db.SCHEMA 에 있다(app_user · app_session) — db.init() 이 만든다. 여기서는 기억만 비운다."""
+    """표는 db.SCHEMA 에 있다(app_user · app_session) — db.init() 이 만든다. 예전 비밀번호 없는 시군 손님 계정 · 접속은 지운다."""
+    try:
+        with db.tx() as con:
+            con.execute(f"DELETE FROM app_session WHERE user_id IN (SELECT id FROM app_user WHERE pw='{NOPW}')")
+            con.execute(f"DELETE FROM app_user WHERE pw='{NOPW}'")
+    except sqlite3.OperationalError:
+        pass
     _forget()
 
 
@@ -57,7 +63,8 @@ def _pw_ok(pw: str) -> str | None:
 # ── 계정 ──────────────────────────────────────────────────
 def _row(r) -> dict:
     return {"id": r["id"], "login": r["login"], "name": r["name"], "role": r["role"], "role_name": ROLES[r["role"]],
-            "sigun": r["sigun"], "active": bool(r["active"]), "created": r["created"], "last_login": r["last_login"]}
+            "sigun": r["sigun"], "active": bool(r["active"]), "pending": bool(r["pending"]) if "pending" in r.keys() else False,
+            "created": r["created"], "last_login": r["last_login"]}
 
 
 def _check(role: str, sigun: str | None) -> str | None:
@@ -70,7 +77,7 @@ def _check(role: str, sigun: str | None) -> str | None:
 
 def users() -> list[dict]:
     with db.tx() as con:
-        return [_row(r) for r in con.execute(f"SELECT * FROM app_user WHERE pw<>'{NOPW}' ORDER BY role, sigun, login")]
+        return [_row(r) for r in con.execute(f"SELECT * FROM app_user WHERE pw<>'{NOPW}' ORDER BY pending DESC, role, sigun, login")]
 
 
 def add(login: str, pw: str, role: str, name: str = "", sigun: str | None = None) -> dict:
@@ -89,46 +96,39 @@ def add(login: str, pw: str, role: str, name: str = "", sigun: str | None = None
 
 
 _SETUP = threading.Lock()
-NOPW = "!"                                         # 비밀번호 없는 시군 손님 계정 — check_pw 가 늘 실패하는 값(아이디로는 못 들어온다)
+NOPW = "!"                                         # 예전 '비밀번호 없는 시군 손님' 계정 표시 — 이제 만들지 않고, 뜰 때 지운다(init)
+PENDING_MAX = 30                                   # 승인 기다리는 신청은 이만큼까지(봇이 표를 채우지 못하게)
 
 
-def sigun_open() -> bool:
-    """시군은 비밀번호 없이 들어오기(로그인 화면에서 시군만 고른다) — 관리자가 끈다. 지금은 기본 켬."""
-    return bool(db.get_setting("sigun_open", True))
-
-
-def set_sigun_open(on: bool) -> None:
-    db.put_setting("sigun_open", bool(on))
-    if not on:                                     # 끄면 그렇게 들어와 있던 접속도 끊는다
-        with db.tx() as con:
-            con.execute(f"DELETE FROM app_session WHERE user_id IN (SELECT id FROM app_user WHERE pw='{NOPW}')")
-    _forget()
-
-
-def guest_sigun(sigun: str, ip: str = "") -> tuple[str, dict]:
-    """시군 손님 접속 — 그 시군의 비밀번호 없는 계정(없으면 만든다)으로 쿠키를 준다."""
-    if not sigun_open():
-        raise PermissionError("시군도 아이디 · 비밀번호로 들어온다 — 도 관리자에게 계정을 받는다")
-    if sigun not in SIGUNS:
-        raise ValueError("시군을 고른다")
-    login_ = f"시군-{sigun}"
+def signup(login: str, pw: str, name: str, role: str, sigun: str | None) -> dict:
+    """계정 신청 — 로그인 화면에서. 도 사용자 · 시군 사용자만(관리자는 신청 못 한다). 관리자가 승인해야 로그인된다."""
+    if role not in ("do", "sigun"):
+        raise ValueError("소속은 도 또는 시군")
+    if not (name or "").strip():
+        raise ValueError("이름 · 부서를 넣어 주세요")
     with db.tx() as con:
-        r = con.execute("SELECT * FROM app_user WHERE login=?", (login_,)).fetchone()
-        if not r:
-            con.execute("INSERT INTO app_user (login, name, role, sigun, pw, created) VALUES (?,?,?,?,?,?)",
-                        (login_, f"{sigun} 담당", "sigun", sigun, NOPW, _now()))
-            r = con.execute("SELECT * FROM app_user WHERE login=?", (login_,)).fetchone()
-        tok = secrets.token_urlsafe(32)
-        con.execute("INSERT INTO app_session VALUES (?,?,?,?,?)", (_h(tok), r["id"], _now(), _later(), (ip or "")[:64]))
-        con.execute("UPDATE app_user SET last_login=? WHERE id=?", (_now(), r["id"]))
-    return tok, _row(r)
+        if con.execute("SELECT COUNT(*) FROM app_user WHERE pending=1").fetchone()[0] >= PENDING_MAX:
+            raise PermissionError("승인을 기다리는 신청이 많다 — 관리자에게 직접 연락해 주세요")
+    u = add(login, pw, role, name, sigun)
+    with db.tx() as con:
+        con.execute("UPDATE app_user SET active=0, pending=1 WHERE id=?", (u["id"],))
+    _forget()
+    return {**u, "active": False, "pending": True}
+
+
+def reject(uid: int) -> None:
+    """신청 거절 — 승인 전(pending) 것만 지운다(쓰던 계정은 '멈추기')."""
+    with db.tx() as con:
+        if not con.execute("DELETE FROM app_user WHERE id=? AND pending=1", (uid,)).rowcount:
+            raise LookupError("승인을 기다리는 신청이 아니다")
+    _forget()
 
 
 def first_admin(login: str, pw: str, name: str = "") -> dict:
     """처음 관리자 — 계정이 하나도 없을 때만. 둘이 동시에 눌러도 하나만 된다(잠금 + 표 안에서 다시 본다)."""
     with _SETUP:
         with db.tx() as con:
-            if con.execute(f"SELECT 1 FROM app_user WHERE pw<>'{NOPW}' LIMIT 1").fetchone():
+            if con.execute(f"SELECT 1 FROM app_user WHERE pw<>'{NOPW}' AND pending=0 LIMIT 1").fetchone():
                 raise PermissionError("이미 계정이 있다 — 관리자에게 계정을 받는다")
         return add(login, pw, "admin", name or "관리자")
 
@@ -145,6 +145,8 @@ def update(uid: int, *, role: str | None = None, sigun: str | None = None, name:
         if why:
             raise ValueError(why)
         na = r["active"] if active is None else int(bool(active))
+        if na and r["pending"]:
+            con.execute("UPDATE app_user SET pending=0 WHERE id=?", (uid,))       # 켜면 = 신청 승인
         if r["role"] == "admin" and (nr != "admin" or not na):        # 마지막 관리자를 잃지 않게
             n = con.execute("SELECT COUNT(*) FROM app_user WHERE role='admin' AND active=1 AND id<>?", (uid,)).fetchone()[0]
             if n == 0:
@@ -174,8 +176,12 @@ def login(login: str, pw: str, ip: str = "") -> tuple[str, dict]:
         if len(fails) >= 10:
             raise PermissionError("잘못 넣은 횟수가 많다 — 15분 뒤에 다시")
     with db.tx() as con:
-        r = con.execute("SELECT * FROM app_user WHERE login=? AND active=1", ((login or "").strip(),)).fetchone()
+        r = con.execute("SELECT * FROM app_user WHERE login=?", ((login or "").strip(),)).fetchone()
         ok = bool(r) and check_pw(pw or "", r["pw"])
+        if ok and not r["active"]:
+            if r["pending"]:                                # 비밀번호가 맞을 때만 알린다(아이디가 있는지 흘리지 않게)
+                raise PermissionError("관리자 승인을 기다리는 중입니다 — 승인되면 로그인됩니다")
+            ok = False
         if not ok:
             with _LOCK:
                 _FAIL.setdefault(key, []).append(now)
@@ -252,7 +258,7 @@ def _later(days: int = DAYS) -> str:
 
 
 # ── 요청 거르기(main.py 미들웨어가 부른다) ─────────────────
-OPEN = ("/login.html", "/api/auth/login", "/api/auth/me", "/api/auth/setup", "/api/auth/sigun", "/api/status", "/favicon.ico", "/r/")
+OPEN = ("/login.html", "/api/auth/login", "/api/auth/me", "/api/auth/setup", "/api/auth/signup", "/api/status", "/favicon.ico", "/r/")
 ADMIN_ONLY = ("/api/settings", "/api/keys", "/api/update", "/api/server-update", "/api/origin", "/api/storage",
               "/api/snaps", "/api/ai/wiki", "/api/ai/task", "/api/ai/llm", "/api/districts/geo", "/api/auth/users", "/admin.html")
 # 관리자가 아닌 사람의 쓰기(POST · PUT · DELETE)는 여기 있는 것만 — 새 쓰기 라우트는 기본으로 관리자 전용(허용 목록)

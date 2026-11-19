@@ -21,7 +21,9 @@
   hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0 12px; }
   select { height: 44px; padding: 0 10px; font-family: inherit; font-size: 15px; color: var(--ink); background: #0e151e; border: 1px solid var(--line); border-radius: 8px; }
   button.sub { width: 100%; margin-top: 8px; color: var(--ink); background: #1b2635; border: 1px solid var(--line); }
-  #sg-box { display: grid; gap: 0; }
+  .su { margin-top: 0; } body { align-content: center; gap: 14px; }
+  .warn { color: #ffcf8a; background: #2a1f0e; border: 1px solid #5a4318; border-radius: 8px; padding: 8px 10px; font-size: 12.5px; }
+  #su-msg { min-height: 1.3em; font-size: 13px; color: var(--bad); } #su-msg.ok { color: #7ad19b; }
   p.demo { text-align: center; } p.demo a { display: inline-block; padding: 10px 4px; color: var(--accent); }
 </style>
 </head>
@@ -35,13 +37,21 @@
   <label id="pw2-l" hidden>비밀번호 한 번 더 <input id="pw2" type="password" autocomplete="new-password"></label>
   <div id="msg" role="alert"></div>
   <button id="go" type="submit">로그인</button>
-  <p id="hint">계정은 도 관리자에게 받습니다.</p>
-  <div id="sg-box" hidden>
-    <hr>
-    <label>시군 담당자 — 시군을 골라 들어가기(비밀번호 없음) <select id="sg"><option value="">시군 고르기</option></select></label>
-    <button type="button" id="sg-go" class="sub">시군 화면으로</button>
-  </div>
+  <p id="hint">계정이 없으면 아래에서 신청합니다 — 도 관리자가 승인하면 로그인됩니다.</p>
+  <p id="plain" class="warn" hidden><b>암호화되지 않은 주소(http)입니다.</b> 비밀번호가 그대로 인터넷을 지나갑니다 — 공용 와이파이에서는 넣지 말고, https 주소로 들어와 주세요.</p>
+  <button type="button" id="su-open" class="sub" hidden aria-expanded="false" aria-controls="su">계정 신청</button>
   <p class="demo"><a id="demo" href="/">시연 화면 보기(가짜 자료 · 로그인 없음)</a></p>
+</form>
+<form id="su" class="su" novalidate hidden>
+  <div><h1>계정 신청</h1><p>관리자가 승인하면 이 아이디 · 비밀번호로 로그인합니다.</p></div>
+  <label>아이디 <input id="su-login" maxlength="40" autocomplete="username" required></label>
+  <label>이름 · 부서 <input id="su-name" maxlength="40" placeholder="창원시 안전총괄과 홍길동" required></label>
+  <label>소속 <select id="su-org"><option value="do">경남도</option></select></label>
+  <label>비밀번호(8자 이상) <input id="su-pw" type="password" autocomplete="new-password" required></label>
+  <label>비밀번호 한 번 더 <input id="su-pw2" type="password" autocomplete="new-password" required></label>
+  <div id="su-msg" role="alert"></div>
+  <button type="submit" id="su-go">신청하기</button>
+  <button type="button" id="su-back" class="sub">로그인으로</button>
 </form>
 <script>
   const $ = id => document.getElementById(id);
@@ -49,9 +59,9 @@
   $("demo").href = `${location.protocol}//${location.hostname}:8001/map.html`;   // 시연 서버는 같은 주소의 8001
   let SETUP = false;                                   // 계정이 하나도 없는 서버 — 첫 관리자를 만든다
   fetch("/api/auth/me").then(r => r.json()).then(j => {
-    if (j.sigun_open && !j.open) {                       // 시군은 비밀번호 없이(관리자가 끌 수 있다)
-      $("sg").insertAdjacentHTML("beforeend", (j.siguns || []).map(s => `<option>${s}</option>`).join(""));
-      $("sg-box").hidden = false;
+    if (j.signup) {                                       // 계정 신청 — 관리자가 승인
+      $("su-org").insertAdjacentHTML("beforeend", (j.siguns || []).map(s => `<option value="${s}">${s}</option>`).join(""));
+      $("su-open").hidden = false;
     }
     if (!j.open) return;
     SETUP = true;
@@ -85,15 +95,32 @@
     } catch { $("msg").textContent = "서버에 닿지 않습니다 — 잠시 뒤 다시"; }
     $("go").disabled = false;
   });
-  $("sg-go").addEventListener("click", async () => {
-    const sigun = $("sg").value;
-    if (!sigun) { $("msg").textContent = "시군을 골라 주세요"; return $("sg").focus(); }
+  // http 로 바깥(공인 주소)에서 들어왔다 — 이 PC · 사내망 · Tailscale(100.x) 이 아니면 경고
+  { const h = location.hostname;
+    const inside = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)/.test(h) || h.endsWith(".local") || h.endsWith(".ts.net");
+    $("plain").hidden = location.protocol === "https:" || inside; }
+  const suShow = on => { $("su").hidden = !on; $("f").hidden = on; $("su-open").setAttribute("aria-expanded", String(on)); (on ? $("su-login") : $("login")).focus(); };
+  $("su-open").addEventListener("click", () => suShow(true));
+  $("su-back").addEventListener("click", () => suShow(false));
+  $("su").addEventListener("submit", async ev => {
+    ev.preventDefault();
+    const m = $("su-msg"), login = $("su-login").value.trim(), name = $("su-name").value.trim(), pw = $("su-pw").value, org = $("su-org").value;
+    m.className = "";
+    if (!login) { m.textContent = "아이디를 넣어 주세요"; return $("su-login").focus(); }
+    if (!name) { m.textContent = "이름 · 부서를 넣어 주세요"; return $("su-name").focus(); }
+    if (pw.length < 8) { m.textContent = "비밀번호는 8자 이상"; return $("su-pw").focus(); }
+    if (pw !== $("su-pw2").value) { m.textContent = "두 번 넣은 비밀번호가 다릅니다"; return $("su-pw2").focus(); }
+    $("su-go").disabled = true;
     try {
-      const r = await fetch("/api/auth/sigun", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sigun }) });
-      if (r.ok) return location.replace("/map.html");
-      $("msg").textContent = (await r.json().catch(() => ({}))).detail || "들어가지 못했습니다";
-    } catch { $("msg").textContent = "서버에 닿지 않습니다"; }
+      const body = { login, name, password: pw, role: org === "do" ? "do" : "sigun", sigun: org === "do" ? null : org };
+      const r = await fetch("/api/auth/signup", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok) { m.className = "ok"; m.textContent = `「${login}」 신청했습니다 — 관리자가 승인하면 로그인할 수 있습니다.`; $("su").reset(); }
+      else m.textContent = j.detail || "신청하지 못했습니다";
+    } catch { m.textContent = "서버에 닿지 않습니다"; }
+    $("su-go").disabled = false;
   });
+  for (const id of ["su-login", "su-name", "su-pw", "su-pw2"]) $(id).addEventListener("input", () => { $("su-msg").textContent = ""; });
   $("login").addEventListener("input", () => { $("msg").textContent = ""; });
   $("pw").addEventListener("input", () => { $("msg").textContent = ""; });
 </script>
