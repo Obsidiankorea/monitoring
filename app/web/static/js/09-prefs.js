@@ -54,6 +54,7 @@ function openPrefs() {
   const th = document.documentElement.dataset.theme;
   $("prefs").innerHTML = `<div class="box" role="dialog" aria-label="설정">
     <div class="top"><b>설정 — 경남 지도</b><span class="sp"></span><button id="pf-x" title="닫기 (Esc)">✕</button></div>
+    ${acctPrefsHtml()}
     <h4>재생</h4>
     <div class="grid2">
     <div class="row"><span class="k">실측 간격</span>${seg("flow_step", [[10, "10분"], [20, "20분"], [30, "30분"], [60, "1시간"]])}</div>
@@ -166,6 +167,7 @@ function openPrefs() {
     <div class="keys"><kbd>1</kbd>~<kbd>8</kbd> 층 · <kbd>Space</kbd> 재생 · <kbd>←</kbd><kbd>→</kbd> 한 장씩 · <kbd>L</kbd> 패널 · <kbd>A</kbd> 특보 · <kbd>S</kbd> 관측소 · <kbd>V</kbd> 지점 값 · <kbd>B</kbd> 누적 기준 · <kbd>F</kbd> 누적 예상 · <kbd>H</kbd> 최근 1시간 · <kbd>G</kbd> 위 카드 가득 · <kbd>R</kbd> 실시간 감시 · <kbd>Q</kbd> 초단기예측 이미지 · <kbd>W</kbd> 바다 위젯 · <kbd>C</kbd> 지도 위치 · <kbd>P</kbd> 화면 재생 · <kbd>T</kbd> 테스트 · <kbd>?</kbd> 도움말 · <kbd>Ctrl</kbd>+<kbd>,</kbd> 설정</div>
   </div>`;
   prefTabs();
+  acctPrefsBind();
   loadWiki();
   loadLlm();
   loadPin();

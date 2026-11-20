@@ -102,3 +102,16 @@ def test_admrul_and_ordin_use_their_own_fields_and_state_keys(monkeypatch):
     assert set(store["law_state"]) == {"admrul:재난문자방송 기준 및 운영규정", "ordin:거제시 재난 대피에 관한 조례"}
     assert store["law_state"]["ordin:거제시 재난 대피에 관한 조례"]["serial"] == "7"
     assert len(calls) == 2 and "nw" not in calls[0] and calls[1]["nw"] == 3        # 행정규칙은 nw 없이, 자치법규는 현행(3)만
+
+
+def test_unregistered_ip_is_not_reported_as_missing_law(monkeypatch):
+    """법제처는 IP 미등록도 200 으로 답한다 — '목록에 없다'가 아니라 등록하라는 글로."""
+    class R:
+        status_code = 200
+        text = ""
+        def raise_for_status(self): pass
+        def json(self): return {"result": "사용자 정보 검증에 실패하였습니다.", "msg": "IP주소 및 도메인주소를 등록해 주세요."}
+    monkeypatch.setitem(lw.config.KEYS, "LAW_OC", "someone")
+    monkeypatch.setattr(lw.httpx, "get", lambda *a, **k: R())
+    with pytest.raises(RuntimeError, match="IP"):
+        lw._fetch({"name": "자연재해대책법"}, 3)

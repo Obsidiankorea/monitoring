@@ -74,6 +74,8 @@ def _fetch(w: dict, nw: int | None) -> list[dict]:
                 body = r.json()
             except ValueError:
                 raise RuntimeError(r.text[:120].strip() or "JSON 이 아닌 응답")
+            if isinstance(body, dict) and "검증" in str(body.get("result", "")):   # 200 으로 온다 — 서버 IP 가 법제처에 등록되지 않음
+                raise RuntimeError(f"법제처 사용자 검증 실패 — 이 서버의 IP · 도메인을 법제처 OPEN API 에 등록해야 한다({body.get('msg', '')[:60]})")
             return [x for x in _rows(body, f) if x.get(f) == name and w.get("org", "") in x.get("지자체기관명", w.get("org", ""))]
         except (httpx.HTTPError, RuntimeError) as e:
             err = e

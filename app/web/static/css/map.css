@@ -146,6 +146,10 @@ button { font-family: inherit; }
 @media (prefers-reduced-motion: reduce) { #rep-job .spin { animation-duration: 3s; } }
 #rep-bs .ob .warn { color: #ffb547; font-weight: 700; }
 #colwarn { margin-left: 8px; min-height: 26px; padding: 0 10px; font: 700 12px var(--sans); color: #1a0f00; background: #ffb547; border: 0; border-radius: 999px; cursor: pointer; text-shadow: none; }
+#acct-dot { margin-left: 8px; min-width: 26px; min-height: 26px; padding: 0 9px; font: 700 12px var(--sans); color: #fff; background: #E5484D; border: 0; border-radius: 999px;
+  cursor: pointer; text-shadow: none; box-shadow: 0 0 0 2px color-mix(in oklab, #E5484D 35%, transparent); }
+#acct-dot[hidden] { display: none; }
+#acct-dot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #colwarn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #colwarn-pop { margin-top: 6px; max-width: 340px; padding: 10px 12px; font: 13px/1.5 var(--sans); color: var(--ink-2); text-shadow: none;
   background: var(--panel); border: 1px solid #8a5a12; border-radius: 10px; }
@@ -2332,18 +2336,27 @@ body.sj-on > header, body.sj-on #stage, body.sj-on #tl, body.sj-on #rail { displ
 #who a, #who button { min-height: 28px; padding: 0 8px; font: 600 12px var(--sans); color: var(--accent); background: none; border: 0; border-radius: 999px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }
 #who a:hover, #who button:hover { background: color-mix(in oklab, var(--accent) 14%, transparent); }
 #who :is(a, button):focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-#who.fold > :not(#who-fold) { display: none; }
-#who.fold { padding: 4px; }
-#who #who-fold { min-width: 28px; justify-content: center; color: var(--ink-2); }
-#who .who-as { display: inline-flex; align-items: center; gap: 6px; padding-left: 4px; }
-#who .who-as b { color: var(--accent); font-weight: 700; }
-#who .who-as select { min-height: 28px; padding: 0 6px; font: 600 12px var(--sans); color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; }
-#who .who-as select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-#vw-pop { position: fixed; left: 10px; bottom: 52px; z-index: 31; width: min(320px, calc(100vw - 20px)); display: grid; gap: 8px; padding: 12px;
-  font: 13px/1.5 var(--sans); color: var(--ink-2); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgb(0 0 0 / .35); }
-#vw-pop[hidden] { display: none; }
-#vw-pop p { margin: 0; } #vw-pop small { font-size: 12px; }
-#vw-pop button { min-height: 36px; padding: 0 10px; font: 600 13px var(--sans); color: var(--ink); background: color-mix(in oklab, var(--panel) 70%, var(--line)); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; text-align: left; }
-#vw-pop button.pri { color: #06121f; background: var(--accent); border-color: var(--accent); }
-#vw-pop button:disabled { opacity: .5; cursor: default; }
-#vw-pop button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+#who > b { color: var(--accent); font: 700 12px var(--sans); }
+body.tour-on #tools { display: flex; opacity: 1; pointer-events: auto; }
+#tour { position: fixed; inset: 0; z-index: 90; pointer-events: none; }
+#tour .tr-ring { position: fixed; border: 2px solid var(--accent); border-radius: 10px; box-shadow: 0 0 0 9999px rgb(0 0 0 / .55); transition: all .2s ease-out; }
+#tour .tr-ring[hidden] { display: block; left: 50% !important; top: 50% !important; width: 0 !important; height: 0 !important; border: 0; }
+#tour .tr-card { position: fixed; width: min(360px, calc(100vw - 16px)); padding: 14px 16px 12px; pointer-events: auto; font: 14px/1.55 var(--sans); color: var(--ink);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 18px 48px rgb(0 0 0 / .5); }
+#tour .tr-n { font: 600 12px var(--mono); color: var(--ink-3); }
+#tour h3 { margin: 2px 0 6px; font-size: 16px; font-weight: 700; }
+#tour p { margin: 0 0 10px; color: var(--ink-2); } #tour p b { color: var(--ink); }
+#tour kbd { padding: 0 5px; font: 600 12px var(--mono); border: 1px solid var(--line); border-radius: 4px; }
+#tour .tr-th, #tour .tr-bt { display: flex; gap: 6px; align-items: center; } #tour .tr-th { margin-bottom: 10px; } #tour .tr-th[hidden] { display: none; } #tour .sp { flex: 1; }
+#tour button { min-height: 34px; padding: 0 12px; font: 600 13px var(--sans); color: var(--ink); background: color-mix(in oklab, var(--panel) 70%, var(--line)); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+#tour button.pri, #tour .tr-th button[aria-pressed="true"] { color: #06121f; background: var(--accent); border-color: var(--accent); }
+#tour button:disabled { opacity: .45; cursor: default; }
+#tour button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#tour [data-tr="skip"] { background: none; border-color: transparent; color: var(--ink-3); }
+@media (prefers-reduced-motion: reduce) { #tour .tr-ring { transition: none; } }
+#tools .ib.alert { position: relative; color: var(--ink); }
+#tools .ib.alert::after { content: ""; position: absolute; top: 5px; right: 5px; width: 9px; height: 9px; border-radius: 50%; background: #E5484D; box-shadow: 0 0 0 2px var(--panel); }
+#prefs .tabs button.alert::after { content: " ●"; color: #E5484D; }
+#prefs .acct-pend { font-style: normal; font-weight: 700; color: #FF6B6B; }
+#prefs .acct-me { font-weight: 600; }
+#prefs #acct-as { min-height: 30px; padding: 0 8px; font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
