@@ -2312,6 +2312,9 @@ body.sj-on > header, body.sj-on #stage, body.sj-on #tl, body.sj-on #rail { displ
 #who a, #who button { min-height: 28px; padding: 0 8px; font: 600 12px var(--sans); color: var(--accent); background: none; border: 0; border-radius: 999px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }
 #who a:hover, #who button:hover { background: color-mix(in oklab, var(--accent) 14%, transparent); }
 #who :is(a, button):focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+#who.fold > :not(#who-fold) { display: none; }
+#who.fold { padding: 4px; }
+#who #who-fold { min-width: 28px; justify-content: center; color: var(--ink-2); }
 #who .who-as { display: inline-flex; align-items: center; gap: 6px; padding-left: 4px; }
 #who .who-as b { color: var(--accent); font-weight: 700; }
 #who .who-as select { min-height: 28px; padding: 0 6px; font: 600 12px var(--sans); color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; }
