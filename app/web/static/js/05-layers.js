@@ -254,6 +254,34 @@ function regSig(reg) {
 }
 /* 세부구역 — 군마다 나뉜 특보구역(서버 domain/regions.py SUBZONES 와 같다). 다 들면 그 군 전체로 적는다 */
 const SUBZ = { 합천: ["서북", "중", "남"], 산청: ["북", "서남", "동남"], 함양: ["중", "서북"], 거창: ["북", "남"], 하동: ["북", "남"] };
+/* 세부구역의 읍면 — 기상청 특보구역 세분화(2026.6.1. 시행, 2026.5.12. 보도자료 붙임2). 지도에 그 구역만 두른다 */
+const SUBZ_EMD = {
+  합천: { 서북: ["가야면", "야로면", "묘산면", "봉산면", "대병면"], 중: ["합천읍", "용주면", "대양면", "율곡면", "쌍책면", "초계면", "적중면", "덕곡면", "청덕면"],
+          남: ["쌍백면", "삼가면", "가회면"] },
+  산청: { 북: ["산청읍", "차황면", "오부면", "생초면", "금서면"], 서남: ["삼장면", "시천면"], 동남: ["단성면", "신안면", "생비량면", "신등면"] },
+  함양: { 서북: ["서상면", "서하면"], 중: ["마천면", "함양읍", "휴천면", "유림면", "수동면", "지곡면", "안의면", "백전면", "병곡면"] },
+  거창: { 북: ["주상면", "웅양면", "고제면", "북상면", "위천면", "가북면"], 남: ["거창읍", "마리면", "남상면", "남하면", "신원면", "가조면"] },
+  하동: { 북: ["화개면", "청암면", "악양면"], 남: ["하동읍", "적량면", "횡천면", "고전면", "금남면", "진교면", "양보면", "북천면", "옥종면", "금성면"] },
+};
+/* 한 시군의 특보 두르기 — [{lv, geom}]. geom 이 null 이면 시군 전체. 세부구역만 걸렸으면 그 읍면을 합친 모양(읍면 경계를 처음 한 번 받는다).
+   세부마다 수준이 다르면(서남부 경보 · 북부 주의보) 수준마다 따로 */
+function alertParts(sig, list) {
+  const top = list.reduce((a, b) => (LVRANK[b.lv] > LVRANK[a.lv] ? b : a)).lv, subs = SUBZ[sig];
+  if (!subs || !SUBZ_EMD[sig]) return [{ lv: top, geom: null }];
+  const by = {};
+  for (const s of subs) {
+    const hit = list.filter(it => !it.sub || it.sub === s);
+    if (hit.length) (by[hit.reduce((a, b) => (LVRANK[b.lv] > LVRANK[a.lv] ? b : a)).lv] ||= []).push(s);
+  }
+  const lvs = Object.keys(by);
+  if (lvs.length === 1 && by[lvs[0]].length === subs.length) return [{ lv: top, geom: null }];
+  if (!ETOPO) { ensureEmd().then(() => drawAlerts()); return [{ lv: top, geom: null }]; }   // 경계를 받는 동안은 시군 전체로
+  return lvs.map(lv => {
+    const names = by[lv].flatMap(s => SUBZ_EMD[sig][s] || []);
+    const gs = ETOPO.objects.emd.geometries.filter(g => g.properties.sigun === sig && names.includes(g.properties.name));
+    return { lv, geom: gs.length ? topojson.merge(ETOPO, gs) : null };
+  });
+}
 /* [[시군, 세부('' = 전체)], …] → '창원 · 진주 · 하동<sup>북부</sup>'. 관제순(창원 · 진주 · 통영 … 합천), 같은 시군은 한 번,
    세부는 윗첨자(둘이면 '북·서남부' — '부'는 끝에 한 번, 그 군의 세부가 다 들면 생략하고 시군만). 경남 열여덟이 다 들면 '경남 전역' */
 function regsHtml(items) {
@@ -358,9 +386,8 @@ function drawAlerts() {
   for (const [sig, list] of Object.entries(ALERTS.bySig)) {
     const ft = FEAT.find(f => f.properties.sigun === sig);
     if (!ft) continue;
-    const top = list.reduce((a, b) => (LVRANK[b.lv] > LVRANK[a.lv] ? b : a));
-    const id = `wc${ft.properties.id}`, dClip = PATH(ft);
-    defs.push(`<clipPath id="${id}"><path d="${dClip}"/></clipPath>`);
+    const id0 = `wc${ft.properties.id}`;
+    defs.push(`<clipPath id="${id0}"><path d="${PATH(ft)}"/></clipPath>`);
     // ⚠️ 작은 섬(4㎢ 미만 = 16칸)까지 두르면 통영·거제 바다가 점선으로 어지럽다 — 선은 큰 땅에만
     const polys = ft.geometry.type === "Polygon" ? [ft.geometry.coordinates] : ft.geometry.coordinates;
     const areaCells = ring => Math.abs(ring.reduce((s, p, i) => {
@@ -368,11 +395,18 @@ function drawAlerts() {
       return s + p[0] * q[1] - q[0] * p[1];
     }, 0)) / 2;
     const big = polys.filter(p => areaCells(p[0]) >= 16);
-    const d = PATH({ type: "MultiPolygon", coordinates: big.length ? big : polys });
-    const L = (cls, sw, dash = "") => `<path class="wl ${cls}" d="${d}" clip-path="url(#${id})" stroke-width="${(sw * 2).toFixed(1)}"${dash ? ` stroke-dasharray="${dash}"` : ""}/>`;
-    if (top.lv === "severe") lines.push(L("severe", w * 1.3), L("gap", w * 0.85), L("severe", w * 0.45));
-    else if (top.lv === "warn") lines.push(L("warn", w));
-    else lines.push(L("watch", w, `${(10 * sc).toFixed(1)} ${(6 * sc).toFixed(1)}`));
+    const dAll = PATH({ type: "MultiPolygon", coordinates: big.length ? big : polys });
+    alertParts(sig, list).forEach((pt, i) => {
+      let d = dAll, id = id0;
+      if (pt.geom) {                                   // 세부구역만 — 그 읍면을 합친 모양을 두르고, 시군 밖으로 삐진 것은 시군 모양으로 자른다
+        id = `${id0}s${i}`; d = PATH(pt.geom);
+        defs.push(`<clipPath id="${id}" clip-path="url(#${id0})"><path d="${d}"/></clipPath>`);
+      }
+      const L = (cls, sw, dash = "") => `<path class="wl ${cls}" d="${d}" clip-path="url(#${id})" stroke-width="${(sw * 2).toFixed(1)}"${dash ? ` stroke-dasharray="${dash}"` : ""}/>`;
+      if (pt.lv === "severe") lines.push(L("severe", w * 1.3), L("gap", w * 0.85), L("severe", w * 0.45));
+      else if (pt.lv === "warn") lines.push(L("warn", w));
+      else lines.push(L("watch", w, `${(10 * sc).toFixed(1)} ${(6 * sc).toFixed(1)}`));
+    });
     // 딱지 — 시군명 밑에 쌓는다(센 것부터)
     // 같은 특보는 딱지 하나 — 세부구역을 모아 '· 북·남', 군의 세부가 다 들면 시군 전체(10-27 거창 북부 · 남부가 딱지 둘이었다)
     const items = [];

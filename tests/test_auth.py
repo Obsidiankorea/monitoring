@@ -307,3 +307,14 @@ def test_view_saved_per_account_and_admin_default(app_):
     js = t.get("/api/prefs.js").text
     assert "gn-theme" in js and "mine:false" in js and '"9"' not in js
     assert "gn-view" in s.get("/api/prefs.js").text                 # 내 것이 있으면 그것
+
+
+def test_view_auto_saved_with_time_and_owner(app_):
+    """계정마다 마지막 화면 — 저장 시각(_at)과 계정 이름이 prefs.js 에 실려, 다른 계정이 쓰던 브라우저면 바꿔 연다"""
+    main, auth = app_
+    auth.add("a1", "password-1", "do", "A")
+    a = TestClient(main.app)
+    _login(a, "a1", "password-1")
+    assert a.put("/api/prefs", json={"data": {"gn-view": "A"}, "at": "2026-11-20T03:00:00Z"}).json()["at"] == "2026-11-20T03:00:00Z"
+    js = a.get("/api/prefs.js").text
+    assert 'me="a1"' in js and 'at="2026-11-20T03:00:00Z"' in js and "_at" not in js and "gnv-owner" in js

@@ -1866,14 +1866,28 @@ def _view_clean(d) -> dict:
 
 @app.get("/api/prefs.js")
 async def api_prefs_js(request: Request):
-    """map.html 이 다른 스크립트보다 먼저 읽는다 — 이 브라우저에 화면 기억이 없으면 계정 것(없으면 처음 화면)을 깔아 둔다."""
+    """map.html 이 다른 스크립트보다 먼저 읽는다 — 계정마다 마지막 화면.
+    · 이 브라우저의 화면 기억이 다른 계정 것이면(gnv-owner) 지우고 이 계정 것(없으면 처음 화면)으로 바꾼다.
+    · 같은 계정이어도 다른 PC 에서 더 늦게 저장했으면(_at > gnv-at) 그것으로.
+    · 기억이 하나도 없으면 계정 것 · 처음 화면. 주인 표시가 없던 기억(이 기능 전)은 지우지 않고 이 계정 것으로 삼는다.
+    이 PC(로컬)는 계정이 없어 예전처럼 — 비었을 때만 처음 화면."""
     k = _view_key(request)
+    u = getattr(request.state, "user", None) or {}
     mine = db.get_setting(k, None) if k else None
     dflt = db.get_setting("view:default", None)
-    data = json.dumps(mine or dflt or None, ensure_ascii=False).replace("<", "\\u003c")
-    body = ("(function(){var d=" + data + ";window.GN_VIEW={mine:" + json.dumps(bool(mine)) + ",def:" + json.dumps(bool(dflt))
-            + ",can:" + json.dumps(bool(k)) + "};try{var S=localStorage;for(var i=0;i<S.length;i++)if(S.key(i).indexOf('gn-')===0)return;"
-            "if(d)for(var x in d)S.setItem(x,d[x]);}catch(e){}})();")
+    at = str((mine or {}).get("_at") or "")
+    d = {x: v for x, v in (mine or dflt or {}).items() if x.startswith("gn-")}
+    me = u.get("login") if k and not u.get("local") else None
+    data = json.dumps(d or None, ensure_ascii=False).replace("<", "\\u003c")
+    body = ("(function(){var d=" + data + ",me=" + json.dumps(me) + ",at=" + json.dumps(at)
+            + ";window.GN_VIEW={mine:" + json.dumps(bool(mine)) + ",def:" + json.dumps(bool(dflt)) + ",can:" + json.dumps(bool(k)) + ",me:me};"
+            "try{var S=localStorage,own=S.getItem('gnv-owner'),lat=S.getItem('gnv-at')||'',ks=[],i,x;"
+            "for(i=0;i<S.length;i++){x=S.key(i);if(x.indexOf('gn-')===0&&x!=='gn-ct-pin')ks.push(x);}"
+            "var put=!ks.length,clear=false;"
+            "if(me){if(own&&own!==me){put=clear=true;}else if(!own){S.setItem('gnv-owner',me);}"
+            "else if(at&&at>lat){put=clear=true;}}"
+            "if(!put)return;if(clear)for(i=0;i<ks.length;i++)S.removeItem(ks[i]);"
+            "if(d)for(x in d)S.setItem(x,d[x]);if(me){S.setItem('gnv-owner',me);S.setItem('gnv-at',at);}}catch(e){}})();")
     return Response(body, media_type="application/javascript", headers={"Cache-Control": "no-store"})
 
 
@@ -1882,8 +1896,9 @@ async def api_prefs_put(body: dict, request: Request):
     k = _view_key(request)
     if not k:
         raise HTTPException(403, "로그인한 계정만 저장한다")
-    await asyncio.to_thread(db.put_setting, k, _view_clean(body.get("data")))
-    return {"ok": True}
+    at = str(body.get("at") or datetime.now().isoformat(timespec="seconds"))[:32]     # 화면이 보낸 저장 시각(다른 PC 와 견준다)
+    await asyncio.to_thread(db.put_setting, k, {**_view_clean(body.get("data")), "_at": at})
+    return {"ok": True, "at": at}
 
 
 @app.put("/api/prefs/default")                            # 관리자만(WRITE_OK 에 없다)

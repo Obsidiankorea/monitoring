@@ -36,7 +36,9 @@
   document.body.appendChild(el);
   whoFold(el);
   viewMenu(u);
+  viewAuto();
   $("who-out").addEventListener("click", async () => {
+    await viewSave(false);                                // 이 계정의 마지막 화면을 남기고 나간다
     try { await fetch("/api/auth/logout", { method: "POST" }); } catch {}
     location.replace("/login.html");
   });
@@ -69,12 +71,34 @@ function whoFold(el) {
 /* 관리자 · 도 사용자의 '시군 화면으로 보기' — 화면(고정 · 시군 밖 감추기)만 시군처럼. 자료 범위(연락처 등)는 관리자 그대로 */
 const AS_SIGUN = new URLSearchParams(location.search).get("as");
 
+/* 계정마다 마지막 화면 — 바꾼 것이 있으면 2분마다 · 창을 숨기거나 닫을 때 · 로그아웃할 때 계정에 저장(PUT /api/prefs).
+   다음에 그 계정으로 들어오면 /api/prefs.js 가 그 화면으로 연다(다른 계정이 쓰던 브라우저여도). 연락처 잠금 번호는 빼고 */
+const viewData = () => { const d = {}; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k.startsWith("gn-") && k !== "gn-ct-pin") d[k] = localStorage.getItem(k); } } catch {} return d; };
+let VIEW_SENT = null;
+async function viewSave(leaving) {
+  const data = viewData(), s = JSON.stringify(data);
+  if (s === VIEW_SENT) return;
+  const at = new Date().toISOString(), body = JSON.stringify({ data, at });
+  if (leaving && body.length > 60000) return;            // 닫히는 중에는 64KB 까지만 보낼 수 있다(다음 2분 저장에 맡긴다)
+  try {
+    const r = await fetch("/api/prefs", { method: "PUT", headers: { "content-type": "application/json" }, body, keepalive: !!leaving });
+    if (r.ok) { VIEW_SENT = s; try { localStorage.setItem("gnv-at", at); } catch {} }
+  } catch {}
+}
+function viewAuto() {
+  if (!window.GN_VIEW?.me) return;
+  VIEW_SENT = JSON.stringify(viewData());                 // 연 그대로는 다시 보내지 않는다
+  setInterval(() => viewSave(false), 120000);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") viewSave(true); });
+  addEventListener("pagehide", () => viewSave(true));
+}
+
 /* 화면 저장 — 이 브라우저의 화면 기억(gn-*)을 계정에. 새 PC · 새 주소에서는 저장한 것으로 시작(/api/prefs.js) */
 function viewMenu(u) {
   const V = window.GN_VIEW || {}, b = $("who-view");
   const pop = document.createElement("div");
   pop.id = "vw-pop"; pop.hidden = true; pop.setAttribute("role", "dialog"); pop.setAttribute("aria-label", "화면 저장");
-  pop.innerHTML = `<p>지도 · 층 · 창 위치 같은 지금 화면을 계정에 저장합니다. 다른 PC나 새 주소에서 로그인하면 이 화면으로 시작합니다.</p>
+  pop.innerHTML = `<p>지도 · 층 · 창 위치 같은 화면은 계정마다 <b>저절로</b> 저장됩니다(2분마다 · 창을 닫거나 로그아웃할 때). 다음에 이 계정으로 들어오면 어느 PC에서든 마지막 화면으로 시작합니다.</p>
     <button type="button" data-v="save" class="pri">지금 화면을 내 화면으로 저장</button>
     <button type="button" data-v="load"${V.mine || V.def ? "" : " disabled"}>${V.mine ? "저장한 내 화면으로 되돌리기" : "처음 화면으로 되돌리기"}</button>
     ${u.role === "admin" ? `<button type="button" data-v="def">지금 화면을 모든 계정의 처음 화면으로</button>` : ""}
@@ -94,7 +118,9 @@ function viewMenu(u) {
     }
     if (v === "def" && !confirm("지금 화면을 모든 계정의 처음 화면으로 저장할까요? 화면을 따로 저장하지 않은 사람이 새 브라우저에서 열 때 이 화면으로 시작합니다.")) return;
     try {
-      const r = await fetch(v === "def" ? "/api/prefs/default" : "/api/prefs", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ data: mine() }) });
+      const at = new Date().toISOString();
+      const r = await fetch(v === "def" ? "/api/prefs/default" : "/api/prefs", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ data: mine(), at }) });
+      if (v !== "def" && r.ok) { VIEW_SENT = JSON.stringify(mine()); try { localStorage.setItem("gnv-at", at); } catch {} }
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.status);
       toast(v === "def" ? "모든 계정의 처음 화면으로 저장했습니다" : "내 화면으로 저장했습니다 — 다른 PC에서도 이 화면으로 시작합니다");
       show(false);
