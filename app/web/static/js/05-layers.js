@@ -13,7 +13,7 @@ const OVL = [
   { id: "tide", label: "조위", short: "조위", key: "O" },
   { id: "temp", label: "기온", short: "기온", key: "E" },
   { id: "snow", label: "눈 · 적설(빗금 · cm)", short: "눈", key: "" },
-  { id: "snowonly", label: "눈만 보기(비 색 숨김 · 깊이 색)", short: "눈만", key: "", parent: "snow" },
+  { id: "snowonly", label: "적설 — 쌓인 눈 깊이(비 색 숨김)", short: "적설", key: "7", parent: "snow" },
   { id: "relief", label: "지형 음영(산 · 골짜기)", short: "지형", key: "Y", grp: "geo" },
   { id: "low", label: "저지대(표고 10m 이하)", short: "저지대", key: "Z", grp: "geo" },
   { id: "water", label: "강 · 호수 · 저수지", short: "물", key: "", grp: "geo" },

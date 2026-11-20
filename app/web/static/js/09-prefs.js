@@ -164,7 +164,7 @@ function openPrefs() {
     <div class="row"><span class="note" id="pf-wiki-st">읽는 중…</span></div>
     <h4>데모</h4>
     <div class="demo-list" id="pf-demo"><div class="al-none">읽는 중…</div></div>
-    <div class="keys"><kbd>1</kbd>~<kbd>8</kbd> 층 · <kbd>Space</kbd> 재생 · <kbd>←</kbd><kbd>→</kbd> 한 장씩 · <kbd>L</kbd> 패널 · <kbd>A</kbd> 특보 · <kbd>S</kbd> 관측소 · <kbd>V</kbd> 지점 값 · <kbd>B</kbd> 누적 기준 · <kbd>F</kbd> 누적 예상 · <kbd>H</kbd> 최근 1시간 · <kbd>G</kbd> 위 카드 가득 · <kbd>R</kbd> 실시간 감시 · <kbd>Q</kbd> 초단기예측 이미지 · <kbd>W</kbd> 바다 위젯 · <kbd>C</kbd> 지도 위치 · <kbd>P</kbd> 화면 재생 · <kbd>T</kbd> 테스트 · <kbd>?</kbd> 도움말 · <kbd>Ctrl</kbd>+<kbd>,</kbd> 설정</div>
+    <div class="keys"><kbd>1</kbd>~<kbd>6</kbd> 층 · <kbd>7</kbd> 적설(쌓인 눈) · <kbd>Space</kbd> 재생 · <kbd>←</kbd><kbd>→</kbd> 한 장씩 · <kbd>L</kbd> 패널 · <kbd>A</kbd> 특보 · <kbd>S</kbd> 관측소 · <kbd>V</kbd> 지점 값 · <kbd>B</kbd> 누적 기준 · <kbd>F</kbd> 누적 예상 · <kbd>H</kbd> 최근 1시간 · <kbd>G</kbd> 위 카드 가득 · <kbd>R</kbd> 실시간 감시 · <kbd>Q</kbd> 초단기예측 이미지 · <kbd>W</kbd> 바다 위젯 · <kbd>C</kbd> 지도 위치 · <kbd>P</kbd> 화면 재생 · <kbd>T</kbd> 테스트 · <kbd>?</kbd> 도움말 · <kbd>Ctrl</kbd>+<kbd>,</kbd> 설정</div>
   </div>`;
   prefTabs();
   acctPrefsBind();

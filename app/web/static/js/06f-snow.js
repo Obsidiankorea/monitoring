@@ -2,7 +2,7 @@
 /* ── 눈 · 적설 — 기상청 적설관측(경남 55곳 남짓, /api/snow · 10분마다 수집) ──
    레이어 '눈 · 적설': 강수량 색은 그대로 두고 겹으로만 — 지금 눈이 오는 읍면동(동네예보 실황 강수형태) 흰 빗금 · 비/눈은 성긴 빗금 · 눈 쌓인 지점 ❄ cm(산지는 ▲ · 해발) ·
    강수 누적 줄 ❄ 칩 · 범례 옆 적설 표(지금 · 3시간 · 24시간). 눈이 관측되거나 대설특보가 나면 저절로 켠다(끄면 이 창에서는 그대로 끔).
-   하위 '눈만 보기': 비 색을 거의 지우고 시군을 쌓인 눈 깊이로 칠한다. 지점은 0cm 까지 다 — 서부경남은 눈만 오는 날이 있어 시군을 확대해 볼 때.
+   하위 '적설'(7 키): 비 색을 거의 지우고 시군을 쌓인 눈 깊이로 칠한다. 지점은 0cm 까지 다 — 서부경남은 눈만 오는 날이 있어 시군을 확대해 볼 때.
    SNOW = { tm, active, alert: [시군], falling: [시군], pty: {시군: {snow, mix, rain: [읍면동]}}, stations: [{stn, name, sigun, lon, lat, ht, mt, sd, d3, d24, day}], siguns: {시군: {sd, d3, d24, stn}} }
    ?snow=sample · 테스트(T)는 샘플(실제 관측 아님) */
 const SNOW_SAMPLE = {
@@ -87,7 +87,7 @@ function snowLegend() {
   const st = (SNOW.stations || []).filter(s => s.sd > 0).sort((a, b) => b.sd - a.sd).slice(0, 7);
   const tm = /^\d{12}$/.test(SNOW.tm || "") ? `관측 ${SNOW.tm.slice(8, 10)}:${SNOW.tm.slice(10)}` : "";
   return `<div class="snlg">
-    ${snowOnly() ? `<div class="snsc">${SNOW_ST.map((t, i) => `<span><b style="background:${SNOW_COL[i]}"></b>${t}</span>`).join("")}<span>cm</span></div>` : ""}
+    ${snowOnly() ? `<div class="snsc">${SNOW_ST.map((t, i) => `<span><b style="background:${SNOW_COL[i]}"></b>${t}</span>`).join("")}<span>cm 쌓인 눈</span></div>` : ""}
     <div class="sw"><b class="snk"></b>지금 눈이 오는 곳(실황)</div><div class="sw"><b class="snk m"></b>비와 눈이 섞여 오는 곳</div>
     ${st.length ? `<table><tr><th>적설</th><th>지금</th><th>3시간</th><th>24시간</th></tr>${st.map(s => `<tr${(s.d24 || 0) >= 5 ? ' class="ov"' : ""}><td>${s.mt ? "▲" : ""}${escH(s.name)}</td><td>${snowTxt(s.sd)}cm</td><td>${s.d3 > 0 ? `+${snowTxt(s.d3)}` : "—"}</td><td>${s.d24 > 0 ? snowTxt(s.d24) : "—"}</td></tr>`).join("")}</table>`
       : `<div class="note">쌓인 눈 없음${SNOW.alert?.length ? ` · 대설특보 ${SNOW.alert.join(" · ")}` : ""}</div>`}

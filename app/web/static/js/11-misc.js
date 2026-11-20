@@ -749,6 +749,10 @@ document.addEventListener("keydown", ev => {
   if (!$("prefs").hidden || !$("help").hidden || ev.ctrlKey || ev.metaKey || ev.altKey) return;
   const i = (CASE ? "12" : "123456").indexOf(ev.key);
   if (i >= 0) { stopPlay(); if (HEAT) setHeat(false); pickLayer(keyKind(i)); }
+  else if (ev.key === "7" && !CASE) {                      // 적설 — 쌓인 눈 깊이(누적)로 칠하기 켜고 끄기(06f 눈만 보기)
+    if (snowOnly()) setOverlay("snowonly", false);
+    else { if (!OV.has("snow")) setOverlay("snow", true); setOverlay("snowonly", true); if (!SNOW) toast("적설 자료를 아직 받지 못했다"); }
+  }
   else if ((ev.key === "t" || ev.key === "T") && !CASE) setTest(!test);
   else if ((ev.key === "i" || ev.key === "I") && !CASE) aiToggle();
   else if (ev.key === "l" || ev.key === "L") setTL(!tlOn);
