@@ -336,10 +336,11 @@ function buildBase() {
       style="font-size:${f.toFixed(1)}px;stroke-width:${(f * 0.16).toFixed(1)}px">${p.sigun}</text>`;
   }).join("");
   $("over").innerHTML =
-    `<defs><clipPath id="selclip"><path id="selcp"/></clipPath></defs><g id="walerts"></g><path id="hl"/><path id="selh"/><path id="sel"/><g id="emdn"></g><g id="wlab"></g><g id="stns"></g><g id="safg"></g><g id="rivr"></g><g id="tidr"></g><g id="labels"></g><g id="names">${names}</g><g id="tempg"></g>`
+    `<defs><clipPath id="selclip"><path id="selcp"/></clipPath></defs><g id="walerts"></g><g id="wsnow"></g><path id="hl"/><path id="selh"/><path id="sel"/><g id="emdn"></g><g id="wlab"></g><g id="stns"></g><g id="safg"></g><g id="rivr"></g><g id="tidr"></g><g id="labels"></g><g id="names">${names}</g><g id="tempg"></g>`
     + `<g id="wbadge"></g><g id="ranks"></g><g id="hot"></g>`;
   HL = null;
   drawAlerts();
+  drawSnow();
   drawRanks();
   drawHeat();
   drawSel();
@@ -541,7 +542,7 @@ function buildLegend() {
     ${PAL !== "blue" && !kma ? `<div class="note">기상청 색을 아직 못 받았다 — 예측 분포 그림을 한 번 받으면 생긴다. 지금은 청색</div>` : ""}
     ${ACCK.has(kind) && (!CASE || accFix()) ? `<div class="note" title="${accFix() ? `눈금을 ${scTop()}㎜ 끝으로 고정했다(${ACC_FIXED_NOTE[scTop()]})${SLIDE_SC ? " — 화면 재생에서 이 화면만" : " — 화면 모두 같이"}. ` : "누적 눈금은 자료 크기에 맞춰 자동으로 고른다 — 경남 시군 최대 중 가장 큰 값이 끝 눈금 근처에 오게. 갱신해서 커지면 곧바로, 작아지면 다 들 때 바뀐다. "}범례를 오른쪽 클릭하면 색(청색 · 기상청 색 · 다양한 색조)과 눈금(자동 · 30 · 60 · 150 · 300 · 800㎜)을 고른다">${accFix() ? `고정 눈금 ${scTop()}㎜${SLIDE_SC ? " · 이 화면" : ""}` : richOn() ? `자동 눈금 · 끝 ${st.at(-1)}` : "자동 눈금"}${ACC_HI[kind] != null && !CASE ? ` · 최대 ${(+ACC_HI[kind]).toFixed(ACC_HI[kind] >= 100 ? 0 : 1)}㎜` : ""}</div>` : ""}
     <div class="sw"><b class="h"></b>결측(땅)</div>
-    <div class="sw"><b style="background:var(--land)"></b>0 · 비 없음</div>`;
+    <div class="sw"><b style="background:var(--land)"></b>0 · 비 없음</div>${snowLegend()}`;
   const b = $("b-x4");
   if (b && !kma) b.onclick = () => { x4 = !x4; saveSetting({ x4 }); buildLegend(); draw(); paintHead(); };
   lg.querySelector(".band").onclick = togglePal;

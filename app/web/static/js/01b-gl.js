@@ -278,4 +278,5 @@ function glRain(o, gr, fade) {
   glLate();
 }
 /* 자료 지연이면 격자를 옅게(#stage.late) */
-const glLate = () => GL_OK && GL.setPaintProperty("rain", "raster-opacity", $("stage").classList.contains("late") ? 0.4 : 1);
+// 눈만 보기(06f)면 비 색을 거의 지운다 — 시군 깊이 색 · 지점이 앞에 서게
+const glLate = () => GL_OK && GL.setPaintProperty("rain", "raster-opacity", snowOnly() ? 0.12 : $("stage").classList.contains("late") ? 0.4 : 1);

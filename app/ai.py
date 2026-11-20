@@ -91,7 +91,9 @@ RULE_DEFAULT = {"비상1단계_호우주의보_시군": 4, "비상2단계_호우
                 "산사태_긴급대피_12시간": 150, "산사태_긴급대피_24시간": 210, "하천_통제_시우량": 30, "하천_통제_지속시간": 3,
                 "하천_사전대피_누적": 200, "하천_사전대피_예보시우량": 30, "하천_긴급대피_누적": 200, "하천_긴급대피_시우량": 30,
                 "지하공간_사전대피_15분": 20, "지하공간_사전대피_예보시우량": 55, "지하공간_긴급대피_15분": 30,
-                "지하공간_긴급대피_시우량": 55}
+                "지하공간_긴급대피_시우량": 55,
+                # [[겨울철 대설·한파 종합대책 (경남 자연재난과 업무편람)]] 대설 비상단계 — 호우와 숫자가 다르다
+                "비상1단계_대설주의보_시군": 4, "비상1단계_대설경보_시군": 3, "비상2단계_대설경보_시군": 4}
 _RULES: dict = {}
 _LHU: dict = {}                                       # ladders 의 유형별 판정값 — rules()["v"] 가 같은 동안
 
@@ -123,7 +125,8 @@ def rules() -> dict:
             else:
                 err.append(f"{k} = {got[k]!r} — 양의 정수가 아니다")
         if (v["비상1단계_호우주의보_시군"] < 2 or v["긴급재난문자_1시간_단독"] <= v["긴급재난문자_1시간"]
-                or v["산사태_사전대피_12시간"] <= v["산사태_통제_12시간"] or v["지하공간_긴급대피_15분"] <= v["지하공간_사전대피_15분"]):
+                or v["산사태_사전대피_12시간"] <= v["산사태_통제_12시간"] or v["지하공간_긴급대피_15분"] <= v["지하공간_사전대피_15분"]
+                or v["비상2단계_대설경보_시군"] < v["비상1단계_대설경보_시군"]):
             err.append("단계가 겹친다 — 전부 기본값으로")
             v = dict(RULE_DEFAULT)
         _RULES.update(key=key, val={"v": v, "err": err, "src": "위키" if not err else "위키(일부 기본값)"})
@@ -519,19 +522,35 @@ def _stage(groups: list[dict]) -> dict | None:
     return None
 
 
-# 도 단계 — 특보 기준에 닿으면 그 단계가 된 것으로 본다. 실제와 다르면 사람이 바꾼다(시군과 같은 저장소, 열쇠 '도').
+def _stage_snow(groups: list[dict]) -> dict | None:
+    """대설 — 주의보(경보 시군도 셈) 1개↑ 초기대응 · 주의보 A개↑ 또는 경보 W1개↑ 비상1 · 경보 W2개↑ 비상2(값은 [[판정값]]).
+    비상3(경보 + 3일 이상 대설 전망)은 전망을 사람이 보고 바꾼다."""
+    land = [g for g in groups if not g.get("sea")]
+    w = {s for g in land if g["name"] == "대설경보" for s in g["siguns"]}
+    a = w | {s for g in land if g["name"] == "대설주의보" for s in g["siguns"]}
+    if len(w) >= R("비상2단계_대설경보_시군"):
+        return {"stage": "비상 2단계", "why": f"대설경보 {len(w)}개 시군({R('비상2단계_대설경보_시군')}개 이상)"}
+    if len(a) >= R("비상1단계_대설주의보_시군") or len(w) >= R("비상1단계_대설경보_시군"):
+        return {"stage": "비상 1단계", "why": f"대설주의보 이상 {len(a)}개 · 경보 {len(w)}개 시군"}
+    if a:
+        return {"stage": "초기대응", "why": f"대설주의보 이상 {len(a)}개 시군"}
+    return None
+
+
+# 도 단계 — 특보 기준을 넘으면 그 단계가 된 것으로 본다. 실제와 다르면 사람이 바꾼다(시군과 같은 저장소, 열쇠 '도').
 DO_ORDER = ["상시대비", "초기대응", "비상 1단계", "비상 2단계", "비상 3단계"]
 
 
 def do_stage(groups: list[dict], over: dict | None = None) -> dict | None:
     """지금 도 단계 — stage = 지금(바꾼 값이 있으면 그것), auto = 특보 기준. 특보도 바꾼 값도 없으면 None."""
-    a = _stage(groups)
+    rain, sn = _stage(groups), _stage_snow(groups)
+    a = max((x for x in (rain, sn) if x), key=lambda x: DO_ORDER.index(x["stage"]), default=None)   # 호우 · 대설 중 높은 쪽
     v = (overrides() if over is None else over).get("도")
     ok = bool(v) and v.get("stage") in DO_ORDER
     if not a and not ok:
         return None
     auto = a["stage"] if a else DO_ORDER[0]
-    return {"stage": v["stage"] if ok else auto, "why": a["why"] if a else "호우특보 없음", "auto": auto, "set": ok,
+    return {"stage": v["stage"] if ok else auto, "why": a["why"] if a else "호우 · 대설특보 없음", "auto": auto, "set": ok,
             "set_at": v.get("at") if ok else None, "order": DO_ORDER}
 
 

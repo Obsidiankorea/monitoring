@@ -13,7 +13,9 @@ from collections import Counter
 from datetime import datetime, timedelta
 from functools import lru_cache
 
-from . import ai, river, tide
+from . import ai, river, snow, tide
+
+MAIN_AL = ("호우", "대설")        # 보고 머리에 시군까지 적는 특보 — 그 밖의 특보는 이름만
 
 FAM_SHORT = {"산사태": "산사태", "하천": "하천", "지하공간": "지하공간", "침수·해안": "침수·해안", "야외·기타": "야외"}
 CONTACTS = ("연락처 · 담당자는 위키에 두지 않는다(실명 · 전화번호) → 원문에서: "
@@ -371,11 +373,11 @@ def _report(base: str, sigun: str | None = None, mode: str = "all") -> dict:
         return _report_sigun(base, sigun)
     o = overview(base)
     rows = o["rows"]
-    hoou = [(g["name"], g["siguns"]) for g in o["groups"] if g["name"].startswith("호우")]
-    others = [g["name"] for g in o["groups"] if not g["name"].startswith("호우")]
+    hoou = [(g["name"], g["siguns"]) for g in o["groups"] if g["name"].startswith(MAIN_AL)]
+    others = [g["name"] for g in o["groups"] if not g["name"].startswith(MAIN_AL)]
     sit = [f"{_when(o['tm'])} 실황" + (" · 취약시간대(21~06시)" if o["night"] else "") +
            (" · 특보는 산출값(가상)" if o["computed"] else "")]
-    sit.append("특보: " + (" · ".join(f"{n} {len(s)}개 시군({'·'.join(s)})" for n, s in hoou) or "호우특보 없음")
+    sit.append("특보: " + (" · ".join(f"{n} {len(s)}개 시군({'·'.join(s)})" for n, s in hoou) or "호우 · 대설특보 없음")
                + (f" · 그 밖에 {', '.join(others)}" if others else ""))
     if o["stage"]:
         sit.append(ai.do_text(o["stage"]))
@@ -391,6 +393,8 @@ def _report(base: str, sigun: str | None = None, mode: str = "all") -> dict:
     rs = river.summary()
     if rs:
         sit.append(rs["text"])
+    if st_snow := snow.text():
+        sit.append(st_snow)
     sit.append("앞으로 6시간: " + (f"가장 많은 곳 {top_fc['sigun']} {top_fc['fc_emd']} {top_fc['fc_sum']:g}㎜(최대 시간당 {top_fc['fc_peak']:g}㎜)"
                                 if top_fc else "비 예보 거의 없음"))
     relay = [r for r in rows if r["relay"]]
@@ -500,6 +504,8 @@ def _report_sigun(base: str, sigun: str) -> dict:
         sit.append(s["tide"])
     sit.append("우려지역(위키): " + " · ".join(f"{FAM_SHORT[k]} {v}" for k, v in sorted(s["risk_total"].items(), key=lambda x: -x[1])))
     sit.append(ai.river_text(s.get("river"), s.get("flood")))
+    if st_snow := snow.text(sigun):
+        sit.append(st_snow)
     relay = [r for r in s["emd"] if r["relay"]]
     imp = []
     if relay:
@@ -791,7 +797,7 @@ def _outlook(rows: list[dict], n: int = 6) -> list[str]:
 def _calm(o: dict, rows: list[dict], hit: bool = False) -> bool:
     """비가 없고 올 우려도 없다 — 호우특보 · 상황전파(시간당 20㎜ · 일 100㎜) · 재난문자 기준 · 대피 기준 해당 없음,
     앞으로 6시간 시군 합 30㎜ 미만 · 시간당 20㎜ 미만 · 전망(단기예보 · 예비특보) 약함. 이때는 자료를 펼치지 않고 '언제부터 필요한가'만 보인다."""
-    return not (hit or any(g["name"].startswith("호우") for g in o["groups"])
+    return not (hit or any(g["name"].startswith(MAIN_AL) for g in o["groups"]) or snow.latest().get("active")
                 or any(r["relay"] or r["cbs"] or (r["fc_sum"] or 0) >= 30 or (r["fc_peak"] or 0) >= 20
                        or r.get("outlook", {}).get("score", 0) >= .5 for r in rows))     # 단기예보 60㎜↑ · 예비특보도 '올 우려'
 
@@ -906,7 +912,7 @@ def _m_meeting(base, sigun):
     st = (o["stage"] or {}).get("stage")
     name, chair = MEETING.get(st, ("상황판단회의(필요 시)", "본부장이 정한 사람"))
     rows = o["rows"] if not sigun else [r for r in o["rows"] if r["sigun"] == sigun]
-    wx = [f"특보: " + (" · ".join(f"{g['name']} {len(g['siguns'])}개 시군" for g in o["groups"] if g["name"].startswith("호우")) or "호우특보 없음")
+    wx = [f"특보: " + (" · ".join(f"{g['name']} {len(g['siguns'])}개 시군" for g in o["groups"] if g["name"].startswith(MAIN_AL)) or "호우 · 대설특보 없음")
           + (" (산출 · 가상)" if o["computed"] else "")]
     wx += [f"{r['sigun']} — 시간당 최대 {r['r1']:g}㎜{'(' + r['emd1'] + ')' if r['r1'] else ''} · 3시간 {r['r3']:g}㎜ · 24시간 {r['r24']:g}㎜"
            + (f" · 앞으로 6시간 {r['fc_sum']:g}㎜" if r["fc_sum"] else "") for r in sorted(rows, key=lambda x: -x["r24"])[:6]]
@@ -1112,7 +1118,7 @@ def _m_brief(base, sigun):
     o, sits = _scope(base, sigun)
     rows = o["rows"] if not sigun else [r for r in o["rows"] if r["sigun"] == sigun]
     t = _when(o["tm"])
-    head = [f"{t} 현재 · 특보 " + (" · ".join(f"{g['name']} {len(g['siguns'])}개 시군({'·'.join(g['siguns'])})" for g in o["groups"] if g["name"].startswith("호우")) or "없음")
+    head = [f"{t} 현재 · 특보 " + (" · ".join(f"{g['name']} {len(g['siguns'])}개 시군({'·'.join(g['siguns'])})" for g in o["groups"] if g["name"].startswith(MAIN_AL)) or "없음")
             + (" (산출 · 가상)" if o["computed"] else ""),
             "도 비상단계: " + ((o["stage"] or {}).get("stage") or "상시대비")]
     rain = [f"{r['sigun']}: 시간당 {r['r1']:g} · 3시간 {r['r3']:g} · 24시간 {r['r24']:g}㎜ (다우 {r['emd3'] or r['emd1']})"

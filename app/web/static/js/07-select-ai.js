@@ -167,7 +167,7 @@ function setSel(list) {
   sjSync(SELS);                                           // 상황판단 창(또는 지도 창)도 같은 시군으로
   dzSeries();                                             // 우려지역 지구 — 고른 시군 시간별 줄(마우스 글 그래프)
   if (AIW.open && AIW.scope !== (list[0] || null)) setTimeout(aiLoad, 0);   // 시군을 바꾸면 그 시군 보고로
-  drawSel(); drawStations(); hot(null); link(null);
+  drawSel(); drawStations(); drawSnow(); hot(null); link(null);
   watchBadges(); renderAlertLegend(); renderRiverLegend(); renderTideLegend();   // 왼쪽 아이콘 · 목록도 고른 시군으로
   if (WATCH_OPEN) watchOpen(WATCH_OPEN);
   if (!$("ly-fc-pop").hidden) fcLoad();

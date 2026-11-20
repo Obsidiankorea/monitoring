@@ -17,7 +17,7 @@ QUIET_H = 6
 
 
 def alert_names(groups: list[dict]) -> list[str]:
-    return sorted({g["name"] for g in groups or [] if not g.get("sea") and g.get("name", "").startswith(("호우", "태풍"))})
+    return sorted({g["name"] for g in groups or [] if not g.get("sea") and g.get("name", "").startswith(("호우", "태풍", "대설"))})
 
 
 def _iso(t: datetime) -> str:

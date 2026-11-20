@@ -12,6 +12,8 @@ const OVL = [
   { id: "district", label: "우려지역 지구", short: "지구", key: "U" },
   { id: "tide", label: "조위", short: "조위", key: "O" },
   { id: "temp", label: "기온", short: "기온", key: "E" },
+  { id: "snow", label: "눈 · 적설(빗금 · cm)", short: "눈", key: "" },
+  { id: "snowonly", label: "눈만 보기(비 색 숨김 · 깊이 색)", short: "눈만", key: "", parent: "snow" },
   { id: "relief", label: "지형 음영(산 · 골짜기)", short: "지형", key: "Y", grp: "geo" },
   { id: "low", label: "저지대(표고 10m 이하)", short: "저지대", key: "Z", grp: "geo" },
   { id: "water", label: "강 · 호수 · 저수지", short: "물", key: "", grp: "geo" },
@@ -212,6 +214,8 @@ function setOverlay(id, on) {
   if (SAF_IDS.includes(id)) { if (on) setLyOpen(id); loadSafety(); }
   if (id === "tide") { if (on) setLyOpen("tide"); loadTide(); }
   if (id === "temp") loadHeat();
+  if (id === "snow" && !on) SNOW_OFF = true;               // 끈 뒤로는 눈이 와도 이 창에서 저절로 켜지 않는다
+  if (id === "snow" || id === "snowonly") { drawSnow(); buildLegend(); glLate(); if (CARDS && !CARDS.err) renderCards(); }
   if (id === "district") { if (on) setLyOpen(id); loadDistrict(); }
   if (id === "stnval") drawStations();
   if (id === "relief" || id === "low" || id === "bldg") glTerrain();

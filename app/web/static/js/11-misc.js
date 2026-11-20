@@ -842,6 +842,8 @@ async function boot() {
   SELS = (Q.get("sig") || "").split(",").filter(x => ORDER_GN().includes(x)).slice(0, SEL_MAX);   // ?sig=함양,거창 — 고른 채로
   OV = new Set(Q.has("ov") ? Q.get("ov").split(",").filter(Boolean)
                : CASE ? ["alerts"] : (SET.overlays || []));
+  if (SNOW?.sample) OV.add("snow");                        // 샘플(?snow=sample · 테스트)은 켠 채로 연다 — 설정에는 남기지 않는다
+  else loadSnow();                                          // 눈 · 대설특보면 저절로 켠다
   renderLayers();
   if (OV.has("river")) loadRiver();
   if (SAF_IDS.some(id => OV.has(id))) loadSafety();
@@ -917,7 +919,7 @@ bootWatch();
 
 /* ── 수집 경고(!) — 기상청 등에서 받는 것이 제때 안 들어오면 제목 아래에 띄운다(1분마다 /api/status).
    늦음 = 마지막 정상 수집이 그 주기의 3배(최소 15분) 넘게 지났다. 한 번도 받은 적 없는 것(스방 — 서버에서 안 닿는다)은 빼고 ── */
-const COL_NAME = Object.fromEntries([...BOOT_SRC, ["bangjae", "스방 강우"], ["tide", "조위"]]);
+const COL_NAME = Object.fromEntries([...BOOT_SRC, ["bangjae", "스방 강우"], ["tide", "조위"], ["snow", "적설"]]);
 async function colWatch() {
   if (window.GN_SNAP || CASE || test) return;
   const b = $("colwarn"), pop = $("colwarn-pop");

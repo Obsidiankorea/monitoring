@@ -645,7 +645,7 @@ function renderAcc() {
     const at = r.pos ? ` data-x="${r.pos.x}" data-y="${r.pos.y}"` : "";
     const g0 = A.per > 1 && !A.sel && i > 0 && rows[i - 1].sig !== r.sig;
     return `<div class="ar${r.det ? " det" : ""}${g0 ? " g0" : ""}${A.basis === "aws" && r.org === "kma" ? " kma" : ""}" data-s="${r.sig}" data-k="${r.sig}|${r.stn}"${at} title="${r.det ? "" : `${r.sig} — 눌러서 이 시군 ${A.basis === "grid" ? "읍면동" : "지점"} 보기`}">
-      <div class="nm2">${rank}<small>${r.tag ?? r.sig}</small>${r.stn}</div>
+      <div class="nm2">${rank}<small>${r.tag ?? r.sig}</small>${r.stn}${A.sel ? "" : snowChip(r.sig)}</div>
       <div class="abar" title="막대를 누르면 색 — ${tone ? "한 색으로" : "지도 범례 색조로(값마다 그 범주 색)"}"${tone && tcol(r.sum) ? ` style="--tc:${tcol(r.sum)}"` : ""}><div class="o${fore ? (o > 0 ? " fb" : "") : hw >= o - 0.05 && !r.fc ? " all" : ""}" style="width:${o.toFixed(1)}%"></div>
         ${h1 >= 0.1 ? `<div class="h${r.fc ? "" : " end"}${hw >= o - 0.05 ? " all" : ""}" style="left:${(o - hw).toFixed(1)}%;width:${hw.toFixed(1)}%" title="그중 최근 1시간 ${h1.toFixed(1)}㎜"></div>` : ""}
         ${r.fc ? `<div class="f" style="left:${o.toFixed(1)}%;width:${f.toFixed(1)}%"></div>` : ""}

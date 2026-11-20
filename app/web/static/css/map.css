@@ -318,6 +318,29 @@ body.tools-auto.moving #tools { opacity: 1; pointer-events: auto; }
 /* 눈금 숫자는 칸의 **아래 끝**(그 값부터 이 색)에 맞춘다 */
 #legend .ticks { position: relative; width: 44px; font-size: 15px; font-weight: 600; }
 #legend .ticks span { position: absolute; left: 0; transform: translateY(50%); line-height: 1; }
+#wsnow .snl { stroke: #F4F8FF; stroke-width: 1.6; opacity: .85; }
+#wsnow .sna { stroke: none; pointer-events: none; } #wsnow .sna.dim, #wsnow .snf.dim, #wsnow .snp.dim { opacity: .35; }
+#wsnow .snf { stroke: none; opacity: .78; pointer-events: none; }
+#wsnow .snp.mt path { fill: #6B4FA8; stroke: #F4F8FF; stroke-width: 1.5; }
+#wsnow .snp.z circle { fill: var(--panel); stroke: #8DB6E6; stroke-width: 1.4; }
+#legend .snsc { display: flex; gap: 6px; align-items: center; font: 600 11.5px var(--sans); color: var(--ink-2); }
+#legend .snsc span { display: inline-flex; align-items: center; gap: 3px; } #legend .snsc b { width: 12px; height: 12px; border-radius: 2px; }
+#legend .snlg tr.ov td { color: var(--ink); font-weight: 800; }
+#wsnow .snp circle { fill: #2B5C9E; stroke: #F4F8FF; stroke-width: 1.5; }
+#wsnow .snp .ic { fill: #fff; font-family: var(--sans); }
+#wsnow .snp rect { fill: color-mix(in oklab, var(--panel) 88%, transparent); stroke: var(--line); }
+#wsnow .snp text:not(.ic) { fill: var(--ink); font: 700 1em var(--sans); dominant-baseline: auto; }
+:root[data-theme="light"] #wsnow .snl { stroke: #5A7FB5; }
+#legend .snlg { position: absolute; left: 100%; bottom: 0; margin-left: 16px; display: grid; gap: 4px; padding: 8px 10px; white-space: nowrap;
+  background: color-mix(in oklab, var(--panel) 80%, transparent); border: 1px solid var(--line); border-radius: 8px; }
+#legend .snk { width: 18px; height: 12px; border: 1px solid var(--line); background: repeating-linear-gradient(45deg, #F4F8FF 0 2px, transparent 2px 6px); }
+#legend .snk.m { background: repeating-linear-gradient(45deg, #F4F8FF 0 2px, transparent 2px 12px); }
+:root[data-theme="light"] #legend .snk { background: repeating-linear-gradient(45deg, #5A7FB5 0 2px, transparent 2px 6px); }
+:root[data-theme="light"] #legend .snk.m { background: repeating-linear-gradient(45deg, #5A7FB5 0 2px, transparent 2px 12px); }
+#legend .snlg table { border-collapse: collapse; font: 600 12.5px var(--sans); color: var(--ink-2); }
+#legend .snlg th { font-weight: 600; color: var(--ink-3); text-align: left; padding: 1px 8px 1px 0; }
+#legend .snlg td { padding: 1px 8px 1px 0; font-variant-numeric: tabular-nums; } #legend .snlg td:first-child { color: var(--ink); }
+.ar .snc { margin-left: 5px; padding: 0 5px; font: 700 .78em var(--sans); font-style: normal; color: #DCE9FF; background: #2B5C9E; border-radius: 4px; vertical-align: 1px; }
 #legend .sw { display: flex; align-items: center; gap: 8px; font: 500 13px var(--sans); color: var(--ink-2); }
 #legend .sw b { width: 30px; height: 16px; border: 1px solid var(--line); border-radius: 3px; display: inline-block; }
 #legend .sw b.h { background: repeating-linear-gradient(135deg, transparent 0 3px, var(--hatch) 3px 4.5px); }
