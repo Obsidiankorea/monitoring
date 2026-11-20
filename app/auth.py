@@ -277,7 +277,7 @@ def write_ok(role: str, method: str, path: str) -> bool:
     return any(f"{method} {path}" == w or (w.endswith("/") and f"{method} {path}".startswith(w)) for w in WRITE_OK.get(role, ()))
 
 
-NO_MACHINE = ("/api/contacts", "/api/reply", "/api/auth")
+NO_MACHINE = ("/api/contacts", "/api/reply", "/api/field", "/api/auth")
 MACHINE = {"login": "machine", "name": "기계 열쇠", "role": "do", "sigun": None, "machine": True}
 LOCAL = {"login": "local", "name": "이 컴퓨터", "role": "admin", "sigun": None, "local": True}
 DEMO = {"login": "demo", "name": "시연", "role": "do", "sigun": None, "demo": True}   # 시연 서버(8001) — 로그인 없이 도 사용자로

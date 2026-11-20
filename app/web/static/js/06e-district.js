@@ -360,14 +360,17 @@ async function dzContacts(r) {
   const rd = !c.pin && !c.err ? (await dzReplyState())[r.id] : null;
   if (!$("tip").contains(box)) return;
   const ppl = c.people?.[r.id] || [];
+  // 문자 내역 — 펼치면 이 지구 회신 기록 전부(07b 의 /api/reply/history 그리기를 같이 쓴다), 중요한 조치는 맨 위. 연락처 파일이 없어도 기록은 본다
+  const hist = `<details class="rph dzh" data-rph="${escH(r.id)}"><summary>✉ 문자 내역 — 현장 조치 기록${rd ? "" : " (요청 없음)"}</summary><div class="mute">펼치면 읽는다</div></details>`;
   box.innerHTML = c.pin ? `<form class="dz-pin"><input type="password" inputmode="numeric" autocomplete="off" placeholder="연락처 잠금 번호"><button>열기</button></form>`
-    : c.err ? `<span class="mute">${escH(c.err)}</span>` : c.on === false ? `<span class="mute">연락처 파일이 없다</span>`
+    : c.err ? `<span class="mute">${escH(c.err)}</span>` : c.on === false ? `<span class="mute">연락처 파일이 없다</span>${hist}`
     : (rd ? `<div class="tr"><span>현장 회신</span><b class="${rd.warn ? "rpw" : ""}">${escH(sjRpTag(rd))}${rd.warn ? ` — ${escH(rd.warn.text)}` : ` · 요청 ${escH(rd.ask.at.slice(11))}`}</b></div>` : "")
       + (ppl.map((p, n) => {
         const who = (p.who || "").replace(/담당부서\s*/g, "") || `담당${n + 1}`;
         return `<div class="tr"><span>${escH(who)}</span>${p.tel ? `<span class="ctl"><a class="tel" href="tel:${escH(p.tel.replace(/[^0-9-]/g, ""))}">📞 ${escH(p.tel)}</a>`
           + (dzMobile(p.tel) ? `<button type="button" class="sms" data-dzsms="${n}" aria-label="${escH(who)}에게 회신 링크 문자 — 미리보기">✉ 문자</button>` : "") + `</span>` : `<em class="mute">번호 없음</em>`}</div>`;
-      }).join("") || `<span class="mute">이 지구 담당자가 표에 없다</span>`);
+      }).join("") || `<span class="mute">이 지구 담당자가 표에 없다</span>`)
+      + hist;
   box.querySelectorAll("[data-dzsms]").forEach(b => b.addEventListener("click", ev => {
     ev.stopPropagation();
     sjRp(r.id, { name: dzName(r), fam: r.fam, st: dzSer(r)?.st, basis: SJ_BN[ACC_BASIS === "grid" ? "grid" : "aws"], tel: ppl[+b.dataset.dzsms]?.tel, back: b,

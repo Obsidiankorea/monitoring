@@ -42,6 +42,8 @@ STEPS = (("ask", "요청"), ("view", "열람"), ("ack", "확인"), ("doing", "�
 SIDE = {"na": "해당 없음", "help": "지원 필요"}
 STAMPS = ("ack", "doing", "done", "na", "help", "undo")   # undo = 방금 누른 것 취소(지우지 않고 새 줄로 바로잡는다)
 NOTE = "현장 조치 여부를 알려 주세요"
+# 중요한 조치 — 상황실이 먼저 볼 것: 조치 완료 · 지원 필요 · 사진, 메모에 이 낱말이나 '12명' · '3세대'
+IMP_WORDS = ("대피", "통제", "침수", "범람", "붕괴", "산사태", "낙석", "토석", "유실", "고립", "구조", "부상", "사망", "실종", "피해", "위험", "정전", "지원")
 WARN_MIN = 10                                      # 요청하고 이만큼 확인이 없으면 상황실 화면에 경고
 MAX_PEOPLE = 2
 MAX_BODY = 6 * 1024 * 1024                         # 화면이 사진을 줄여 보낸다(긴 변 1600) — 그래도 넘으면 받지 않는다
@@ -198,9 +200,17 @@ def rounds(con, rid: str, n: int = 5, now: str | None = None) -> list[dict]:
         for x in r["ev"]:
             x["t"] = _t(x["at"], a and a["at"])
             x["plus"] = _mins(a["at"], x["at"]) if a else None
+            x["tags"] = tags(x["memo"])
+            x["imp"] = not x.get("x") and (x["k"] in ("done", "help") or x["photo"] or bool(x["tags"]))
             x["label"] = dict(STEPS).get(x["k"]) or SIDE.get(x["k"]) or {"on": "담당자로 등록", "off": "담당에서 빠짐", "note": "덧붙임",
                                                                       "undo": f"취소 — {dict(STEPS, **SIDE).get(x.get('of'), '')}"}.get(x["k"], x["k"])
     return out[::-1][:n]
+
+
+def tags(memo: str) -> list[str]:
+    """메모에서 뽑은 말 — IMP_WORDS 낱말과 사람 · 세대 수. 메모 글(이름이 들 수 있다) 대신 AI 맥락에는 이것만 간다."""
+    m = memo or ""
+    return [w for w in IMP_WORDS if w in m] + re.findall(r"\d+\s*(?:명|세대|가구)", m)[:3]
 
 
 def _t(at: str, base: str | None) -> str:
@@ -609,6 +619,28 @@ def _last_note(r: dict) -> dict | None:
     """요청 한 번에서 마지막으로 남긴 메모 · 사진 — 파견 현황판 지구 줄(잠금 번호를 넣은 화면만)."""
     x = next((e for e in reversed(r["ev"]) if (e.get("memo") or e.get("photo")) and not e.get("x")), None)
     return x and {"t": x["t"], "label": x["label"], "memo": x["memo"], "photo": x["photo"]}
+
+
+def actions(hours: int = 24, now: str | None = None) -> list[dict]:
+    """AI 상황판단에 줄 현장 조치 — 최근 hours 시간에 요청 · 회신이 있던 지구마다 지금 단계 · 지원 필요 · 미확인과 중요한 조치.
+    이름 · 번호 · 메모 글은 넣지 않는다(메모에서 뽑은 낱말 tags 만) — 잠금 없이 AI 맥락으로 간다."""
+    from . import ai
+    now = now or _now()
+    short = {v: k for k, v in ai.SIGUN_FULL.items()}
+    since = (datetime.strptime(now, "%Y-%m-%d %H:%M") - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M")
+    out = []
+    with db.tx() as con:
+        for rid, sg, name in con.execute("SELECT rid, sigun, name FROM duty_link").fetchall():
+            rd = [r for r in rounds(con, rid, 3, now) if (r["ask"] and r["ask"]["at"] >= since) or any(e["at"] >= since for e in r["ev"])]
+            if not rd:
+                continue
+            imp = [{"t": e["at"][5:], "label": e["label"], "tags": e["tags"], "photo": e["photo"]}
+                   for r in rd for e in reversed(r["ev"]) if e["imp"] and e["at"] >= since][:4]
+            out.append({"sigun": short.get(sg, sg), "name": name, "now": rd[0]["now"], "side": rd[0]["side"],
+                        "warn": rd[0]["warn"] and rd[0]["warn"]["text"], "asked": rd[0]["ask"] and rd[0]["ask"]["at"], "imp": imp})
+    out.sort(key=lambda x: x["asked"] or "", reverse=True)
+    out.sort(key=lambda x: (not x["warn"], "지원 필요" not in x["side"]))
+    return out
 
 
 def field_log(a: str, b: str) -> list[dict]:

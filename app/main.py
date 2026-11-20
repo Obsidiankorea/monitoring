@@ -665,6 +665,15 @@ async def api_reply_history(rid: str, request: Request, x_pin: str | None = Head
     return JSONResponse(d, headers={"Cache-Control": "no-store"})
 
 
+@app.get("/api/field/actions")
+async def api_field_actions(request: Request, sigun: str | None = None, hours: int = Query(24, ge=1, le=168)):
+    """현장 조치 요약(문자 회신) — AI 상황판단 맥락용. 이름 · 번호 · 메모 글 없음(메모에서 뽑은 낱말만). 시군 사용자는 자기 시군만."""
+    from . import reply
+    sg = _my_sigun(request) or sigun
+    rows = await asyncio.to_thread(reply.actions, hours)
+    return JSONResponse({"rows": [r for r in rows if not sg or r["sigun"] == sg]}, headers={"Cache-Control": "no-store"})
+
+
 from . import reply as _reply  # noqa: E402 — 회신 화면(/r/…). 같은 망에서는 대시보드 주소로도 열린다(밖에는 app.reply 서버만)
 app.include_router(_reply.router)
 

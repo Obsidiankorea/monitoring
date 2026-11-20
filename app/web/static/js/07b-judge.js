@@ -76,6 +76,8 @@ async function sjRpList() {
     SJ.rp = res.ok ? Object.fromEntries((await res.json()).rows.filter(x => x.round?.ask).map(x => [x.rid, x])) : null;
   } catch { SJ.rp = null; }
 }
+/* 회신 한 줄 — 중요한 조치(완료 · 지원 필요 · 사진 · 대피 · 통제 같은 말, reply.tags)는 ★ 굵게 */
+const sjEvLi = e => `<li class="${e.x ? "x" : ""}${e.imp ? " imp" : ""}">${e.imp ? "★ " : ""}${escH(`${e.t} · ${e.who ? e.who + " · " : ""}${e.label}${e.x ? " (취소됨)" : ""}${e.memo ? " — " + e.memo : ""}`)}${e.photo ? " 📷" : ""}</li>`;
 const sjRpTag = rd => rd.warn ? "확인 없음" : { 요청: "요청함", 열람: "요청함", 확인: "확인", "조치 중": "조치 중", "조치 완료": "완료" }[rd.now] || rd.now;
 /* 상세 담당 칸 아래 — 지금 단계 한 줄 + 펼치면 단계 표(현장 화면 r.html · 현황 reply.html 과 같은 목록을 그린다) */
 function sjRpBox(r) {
@@ -83,7 +85,7 @@ function sjRpBox(r) {
   if (!rd) return "";
   const st = rd.steps.map(s => `<li class="${s.st}"><b>${escH(s.label)}</b><span>${s.st === "done" ? escH([s.t, s.who, s.plus ? `+${s.plus}분` : ""].filter(Boolean).join(" · "))
     : s.st === "skip" ? "건너뜀" : s.st === "next" ? "다음 단계" : ""}</span></li>`).join("");
-  const ev = rd.ev.filter(e => e.k !== "view").map(e => `<li class="${e.x ? "x" : ""}">${escH(`${e.t} · ${e.who ? e.who + " · " : ""}${e.label}${e.x ? " (취소됨)" : ""}${e.memo ? " — " + e.memo : ""}`)}${e.photo ? " 📷" : ""}</li>`).join("");
+  const ev = rd.ev.filter(e => e.k !== "view").map(sjEvLi).join("");
   return `<details class="rpx${rd.warn ? " w" : ""}"><summary><b>현장 회신</b> ${escH(rd.now)}${rd.side.length ? ` · ${escH(rd.side.join(" · "))}` : ""}`
     + `${rd.warn ? ` <em>⚠ ${escH(rd.warn.text)}</em>` : ""}<span class="mute">요청 ${escH(rd.ask.at.slice(11))}${rd.ask.info ? ` · ${escH(rd.ask.info)}` : ""}</span></summary>`
     + `<p class="mute">요청: ${escH(rd.ask.memo)}</p><ol class="tl">${st}</ol>${ev ? `<ol class="ev">${ev}</ol>` : ""}`
@@ -96,13 +98,16 @@ document.addEventListener("toggle", async ev => {
   const box = d.querySelector("div");
   try {
     const res = await fetch(`/api/reply/history?rid=${encodeURIComponent(d.dataset.rph)}`, { headers: { "x-pin": sjPin() }, cache: "no-store" });
+    if (res.status === 404) { box.textContent = "아직 문자 내역이 없다 — 회신 링크 문자를 보내면 여기에 쌓인다"; return; }
     const j = await res.json();
     if (!res.ok) throw new Error(j.detail || res.status);
     d.dataset.got = "1";
     box.className = "rphl";
-    box.innerHTML = j.rounds.map(rd => `<section><h6>${rd.ask ? `${escH(rd.ask.at.slice(5))} 요청 · ${escH(rd.ask.by)}` : "요청 없이 남은 기록"} <span class="mute">→ ${escH(rd.now)}</span></h6>`
+    const imp = j.rounds.flatMap(rd => rd.ev.filter(e => e.imp).reverse()).slice(0, 8);   // 새것부터
+    box.innerHTML = (imp.length ? `<div class="imps"><h6>중요한 조치</h6><ol class="ev">${imp.map(e => `<li class="imp">${escH(`${e.at.slice(5)} · ${e.label}${e.memo ? " — " + e.memo : ""}`)}${e.photo ? " 📷" : ""}</li>`).join("")}</ol></div>` : "")
+      + j.rounds.map(rd => `<section><h6>${rd.ask ? `${escH(rd.ask.at.slice(5))} 요청 · ${escH(rd.ask.by)}` : "요청 없이 남은 기록"} <span class="mute">→ ${escH(rd.now)}</span></h6>`
       + (rd.ask ? `<p class="mute">${escH(rd.ask.memo)}${rd.ask.info ? ` · ${escH(rd.ask.info)}` : ""}</p>` : "")
-      + `<ol class="ev">${rd.ev.filter(e => e.k !== "view").map(e => `<li class="${e.x ? "x" : ""}">${escH(`${e.t} · ${e.who ? e.who + " · " : ""}${e.label}${e.x ? " (취소됨)" : ""}${e.memo ? " — " + e.memo : ""}`)}${e.photo ? " 📷" : ""}</li>`).join("") || `<li class="mute">회신 없음</li>`}</ol></section>`).join("")
+      + `<ol class="ev">${rd.ev.filter(e => e.k !== "view").map(sjEvLi).join("") || `<li class="mute">회신 없음</li>`}</ol></section>`).join("")
       || `<p class="mute">기록이 없다</p>`;
   } catch (e) { box.textContent = `읽지 못했다 — ${e.message}`; }
 }, true);

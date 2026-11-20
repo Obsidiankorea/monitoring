@@ -382,3 +382,25 @@ def test_history_board_note_and_event_flow(tdb, tmp_path, monkeypatch):
     f = [x for x in d["rows"] if x["kind"] == "field"]
     assert [x["step"] for x in f] == ["요청", "조치 완료", "덧붙임", "요청", "덧붙임"] and f[2]["memo"] is True
     assert "통제선" not in str(d) and "김파일" not in str(d)                             # 사건 이력은 잠금 없이 열린다
+
+
+def test_important_actions_and_ai_summary(tdb, tmp_path, monkeypatch):
+    """중요한 조치(완료 · 메모의 대피 · N명)는 ★ 표시 — AI 맥락(/api/field/actions · 보고 칸)에는 낱말만, 메모 글 · 이름은 안 간다."""
+    from app import aireport
+    _setup(tmp_path, monkeypatch)
+    c, pub = TestClient(main.app), TestClient(reply.public_app)
+    T = ["2026-11-18 10:00"]
+    monkeypatch.setattr(reply, "_now", lambda: T[0])
+    url = c.post("/api/reply/ask", json={"rids": [A], "base": "https://r.example", "single": True}).json()["links"][0]["url"]
+    tok = url.rsplit("/", 1)[1]
+    T[0] = "2026-11-18 10:03"
+    pub.post(f"/r/{tok}/stamp", json={"p": "1", "step": "ack"})
+    pub.post(f"/r/{tok}/note", json={"p": "1", "memo": "김파일 이장 마을회관으로 주민 12명 대피"})
+    ev = c.get("/api/reply/history", params={"rid": A}).json()["rounds"][0]["ev"]
+    assert [e["imp"] for e in ev if e["k"] in ("ack", "note")] == [False, True]
+    rows = c.get("/api/field/actions").json()["rows"]
+    assert rows[0]["name"] == "가지구" and rows[0]["imp"][0]["tags"] == ["대피", "12명"]
+    assert "김파일" not in str(rows) and "마을회관" not in str(rows)
+    assert c.get("/api/field/actions", params={"sigun": "거제"}).json()["rows"] == []
+    monkeypatch.setattr(aireport.ai, "_get", lambda base, path, **p: c.get(path, params=p).json())
+    assert any("대피 · 12명" in x for x in aireport._field("", None))

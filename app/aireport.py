@@ -327,7 +327,38 @@ MODES = [("all", "종합"), ("meeting", "상황판단회의"), ("dept", "단계�
          ("control", "통제(지하차도 · 하천)"), ("msg", "재난문자"), ("brief", "상황보고")]
 
 
+FIELD_H = "현장 조치 — 문자 회신(최근 24시간)"
+
+
+def _field(base: str, sigun: str | None) -> list[str]:
+    """현장 조치 — 지구마다 지금 단계 · 지원 필요 · 미확인 · 중요한 조치. 공개 요약 API 로만 읽는다(이름 · 번호 · 메모 글은 오지 않는다)."""
+    try:
+        rows = ai._get(base, "/api/field/actions", **({"sigun": sigun} if sigun else {}))["rows"]
+    except Exception:                           # noqa: BLE001
+        return []
+    out = []
+    for r in rows[:12]:
+        imp = "; ".join(f"{e['t']} {e['label']}" + (f"({' · '.join(e['tags'])})" if e["tags"] else "") + (" · 사진" if e["photo"] else "")
+                        for e in r["imp"])
+        out.append(f"{r['sigun']} {r['name']}: 현장 {r['now']}" + "".join(f" · {s}" for s in r["side"])
+                   + (f" · ⚠ {r['warn']} — 다시 연락 필요" if r["warn"] else "") + (f" — 중요: {imp}" if imp else ""))
+    if len(rows) > 12:
+        out.append(f"그 밖에 {len(rows) - 12}곳")
+    return out
+
+
 def report(base: str, sigun: str | None = None, mode: str = "all") -> dict:
+    """보고에 현장 조치(문자 회신)를 '중요한 점' 바로 뒤에 붙인다 — 상황판단 · 자유 질문(LLM) 모두 이것을 근거로 본다."""
+    r = _report(base, sigun, mode)
+    f = _field(base, sigun)
+    if f:
+        secs = r.setdefault("sections", [])
+        i = next((n + 1 for n, s in enumerate(secs) if s["h"] == "중요한 점"), len(secs))
+        secs.insert(i, {"h": FIELD_H, "items": f})
+    return r
+
+
+def _report(base: str, sigun: str | None = None, mode: str = "all") -> dict:
     """mode — all(종합) · meeting(상황판단회의) · evac(대피 판단) · control(지하차도 · 하천 통제) · msg(재난문자) · brief(상황보고)."""
     if mode and mode != "all":
         fn = {"meeting": _m_meeting, "dept": _m_dept, "evac": _m_evac, "control": _m_control, "msg": _m_msg, "brief": _m_brief}.get(mode)
