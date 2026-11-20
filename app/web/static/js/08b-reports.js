@@ -5,7 +5,10 @@
    타일 오른쪽 누름(· 메뉴 키 · Shift+F10 · 타일의 ⚙) = 그 보고서 옵션창 — 런처(윈도우 앱) 옵션 가운데 서버에서 되는 것. 이 브라우저에 보고서별로 기억하고,
    보낼 때는 기본값과 다른 것만(안 보낸 것은 서버 설정을 따른다). 머리 ⚙ = 전체 설정(받을 때 텔레그램에도).
    17시 대기(등록부 wait) — 서버가 1분마다 묻고, 이 화면은 상태만 1분마다 가볍게(걸린 것이 있을 때만) 물어 타일 · 도구 줄 단추에 표시 */
-const REP = { d: null, g: "전체", busy: null, t0: 0, tick: 0, set: false, back: null, msg: null, w: {}, op: null, opBack: null };
+const REP = { d: null, g: "전체", busy: null, jobs: {}, tick: 0, set: false, back: null, msg: null, w: {}, op: null, opBack: null };
+/* 여러 보고서를 한꺼번에 걸 수 있다 — 보고서 서버는 받은 차례대로 하나씩 만든다(작업끼리 자료 · 기록이 섞이지 않게).
+   REP.jobs = {보고서 id: {name, job, t0(건 때), run(서버가 만들기 시작한 때 | null), exp(예상 초)}} · REP.busy = 하나라도 있나 */
+const repBusy = () => Object.keys(REP.jobs).length;
 const repPref = () => { try { return JSON.parse(localStorage.getItem("gn-rep") || "{}"); } catch { return {}; } };
 function repSave(p) { try { localStorage.setItem("gn-rep", JSON.stringify({ ...repPref(), ...p })); } catch {} }
 const repName = cd => { const m = /filename\*=UTF-8''([^;]+)/i.exec(cd || ""); return m ? decodeURIComponent(m[1]) : ""; };
@@ -36,7 +39,6 @@ function repWhy(r) {
   if (!r.ready) return "준비 중";
   if (d?.demo) return r.live || r.sample ? "" : "시연 샘플이 없다";   // 시연 — 기상상황보고는 지금 시각으로, 나머지는 샘플
   if (d && !d.ready && !d.demo) return "재난상황보고서 서버 토큰이 없다";
-  if (REP.busy && REP.busy !== r.id) return "다른 보고서를 만드는 중 — 서버는 한 번에 하나, 끝나면 누르세요";
   return "";
 }
 /* 17시 대기 표시 — 대기 중(시계) · 준비됨(✓, 누르면 저장해 둔 파일) · 그만둠(사유) */
@@ -50,10 +52,10 @@ function repWaitBadge(r) {
     + `<button type="button" data-wx="${escH(r.id)}" aria-label="${escH(`${r.name} 17시 대기 ${w.state === "waiting" ? "취소" : "지우기"}`)}">${w.state === "waiting" ? "취소" : "지우기"}</button></div>`;
 }
 function repTile(r) {
-  const why = repWhy(r), busy = REP.busy === r.id, off = !!why || busy, d = REP.d || {}, w = REP.w[r.id], rd = w?.state === "ready";
+  const J = REP.jobs[r.id], why = repWhy(r), busy = !!J, off = !!why || busy, d = REP.d || {}, w = REP.w[r.id], rd = w?.state === "ready";
   const th = `<span class="th">${r.thumb ? `<img src="img/reports/${escH(r.id)}.png" alt="" loading="lazy">` : ""}`
     + `<i class="ph" aria-hidden="true"><b></b><u></u><u></u><u></u><u></u><u></u></i>`
-    + (busy ? `<em class="run" role="status"><i class="ldbar"><i></i></i>만드는 중 · <span class="sec">${Math.round((Date.now() - REP.t0) / 1000)}</span>초</em>` : "")
+    + (busy ? `<em class="run" role="status"><i class="ldbar"><i></i></i>${J.run ? `만드는 중 · <span class="sec" data-sec="${escH(r.id)}">${Math.round((Date.now() - J.run) / 1000)}</span>초` : "차례 기다림"}</em>` : "")
     + (!r.ready ? `<em class="soon">준비 중</em>` : "") + (r.ready && repChanged(r) ? `<em class="chg" title="기본값과 다른 옵션이 있다">옵션</em>` : "") + `</span>`;
   const lab = rd ? `${r.name} — 17시 보고서 받기` : `${r.name} 받기${why ? ` — ${why}` : ""}`;
   return `<div class="rt${busy ? " busy" : ""}${r.ready ? "" : " off"}${w ? ` w-${escH(w.state)}` : ""}" data-id="${escH(r.id)}">`
@@ -435,7 +437,7 @@ function repDraw() {
     <nav aria-label="묶음">${gs.map(g => { const n = g === "전체" ? list.length : list.filter(r => r.group === g).length;
       return `<button type="button" data-g="${escH(g)}" aria-pressed="${g === REP.g}" class="${g === REP.g ? "on" : ""}">${escH(g)} <i>${n}</i></button>`; }).join("")}</nav>
     <div class="grid">${shown.map(repTile).join("") || `<p class="mute">이 묶음에는 아직 보고서가 없다</p>`}</div>
-    <p class="msg${REP.msg && !REP.msg.ok ? " bad" : ""}" role="status">${escH(REP.msg?.text || (REP.busy ? "보고서 서버가 만드는 중 — 창을 닫아도(✕) 계속 만들고, 오른쪽 위에 진행이 보인다. 끝나면 저절로 받는다" : "타일을 누르면 받는다 · 오른쪽 누름(⚙)은 옵션 · 구석 단추는 텔레그램으로 보내기만"))}</p></div>
+    <p class="msg${REP.msg && !REP.msg.ok ? " bad" : ""}" role="status">${escH(REP.msg?.text || (repBusy() ? "보고서 서버가 만드는 중 — 여러 개를 걸어 두면 차례대로 만든다. 창을 닫아도(✕) 계속, 오른쪽 위에 진행이 보이고 끝나면 저절로 받는다" : "타일을 누르면 받는다 · 오른쪽 누름(⚙)은 옵션 · 구석 단추는 텔레그램으로 보내기만"))}</p></div>
     <div class="opbg" id="rep-op" hidden></div>${repBsHtml()}`;
   if (REP.bs) $("rep-bs").querySelector(".op").focus();
   else if (REP.op) repOpDraw();
@@ -456,7 +458,7 @@ function repJob(st, text, pct) {
     el = document.createElement("button");
     el.type = "button"; el.id = "rep-job"; el.setAttribute("aria-live", "polite"); el.setAttribute("aria-controls", "rep-jobd");
     el.addEventListener("click", () => {
-      if (REP.busy) return repJobOpen($("rep-jobd").hidden);
+      if (repBusy()) return repJobOpen($("rep-jobd").hidden);
       clearTimeout(REP.jobT); el.hidden = true; repJobOpen(false); openRep();
     });
     const d = document.createElement("div");
@@ -484,10 +486,11 @@ function repJobOpen(on) {
 function repJobDraw() {
   const d = $("rep-jobd");
   if (!d || d.hidden) return;
-  const p = REP.prog || {}, calls = p.calls || [], sec = Math.round((Date.now() - REP.t0) / 1000);
+  const p = REP.prog || {}, calls = p.calls || [];
   const now = !p.running ? "보고서 서버에 묻는 중…" : p.last && p.last.ago <= 5 ? `기상청 '${p.last.label}' 받는 중` : calls.length ? "받은 자료로 그림 · 한글 파일을 만드는 중" : "준비 중";
-  d.innerHTML = `<div class="jd-h"><b>${escH(REP.jobName || "")}</b><span>${sec}초 · 예상 약 ${REP.exp}초</span></div>
-    <div class="jd-now"><i class="spin" aria-hidden="true"></i>${escH(now)}</div>
+  d.innerHTML = Object.values(REP.jobs).map(J => `<div class="jd-h"><b>${escH(J.name)}</b><span>${J.run
+      ? `${repPct(J)}% · ${Math.round((Date.now() - J.run) / 1000)}초 · 예상 약 ${J.exp}초` : "차례 기다림"}</span></div>`).join("")
+    + `<div class="jd-now"><i class="spin" aria-hidden="true"></i>${escH(now)}</div>
     ${calls.length ? `<ul>${calls.map(c => `<li class="${c.fail ? "f" : ""}"><span>${escH(c.label)}</span><b>${c.ok}건</b>${c.fail ? `<em>실패 ${c.fail}</em>` : ""}</li>`).join("")}</ul>` : ""}
     <div class="jd-ft"><button type="button" data-jd="open">보고서 창 열기</button></div>`;
   d.querySelector('[data-jd="open"]').onclick = () => openRep();
@@ -503,20 +506,13 @@ async function repRun(id, mode) {
     } catch (e) { REP.msg = { ok: false, text: `받지 못했다 — ${e.message}` }; }
     return repDraw();
   }
-  if (REP.busy) return;
+  if (REP.jobs[id]) return;                                    // 같은 보고서를 두 번은 걸지 않는다
   const p = repPref(), dl = mode === "dl", tg = mode === "tg" || (dl && !!p.tg && !!REP.d?.tg);
-  REP.busy = id; REP.t0 = Date.now(); REP.msg = null; REP.prog = null; REP.jobName = r.name; repDraw();
   let took = {};
   try { took = JSON.parse(localStorage.getItem("gn-rep-took") || "{}"); } catch {}
-  REP.exp = Math.max(15, Math.round(took[id] || 60));                // 지난번 걸린 시간 — 처음은 60초로 어림
-  const pct = () => Math.min(95, Math.round((Date.now() - REP.t0) / 10 / REP.exp));
-  const jobText = () => `${r.name} 만드는 중 · ${pct()}%`;
-  repJob("busy", jobText(), pct());
-  REP.tick = setInterval(() => {
-    const e = $("rep").querySelector(".rt.busy .sec"); if (e) e.textContent = Math.round((Date.now() - REP.t0) / 1000);
-    repJob("busy", jobText(), pct()); repJobDraw();
-  }, 1000);
-  REP.ptick = setInterval(async () => { try { REP.prog = await getJson("/api/reports/progress"); } catch {} }, 2000);
+  // 예상 — 지난번 걸린 시간(처음은 60초). 차례를 기다리는 동안은 세지 않고, 서버가 그 작업을 시작하면(run) 잰다
+  REP.jobs[id] = { name: r.name, job: r.job || id, t0: Date.now(), run: repBusy() ? null : Date.now(), exp: Math.max(15, Math.round(took[id] || 60)) };
+  REP.busy = id; REP.msg = null; repDraw(); repTick();
   try {
     const res = await fetch("/api/reports/run", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, opts: repSend(r), items: r.compose ? repCmItems() : undefined, extra: r.compose ? repCm().ex : undefined, tg, dl }) });
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || `오류 ${res.status}`);
@@ -532,12 +528,39 @@ async function repRun(id, mode) {
       repBasis(r.name, j.name, j.basis);
     }
   } catch (e) { REP.msg = { ok: false, text: `만들지 못했다 — ${e.message}` }; }
-  clearInterval(REP.tick); clearInterval(REP.ptick); REP.busy = null;
-  if (REP.msg?.ok) { took[id] = (Date.now() - REP.t0) / 1000; try { localStorage.setItem("gn-rep-took", JSON.stringify(took)); } catch {} }
+  const J = REP.jobs[id];
+  delete REP.jobs[id];
+  if (REP.msg?.ok && J.run) { took[id] = (Date.now() - J.run) / 1000; try { localStorage.setItem("gn-rep-took", JSON.stringify(took)); } catch {} }
   const warn = REP.bs?.list?.some(x => x.warn);
-  repJob(!REP.msg?.ok ? "bad" : warn ? "warn" : "ok",
-         !REP.msg?.ok ? `✕ ${r.name} — 만들지 못했다(눌러서 보기)` : `✓ ${r.name} 받았다${warn ? " · ⚠ 기상청 조회 실패 — 눌러서 확인" : ""}`);
+  const done = !REP.msg?.ok ? `✕ ${r.name} — 만들지 못했다(눌러서 보기)` : `✓ ${r.name} 받았다${warn ? " · ⚠ 기상청 조회 실패 — 눌러서 확인" : ""}`;
+  if (repBusy()) { toast(done); repTick(); }                   // 아직 남은 작업이 있으면 알림만 — 띠는 남은 것을 계속 보인다
+  else { REP.busy = null; clearInterval(REP.tick); clearInterval(REP.ptick); REP.tick = REP.ptick = 0; repJob(!REP.msg?.ok ? "bad" : warn ? "warn" : "ok", done); }
   if (!$("rep").hidden) repDraw();
+}
+/* 진행 % — 서버가 그 작업을 시작한 뒤 지난 시간 ÷ 예상(95% 에서 멈춘다). 차례를 기다리는 동안은 0 */
+const repPct = J => J.run ? Math.min(95, Math.round((Date.now() - J.run) / 10 / J.exp)) : 0;
+/* 띠 · 타일 초 · 펼친 목록을 1초마다, 서버 진행을 2초마다 — 서버가 지금 만드는 작업(job)이 시작한 때를 run 으로 잡는다 */
+function repTick() {
+  const draw = () => {
+    const L = Object.entries(REP.jobs);
+    if (!L.length) return;
+    for (const [rid, J] of L) { const e = $("rep").querySelector(`[data-sec="${CSS.escape(rid)}"]`); if (e && J.run) e.textContent = Math.round((Date.now() - J.run) / 1000); }
+    const cur = L.find(([, J]) => J.run) || L[0], wait = L.filter(([, J]) => !J.run).length;
+    const pct = Math.round(L.reduce((a, [, J]) => a + repPct(J), 0) / L.length);
+    repJob("busy", L.length === 1 ? `${cur[1].name} ${cur[1].run ? `만드는 중 · ${pct}%` : "차례 기다림"}`
+      : `보고서 ${L.length}개 — ${cur[1].name} 만드는 중${wait ? ` · ${wait}개 차례 기다림` : ""} · ${pct}%`, pct);
+    repJobDraw();
+  };
+  draw();
+  if (!REP.tick) REP.tick = setInterval(draw, 1000);
+  if (!REP.ptick) REP.ptick = setInterval(async () => {
+    try { REP.prog = await getJson("/api/reports/progress"); } catch { return; }
+    const P = REP.prog;
+    if (!P.running) return;
+    for (const J of Object.values(REP.jobs))                    // 서버가 이 작업을 만들기 시작했다 — 그때부터 잰다
+      if (J.job === P.job && !J.run) J.run = Date.now() - (P.elapsed || 0) * 1000;
+    if (!$("rep").hidden && !REP.op) repDraw();
+  }, 2000);
 }
 /* 자료 기준 시각 팝업 — 만들기가 끝나면 이번 파일에 쓴 기상청 자료의 발표 · 기준 시각(문서에는 안 넣는다) + 우리 자료 시각.
    서버가 보낸 것만(없으면 안 띄운다). 닫기 · Esc · 바깥 누름 */
@@ -576,7 +599,7 @@ async function repWait(id, on) {
 async function repPoll() {
   try { REP.w = (await getJson("/api/reports/wait")).wait || {}; } catch { return; }
   repMark();
-  if (!$("rep").hidden && !REP.busy && !REP.op) repDraw();        /* 옵션창을 고치는 중이면 다시 그리지 않는다 */
+  if (!$("rep").hidden && !repBusy() && !REP.op) repDraw();        /* 옵션창을 고치는 중이면 다시 그리지 않는다 */
 }
 function repMark() {
   const v = Object.values(REP.w), st = v.some(x => x.state === "ready") ? "ready" : v.some(x => x.state === "waiting") ? "waiting" : "", b = $("b-rep");
