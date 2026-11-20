@@ -41,7 +41,7 @@ td img { width: 96px; height: 72px; object-fit: cover; border-radius: 4px; displ
     <div class="row">
       <label class="f">연락처 잠금 번호<input type="password" id="pin" inputmode="numeric" autocomplete="off" style="width:120px"></label>
       <label class="f">시군<select id="sigun"></select></label>
-      <label class="f" style="flex:1;min-width:240px">현장에서 열 주소 — 회신 전용 서버(밖에서 닿는 주소)
+      <label class="f" style="flex:1;min-width:240px">현장에서 열 주소 — 회신 전용 서버(밖에서 열리는 주소)
         <input type="text" id="base" placeholder="비우면 지금 이 주소"></label>
     </div>
     <div id="pick"><p class="msg">시군을 고르면 지구가 나옵니다.</p></div>
@@ -124,7 +124,7 @@ $("#ask").onclick = async () => {
 
 async function load() {
   const r = await fetch("/api/reply/list", { headers: hdr() }).catch(() => null);
-  if (!r) return say("#rowmsg", "현황을 읽지 못했습니다 — 서버에 닿지 않습니다. 30초 뒤 다시 읽습니다.", true);
+  if (!r) return say("#rowmsg", "현황을 읽지 못했습니다 — 서버에 연결하지 못했습니다. 30초 뒤 다시 읽습니다.", true);
   if (!r.ok) return say("#rowmsg", `현황을 읽지 못했습니다 — ${await why(r)}`, true);
   const rows = (await r.json()).rows;
   $("#rows tbody").replaceChildren(...rows.map(x => {

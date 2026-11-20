@@ -63,7 +63,7 @@ def _calls(name: str, now: datetime) -> int:
 
 
 async def _pages(cli: httpx.AsyncClient, name: str, now: datetime) -> list[dict]:
-    """전체 쪽을 받는다(1000행씩). 하루 한도에 닿으면 멈춘다."""
+    """전체 쪽을 받는다(1000행씩). 하루 한도를 채우면 멈춘다."""
     api, _, _ = SETS[name]
     out, page, total = [], 1, None
     while total is None or (page - 1) * 1000 < total:

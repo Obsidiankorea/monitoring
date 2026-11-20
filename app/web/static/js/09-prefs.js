@@ -116,7 +116,7 @@ function openPrefs() {
     <h4>관측소</h4>
     <div class="row"><span class="k">경남 AWS(내부망)</span>${seg("gn_off", [[false, "쓴다"], [true, "끈다"]])}</div>
     <div class="row"><span class="k"></span><span class="note">끄면 스방 수집을 멈추고, 면(AWS 누적 · 1시간) · 강수 누적 카드 · 지금 오는 비에서 경남 AWS 를 모두 뺀다 — 기상청 AWS 만 쓴다.
-      내부망 밖(집 · 서버)에서 스방에 닿지 않을 때, 또는 내부망에서도 경남 AWS 값을 빼고 보고 싶을 때. 한 곳씩 빼는 것은 아래 비활성 AWS.</span></div>
+      내부망 밖(집 · 서버)에서 스방에 접속하지 못할 때, 또는 내부망에서도 경남 AWS 값을 빼고 보고 싶을 때. 한 곳씩 빼는 것은 아래 비활성 AWS.</span></div>
     <div class="row"><span class="k">비활성 AWS</span><span class="note">${offList().length ? `${offList().length}곳 — 면(AWS 누적 · 1시간) · 강수 누적 카드 · 지금 오는 비(종합 화면도)에서 뺐다.` : "없음."}
       지도에서 관측소(S)를 켜고 점을 오른쪽 클릭 → 비활성화. 주변과 동떨어진 값(고장 · 막힘)을 빼고 둘레 관측소로 면을 다시 메운다.</span></div>
     ${offList().map(x => `<div class="row"><span class="k">${x.sigun}</span><span class="offnm">${x.name}<small>${x.org === "gn" ? "경남 AWS" : `기상청 ${x.id}`}</small></span>
@@ -148,7 +148,7 @@ function openPrefs() {
     <div class="row" id="pf-llm-loc"><span class="k">로컬 주소</span><input id="pf-llm-url" style="flex:1;min-width:0;font:inherit" spellcheck="false"><input id="pf-llm-model" style="width:120px;font:inherit" spellcheck="false" placeholder="모델(비워도 됨)"><button id="pf-llm-save" type="button">저장</button></div>
     <div class="row"><span class="note" id="pf-llm-st">읽는 중…</span></div>
     <h4>AI 알림</h4>
-    <div class="row"><span class="note">AI 팝업을 열지 않아도, 위키 기준(통제 · 사전대피 · 긴급대피)에 <b>가까워지거나(70%↑) 닿으면</b> 텔레그램으로 알린다 — 새로 생기거나 한 단계 오른 것만, 5분마다 본다.
+    <div class="row"><span class="note">AI 팝업을 열지 않아도, 위키 기준(통제 · 사전대피 · 긴급대피)에 <b>가까워지거나(70%↑) 넘으면</b> 텔레그램으로 알린다 — 새로 생기거나 한 단계 오른 것만, 5분마다 본다.
       <b>켜는 서버는 한 곳만</b>(PC 와 서버를 둘 다 켜면 같은 알림이 두 번 간다). 기본은 끔.</span></div>
     <div class="row"><span class="k">알림</span><span class="seg"><button id="pf-al-off" type="button">끔</button><button id="pf-al-on" type="button">켬</button></span><button id="pf-al-test" type="button">시험 발송</button></div>
     <div class="row"><span class="note" id="pf-al-st">읽는 중…</span></div>

@@ -341,7 +341,7 @@ def fetch(rid: str, opts: dict | None = None, client: httpx.Client | None = None
                 meta["basis"].insert(0, {"name": "⚠️ 기상청 조회 실패 — 그 칸 확인 필요", "at": meta["warn"], "warn": True})
         return out
     except httpx.HTTPError as e:
-        raise RuntimeError(_mask(f"보고서 서버에 닿지 못했다 — {type(e).__name__}: {e}")) from None
+        raise RuntimeError(_mask(f"보고서 서버에 연결하지 못했다 — {type(e).__name__}: {e}")) from None
     except RuntimeError as e:
         raise RuntimeError(_mask(e)) from None
     finally:
@@ -375,7 +375,7 @@ def send_tg(name: str, data: bytes, caption: str = "", client: httpx.Client | No
         if r.status_code != 200:
             raise RuntimeError(f"텔레그램 {r.status_code}")
     except httpx.HTTPError as e:
-        raise RuntimeError(_mask(f"텔레그램에 닿지 못했다 — {type(e).__name__}: {e}")) from None
+        raise RuntimeError(_mask(f"텔레그램에 연결하지 못했다 — {type(e).__name__}: {e}")) from None
     finally:
         if client is None:
             c.close()
@@ -403,7 +403,7 @@ def _jaenan(method: str, path: str, client: httpx.Client | None = None, **kw) ->
     try:
         r = c.request(method, f"{url()}{path}", headers={"Authorization": f"Bearer {_tok()}", **kw.pop("headers", {})}, **kw)
     except httpx.HTTPError as e:
-        raise RuntimeError(_mask(f"보고서 서버에 닿지 못했다 — {type(e).__name__}: {e}")) from None
+        raise RuntimeError(_mask(f"보고서 서버에 연결하지 못했다 — {type(e).__name__}: {e}")) from None
     finally:
         if client is None:
             c.close()
@@ -546,7 +546,7 @@ def wait_tick(now: datetime | None = None, client: httpx.Client | None = None, t
             except Waiting as e:
                 _patch(rid, status=str(e), checked=now.isoformat(timespec="seconds"))
                 continue
-            except (RuntimeError, ValueError) as e:     # 서버에 못 닿음 등 — 다음 바퀴에 다시(사유만 적어 둔다)
+            except (RuntimeError, ValueError) as e:     # 서버에 연결 못 함 등 — 다음 바퀴에 다시(사유만 적어 둔다)
                 _patch(rid, status=_mask(e)[:200], checked=now.isoformat(timespec="seconds"))
                 continue
             WAIT_DIR.mkdir(parents=True, exist_ok=True)

@@ -70,7 +70,7 @@ mkdir -p config && cp handoff-mac/config/api_keys.txt config/   # 키는 저장�
 | `live-20261018-1536` | 10.18. 15:36 | 비 오는 중 · 앞으로 6시간 |
 
 > [!note] 서버 시연에 경남 AWS(스방) 덧붙이기 — 내부망에서
-> 서버는 스방에 닿지 않아 굳힌 시연에 경남 AWS 가 없다. 스방은 지난 날짜의 시간 강수도 주므로, **내부망 PC 에서**
+> 서버는 스방에 접속할 수 없어 굳힌 시연에 경남 AWS 가 없다. 스방은 지난 날짜의 시간 강수도 주므로, **내부망 PC 에서**
 > `tools\snap_bangjae.py <시연 이름> "YYYY-MM-DD HH:MM"` 으로 그 시각 앞 72시간을 받아 `data/demo/bangjae/<시연 이름>.json`
 > 에 두고 커밋한다. 서버를 갱신하면 시연 서버가 그 시연을 띄울 때 **사본** DB 에 얹는다(`snaps.add_bangjae`, 굳힌 원본은 그대로).
 > 그 시각이 든 스방 칸(00:24 면 00시 칸)은 넣지 않는다 — 지금 받으면 그 뒤 비까지 들어 있다. 시군 평균(dt090)은 계정이 없으면
@@ -96,7 +96,7 @@ mkdir -p config && cp handoff-mac/config/api_keys.txt config/   # 키는 저장�
 | 갱신 | GitHub 에 올린 뒤 `bash /mnt/user/appdata/gn-monitor/repo/deploy/unraid/deploy.sh` — 받기(ff-only) → 빌드 → 갈아끼우기 → `/api/status` 확인 |
 | 이미지 | `Dockerfile`(python 3.14.3-slim + tzdata, KST). 키·DB 는 굽지 않는다(`.dockerignore`) — 실행할 때 연결 |
 | 쌓이는 자료 | `GN_STATE=/state` — DB·격자 캐시만 바깥에. 지도 경계·사례(`data/geo`·`data/demo`)는 이미지 안 |
-| 스방 | 집에서는 내부망에 닿지 않는다 — `SKIP_COLLECT=bangjae`(쉼표로 여럿). 누적 카드 AWS 는 기상청으로 물러선다 |
+| 스방 | 집에서는 내부망에 접속할 수 없다 — `SKIP_COLLECT=bangjae`(쉼표로 여럿). 누적 카드 AWS 는 기상청으로 물러선다 |
 
 ⚠️ **PC 와 서버가 둘 다 수집하면 기상청 호출이 두 배**다(같은 키). 첫 배포 때 PC 의 DB(설정·기록)를
 SQLite 백업으로 떠서 옮겨 두었다.
@@ -105,8 +105,8 @@ SQLite 백업으로 떠서 옮겨 두었다.
 `서버에서 받기`. 서버면 이 PC 는 수집기를 멈추고(스케줄러 pause — 재시작 없이), 화면이 부르는 `/api/…` 를
 서버로 넘긴다(`app/origin.py`, 미들웨어). 화면 파일은 이 PC 것. **넘기지 않는 것**: 받는 곳 설정(`/api/origin`) ·
 업데이트(`/api/update…`) · 저장공간(`/api/storage…`, 보관 기간) — 이 PC 의 것이다. 바꾸기 전에 그 주소의
-`/api/status` 를 불러 보고(연결 확인) 닿지 않으면 바꾸지 않는다. 서버에서 받는 중에는 메뉴바에 `서버`,
-지도 머리에 `서버` 배지. 서버에 닿지 않으면 화면의 요청이 502(까닭 적힘)로 온다. 설정은 이 PC DB(`origin`).
+`/api/status` 를 불러 보고(연결 확인) 연결되지 않으면 바꾸지 않는다. 서버에서 받는 중에는 메뉴바에 `서버`,
+지도 머리에 `서버` 배지. 서버에 연결되지 않으면 화면의 요청이 502(까닭 적힘)로 온다. 설정은 이 PC DB(`origin`).
 ⚠️ 화면의 '업데이트' 단추는 서버(컨테이너)에서는 안 된다(git 이 없다) — 서버 갱신은 deploy.sh.
 
 ## 구조 — 수집과 표출을 분리한다

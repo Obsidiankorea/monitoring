@@ -524,7 +524,7 @@ function renderAcc() {
   if (A.basis === "aws" && A.gnSel) {
     // 지금 쓰는 쪽 하나만 보인다 — 글자를 누르면 다른 쪽으로(⇄). 내부망이 아니면 기상청AWS 로 고정(누를 수 없다)
     $("acc-src").innerHTML = `<span class="gsw${A.gnLock ? " lock" : ""}"><b data-v="${A.gnSel === "gn" ? "kma" : "gn"}">${A.gnSel === "gn" ? "경남AWS" : "기상청AWS"}${A.gnLock ? "" : " ⇄"}</b></span>`;
-    $("acc-src").title = A.src + (A.gnLock ? " — 이 서버는 내부망(스방)에 닿지 않아 기상청 AWS 로 고정" : ` — 눌러서 ${A.gnSel === "gn" ? "기상청AWS" : "경남AWS"}로`);
+    $("acc-src").title = A.src + (A.gnLock ? " — 이 서버는 내부망(스방)에 접속할 수 없어 기상청 AWS 로 고정" : ` — 눌러서 ${A.gnSel === "gn" ? "기상청AWS" : "경남AWS"}로`);
     $("acc-src").classList.remove("fell");
   } else { $("acc-src").textContent = A.src; $("acc-src").title = ""; $("acc-src").classList.toggle("fell", !!A.fell); }
   $("acc-bt").textContent = A.bt;

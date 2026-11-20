@@ -165,7 +165,7 @@ STL = {"met": "해당", "near": "가까움"}
 
 
 def _gt(c: dict) -> str:
-    """판정 줄 뒤에 붙일 '[기준 78% · 남은 22㎜(일/누적) · 예보대로면 14시경 닿음]' — 모르면 빈 글."""
+    """판정 줄 뒤에 붙일 '[기준 78% · 남은 22㎜(일/누적) · 예보대로면 14시경 넘음]' — 모르면 빈 글."""
     t = ai.gap_text(c)
     return f" [{t}]" if t else ""
 
@@ -242,7 +242,7 @@ def _river_tasks(sigun: str | None = None) -> list[str]:
 
 def _tasks(stage, relay_where: str, s_list: list[dict], night: bool, cbs: list[str], sg_for_relay: str, sigun: str | None = None) -> list[str]:
     t = []
-    if stage and stage["stage"] != ai.DO_ORDER[0]:           # 기준에 닿으면 그 단계가 된 것으로 본다 — 회의를 다시 시키지 않는다
+    if stage and stage["stage"] != ai.DO_ORDER[0]:           # 기준을 넘으면 그 단계가 된 것으로 본다 — 회의를 다시 시키지 않는다
         t.append(f"도 {stage['stage']} 근무 중으로 본다 — 이 단계 근무 · 임무 유지, 실제와 다르면 왼쪽 특보 아이콘에서 단계 수정 ([[위기경보와 비상단계]])")
     if relay_where:
         t.append(f"{sg_for_relay}재난상황실에 유선 전파 — {relay_where}: 시간당 {ai.R('상황전파_1시간')}㎜ 이상(또는 일 {ai.R('상황전파_일')}㎜ 이상), "
@@ -317,7 +317,7 @@ def _rule_warn() -> list[str]:
 TIDE_REF = "고조정보 4단계와 대조기 해안침수"
 BASE_REFS = ["통제·대피 기준", "시군 상황관리반 행동매뉴얼", "대피명령 길라잡이", "위기경보와 비상단계", "재난문자 송출기준"]
 Q_ALL = [("relay", "상황전파 해야 할 곳은?"), ("stage", "비상단계 · 다음 단계 조건은?"),
-         ("evac", "대피 기준에 닿은 곳은?"), ("control", "통제할 시설은? (지하차도 · 하천변 · 둔치)"),
+         ("evac", "대피 기준을 넘은 곳은?"), ("control", "통제할 시설은? (지하차도 · 하천변 · 둔치)"),
          ("forecast", "앞으로 6시간 비가 더 올 곳은?"), ("msg", "재난문자 기준 · 문안은?"),
          ("book", "연락처 · 책자 어디를 보면 되나?")]
 Q_SIG = [("order", "어느 읍면동을 먼저 봐야 하나?"), ("sites", "산사태 지구 · 대피장소는?"),
@@ -414,7 +414,7 @@ def _report(base: str, sigun: str | None = None, mode: str = "all") -> dict:
     if river.flood():
         imp.append("홍수예보 발령: " + _few([river.fld_text(s) for s in river.flood()], 6))
     if not imp:
-        imp.append("기준에 닿은 곳 없음")
+        imp.append("기준을 넘은 곳 없음")
     tasks = _tasks(o["stage"], _few([r["sigun"] for r in relay], 8), sits, o["night"], cbs, "해당 시군 ")
     look = []
     for s in sits:
@@ -444,7 +444,7 @@ def _flash_sigun(s: dict, full: str) -> dict:
     txt = f"{_when(s['tm'])} 실황 · {full}"
     if sd:
         txt += f" 비상단계 {sd['stage']}" + (f"(수동 입력 · 특보 기준 {sd['auto']})" if sd["set"] else "")
-    txt += f" · 우려지역 기준: {rain or '닿은 곳 없음'}"
+    txt += f" · 우려지역 기준: {rain or '넘은 곳 없음'}"
     rv = s.get("river")
     if rv and rv["stage"] >= 1:
         txt += f" · 하천 {rv['name']} {ai.RV_NAME[rv['stage']]} 수위"
@@ -462,7 +462,7 @@ def _flash_sigun(s: dict, full: str) -> dict:
 
 
 def _flash_all(o: dict, sits: list[dict], own: dict) -> dict:
-    """속보 한 줄 — 경남 전체. 도 비상단계 · 시군 비상단계(평시가 아닌 것) · 우려지역 기준에 닿은 시군(훑은 시군만)."""
+    """속보 한 줄 — 경남 전체. 도 비상단계 · 시군 비상단계(평시가 아닌 것) · 우려지역 기준을 넘은 시군(훑은 시군만)."""
     parts = [f"{_when(o['tm'])} 실황"]
     if o["stage"]:
         parts.append(f"도 비상단계 {o['stage']['stage']}({o['stage']['why']})")
@@ -525,7 +525,7 @@ def _report_sigun(base: str, sigun: str) -> dict:
     if s.get("flood"):
         imp.append("홍수예보 발령: " + _few([river.fld_text(x) for x in s["flood"]], 6))
     if not imp:
-        imp.append("기준에 닿은 곳 없음")
+        imp.append("기준을 넘은 곳 없음")
     full = ai.SIGUN_FULL.get(sigun, sigun)
     tasks = _tasks(s["stage"], _few([r["emd"] for r in relay], 6), [s], s["night"], cbs, f"{full} ", sigun)
     look = [_emd_line(s, r, sb) for r in [x for x in s["emd"] if x["risk"]][:4]]
@@ -805,7 +805,7 @@ def _calm(o: dict, rows: list[dict], hit: bool = False) -> bool:
 def _quiet(o: dict, sigun: str | None, rows: list[dict], title: str, when: list[str], refs: list[str]) -> dict:
     """한가할 때의 짧은 보고 — 지금 상태 한 줄 + 언제부터 필요한가 + 참고."""
     top = max(rows, key=lambda r: r["fc_sum"] or 0, default=None)
-    now_ = "호우특보 없음 · 기준에 닿은 곳 없음 · " + (f"앞으로 6시간 가장 많은 곳 {top['sigun']} {top['fc_sum']:g}㎜" if top and top["fc_sum"] else "앞으로 6시간 비 예보 거의 없음")
+    now_ = "호우특보 없음 · 기준을 넘은 곳 없음 · " + (f"앞으로 6시간 가장 많은 곳 {top['sigun']} {top['fc_sum']:g}㎜" if top and top["fc_sum"] else "앞으로 6시간 비 예보 거의 없음")
     return {**_hdr(o, sigun, f"{title} — 지금은 해당 없음"),
             "sections": [{"h": "지금", "items": [now_] + [x for x in _outlook(rows, 2) if "큰 비 없음" not in x] + tide.summary()},   # 대조기만으로도 저지대가 잠길 수 있다 {"h": "이렇게 되면 필요하다", "items": when},
                          {"h": "참고 — 위키 · 책자", "items": _refs(refs)}]}
@@ -940,7 +940,7 @@ def _m_meeting(base, sigun):
             f"예비 상황판단회의 · 초기대응 — 호우주의보 발표({ai.R('비상1단계_호우주의보_시군') - 1}개 시군 이하) ([[위기경보와 비상단계]])",
             f"초기 상황판단회의 · 비상 1단계 — 주의보 {ai.R('비상1단계_호우주의보_시군')}개 시군 이상 또는 경보 {ai.R('비상2단계_호우경보_시군') - 1}개 시군 이하",
             f"본 상황판단회의 · 비상 2단계 — 호우경보 {ai.R('비상2단계_호우경보_시군')}개 시군 이상",
-            f"그 전이라도 상황전파 기준({ai.relay_rule()})에 닿는 곳이 생기면 이 화면이 자료를 펼친다"],
+            f"그 전이라도 상황전파 기준({ai.relay_rule()})을 넘는 곳이 생기면 이 화면이 자료를 펼친다"],
             ["상황판단회의", "위기경보와 비상단계"])
     jud = _judicial("상황판단회의", [18, 3, 19, 20], ("판단", "위험정보"), "상황판단회의 · 비상근무 단계에서")
     sec = [{"h": "1. 기상상황(현황 · 전망)", "items": wx}, {"h": "2. 재난상황", "items": dis},
@@ -1010,7 +1010,7 @@ def _m_evac(base, sigun):
     rows0 = o["rows"] if not sigun else [r for r in o["rows"] if r["sigun"] == sigun]
     if _calm(o, rows0, bool(emerg or pre)):
         return _quiet(o, sigun, rows0, "대피 판단", [
-            "산사태 · 하천 · 지하공간 · 침수 — 읍면동마다 위키 우려지역 기준에 닿거나 가까워지면(70% 이상) 이 화면이 대상 지구와 대피장소를 펼친다",
+            "산사태 · 하천 · 지하공간 · 침수 — 읍면동마다 위키 우려지역 기준을 넘거나 가까워지면(70% 이상) 이 화면이 대상 지구와 대피장소를 펼친다",
             "사전대피는 예보, 긴급대피는 실황이 기준 — 시군을 고르면 그 시군 읍면동까지 본다 ([[통제·대피 기준]])",
             "야간(21~06시) 전에 비가 예상되면 일몰 전 사전대피를 먼저 본다"],
             ["통제·대피 기준", "대피명령 길라잡이"])
@@ -1072,7 +1072,7 @@ def _m_control(base, sigun):
            {"h": "지하공간 15분 강우 높은 곳", "items": hot15[:10] or ["15분 14㎜ 넘은 지하공간 읍면동 없음"]},
            *([{"h": "홍수특보 발령", "items": [river.fld_text(s) for s in fld]}] if fld else []),
            {"h": "하천변 산책로 · 둔치주차장 · 세천 · 소교량", "items": banks[:20] or ["대상 없음"]},
-           {"h": "하천 기준 대조", "items": rv[:10] or ["하천 통제 · 대피 기준에 닿은 곳 없음(30㎜/h 3시간 지속 예보 · 누적 200㎜ + 30㎜/h)"]},
+           {"h": "하천 기준 대조", "items": rv[:10] or ["하천 통제 · 대피 기준을 넘은 곳 없음(30㎜/h 3시간 지속 예보 · 누적 200㎜ + 30㎜/h)"]},
            {"h": "기준 · 유의", "items": ["지하차도: 호우특보 발령 · 침수심 5㎝ 이상이면 통제. 4인 담당자(공무원 2 · 민간 1 · 경찰 1) — [[통제·대피 기준]]",
                                          "하천: 30㎜/h 이상 3시간 지속 예보 · 홍수주의보면 통제", "침수심 · CCTV · 제방 · 교량 수위는 대시보드에 없다 — 시군 · 현장 확인"]},
            *([j] if (j := _judicial("통제", [18, 4, 6, 11], ("대피", "시설"), "지하차도 · 하천 · 도로 통제에서")) else []),
@@ -1088,7 +1088,7 @@ def _m_msg(base, sigun):
     if _calm(o, rows, bool(fld or _hits(sits, ("긴급대피", "사전대피"), ("met", "near")))):
         return _quiet(o, sigun, rows, "재난문자", [
             f"긴급재난문자 기준 — {ai.cbs_rule()} (기상청 송출)",
-            "호우특보 · 대피 기준 해당 · 상황전파 기준에 닿으면 상황에 맞는 표준문안(90자)을 이 화면이 골라 보여 준다"],
+            "호우특보 · 대피 기준 해당 · 상황전파 기준을 넘으면 상황에 맞는 표준문안(90자)을 이 화면이 골라 보여 준다"],
             ["재난문자 송출기준", "재난문자 표준문안"])
     tbl = {}
     for a, b in _rows("재난문자 표준문안"):

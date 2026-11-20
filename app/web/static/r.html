@@ -481,7 +481,7 @@ function drawNow(g) {
       return w2;
     };
     const body = [el("h2", "기준까지")];
-    body.push(...SG.map(k => one(k, g.st[k], g.st[k].rule, g.st[k].parts || [], g.st[k].eta ? `${g.st[k].eta}시쯤 닿음` : "")));
+    body.push(...SG.map(k => one(k, g.st[k], g.st[k].rule, g.st[k].parts || [], g.st[k].eta ? `${g.st[k].eta}시쯤 넘음` : "")));
     if (g.site != null) body.push(one("지구 자체 기준", { pct: g.site, met: g.site >= 100 }, g.rule, g.site_slide ? [] : g.site_parts, g.site_slide ? (g.site >= 100 ? "산사태 예보 발령 중" : "발령 없음") : ""));
     const more = el("details", null, "gs"), msm = el("summary");
     msm.append(el("div", "앞으로 추이 · 계산 기준", "h"));
@@ -495,7 +495,7 @@ function drawNow(g) {
           + `<line x1="0" x2="${W}" y1="${y(100)}" y2="${y(100)}" stroke="#101821" stroke-dasharray="4 3" stroke-width="1"/>`
           + `<polyline fill="none" stroke="#1B6FA8" stroke-width="2.5" vector-effect="non-scaling-stroke" points="${v.map((p, i) => `${x(i).toFixed(1)},${y(p).toFixed(1)}`).join(" ")}"/></svg>`));
     }
-    tail.push(el("p", `${g.basis} 기준 · ${g.where === "지구" ? "이 지구 자리 비" : "읍면동에서 가장 많이 온 칸"} · ${g.at ? g.at.slice(11, 16) + " 계산" : ""} — 예보로 닿는 시각은 예보대로 올 때`, "gm"));
+    tail.push(el("p", `${g.basis} 기준 · ${g.where === "지구" ? "이 지구 자리 비" : "읍면동에서 가장 많이 온 칸"} · ${g.at ? g.at.slice(11, 16) + " 계산" : ""} — 예보로 넘는 시각은 예보대로 올 때`, "gm"));
     more.append(...tail); body.push(more);
     box.replaceChildren(...body);
   }

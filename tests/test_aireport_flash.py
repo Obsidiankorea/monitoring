@@ -21,13 +21,13 @@ def test_flash_sigun_names_rain_state_and_strongest_rule(monkeypatch):
 def test_flash_sigun_calm(monkeypatch):
     monkeypatch.setattr(ai, "overrides", lambda: {})
     f = aireport._flash_sigun(_sit([], [{"stage": "통제", "st": "no", "rule": "r"}]), "함양군")
-    assert f["tone"] == 0 and "닿은 곳 없음" in f["text"]
+    assert f["tone"] == 0 and "넘은 곳 없음" in f["text"]
 
 
 def test_flash_sigun_shows_manual_stage_and_human_override(monkeypatch):
     monkeypatch.setattr(ai, "overrides", lambda: {})
     f = aireport._flash_sigun(_sit(["호우주의보"], [], "거제"), "거제시")
-    assert "거제시 비상단계 비상 1단계 · 우려지역 기준: 닿은 곳 없음" in f["text"]
+    assert "거제시 비상단계 비상 1단계 · 우려지역 기준: 넘은 곳 없음" in f["text"]
     monkeypatch.setattr(ai, "overrides", lambda: {"거제": {"stage": "비상 2단계", "at": "202610310100"}})
     t = aireport._flash_sigun(_sit(["호우주의보"], [], "거제"), "거제시")["text"]
     assert "비상단계 비상 2단계(수동 입력 · 특보 기준 비상 1단계)" in t

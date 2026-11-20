@@ -1,4 +1,4 @@
-"""AI 기준 근접 알림 — 사람이 팝업을 열지 않아도, 위키 기준(통제 · 사전대피 · 긴급대피)에 가까워지거나 닿으면 텔레그램으로 알린다.
+"""AI 기준 근접 알림 — 사람이 팝업을 열지 않아도, 위키 기준(통제 · 사전대피 · 긴급대피)에 가까워지거나 넘으면 텔레그램으로 알린다.
 
 켜고 끄는 것은 설정(지도 › AI 알림 · DB ai_alert). **기본은 끔**이고, 켜는 서버(서버 한 곳)에서만 켠다 — PC 와 서버를 둘 다 켜면 같은 알림이 두 번 간다.
 5분마다 aireport 가 쓰는 같은 판정(app/ai.py ladders)을 읽어서, **새로 생겼거나 한 단계 올라간 것**만 보낸다(같은 상태는 다시 보내지 않는다).
@@ -49,7 +49,7 @@ async def send(text: str) -> None:
             raise RuntimeError(f"텔레그램 {r.status_code}")
 
 
-_GAP: dict[str, dict] = {}      # 열쇠 → {t: 기준 N% · 남은 ㎜ · 닿는 시각 글, pct} (화면 목록 · 읍면동 배지에만. 알림 문자는 그대로)
+_GAP: dict[str, dict] = {}      # 열쇠 → {t: 기준 N% · 남은 ㎜ · 넘는 시각 글, pct} (화면 목록 · 읍면동 배지에만. 알림 문자는 그대로)
 _DO: dict = {"v": None}         # 도 비상단계(+사람이 바꾼 값)
 _GROUPS: dict = {"v": []}       # 이번 훑을 때의 특보 묶음(사건 묶음 · app/events.py)
 _STAGES: dict = {}              # 시군 비상단계(매뉴얼이 위키에 있는 시군) — 이번 훑을 때의 특보 기준(+사람이 바꾼 값)
@@ -102,7 +102,7 @@ SNAP_TTL = 120          # 화면이 몇 초마다 물어도 이만큼은 같은 
 
 
 def snapshot(base: str) -> dict:
-    """화면용 — 지금 기준에 가까워졌거나 닿은 곳(텔레그램 켜고 끄는 것과 무관). 시군별로 묶어 센 것 먼저."""
+    """화면용 — 지금 기준에 가까워졌거나 넘은 곳(텔레그램 켜고 끄는 것과 무관). 시군별로 묶어 센 것 먼저."""
     now_t = time.time()
     if _SNAP["v"] is not None and now_t - _SNAP["t"] < SNAP_TTL:
         return _SNAP["v"]
@@ -174,7 +174,7 @@ def _msg(new: list, tm: str) -> str:
         parts = [f"{fam} {emo(stg)} {'충족' if v == 2 else '근접'}" for (fam, stg), v in sorted(d.items(), key=lambda kv: -(STAGE_RANK[kv[0][1]] * 10 + kv[1]))]
         lines.append(f"{sg} {emd} — " + " · ".join(parts[:3]))
     more = len(ranked) - MAX_LINES
-    head = f"⚠️ 경남 AI 상황판단 — {tm} 기준에 가까워졌거나 닿은 곳 {len(ranked)}곳" + (f" · {stage[0][1]} 진입" if stage else "")
+    head = f"⚠️ 경남 AI 상황판단 — {tm} 기준에 가까워졌거나 넘은 곳 {len(ranked)}곳" + (f" · {stage[0][1]} 진입" if stage else "")
     return "\n".join([head, *[f"• {x}" for x in lines], *([f"… 외 {more}곳"] if more > 0 else []), "",
                       "지도에서 I 키(AI 상황판단)로 대상 지구 · 대피장소를 본다. 판단 · 대피명령은 권한자(시장 · 군수) — 기준과의 대조일 뿐이다."])
 

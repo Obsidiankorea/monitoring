@@ -255,8 +255,8 @@ def _part(label: str, v, need, unit: str = "㎜", eta: dict | None = None) -> di
 
 
 def _eta(v, need, hours: list, labels: list) -> dict | None:
-    """쌓이는 값(누적)이 시간별 예보를 더해 기준에 처음 닿는 시각 — {'at': '14', 'i': 2}.
-    예보 시간 안에 안 닿으면 {'at': None}. 이미 닿았거나 값 · 예보가 없으면 None.
+    """쌓이는 값(누적)이 시간별 예보를 더해 기준을 처음 넘는 시각 — {'at': '14', 'i': 2}.
+    예보 시간 안에 넘지 않으면 {'at': None}. 이미 넘었거나 값 · 예보가 없으면 None.
     ⚠️ 창에서 빠져나가는 옛 비는 빼지 않는다 → 실제보다 이르게 나올 수 있다."""
     if v is None or v >= need or not hours:
         return None
@@ -286,7 +286,7 @@ def _gap(*parts: dict) -> dict | None:
 
 
 def gap_text(c: dict) -> str:
-    """판정 한 줄(c)에 붙일 글 — '기준 78% · 남은 22㎜(일/누적) · 예보대로면 14시경 닿음'. 모르면 빈 글."""
+    """판정 한 줄(c)에 붙일 글 — '기준 78% · 남은 22㎜(일/누적) · 예보대로면 14시경 넘음'. 모르면 빈 글."""
     g = c.get("gap")
     if not g:
         return ""
@@ -295,7 +295,7 @@ def gap_text(c: dict) -> str:
         s += f" · 남은 {g['left']:g}{g['unit']}({g['by']})"
     e = g["eta"]
     if e:
-        s += f" · 예보대로면 {e['at']}시경 닿음" if e["at"] else " · 예보 시간 안엔 안 닿음"
+        s += f" · 예보대로면 {e['at']}시경 넘음" if e["at"] else " · 예보 시간 안엔 넘지 않음"
     if g["partial"]:
         s += " · 일부 조건은 모름"
     return s
@@ -334,14 +334,14 @@ def flood_of(sigun: str) -> list[dict]:
 
 
 def _fld(rv: dict | None, fld: list[dict] | None, need: int) -> str:
-    """홍수예보 발령이 need 단계(2 주의보 · 3 경보)에 닿았나. 발령이 없어도 하천 자료가 없으면 '모름'이다."""
+    """홍수예보 발령이 need 단계(2 주의보 · 3 경보)에 이르렀나. 발령이 없어도 하천 자료가 없으면 '모름'이다."""
     if any(s["fc"]["lv"] >= need for s in fld or []):
         return "met"
     return "no" if rv else "unknown"
 
 
 def _riv(rv: dict | None, need: int) -> tuple[str, dict | None]:
-    """하천 수위 단계(0 정상 · 1 관심 · 2 주의보 · 3 경보 · 4 심각)가 need 에 닿았나 → (st, gap). 한 단계 모자라면 근접."""
+    """하천 수위 단계(0 정상 · 1 관심 · 2 주의보 · 3 경보 · 4 심각)가 need 에 이르렀나 → (st, gap). 한 단계 모자라면 근접."""
     if not rv:
         return "unknown", None
     st = "met" if rv["stage"] >= need else "near" if rv["stage"] == need - 1 else "no"
@@ -358,7 +358,7 @@ def _riv(rv: dict | None, need: int) -> tuple[str, dict | None]:
 def ladders(r: dict, night: bool, alerts: list[str], rv: dict | None = None, fld: list[dict] | None = None,
             plv: int | None = None) -> dict:
     """읍면동 하나 — [[통제·대피 기준]] 3대 유형 단계별 조건 대조(숫자는 위키 [[판정값]], 조건의 짝은 여기).
-    st 는 '그 조건에 닿았나', gap 은 '기준에서 얼마나 먼가'(비율 · 남은 양 · 닿는 시각).
+    st 는 '그 조건을 넘었나', gap 은 '기준에서 얼마나 먼가'(비율 · 남은 양 · 넘는 시각).
     같은 단계의 줄들은 '또는'이다(행안부 지침(안) 별표 4 — 줄마다 따로, 2개 이상 차면 가장 높은 단계).
     plv = 산림청 산사태 예측정보(시군 단위) 2 경보 · 1 주의보 · 0 없음 · None 못 받음."""
     rain, fpk, f3 = r["rain"], r["fc_peak"], r["fc_run30"]
@@ -376,7 +376,7 @@ def ladders(r: dict, night: bool, alerts: list[str], rv: dict | None = None, fld
     fh, fl = r.get("eta_hours") or r.get("fc_hours") or [], r.get("eta_labels") or r.get("fc_labels") or []   # 도달 시각은 초단기 + 단기예보로
     fpk_ok = None if fpk is None or fcap else fpk          # 30 에 막힌 예보는 50·55 와 견줄 수 없다
 
-    def cum(label, v, need):                               # 쌓이는 값 — 예보 시우량을 더해 닿는 시각도 본다
+    def cum(label, v, need):                               # 쌓이는 값 — 예보 시우량을 더해 넘는 시각도 본다
         return _part(label, v, need, eta=_eta(v, need, fh, fl))
 
     def one(label, v, need, unit="㎜"):
@@ -842,7 +842,7 @@ def short_of(base: str) -> dict:
 def situation(sigun: str, base: str = "http://127.0.0.1:8000", k: float = 1.0, basis: str = "grid",
               add_h: float = 0.0, add_24: float = 0.0) -> dict:
     """시군 하나 — 읍면동별 지금 수치 · 우려지역(유형별) · 3대 유형 단계 대조 · 지구 대피기준까지 % ·
-    상황전파 기준 · 특보 · 비상단계 · 재난문자 기준. 판정하지 않는다(st 는 '그 조건에 닿았나'일 뿐).
+    상황전파 기준 · 특보 · 비상단계 · 재난문자 기준. 판정하지 않는다(st 는 '그 조건을 넘었나'일 뿐).
     k = 상황판단 모드의 '만약에' — 예보 시우량(초단기 · 단기)에 곱한다. add_h = 앞으로 24시간 매시간 더하는 ㎜,
     add_24 = 앞으로 24시간에 고루 나눠 더하는 총 ㎜(곱한 뒤 더한다)."""
     base = base.rstrip("/")
@@ -934,7 +934,7 @@ def situation(sigun: str, base: str = "http://127.0.0.1:8000", k: float = 1.0, b
         "limits": ["지구 좌표가 없어 읍면동 안 가장 많이 온 격자(500m)로 견준다 — 지구 강우의 상한",
                    f"초단기 예보 시우량은 {RN1_CAP:g}㎜ 에서 막혀 온다 — 50·55㎜/h 예보 조건은 '모름'",
                    "토양함수 · 침수심 · 제방 만수위 · 교량 수위 · 댐 수위는 여기 없다. 산림청 산사태 예측정보는 시군 단위 주의보 · 경보만 받는다(예비경보 · 예측 시간은 못 가린다) — 따로 확인(하천 수위는 홍수통제소 원시값을 연결했다)",
-                   "기준 N% · 남은 ㎜ · 닿는 시각은 가장 먼 조건 기준이다 — 닿는 시각은 예보 시우량을 지금 누적에 더한 것이라 창에서 빠지는 옛 비는 빼지 않아 실제보다 이를 수 있다",
+                   "기준 N% · 남은 ㎜ · 넘는 시각은 가장 먼 조건 기준이다 — 넘는 시각은 예보 시우량을 지금 누적에 더한 것이라 창에서 빠지는 옛 비는 빼지 않아 실제보다 이를 수 있다",
                    "조위 단계는 해양조사원 고조정보다 — 폭풍해일 특보와 다른 체계이고, 호우와 만조의 겹침은 나란히 보일 뿐 판정하지 않는다(위키에 기준이 없다)",
                    "전망(높음 · 주의 · 낮음)은 특보 · 단기예보 · 초단기를 묶은 참고다 — 새 발표일수록 무겁고, 지금 비가 같은 말을 하면 시간이 지나도 깎지 않는다. 위키 기준 대조 · 비상단계는 바꾸지 않는다",
                    "목록에 없다고 위험이 없는 것이 아니다", "대피명령은 시장·군수·구청장 권한(재난안전법 제40조)",
@@ -972,7 +972,7 @@ def _na(v):
 
 
 def brief(s: dict, top: int = 4) -> str:
-    """LLM 맥락 · 사람이 읽는 짧은 글 — 닿았거나 가까운 것만 적는다."""
+    """LLM 맥락 · 사람이 읽는 짧은 글 — 넘었거나 가까운 것만 적는다."""
     t = s.get("tm") or ""
     out = [f"■ {s['sigun']} — {t[4:6]}.{t[6:8]}. {t[8:10]}:{t[10:12]} 실황 기준{' · 취약시간대(21~06시)' if s['night'] else ''}"]
     out.append("특보: " + (", ".join(s["alerts"]) or "없음") + (f" · 예비 {', '.join(p['name'] for p in s['pending'])}" if s["pending"] else ""))
@@ -997,7 +997,7 @@ def brief(s: dict, top: int = 4) -> str:
         out.append(f"· {r['emd']} — 1h {rn['1h']} · 3h {rn['3h']} · 24h {rn['24h']} · 15분 {_na(r['m15'])}{an_} · {fc}"
                    f" · 우려지역 {', '.join(f'{k} {v}' for k, v in r['risk'].items()) or '없음'}")
         if hit:
-            out.append("   닿음/근접: " + "; ".join(hit))
+            out.append("   넘음/근접: " + "; ".join(hit))
         if r["sites"]:
             b = max(r["sites"], key=lambda x: x["max_pct"] or 0)
             out.append("   산사태 지구 대피기준(원문 '" + b["rule"] + "'): "

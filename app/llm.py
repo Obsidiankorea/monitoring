@@ -110,7 +110,7 @@ def _claude_api(system: str, user: str) -> str:
     except anthropic.RateLimitError:
         raise RuntimeError("Anthropic API 사용 한도 — 잠시 뒤 다시 묻는다") from None
     except anthropic.APIConnectionError:
-        raise RuntimeError("Anthropic API 에 닿지 못했다(인터넷)") from None
+        raise RuntimeError("Anthropic API 에 연결하지 못했다(인터넷)") from None
     except anthropic.APIStatusError as e:
         raise RuntimeError(f"Anthropic API 오류 {e.status_code}") from None
     if r.stop_reason == "refusal":

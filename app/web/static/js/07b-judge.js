@@ -7,7 +7,7 @@
 const SJ_SOLO = new URLSearchParams(location.search).has("sj");
 const SJ = { open: false, sg: "all", k: 1, addH: 0, add24: 0, basis: "grid", cut: { on: true, pct: 70 }, d: null, log: [], st: null,
   ct: null, q: [], llm: null, rep: null, seq: 0, sel: new URLSearchParams(location.search).get("r"), tab: "단계판", more: false, ai: false, wopen: false, msgs: [] };
-SJ.min = 50;                                             // 불러올 범위 — 지금 · 예보로 이 % 에 닿을 수 있는 지구만(0 = 전부). 경남 전체를 다 모으면 수십 초
+SJ.min = 50;                                             // 불러올 범위 — 지금 · 예보로 이 % 까지 오를 수 있는 지구만(0 = 전부). 경남 전체를 다 모으면 수십 초
 try { Object.assign(SJ.cut, JSON.parse(localStorage.getItem("gn-sj-cut") || "{}")); SJ.basis = localStorage.getItem("gn-sj-basis") || "grid"; SJ.min = +(localStorage.getItem("gn-sj-min") ?? 50) || 0; } catch {}
 SJ.dpop = (() => { try { return localStorage.getItem("gn-sj-dpop") === "1"; } catch { return false; } })();   // 지구 상세 — 오른쪽 고정 / 가운데 팝업
 SJ.pane = { l: true, r: true };                          // 왼쪽(매뉴얼) · 오른쪽(상세) 패널 — [ · ] 키
@@ -48,7 +48,7 @@ async function sjLoad(onlyData) {
   const my = ++SJ.seq, sg = SJ.sg, qs = new URLSearchParams({ sigun: sg, k: SJ.k, add_h: SJ.addH, add_24: SJ.add24, series: 1, sb: SJ.basis, min: SJ.min, ...(SJ.sel ? { r: SJ.sel } : {}), ...(SJ.fresh ? { fresh: 1 } : {}) });
   SJ.fresh = false;                                      // 서버는 2분 남짓 같은 계산을 준다 — [다시 계산] 만 건너뛴다   // r — 걸러져도 고른 지구는 받는다
   if (!onlyData) {   // 처음 모을 때는 수십 초 걸린다 — 멈춘 것처럼 보이지 않게 움직이는 줄 · 지난 초 · 자리 잡은 뼈대
-    $("sj-c").innerHTML = `<div class="sj-ld" role="status"><div class="ldbar"><i></i></div><b>${sg === "all" ? "경남 전체 18개 시군" : escH(sg)} 지구 판정을 모으는 중${SJ.min ? ` — ${SJ.min}% 에 닿을 수 있는 곳만` : ""}</b>
+    $("sj-c").innerHTML = `<div class="sj-ld" role="status"><div class="ldbar"><i></i></div><b>${sg === "all" ? "경남 전체 18개 시군" : escH(sg)} 지구 판정을 모으는 중${SJ.min ? ` — ${SJ.min}% 까지 오를 수 있는 곳만` : ""}</b>
       <small>강수 격자 · 지구별 대피 기준 · 판단 기록을 맞춰 본다 — 처음에는 수십 초 걸릴 수 있다 · <span class="sec">0</span>초째</small>${'<div class="sk"></div>'.repeat(6)}</div>`;
     const t0 = Date.now(), tick = setInterval(() => { const e = $("sj-c").querySelector(".sj-ld .sec"); if (e) e.textContent = Math.round((Date.now() - t0) / 1000); else clearInterval(tick); }, 1000);
   }
@@ -243,7 +243,7 @@ function sjDetail() {
   const stg = SJ_STG.map(s => {
     const c = b.st[s];
     if (!c) return "";
-    return `<div class="sx"><div class="sxh"><b>${s}</b>${sjPct(c)}<span>${sjEtaTxt(c) === "넘음" ? "기준 넘음" : c.eta ? `${c.eta}시 도달 예상` : c.unk ? "자료 없음" : "내일 24시까지 안 닿음"}</span></div>
+    return `<div class="sx"><div class="sxh"><b>${s}</b>${sjPct(c)}<span>${sjEtaTxt(c) === "넘음" ? "기준 넘음" : c.eta ? `${c.eta}시 도달 예상` : c.unk ? "자료 없음" : "내일 24시까지 넘지 않음"}</span></div>
       <div class="rl">${escH(c.rule)}${c.partial ? " · 모르는 조건은 빼고 계산" : ""}</div>${sjParts(c.parts || [])}</div>`;
   }).join("");
   const ppl = SJ.ct?.people?.[r.id] || [];
@@ -375,7 +375,7 @@ function sjRender() {
     <div class="ttl">상황판단<br><span>${d.tm ? `${+d.tm.slice(4, 6)}.${+d.tm.slice(6, 8)}. ${d.tm.slice(8, 10)}:${d.tm.slice(10, 12)} 실황` : ""}${window.GN_SNAP?.fake ? " · 가상 시연" : ""}${d.computed_at ? ` · <span title="서버가 판정을 센 시각 — 2분 남짓 같은 계산을 다시 준다">${Math.max(0, Math.round((Date.now() - new Date(d.computed_at)) / 60000))}분 전 계산</span> <button class="g" id="sj-re" title="캐시를 건너뛰고 지금 다시 센다(경남 전체는 수 초~수십 초)">다시 계산</button>` : ""}</span></div>
     <div class="hud">${hud}</div>
     <span class="seg">${["grid", "aws"].map(k => `<button data-bs="${k}" class="${SJ.basis === k ? "on" : ""}">${SJ_BN[k]}</button>`).join("")}</span>
-    <label class="cut" title="불러올 범위 — 지금 또는 예보(초단기 포함)로 이 % 에 닿을 수 있는 지구만 서버에서 모은다(빠르다)">불러오기<select id="sj-min" aria-label="불러올 범위">${[0, 30, 50, 70, 90].map(v => `<option value="${v}"${v === SJ.min ? " selected" : ""}>${v ? `${v}% 이상만` : "전부"}</option>`).join("")}</select></label>
+    <label class="cut" title="불러올 범위 — 지금 또는 예보(초단기 포함)로 이 % 까지 오를 수 있는 지구만 서버에서 모은다(빠르다)">불러오기<select id="sj-min" aria-label="불러올 범위">${[0, 30, 50, 70, 90].map(v => `<option value="${v}"${v === SJ.min ? " selected" : ""}>${v ? `${v}% 이상만` : "전부"}</option>`).join("")}</select></label>
     <label class="cut"><input type="checkbox" id="sj-cut"${SJ.cut.on ? " checked" : ""}><input type="number" id="sj-cutp" min="10" max="100" step="5" value="${SJ.cut.pct}">% 이상</label>
     <div class="wif"><b>만약에</b><span class="wt">${[SJ.addH && `매시간 +${SJ.addH}㎜`, SJ.add24 && `24시간 +${SJ.add24}㎜`].filter(Boolean).join(" · ")}</span>
       <input type="range" id="sj-k" min="50" max="300" step="10" value="${Math.round(SJ.k * 100)}" title="초단기 · 단기예보 시우량 배수"><i>×${SJ.k.toFixed(1)}</i>
@@ -393,7 +393,7 @@ function sjRender() {
     if (g.sec !== cur) { cur = g.sec; body += `<div class="sec s${cur}"><b>${SJ_SEC[cur]}</b><span>${gs.filter(x => x.sec === cur).length}</span></div>`; }
     body += sjGroup(g);
   }
-  $("sj-c").innerHTML = `<div class="sjp" id="sj-plot">${sjPlotInner()}</div>${d.min && d.n_all > d.rows.length ? `<div class="sj-flt" role="status">전체 ${d.n_all}곳 중 ${d.rows.length}곳만 — 지금 · 예보(초단기 포함)로 ${d.min}% 에 닿을 수 있는 곳 <button id="sj-all">전부 보기</button></div>` : ""}<div class="lh"><span>읍면동 · 유형</span><span>통제</span><span>사전대피</span><span>긴급대피</span><span>도달</span><span>지구</span></div>`
+  $("sj-c").innerHTML = `<div class="sjp" id="sj-plot">${sjPlotInner()}</div>${d.min && d.n_all > d.rows.length ? `<div class="sj-flt" role="status">전체 ${d.n_all}곳 중 ${d.rows.length}곳만 — 지금 · 예보(초단기 포함)로 ${d.min}% 까지 오를 수 있는 곳 <button id="sj-all">전부 보기</button></div>` : ""}<div class="lh"><span>읍면동 · 유형</span><span>통제</span><span>사전대피</span><span>긴급대피</span><span>도달</span><span>지구</span></div>`
     + (body || `<div class="sj-ld">${SJ.cut.on ? `${SJ.cut.pct}% 이상인 곳이 없다` : "지구가 없다"}</div>`)
     + (gs.length > shown.length ? `<button class="more" id="sj-more">나머지 ${gs.length - shown.length}묶음 더 보기</button>` : "")
     + `<p class="mute foot">좌표가 있는 지구는 그 자리 비, 없으면(*) 읍면동 최대 칸 · 예보는 읍면동 · 색: 50 · 70 · 80 · 90 · 100% 이상</p>`;
@@ -431,7 +431,7 @@ function sjEsc() {
    한 벌을 두 창에서 — 상황판단(지구 상세의 단추)과 지도(고정한 지구 카드의 문자 단추, 06e). 상자 · 뒤판은 body 에 붙는다(#sj 가 숨은 지도 창에서도).
    sjRp(rid, ctx) — ctx {name, fam, st 단계별 판정, basis 기준 이름, tel 미리 고를 받는 사람, back 닫으면 돌아갈 단추, after 요청을 남긴 뒤} */
 const SJ_RP = { rid: null, note: "", j: null, done: false, pi: 0, tab: "sms", info: "", name: "", tel: "", mtel: "", back: null, after: null };   // pi "m" = 직접 넣은 번호(mtel)
-/* 요청 한 줄 기본값 — 그 지구에서 지금 닿은(넘은) 가장 높은 단계 · 유형으로. 결정 단추(SJ_ACT)와 같은 말. % 는 문자에 넣지 않고 기록(info)에만 */
+/* 요청 한 줄 기본값 — 그 지구에서 지금 넘은 가장 높은 단계 · 유형으로. 결정 단추(SJ_ACT)와 같은 말. % 는 문자에 넣지 않고 기록(info)에만 */
 const SJ_RQ = { 산사태: "위험 구간 출입을 통제", 하천: "하천변 · 둔치 출입을 통제", 지하공간: "지하차도 · 지하공간 출입을 통제", "침수·해안": "침수 우려 도로 · 해안 출입을 통제" };
 function sjRpNote(fam, st, basis) {                         // st = 판정 줄 b.st({통제: {pct, met}, …}) — 두 창이 같은 모양을 넘긴다
   st = st || {};
@@ -498,7 +498,7 @@ async function sjRp(rid, ctx) {
     <p class="mute rpmh">표의 번호가 틀렸거나 다른 사람에게 보낼 때 — 번호는 저장하지 않는다(문자 앱에만 넘긴다)</p>
     <h5>보낼 문자 글</h5><pre class="rps"></pre>
     <h5>링크 주소</h5><p class="rpu">${escH(ln.url)}</p>
-    ${base ? "" : `<p class="rpw">밖에서 닿는 주소가 아직 없다 — 지금 이 주소(${escH(location.origin)})로 만들어 같은 망 밖 휴대폰에서는 안 열린다. <a href="/reply.html" target="_blank" rel="noopener">현장 회신 화면</a>에서 주소를 넣는다</p>`}
+    ${base ? "" : `<p class="rpw">밖에서 열리는 주소가 아직 없다 — 지금 이 주소(${escH(location.origin)})로 만들어 같은 망 밖 휴대폰에서는 안 열린다. <a href="/reply.html" target="_blank" rel="noopener">현장 회신 화면</a>에서 주소를 넣는다</p>`}
     <p class="mute">${j.demo ? "시연 — [문자 앱 열기] · [복사] 는 되지만 요청 기록은 남기지 않는다" : SJ_RP.done ? "✔ 요청을 남겼다 — 현장 회신 현황(reply.html)에서 회신을 본다" : "[문자 앱 열기] · [복사] 를 누르면 그때 요청 기록이 남는다(지구 진행 기록 · 현황)"}</p></div>
     <div class="rpm"><div class="rptab" role="tablist" aria-label="담당자 휴대폰 화면"><button role="tab" data-rptab="sms">문자 도착</button><button role="tab" data-rptab="page">링크를 열면</button></div>
       <div class="rpph"><div class="rpsms" role="tabpanel" aria-label="문자가 도착한 모습"><div class="rpfrom"><i aria-hidden="true">상</i><b>보낸 사람</b><span>상황실 — 보내는 분의 휴대폰 번호</span></div>

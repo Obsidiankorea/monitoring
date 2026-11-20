@@ -285,7 +285,7 @@ def test_preview_note_reaches_frame_without_record():
 
 def test_gauge_is_the_judge_row(tdb, tmp_path, monkeypatch):
     """링크 페이지의 '지금 비와 기준' — 그 지구 judge 줄(격자)의 단계 · 조건 · % 그대로, 시군 하나 · 시간별로 캐시를 탄다.
-    연락처는 섞이지 않고, 대시보드에 못 닿으면 빈 것(오류 아님), 없는 토큰은 404."""
+    연락처는 섞이지 않고, 대시보드에 연결하지 못하면 빈 것(오류 아님), 없는 토큰은 404."""
     from app import judge
     _setup(tmp_path, monkeypatch)
     st = {"통제": {"pct": 43, "met": False, "unk": False, "eta": "내일 02", "eta_h": 9, "rule": "24시간 200㎜↑(실황)", "partial": False,

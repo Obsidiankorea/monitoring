@@ -243,7 +243,7 @@ function dzMiniPlane(r) {
     return `<div class="dzb"><span>${x}</span><svg width="${BW}" height="10"><rect width="${BW}" height="10" fill="var(--line)"/>`
       + `<rect width="${bx(v).toFixed(1)}" height="10" fill="${dzColVar(lv)}"/><line x1="${bx(70)}" x2="${bx(70)}" y1="0" y2="10" stroke="var(--t70)"/>`
       + `<line x1="${bx(100)}" x2="${bx(100)}" y1="0" y2="10" stroke="var(--t100)" stroke-width="1.5"/></svg>`
-      + `<em style="color:${dzColVar(lv)}">${v ?? "—"}%</em><small>${v >= 100 ? "넘음" : j != null ? `${at(j)} 도달` : "안 닿음"}</small></div>` + dzWhy(x);
+      + `<em style="color:${dzColVar(lv)}">${v ?? "—"}%</em><small>${v >= 100 ? "넘음" : j != null ? `${at(j)} 도달` : "넘지 않음"}</small></div>` + dzWhy(x);
   }).join("");
   // ③ 오른쪽 — 단계 영역 평면(셋을 한 평면에, 지금 다음 단계를 진하게) · 지구 원문 기준 자홍 흐르는 점선 · 비가 아닌 조건은 글로
   const reg = DZ_REG?.[r.fam], n = (s.pl || []).length;
@@ -269,9 +269,9 @@ function dzMiniPlane(r) {
     return `<div class="d${hot ? " hot" : ""}"${hot ? ` style="--c:${dzColVar(dzLv(c.pct))}"` : ""}>· ${escH(x.stage)}: ${escH(x.text)}${hot ? ` <b>${escH(pts || `${c.pct}%`)}</b>` : ""}</div>`;
   }).join("");
   const head = ph.skip ? `<b style="color:var(--t100)">⚠ ${ph.skip}가 ${ph.next}보다 더 찼다 — 단계를 건너뛸 수 있음(국지성 폭우)</b>`
-    : ph.next ? `다음 단계 <b>${ph.next}</b>${ph.eta(ph.next) != null ? ` · ${at(ph.eta(ph.next))} 도달 예상` : " · 내일까지 안 닿음"}` : `<b style="color:var(--t100)">${ph.cur} 기준까지 넘음</b>`;
+    : ph.next ? `다음 단계 <b>${ph.next}</b>${ph.eta(ph.next) != null ? ` · ${at(ph.eta(ph.next))} 도달 예상` : " · 내일까지 넘지 않음"}` : `<b style="color:var(--t100)">${ph.cur} 기준까지 넘음</b>`;
   const site = s.site?.length ? siteText(s.site, reg).replace("이 지구 자체 기준: ", "") : "";
-  // 도달 시점으로 가른 두 줄(지금 값만) — 예보로 닿는 것과 실제 내린 비로 닿은 것은 무게가 다르다(예보 = 권고, 실황 = 실행)
+  // 도달 시점으로 가른 두 줄(지금 값만) — 예보로 넘는 것과 실제 내린 비로 넘은 것은 무게가 다르다(예보 = 권고, 실황 = 실행)
   const one = (k, v) => `<div class="dz2" title="${escH(v?.rule || "")}"><span>${k}</span>${v ? `<b style="color:${dzColVar(dzLv(v.pct))}">${v.pct}%</b><small>${STG_EMO[v.stage] || ""} ${v.stage}${v.met ? " 충족" : ""}</small>` : `<small>견줄 값 없음</small>`}</div>`;
   const two = DZ_TI === 0 && (s.fc || s.obs) ? one("예보 기준", s.fc) + one("실황 기준", s.obs) : "";
   return { strip, bars, head, texts, plane, site, two };

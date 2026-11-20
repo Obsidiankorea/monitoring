@@ -143,7 +143,7 @@ def build(st: dict, today_rows: list, pred: list[tuple[str, float]], now: dateti
     return {"code": st["code"], "name": st["name"], "sigun": st["sigun"], "x": x, "y": y, "t": t, "v": v, "pred": p,
             "diff": round(v - p, 1) if p is not None else None, "stage": stage(st, v), "cuts": st["cuts"], "names": HI, "col": [0, 1, 2, 3, 4],
             "scale": "고조정보" if st["cuts"] else None, "next": mark(next_), "top": mark(top), "facil": facil,
-            "wet": [f["name"] for f in facil if top and f["h"] <= top[1]],     # 7일 안 만조가 지반고에 닿는 시설
+            "wet": [f["name"] for f in facil if top and f["h"] <= top[1]],     # 7일 안 만조가 지반고를 넘는 시설
             "series": [[a, o_by.get(a), b] for a, b in all_p if a0 <= a <= a1 and a[10:12] in ("00", "30")],
             "stale": (now - datetime.strptime(t, "%Y%m%d%H%M")).total_seconds() > STALE_MIN * 60}
 
@@ -211,7 +211,7 @@ def text(r: dict | None, fc6h=None, spring: bool = True) -> str | None:
     if r["top"] and r["top"]["stage"]:
         out += f" · 7일 안 최고 {_hm(r['top']['t'])} {r['top']['h']:g}cm{lab(r['top'])}"
     if r["wet"]:
-        out += f" · 7일 안 만조가 지반고에 닿는 시설: {', '.join(r['wet'])}"
+        out += f" · 7일 안 만조가 지반고를 넘는 시설: {', '.join(r['wet'])}"
     if spring and _spring_text():
         out += f" · {_spring_text()}"
     return out

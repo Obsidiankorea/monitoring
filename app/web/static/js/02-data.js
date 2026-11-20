@@ -8,7 +8,7 @@ function reqTm(key) {
   if (OBSK.has(key) && OBS_TM) return OBS_TM;
   return pinned(key) ? PIN_TM : null;
 }
-/* 누적(acc) 층 요청에 카드의 구간을 싣는다 — 저장한 설정이 서버에 닿기 전에도 같은 구간을 그리게 */
+/* 누적(acc) 층 요청에 카드의 구간을 싣는다 — 저장한 설정이 서버에 저장되기 전에도 같은 구간을 그리게 */
 function accParams(p, key) {
   if (!ACCK.has(key) || CASE) return p;
   p.set("hours", String(SET.acc_hours || 12));

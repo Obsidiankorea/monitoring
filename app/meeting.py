@@ -157,7 +157,7 @@ def tide_lines(sgs: list[str], names: list[str]) -> tuple[list[dict] | None, lis
     out = [{"text": "다음 만조 — " + " · ".join(one(r) for r in use), "subs": []}]
     wet = sorted({w for r in use for w in r.get("wet") or []})
     if wet:
-        out.append({"text": "7일 안 만조가 지반고에 닿는 시설: " + ", ".join(wet), "subs": []})
+        out.append({"text": "7일 안 만조가 지반고를 넘는 시설: " + ", ".join(wet), "subs": []})
     sp = tide._spring_text()
     if sp:
         out.append({"text": sp, "subs": []})

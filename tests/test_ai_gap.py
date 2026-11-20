@@ -29,7 +29,7 @@ def test_eta_not_reached_within_forecast_hours():
 def test_gap_binding_is_the_farthest_condition():
     g = ai._gap(ai._part("일/누적", 80, 100), ai._part("예보 시우량", 5, 20, "㎜/h"))
     assert (g["pct"], g["left"], g["unit"], g["by"]) == (25, 15, "㎜/h", "예보 시우량")
-    assert g["partial"] is False and g["eta"] is None        # 시우량은 안 쌓이는 값 — 닿는 시각을 말하지 않는다
+    assert g["partial"] is False and g["eta"] is None        # 시우량은 안 쌓이는 값 — 넘는 시각을 말하지 않는다
 
 
 def test_gap_partial_when_a_condition_is_unknown():
@@ -44,7 +44,7 @@ def test_ladder_landslide_control_gap_and_eta():
     g = c["gap"]
     assert (g["pct"], g["left"], g["by"]) == (87, 12, "24시간")
     assert g["eta"] == {"at": "15", "i": 1}                   # 78 + 10 + 12 = 100 ≥ 90
-    assert ai.gap_text(c) == "기준 87% · 남은 12㎜(24시간) · 예보대로면 15시경 닿음"
+    assert ai.gap_text(c) == "기준 87% · 남은 12㎜(24시간) · 예보대로면 15시경 넘음"
 
 
 def test_ladder_gap_without_forecast_has_no_eta():
@@ -58,11 +58,11 @@ def test_ladder_capped_forecast_makes_50mm_condition_unknown():
 
 
 def test_landslide_12h_and_24h_are_separate_or_rows():
-    """별표 4 — 과거 12시간 또는 24시간. 한쪽만 차도 그 단계에 닿는다(줄이 따로)."""
+    """별표 4 — 과거 12시간 또는 24시간. 한쪽만 차도 그 단계를 넘는다(줄이 따로)."""
     lad = ai.ladders(_row(rain={"1h": 5, "3h": 20, "12h": 160, "24h": 100, "48h": 300}), False, [])
     ev = {c["rule"][:4]: c["st"] for c in lad["산사태"] if c["stage"] == "긴급대피" and "gap" in c}
     assert ev == {"12시간": "met", "24시간": "no"}
-    assert _rule(lad, "산사태", "긴급대피", "12시간")["gap"]["eta"] is None      # 이미 닿았다
+    assert _rule(lad, "산사태", "긴급대피", "12시간")["gap"]["eta"] is None      # 이미 넘었다
 
 
 def test_landslide_forest_prediction_level():

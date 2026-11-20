@@ -28,7 +28,7 @@ def test_msg_groups_by_emd():
 
 
 def test_snapshot_items_carry_the_gap_text(monkeypatch):
-    """화면 목록에는 '기준 N% · 남은 ㎜ · 닿는 시각' 글이 같이 간다(알림 문자는 그대로)."""
+    """화면 목록에는 '기준 N% · 남은 ㎜ · 넘는 시각' 글이 같이 간다(알림 문자는 그대로)."""
     gap = {"pct": 80, "left": 20, "unit": "㎜", "by": "일/누적", "partial": False, "eta": {"at": "15", "i": 1}, "parts": []}
     lad = {"산사태": [{"stage": "사전대피", "rule": "r", "st": "near", "gap": gap},
                     {"stage": "긴급대피", "rule": "호우경보 발령", "st": "met"}]}
@@ -40,7 +40,7 @@ def test_snapshot_items_carry_the_gap_text(monkeypatch):
     monkeypatch.setitem(aiwatch._SNAP, "v", None)
     items = aiwatch.snapshot("http://x")["items"]
     by = {i["rule"]: i for i in items}
-    assert by["r"]["gap"] == "기준 80% · 남은 20㎜(일/누적) · 예보대로면 15시경 닿음"
+    assert by["r"]["gap"] == "기준 80% · 남은 20㎜(일/누적) · 예보대로면 15시경 넘음"
     assert by["호우경보 발령"]["gap"] == ""
     assert by["r"]["pct"] == 80 and by["호우경보 발령"]["pct"] is None
     snap = aiwatch.snapshot("http://x")

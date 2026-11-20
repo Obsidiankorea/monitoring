@@ -230,7 +230,7 @@ def series_of(e: dict, s: dict, fam: str, rule: str) -> dict | None:
 
 
 def reach_of(e: dict, s: dict, fam: str, rule: str) -> int:
-    """지금 또는 예보(초단기 + 단기) 끝까지 닿을 수 있는 가장 높은 % 의 윗값 — 문턱 거르기용. 시각마다 다시 대조하는 series_of 대신 한 번에:
+    """지금 또는 예보(초단기 + 단기) 끝까지 오를 수 있는 가장 높은 % 의 윗값 — 문턱 거르기용. 시각마다 다시 대조하는 series_of 대신 한 번에:
     누적 = 지금 + 예보 다 더함, 1시간 · 3시간 · 예보 시우량 = 예보 가운데 가장 큰 것, 야간 예보 기준도 켠다(넉넉하게 — 덜 거르는 쪽으로).
     e 는 지구 자리로 바꾼 줄(at_point 뒤)."""
     fh = [v or 0 for v in (e.get("eta_hours") or e.get("fc_hours") or [])]
@@ -323,7 +323,7 @@ def rows_of(sg: str, base: str, k: float, add: tuple = (0.0, 0.0), series: bool 
                     v.update(site=ss, site_slide=True, top=max(v["top"], ss))
                 if v:
                     site_urgent(v, d["rule"])
-            # 문턱(min) — 지금 · 예보로 닿을 윗값이 모자라면 시간별 series(비싼 것)를 건너뛴다. 두 기준 중 큰 것(기준을 바꿔도 같은 지구)
+            # 문턱(min) — 지금 · 예보로 오를 윗값이 모자라면 시간별 series(비싼 것)를 건너뛴다. 두 기준 중 큰 것(기준을 바꿔도 같은 지구)
             reach = max(v["top"] for v in b.values() if v)
             if min_pct and reach < min_pct:
                 reach = max(reach, reach_of(eg, g, d["fam"], d["rule"]), reach_of(ea2, a, d["fam"], d["rule"]) if ea else 0)
@@ -341,7 +341,7 @@ def rows_of(sg: str, base: str, k: float, add: tuple = (0.0, 0.0), series: bool 
 
 def build(sigun: str, base: str, k: float = 1.0, add_h: float = 0.0, add_24: float = 0.0, series: bool = False, sb: str | None = None,
           min_pct: float = 0, keep: str | None = None) -> dict:
-    """min_pct — 지금 · 예보로 그 % 에 못 닿는 지구는 rows 에서 뺀다(keep 지구는 남김). 시군 차트(chart)는 늘 전체로 센다."""
+    """min_pct — 지금 · 예보로 그 % 까지 못 오르는 지구는 rows 에서 뺀다(keep 지구는 남김). 시군 차트(chart)는 늘 전체로 센다."""
     sgs = list(ai.SIGUN_FULL) if sigun == "all" else [sigun]
     with ThreadPoolExecutor(max_workers=4) as ex:
         got = list(ex.map(lambda s: (s, *rows_of(s, base, k, (add_h, add_24), series, sb, min_pct, keep)), sgs))

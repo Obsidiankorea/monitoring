@@ -17,7 +17,7 @@ def test_decisions_record_list_delete(tdb):
 
 
 def test_eta_runs_into_short_forecast():
-    """초단기 6시간 안에 안 닿아도 단기예보(eta_hours)를 이어 '내일 01' 같은 시각을 낸다 — 산사태 긴급대피 24시간 210㎜."""
+    """초단기 6시간 안에 넘지 않아도 단기예보(eta_hours)를 이어 '내일 01' 같은 시각을 낸다 — 산사태 긴급대피 24시간 210㎜."""
     r = {"rain": {"1h": 5, "3h": 10, "12h": 100, "24h": 185, "48h": 245}, "fc_peak": 4, "fc_run30": 0, "m15": 1, "ante": 0,
          "fc_hours": [4] * 6, "fc_labels": ["19", "20", "21", "22", "23", "00"]}
     pick = lambda r: next(x for x in ai.ladders(r, False, [])["산사태"] if x["rule"].startswith("24시간 210"))  # noqa: E731
@@ -169,7 +169,7 @@ def test_district_emd_names_that_differ_from_the_map():
 
 
 def test_build_min_drops_districts_that_cannot_reach(monkeypatch):
-    """min=50 — 지금 · 예보로 50% 에 못 닿는 지구는 rows 에서 빠지고 series 도 안 만든다. n_all · 시군 차트는 전체, r(keep) 지구는 남는다."""
+    """min=50 — 지금 · 예보로 50% 까지 못 오르는 지구는 rows 에서 빠지고 series 도 안 만든다. n_all · 시군 차트는 전체, r(keep) 지구는 남는다."""
     from app import contacts, judge, safety, terrain
     e = {"emd": "북면", "rain": {"1h": 1, "3h": 2, "12h": 5, "24h": 10, "48h": 10}, "m15": 0, "fc_peak": 1, "fc_run30": 0, "ante": 0,
          "fc_hours": [1] * 6, "fc_labels": [str(h) for h in range(6)], "sites": [], "fc6h": 6, "later": None}

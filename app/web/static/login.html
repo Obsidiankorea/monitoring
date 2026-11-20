@@ -81,7 +81,7 @@
         const r = await fetch("/api/auth/setup", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ login, password, name: $("name").value.trim() }) });
         if (r.ok) return location.replace("/admin.html");
         $("msg").textContent = (await r.json().catch(() => ({}))).detail || "만들지 못했습니다";
-      } catch { $("msg").textContent = "서버에 닿지 않습니다"; }
+      } catch { $("msg").textContent = "서버에 연결하지 못했습니다"; }
       $("go").disabled = false;
       return;
     }
@@ -93,7 +93,7 @@
       const j = await r.json().catch(() => ({}));
       $("msg").textContent = j.detail || "로그인하지 못했습니다";
       $("pw").select();
-    } catch { $("msg").textContent = "서버에 닿지 않습니다 — 잠시 뒤 다시"; }
+    } catch { $("msg").textContent = "서버에 연결하지 못했습니다 — 잠시 뒤 다시"; }
     $("go").disabled = false;
   });
   // http 로 바깥(공인 주소)에서 들어왔다 — 이 PC · 사내망 · Tailscale(100.x) 이 아니면 경고
@@ -118,7 +118,7 @@
       const j = await r.json().catch(() => ({}));
       if (r.ok) { m.className = "ok"; m.textContent = `「${login}」 신청했습니다 — 관리자가 승인하면 로그인할 수 있습니다.`; $("su").reset(); }
       else m.textContent = j.detail || "신청하지 못했습니다";
-    } catch { m.textContent = "서버에 닿지 않습니다"; }
+    } catch { m.textContent = "서버에 연결하지 못했습니다"; }
     $("su-go").disabled = false;
   });
   for (const id of ["su-login", "su-name", "su-pw", "su-pw2"]) $(id).addEventListener("input", () => { $("su-msg").textContent = ""; });

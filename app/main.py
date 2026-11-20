@@ -179,7 +179,7 @@ async def lifespan(app: FastAPI):
         return
     sched = AsyncIOScheduler(timezone="Asia/Seoul")   # 시각은 전부 KST. UTC로 바꾸지 않는다.
     app.state.sched = sched
-    # 수집기 골라 끄기 — SKIP_COLLECT=bangjae 처럼(쉼표). 언레이드(집)에서는 스방(내부망)에 닿지 않아 실패만 쌓인다
+    # 수집기 골라 끄기 — SKIP_COLLECT=bangjae 처럼(쉼표). 언레이드(집)에서는 스방(내부망)에 접속할 수 없어 실패만 쌓인다
     skip = {x.strip() for x in os.environ.get("SKIP_COLLECT", "").split(",") if x.strip()}
     app.state.skip = skip
     if skip:
@@ -827,7 +827,7 @@ async def api_judge(request: Request, sigun: str = "all", k: float = 1.0, add_h:
                     min_: float = Query(0, alias="min"), r: str = "", fresh: int = 0):
     """상황판단 모드 — 지구 한 줄씩(위키 지구 × 기상청 격자 · AWS 면 두 기준의 강수 · 통제 · 사전대피 · 긴급대피 %).
     sigun=all 이면 경남 전체(시군 차트 + 지구 목록). series=1 이면 지구마다 앞으로 시간별 % (차트 줄 · 재생). 연락처는 넣지 않는다(/api/contacts).
-    min=50 이면 지금 · 예보(초단기 포함)로 50% 에 못 닿는 지구는 빼고(n_all 은 전체 수, 시군 차트는 전체로) — r 지구는 남긴다(주소로 바로 연 지구).
+    min=50 이면 지금 · 예보(초단기 포함)로 50% 까지 못 오르는 지구는 빼고(n_all 은 전체 수, 시군 차트는 전체로) — r 지구는 남긴다(주소로 바로 연 지구).
     결과는 judge.BTTL 초 캐시(computed_at = 계산 시각), fresh=1 이면 다시 센다."""
     from . import judge
     me = f"http://127.0.0.1:{os.environ.get('PORT', '8000')}"
@@ -1011,7 +1011,7 @@ async def api_ai_task(body: dict):
 
 @app.get("/api/ai/watch")
 async def api_ai_watch():
-    """지금 위키 기준(통제 · 사전대피 · 긴급대피)에 가까워졌거나(70%↑) 닿은 곳 — 지도 표식 · 왼쪽 위험 아이콘용.
+    """지금 위키 기준(통제 · 사전대피 · 긴급대피)에 가까워졌거나(70%↑) 넘은 곳 — 지도 표식 · 왼쪽 위험 아이콘용.
     텔레그램 알림 설정과 무관하게 언제나 읽는다(2분 캐시)."""
     try:
         return await asyncio.to_thread(aiwatch.snapshot, _ai_base(None))
