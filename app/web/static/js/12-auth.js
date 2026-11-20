@@ -28,6 +28,9 @@
     + `<a href="${SNAP_URL("/map.html")}">시연 화면</a>`
     + `<button type="button" id="who-view" aria-expanded="false" aria-controls="vw-pop">화면 저장</button>`
     + (u.role === "admin" ? `<a href="/admin.html">계정 관리</a>` : "")
+    + (u.role === "admin" ? `<label class="who-as">${AS_SIGUN ? `<b>${esc(AS_SIGUN)} 화면으로 보는 중</b>` : "시군 화면"}
+        <select id="who-as" aria-label="시군 화면으로 보기"><option value="">${AS_SIGUN ? "도 화면으로" : "고르기"}</option>
+        ${(me.siguns || []).filter(s => s !== AS_SIGUN).map(s => `<option>${esc(s)}</option>`).join("")}</select></label>` : "")
     + `<button type="button" id="who-out">로그아웃</button>`;
   document.body.appendChild(el);
   viewMenu(u);
@@ -36,7 +39,18 @@
     location.replace("/login.html");
   });
   if (u.role === "sigun" && u.sigun) lockSigun(u.sigun);
+  if (u.role === "admin") {
+    $("who-as").addEventListener("change", e => {          // 관리자 — 그 시군 담당자가 보는 화면으로(주소 ?as=창원)
+      const q = new URLSearchParams(location.search);
+      e.target.value ? q.set("as", e.target.value) : q.delete("as");
+      location.search = q.toString();
+    });
+    if (AS_SIGUN && (me.siguns || []).includes(AS_SIGUN)) lockSigun(AS_SIGUN);
+  }
 })();
+
+/* 관리자의 '시군 화면으로 보기' — 화면(고정 · 시군 밖 감추기)만 시군처럼. 자료 범위(연락처 등)는 관리자 그대로 */
+const AS_SIGUN = new URLSearchParams(location.search).get("as");
 
 /* 화면 저장 — 이 브라우저의 화면 기억(gn-*)을 계정에. 새 PC · 새 주소에서는 저장한 것으로 시작(/api/prefs.js) */
 function viewMenu(u) {
