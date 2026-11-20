@@ -1159,8 +1159,19 @@ async def api_reports_progress():
     return JSONResponse(await asyncio.to_thread(reports.progress), headers={"Cache-Control": "no-store"})
 
 
+REP_BUSY = {"n": 0}      # 지금 보고서 서버를 기다리는 요청 수 — 배포(deploy.sh)가 0 이 될 때까지 기다린다(/api/status reports_busy)
+
+
 @app.post("/api/reports/run")
 async def api_reports_run(body: dict):
+    REP_BUSY["n"] += 1
+    try:
+        return await _reports_run(body)
+    finally:
+        REP_BUSY["n"] -= 1
+
+
+async def _reports_run(body: dict):
     """{id, opts, items, tg, dl} — 언레이드 jaenan-weather 에서 보고서를 만들어 받는다. dl 이면 첨부로(파일이 여럿이면 zip,
     텔레그램 결과는 X-Tg: ok|fail|off), dl=false 면 텔레그램만 보내고 JSON {ok, name, tg}. 텔레그램은 파일마다.
     items = 작성 창(상황판단회의)이 고른 문구 {중점유의사항: [{text, subs}], 조치계획: [...]}. 시연(DEMO)에서는 만들지 않는다."""
@@ -1454,7 +1465,7 @@ async def api_update_restart():
 
 @app.get("/api/status")
 async def api_status():
-    return {"collect": queries.status(), "poll": POLL_DEFAULT,
+    return {"collect": queries.status(), "poll": POLL_DEFAULT, "reports_busy": REP_BUSY["n"],
             "intervals": intervals(),
             "qpf": qpf.cfg(), "publish": db.publish_stats()}
 

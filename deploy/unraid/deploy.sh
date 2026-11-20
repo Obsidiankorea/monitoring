@@ -42,6 +42,13 @@ AI=(-e GN_AI="$GN_AI" -v "$D/config/claude:/app/config/claude:ro" -e GN_TERRAIN=
 if [ -d "$WIKI" ]; then AI+=(-e GN_WIKI=/wiki -v "$WIKI:/wiki:ro"); else echo "[deploy] ⚠ 위키가 없다($WIKI) — AI 보고에 기준 · 우려지역이 빠진다"; fi
 
 PREV=$(docker inspect --format '{{.Config.Image}}' "$NAME" 2>/dev/null || true)   # 안 뜨면 이것으로 되돌린다
+# 보고서를 기다리는 요청이 있으면 끝날 때까지(최대 20분) — 갈아 끼우면 그 요청이 끊겨 보고서를 못 받는다(2026-11-20)
+for i in $(seq 1 240); do
+  n=$(curl -fsS "http://127.0.0.1:$PORT/api/status" 2>/dev/null | grep -o '"reports_busy": *[0-9]*' | grep -o '[0-9]*$' || echo 0)
+  [ "${n:-0}" -gt 0 ] || break
+  [ "$i" = 1 ] && echo "[deploy] 보고서 $n개를 기다리는 중 — 끝나면 갈아 끼운다"
+  sleep 5
+done
 docker build -q -t "$NAME:$V" -t "$NAME:latest" --build-arg APP_VERSION="$V" "$D/repo" >/dev/null
 run_main() {
   docker rm -f "$NAME" >/dev/null 2>&1 || true
