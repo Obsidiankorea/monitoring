@@ -491,7 +491,7 @@ function repBsHtml() {
   return `<div class="opbg" id="rep-bs"><div class="op bs" role="dialog" aria-modal="true" aria-labelledby="rep-bs-t" tabindex="-1">
     <div class="oh"><div><b id="rep-bs-t">자료 기준 시각</b><small class="mute">${escH(b.title)} — ${escH(b.file || "")}</small></div>
       <button type="button" id="rep-bsx" aria-label="닫기 (Esc)" title="닫기 (Esc)">✕</button></div>
-    <dl class="ob">${b.list.map(x => `<dt>${escH(x.name)}</dt><dd>${escH(x.at)}</dd>`).join("")}</dl>
+    <dl class="ob">${b.list.map(x => `<dt${x.warn ? ' class="warn"' : ""}>${escH(x.name)}</dt><dd${x.warn ? ' class="warn"' : ""}>${escH(x.at)}</dd>`).join("")}</dl>
     <p class="mute bsn">기상청 자료 시각은 문서에 넣지 않았다 — 이 창으로만 알린다. 수위 · 우려지역 · 조위는 문서 각주에도 있다.</p>
     <div class="of"><span class="sp"></span><button type="button" id="rep-bsok" class="pri">확인</button></div></div></div>`;
 }

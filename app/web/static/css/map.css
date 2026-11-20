@@ -135,6 +135,14 @@ button { font-family: inherit; }
 #lsrc.fold { font-size: 0; }
 #lsrc.fold::before { content: "출처 ▸"; font-size: 11px; color: var(--ink-3); }
 #badges { display: inline-flex; gap: 6px; text-shadow: none; }
+#rep-bs .ob .warn { color: #ffb547; font-weight: 700; }
+#colwarn { margin-left: 8px; min-height: 26px; padding: 0 10px; font: 700 12px var(--sans); color: #1a0f00; background: #ffb547; border: 0; border-radius: 999px; cursor: pointer; text-shadow: none; }
+#colwarn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#colwarn-pop { margin-top: 6px; max-width: 340px; padding: 10px 12px; font: 13px/1.5 var(--sans); color: var(--ink-2); text-shadow: none;
+  background: var(--panel); border: 1px solid #8a5a12; border-radius: 10px; }
+#colwarn-pop[hidden] { display: none; }
+#colwarn-pop ul { margin: 6px 0; padding-left: 16px; } #colwarn-pop li b { color: var(--ink); }
+#colwarn-pop li small { display: block; color: var(--ink-2); font-size: 11.5px; } #colwarn-pop > small { font-size: 12px; }
 .badge {
   display: inline-block; font-size: 13px; font-weight: 600; padding: 2px 9px; border-radius: 6px;
   border: 1px solid var(--line); color: var(--ink-2); white-space: nowrap;

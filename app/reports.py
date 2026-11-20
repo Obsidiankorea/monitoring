@@ -324,6 +324,9 @@ def fetch(rid: str, opts: dict | None = None, client: httpx.Client | None = None
         if meta is not None:                       # 화면 팝업 — 이번 파일에 쓴 기상청 자료 시각(jaenan) + 이번 요청에 넣은 우리 자료 시각
             meta["basis"] = [{"name": str(x.get("name"))[:60], "at": str(x.get("at"))[:120]}
                              for x in j.get("basis") or [] if isinstance(x, dict)][:20] + local
+            meta["warn"] = warn_text(j.get("warn"))
+            if meta["warn"]:                       # 기상청 조회가 끝내 실패한 자료 — 그 칸이 비었거나 지난 값일 수 있다(맨 위에)
+                meta["basis"].insert(0, {"name": "⚠️ 기상청 조회 실패 — 그 칸 확인 필요", "at": meta["warn"], "warn": True})
         return out
     except httpx.HTTPError as e:
         raise RuntimeError(_mask(f"보고서 서버에 닿지 못했다 — {type(e).__name__}: {e}")) from None
@@ -332,6 +335,15 @@ def fetch(rid: str, opts: dict | None = None, client: httpx.Client | None = None
     finally:
         if client is None:
             c.close()
+
+
+def warn_text(warn) -> str:
+    """jaenan 의 warn [{label, fail, total}] → '기상특보 18/207번 · 파고 1/1번(못 받음)'."""
+    out = []
+    for x in warn or []:
+        if isinstance(x, dict) and x.get("label") and isinstance(x.get("fail"), int) and isinstance(x.get("total"), int):
+            out.append(f"{str(x['label'])[:20]} {x['fail']}/{x['total']}번" + ("(못 받음)" if x["fail"] >= x["total"] else ""))
+    return " · ".join(out[:10])
 
 
 TG_KIND = {"image/png": ("sendPhoto", "photo"), "image/gif": ("sendAnimation", "animation")}   # 그 밖은 sendDocument

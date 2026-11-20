@@ -148,5 +148,9 @@ async def collect(now: datetime | None = None) -> dict:
         raise
 
     db.put_snapshot("alerts", at, at, data)
+    try:                                           # 원자료는 바뀔 때만 — 재난상황보고서 서버가 기상청 대신 읽는다
+        db.put_alert_raw(at, raw.decode("utf-8"))
+    except Exception:                              # noqa: BLE001 — 지도 수집은 막지 않는다
+        pass
     db.log_collect("alerts", True, at, f"{len(data['groups'])}종")
     return data

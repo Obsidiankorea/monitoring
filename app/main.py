@@ -1155,7 +1155,8 @@ async def api_reports_run(body: dict):
     if tg:
         try:
             for i, (n, d) in enumerate(files):
-                await asyncio.to_thread(reports.send_tg, n, d, f"📄 {reports.BY_ID[rid]['name']} — 경남 강수 지도에서 보냄" if not i else "")
+                cap = f"📄 {reports.BY_ID[rid]['name']} — 경남 강수 지도에서 보냄" + (f"\n⚠️ 기상청 조회 실패: {meta['warn']} — 확인 필요" if meta.get("warn") else "")
+                await asyncio.to_thread(reports.send_tg, n, d, cap if not i else "")
             st = "ok"
         except RuntimeError as e:
             st, why = "fail", reports._mask(e)[:200]
@@ -1503,6 +1504,28 @@ async def api_refresh(kind: str, force: bool = False):
 
 
 # ── 시연(스냅숏) — 시계와 목록 ─────────────────────────────────────────────
+ALERT_RAW_KEYS = ("REG_UP", "REG_UP_KO", "REG_ID", "REG_KO", "TM_FC", "TM_EF", "WRN", "LVL", "CMD", "ED_TM")
+
+
+@app.get("/api/alerts/raw")
+async def api_alerts_raw(tm: str = ""):
+    """재난상황보고서 서버용 — 그 시각(YYYYMMDDHHMM, 비우면 지금) 특보 현황을 기상청 wrn_now_data(disp=0) 글 모양 그대로(euc-kr).
+    1분마다 받아 바뀔 때만 둔 원자료에서 — 그 시각 수집이 없으면 404(그때는 기상청에 묻는다)."""
+    try:
+        t = min(datetime.strptime(tm, "%Y%m%d%H%M"), clock.now()) if tm else clock.now()
+    except ValueError as e:
+        raise HTTPException(400, "tm=YYYYMMDDHHMM") from e
+    got = await asyncio.to_thread(db.alert_raw_at, t)
+    if not got:
+        raise HTTPException(404, "그 시각 특보 수집 기록이 없다")
+    rows = json.loads(got[1])
+    lines = ["#START7777", f"# gn-monitor 특보 원자료 — {got[0]} 에 받은 것"]
+    lines += [", ".join(str(r.get(k, "")) for k in ALERT_RAW_KEYS) + "=" for r in rows]
+    lines.append("#7777END")
+    return Response("\n".join(lines).encode("euc-kr", "replace"), media_type="text/plain; charset=euc-kr",
+                    headers={"X-GN-Alert-At": got[0]})
+
+
 @app.get("/api/clock.js")
 async def api_clock_js():
     """화면이 맨 먼저 읽는 작은 스크립트 — 시연이면 멈춘 시각(ms)과 그 시연, 실황이면 null."""

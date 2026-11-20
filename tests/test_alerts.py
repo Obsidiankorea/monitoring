@@ -100,3 +100,26 @@ def test_subzone_with_gun_and_control_order():
     assert [(p["reg"], p["sigun"]) for p in d["pending"]] == [("밀양시", "밀양"), ("하동군북부", "하동")]
     from app.domain.regions import sub_of
     assert sub_of("하동군북부") == "북" and sub_of("합천서북부") == "서북"
+
+
+def test_alert_raw_kept_on_change_and_served_as_text(tdb):
+    """특보 원자료 — 바뀔 때만 두고, 그 시각 수집이 있을 때만 wrn_now_data(disp=0) 글 모양으로 내준다(재난상황보고서 서버용)"""
+    import json
+    from datetime import datetime
+    from fastapi.testclient import TestClient
+    from app import main
+    row = {"REG_UP": "L1080000", "REG_UP_KO": "경상남도", "REG_ID": "L1080100", "REG_KO": "창원", "TM_FC": "202611200500",
+           "TM_EF": "202611200600", "WRN": "호우", "LVL": "주의보", "CMD": "발표", "ED_TM": ""}
+    body = json.dumps([row], ensure_ascii=False)
+    assert tdb.put_alert_raw("2026-11-20 06:00", body) and not tdb.put_alert_raw("2026-11-20 06:01", body)
+    tdb.put_snapshot("alerts", "2026-11-20 06:05", "2026-11-20 06:05", {"groups": []})
+    assert tdb.alert_raw_at(datetime(2026, 11, 20, 6, 6))[0] == "2026-11-20 06:00"
+    assert tdb.alert_raw_at(datetime(2026, 11, 20, 6, 30)) is None            # 그 시각 수집 기록이 없다
+    assert tdb.alert_raw_at(datetime(2026, 11, 20, 6, 4)) is None             # 3분 안 수집 없음
+    c = TestClient(main.app)
+    r = c.get("/api/alerts/raw?tm=202611200606")
+    assert r.status_code == 200
+    line = [l for l in r.content.decode("euc-kr").splitlines() if not l.startswith("#")][0]
+    v = [x.strip() for x in line.rstrip("=").split(",")]
+    assert v[2] == "L1080100" and v[6] == "호우" and v[7] == "주의보"
+    assert c.get("/api/alerts/raw?tm=202611200630").status_code == 404

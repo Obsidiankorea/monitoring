@@ -348,3 +348,16 @@ def test_fetch_basis_from_jaenan(keys):
     meta = {}
     reports.fetch("nature", {}, httpx.Client(transport=httpx.MockTransport(h)), meta=meta)
     assert meta["basis"] == [{"name": "특보", "at": "a"}]
+
+
+def test_jaenan_kma_failures_shown_first(keys):
+    """기상청 조회가 끝내 실패한 자료(jaenan warn)는 자료 기준 창 맨 위에 경고로 — 보고서 칸이 비었을 수 있다"""
+    def h(req):
+        if req.url.path.startswith("/api/run/"):
+            return httpx.Response(200, json={"ok": True, "names": ["x.hwp"], "files": ["/files/x.hwp"], "basis": [{"name": "특보", "at": "a"}],
+                                             "warn": [{"label": "기상특보", "fail": 18, "total": 207}, {"label": "파고", "fail": 1, "total": 1}, "bad"]})
+        return httpx.Response(200, content=HWP)
+    meta = {}
+    reports.fetch("daily", {}, httpx.Client(transport=httpx.MockTransport(h)), meta=meta)
+    assert meta["warn"] == "기상특보 18/207번 · 파고 1/1번(못 받음)"
+    assert meta["basis"][0]["warn"] and meta["basis"][1] == {"name": "특보", "at": "a"}

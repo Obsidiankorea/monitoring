@@ -106,6 +106,12 @@ CREATE TABLE IF NOT EXISTS bangjae_hourly (
 );
 CREATE INDEX IF NOT EXISTS idx_bjh_tm ON bangjae_hourly(tm);
 
+-- 특보 원자료(wrn_now_data JSON 행 목록) — 바뀔 때만 한 줄. 재난상황보고서 서버가 기상청 대신 읽는다(/api/alerts/raw)
+CREATE TABLE IF NOT EXISTS alert_raw (
+  at   TEXT PRIMARY KEY,                -- 'YYYY-MM-DD HH:MM' 이 내용을 처음 받은 때
+  body TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS snapshot (
   kind       TEXT NOT NULL,            -- 'alerts'
   base_time  TEXT NOT NULL,
@@ -263,6 +269,29 @@ def log_collect(kind: str, ok: bool, at: str, detail: str = "") -> None:
                  ok_at=CASE WHEN excluded.ok=1 THEN excluded.ok_at ELSE collect_log.ok_at END""",
             (kind, at if ok else None, at, 1 if ok else 0, detail[:300]),
         )
+
+
+def put_alert_raw(at: str, body: str) -> bool:
+    """특보 원자료 — 앞의 것과 같으면 두지 않는다(바뀔 때만). 둔 것이면 True.
+    shortcut: 지우지 않는다 — 하루 몇 줄이라 작다, 커지면 maint 에서 40일 넘은 것 지우기."""
+    with tx() as con:
+        r = con.execute("SELECT body FROM alert_raw ORDER BY at DESC LIMIT 1").fetchone()
+        if r and r["body"] == body:
+            return False
+        con.execute("INSERT OR REPLACE INTO alert_raw(at, body) VALUES(?,?)", (at, body))
+        return True
+
+
+def alert_raw_at(t) -> tuple[str, str] | None:
+    """그 시각(datetime) 특보 원자료 (받은 때, 본문). 그 시각 3분 안에 특보를 받은 기록이 없거나
+    원자료를 두기 시작하기 전이면 None — 부르는 쪽이 기상청에 묻는다."""
+    from datetime import timedelta
+    hi, lo = t.strftime("%Y-%m-%d %H:%M"), (t - timedelta(minutes=3)).strftime("%Y-%m-%d %H:%M")
+    with tx() as con:
+        if not con.execute("SELECT 1 FROM snapshot WHERE kind='alerts' AND base_time BETWEEN ? AND ? LIMIT 1", (lo, hi)).fetchone():
+            return None
+        r = con.execute("SELECT at, body FROM alert_raw WHERE at<=? ORDER BY at DESC LIMIT 1", (hi,)).fetchone()
+    return (r["at"], r["body"]) if r else None
 
 
 def put_snapshot(kind: str, base_time: str, fetched_at: str, payload: Any) -> None:

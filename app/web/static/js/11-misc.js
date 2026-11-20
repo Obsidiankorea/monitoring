@@ -914,3 +914,33 @@ async function bootWatch() {
   paint();
 }
 bootWatch();
+
+/* ── 수집 경고(!) — 기상청 등에서 받는 것이 제때 안 들어오면 제목 아래에 띄운다(1분마다 /api/status).
+   늦음 = 마지막 정상 수집이 그 주기의 3배(최소 15분) 넘게 지났다. 한 번도 받은 적 없는 것(스방 — 서버에서 안 닿는다)은 빼고 ── */
+const COL_NAME = Object.fromEntries([...BOOT_SRC, ["bangjae", "스방 강우"], ["tide", "조위"]]);
+async function colWatch() {
+  if (window.GN_SNAP || CASE || test) return;
+  const b = $("colwarn"), pop = $("colwarn-pop");
+  if (!b) return;
+  const tick = async () => {
+    let s; try { s = await getJson("/api/status"); } catch { return; }
+    const now = NOWD().getTime(), iv = s.intervals || {};
+    const late = Object.entries(s.collect || {}).filter(([k, v]) => v.ok_at && COL_NAME[k]).map(([k, v]) => {
+      const ago = (now - new Date(v.ok_at.replace(" ", "T") + ":00+09:00").getTime()) / 60000;
+      return { k, v, ago, lim: Math.max(3 * (iv[k] || 600) / 60, 15) };
+    }).filter(x => x.ago > x.lim).sort((a, z) => z.ago - a.ago);
+    b.hidden = !late.length;
+    if (!late.length) { pop.hidden = true; b.setAttribute("aria-expanded", "false"); return; }
+    b.textContent = `! 수집 지연 ${late.length}`;
+    b.title = "제때 안 들어오는 자료 — 눌러서 보기";
+    const esc = t => String(t ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    pop.innerHTML = `<b>제때 안 들어오는 자료</b><ul>${late.map(x => `<li><b>${esc(COL_NAME[x.k])}</b> 마지막 정상 ${esc(x.ago < 1200 ? x.v.ok_at.slice(11) : x.v.ok_at.slice(5).replace("-", "."))}
+      (${x.ago < 90 ? `${Math.round(x.ago)}분` : x.ago < 2880 ? `${Math.round(x.ago / 60)}시간` : `${Math.round(x.ago / 1440)}일`} 전)${x.v.ok ? "" : `<small>${esc((x.v.detail || "").slice(0, 80))}</small>`}</li>`).join("")}</ul>
+      <small>지도의 그 자료는 마지막으로 받은 것입니다. 보통 기상청 쪽 지연이고, 다시 받으면 저절로 사라집니다.</small>`;
+  };
+  b.addEventListener("click", () => { pop.hidden = !pop.hidden; b.setAttribute("aria-expanded", String(!pop.hidden)); });
+  document.addEventListener("keydown", ev => { if (ev.key === "Escape" && !pop.hidden) { pop.hidden = true; b.setAttribute("aria-expanded", "false"); } });
+  await tick();
+  setInterval(tick, 60000);
+}
+colWatch();
