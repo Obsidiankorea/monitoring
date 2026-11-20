@@ -34,3 +34,23 @@ def test_alert_backfill_exact_minutes_only(tdb):
     assert tdb.alert_raw_at(datetime(2026, 11, 19, 9, 10))[1] == '[{"x": 1}]'
     assert tdb.alert_raw_at(datetime(2026, 11, 19, 9, 13)) is None       # 사이 분은 기상청에(해제 시각을 분 단위로 찾는다)
     assert tdb.alert_raw_at(datetime(2026, 11, 20, 10, 6))[1] == "[]"     # 1분마다 둔 뒤는 그대로
+
+
+def test_backfill_newest_first(tdb, monkeypatch):
+    """채워 넣기는 최근 시각부터 · 이미 채운 시각은 건너뛴다 · 1분마다 둔 뒤 시각은 묻지 않는다."""
+    import asyncio
+    from app.collectors import alerts
+    asked = []
+
+    async def fake(path, params):
+        asked.append(params["tm"])
+        return b"[]"
+    monkeypatch.setattr(alerts, "fetch_bytes", fake)
+    from datetime import datetime as dt, timedelta
+    first = (dt.now() - timedelta(hours=1)).replace(second=0, microsecond=0)
+    tdb.put_alert_raw(first.strftime("%Y-%m-%d %H:%M"), "[]")
+    n = asyncio.run(alerts.backfill_raw(hours=2, workers=2))
+    assert n == len(asked) >= 5 and asked[0] == max(asked) and asked[-1] == min(asked)      # 최근 것부터
+    assert all(a < first.strftime("%Y%m%d%H%M") for a in asked)
+    asked.clear()
+    assert asyncio.run(alerts.backfill_raw(hours=2, workers=2)) == 0 and asked == []
