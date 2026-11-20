@@ -180,7 +180,7 @@ const repCmMine = () => { const v = repPref().cmp; return Array.isArray(v) ? v :
 function repCmPick(g, kinds, n) {
   const all = REP.ph?.[g] || [], out = [];
   for (let round = 0; out.length < n && round < 20; round++) for (const k of kinds) {
-    const p = all.filter(x => (x.kinds || []).includes(k) && !out.includes(x))[0];
+    const p = all.filter(x => (x.kinds || []).includes(k) && !out.includes(x) && !/○/.test(x.text))[0];   // ○(채울 자리)가 있는 문구는 손으로 고를 때만
     if (p && out.length < n) out.push(p);
   }
   return all.filter(x => out.includes(x)).map(p => ({ k: p.text, text: p.text, subs: [...(p.subs || [])] }));

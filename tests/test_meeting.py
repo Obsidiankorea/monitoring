@@ -27,7 +27,7 @@ def test_past_lines_grade_a_kind_first(tmp_path, monkeypatch):
     assert got[0]["text"] == "**합천군** — 2025.7 호우: 피해 1,084.4억 · 1시간 최대 81.5mm(삼가) · 24시간 395.5mm · 산사태 복구 64건 · 특별재난지역"
     assert got[0]["subs"] == ["- 2022.9 태풍힌남노: 피해 2,000.0억"]                   # 호우가 먼저(피해는 태풍이 커도) · B 등급 매미는 없다
     assert got[-1]["text"].startswith("※ 경남도 피해현황 및 복구계획(A 등급")
-    assert meeting.past_lines([], ["호우"]) == meeting.NO_ALERT
+    assert meeting.past_lines([], ["호우"]) == meeting.NO_PAST                  # 견줄 시군이 없다
 
 
 def test_district_lines_counts_and_no_names(monkeypatch):
@@ -56,3 +56,10 @@ def test_tide_only_when_relevant_and_toggles(monkeypatch):
     monkeypatch.setattr(queries, "alerts", _alerts([]))
     body, _ = meeting.extras(["호우"], {"과거사례": False})
     assert body == {"특보지역현황": meeting.NO_ALERT}                                   # 특보 없음 · 과거는 끔 · 조위는 해당 없음(본문에 없다)
+
+
+def test_sea_only_alert_is_named():
+    """바다 특보(풍랑)만 있으면 '육상 시군에 특보 없음(바다: 풍랑주의보)' — 그냥 '없음'이면 기상상황보고와 어긋난다."""
+    from app import meeting
+    assert meeting.district_lines([], ["풍랑주의보"])[0][0]["text"] == "육상 시군에 발효 중인 특보 없음(바다: 풍랑주의보)"
+    assert meeting.district_lines([])[0] == meeting.NO_ALERT

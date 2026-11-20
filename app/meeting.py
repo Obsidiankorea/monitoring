@@ -17,6 +17,12 @@ from . import ai, contacts, judge, queries, terrain, tide
 
 KINDS = ("호우", "태풍", "강풍", "풍랑", "대설", "한파", "폭염")
 NO_ALERT = [{"text": "발효 중인 특보 없음", "subs": []}]
+NO_PAST = [{"text": "특보가 난 시군이 없어 견줄 과거 사례 없음", "subs": []}]
+
+
+def _no_alert(names: list[str]) -> list[dict]:
+    """특보 시군이 없을 때 — 바다 특보(풍랑 등)만 있으면 그렇다고(그냥 '없음'이면 기상상황보고와 어긋난다)."""
+    return [{"text": f"육상 시군에 발효 중인 특보 없음(바다: {', '.join(names)})", "subs": []}] if names else NO_ALERT
 
 
 def alert_siguns() -> tuple[list[str], list[str], str | None]:
@@ -45,10 +51,10 @@ def _judged() -> tuple[list[dict], str | None]:
     return v.get("rows") or [], v.get("computed_at")
 
 
-def district_lines(sgs: list[str]) -> tuple[list[dict], list[dict]]:
+def district_lines(sgs: list[str], names: list[str] | None = None) -> tuple[list[dict], list[dict]]:
     """특보 시군마다 — 우려지구 수(유형별) · 지구 둘레 건물 · 판정 단계별 지구 수. (줄, 기준 시각들)"""
     if not sgs:
-        return NO_ALERT, []
+        return _no_alert(names or []), []
     rows, at = _judged()
     ter = terrain.table()
     out = []
@@ -106,7 +112,7 @@ def _event_label(eid: str) -> str:
 def past_lines(sgs: list[str], kinds: list[str]) -> list[dict]:
     """특보 시군마다 피해액 큰 A 등급 사건 1~2개 — 종류가 맞는 사건 먼저."""
     if not sgs:
-        return NO_ALERT
+        return NO_PAST
     ev = {e["event_id"]: e for e in _csv("경남 풍수해 사건 이력.csv") if e.get("신뢰도") == "A"}
     dmg = _csv("경남 풍수해 사건×시군 피해.csv")
     out = []
@@ -176,7 +182,7 @@ def extras(kinds: list[str], on: dict | None = None) -> tuple[dict, list[dict]]:
     if at:
         basis.append({"name": "특보 시군(지도 특보 자료)", "at": str(at)[:16] + (f" — {', '.join(names)}" if names else " — 해당 특보 없음")})
     if on["특보지역현황"]:
-        body["특보지역현황"], b = district_lines(sgs)
+        body["특보지역현황"], b = district_lines(sgs, names)
         basis += b
     if on["과거사례"]:
         body["과거사례"] = past_lines(sgs, [k for k in kinds if k in KINDS] + [k for n in names for k in KINDS if k in n])
