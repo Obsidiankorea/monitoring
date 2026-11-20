@@ -92,8 +92,8 @@ RULE_DEFAULT = {"비상1단계_호우주의보_시군": 4, "비상2단계_호우
                 "하천_사전대피_누적": 200, "하천_사전대피_예보시우량": 30, "하천_긴급대피_누적": 200, "하천_긴급대피_시우량": 30,
                 "지하공간_사전대피_15분": 20, "지하공간_사전대피_예보시우량": 55, "지하공간_긴급대피_15분": 30,
                 "지하공간_긴급대피_시우량": 55,
-                # [[겨울철 대설·한파 종합대책 (경남 자연재난과 업무편람)]] 대설 비상단계 — 호우와 숫자가 다르다
-                "비상1단계_대설주의보_시군": 4, "비상1단계_대설경보_시군": 3, "비상2단계_대설경보_시군": 4}
+                # [[대설 종합대책 2026-27 (경상남도 겨울철 자연재난)]] 대설 비상단계 — 호우와 숫자가 다르다(2026-27 은 경보 1개부터 비상 1단계)
+                "비상1단계_대설주의보_시군": 4, "비상1단계_대설경보_시군": 1, "비상2단계_대설경보_시군": 4}
 _RULES: dict = {}
 _LHU: dict = {}                                       # ladders 의 유형별 판정값 — rules()["v"] 가 같은 동안
 
@@ -522,12 +522,25 @@ def _stage(groups: list[dict]) -> dict | None:
     return None
 
 
+def _snow_siguns(groups: list[dict], names: tuple[str, ...]) -> set[str]:
+    """그 특보가 난 시군 — 세부구역으로 쪼갠 군은 구역의 50% 이상에 나야 1개 시군으로 센다([[대설 종합대책 2026-27 (경상남도 겨울철 자연재난)]]).
+    여러 특보(주의보 · 경보)를 함께 보면 세부구역을 합쳐서 센다."""
+    from .domain.regions import SUBZONES, canon_reg, sigun_of
+    regs = [canon_reg(r) for g in groups if not g.get("sea") and g["name"] in names for r in g.get("regions") or []]
+    whole = {s for g in groups if not g.get("sea") and g["name"] in names for s in g["siguns"] if s not in SUBZONES}
+    part: dict[str, set] = {}
+    for r in regs:
+        s = sigun_of(r)
+        if s in SUBZONES:                                    # 'OO군' 통째면 구역 전부, 세부구역이면 그 구역만
+            part.setdefault(s, set()).update(SUBZONES[s] if r.removesuffix("군") == s else {r} & set(SUBZONES[s]))
+    return whole | {s for s, got in part.items() if len(got) * 2 >= len(SUBZONES[s])}
+
+
 def _stage_snow(groups: list[dict]) -> dict | None:
     """대설 — 주의보(경보 시군도 셈) 1개↑ 초기대응 · 주의보 A개↑ 또는 경보 W1개↑ 비상1 · 경보 W2개↑ 비상2(값은 [[판정값]]).
-    비상3(경보 + 3일 이상 대설 전망)은 전망을 사람이 보고 바꾼다."""
-    land = [g for g in groups if not g.get("sea")]
-    w = {s for g in land if g["name"] == "대설경보" for s in g["siguns"]}
-    a = w | {s for g in land if g["name"] == "대설주의보" for s in g["siguns"]}
+    비상3(다수 시군 장기 대설 전망 · 대규모 피해)은 사람이 보고 바꾼다."""
+    w = _snow_siguns(groups, ("대설경보",))
+    a = _snow_siguns(groups, ("대설경보", "대설주의보"))
     if len(w) >= R("비상2단계_대설경보_시군"):
         return {"stage": "비상 2단계", "why": f"대설경보 {len(w)}개 시군({R('비상2단계_대설경보_시군')}개 이상)"}
     if len(a) >= R("비상1단계_대설주의보_시군") or len(w) >= R("비상1단계_대설경보_시군"):

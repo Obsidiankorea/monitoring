@@ -32,9 +32,14 @@ def test_parse_and_build():
 
 def test_do_stage_snow(monkeypatch):
     monkeypatch.setattr(ai, "overrides", lambda: {})
-    g = lambda name, sg: {"name": name, "siguns": sg, "sea": False}    # noqa: E731
+    g = lambda name, sg, regs=None: {"name": name, "siguns": sg, "sea": False, "regions": regs or list(sg)}    # noqa: E731
     assert ai.do_stage([g("대설주의보", ["거창"])])["stage"] == "초기대응"
     assert ai.do_stage([g("대설주의보", ["거창", "함양"]), g("대설경보", ["산청", "합천"])])["stage"] == "비상 1단계"
+    assert ai.do_stage([g("대설경보", ["창원"])])["stage"] == "비상 1단계"          # 2026-27 — 경보 1개부터
+    # 세부구역으로 쪼갠 군은 구역 50% 이상이어야 1개 시군 — 산청 3구역 중 1곳은 안 세고, 거창 2구역 중 1곳은 센다
+    assert ai.do_stage([g("대설주의보", ["산청"], ["산청북부"])]) is None
+    assert ai.do_stage([g("대설주의보", ["산청"], ["산청군북부", "산청서남부"])])["stage"] == "초기대응"
+    assert ai.do_stage([g("대설주의보", ["거창"], ["거창북부"])])["stage"] == "초기대응"
     assert ai.do_stage([g("대설경보", ["거창", "함양", "산청", "합천"])])["stage"] == "비상 2단계"
     # 호우와 대설이 같이면 높은 쪽
     assert ai.do_stage([g("호우경보", ["창원", "김해", "양산"]), g("대설주의보", ["거창"])])["stage"] == "비상 2단계"
