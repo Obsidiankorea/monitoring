@@ -1148,6 +1148,13 @@ async def api_reports():
     return reports.listing()
 
 
+@app.get("/api/reports/progress")
+async def api_reports_progress():
+    """보고서 서버가 지금 만드는 것의 진행 — 오른쪽 위 진행 띠가 만드는 동안 2초마다 읽는다."""
+    from . import reports
+    return JSONResponse(await asyncio.to_thread(reports.progress), headers={"Cache-Control": "no-store"})
+
+
 @app.post("/api/reports/run")
 async def api_reports_run(body: dict):
     """{id, opts, items, tg, dl} — 언레이드 jaenan-weather 에서 보고서를 만들어 받는다. dl 이면 첨부로(파일이 여럿이면 zip,
@@ -1913,6 +1920,23 @@ async def api_posts():
     """공지 · 요청 게시판 — {notice: [...], request: [...], status: {코드: 이름}}. 로그인한 사람은 다 본다."""
     from . import posts
     return JSONResponse(await asyncio.to_thread(posts.all_posts), headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/docs")
+async def api_docs():
+    """게시판 '문서' 탭 — docs/ 맨 위 · 재난온톨로지 · 아이디어의 문서 목록(제목 · 요약 · 고친 날). docs/api 는 뺀다."""
+    from . import mdview
+    return {"rows": await asyncio.to_thread(mdview.listing)}
+
+
+@app.get("/api/docs/view")
+async def api_docs_view(path: str):
+    """문서 하나를 서식 입힌 HTML 로 — 목록에 있는 경로만."""
+    from . import mdview
+    d = await asyncio.to_thread(mdview.view, path)
+    if not d:
+        raise HTTPException(404, "없는 문서")
+    return d
 
 
 @app.get("/api/posts/popup")

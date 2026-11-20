@@ -52,9 +52,7 @@ function setHeat(on, save = true) {
   if (save) { try { localStorage.setItem("gn-map-heat", HEAT ? "1" : "0"); } catch {} }
   document.body.classList.toggle("heat", HEAT);
   const m = $("mode");
-  m.textContent = HEAT ? "☀️" : "🌧️";
-  m.title = `${HEAT ? "폭염" : "호우"} 화면 — 눌러서 ${HEAT ? "호우" : "폭염"} 화면으로 (M)`;
-  m.setAttribute("aria-label", m.title);
+  modeIcon();                                              // 호우 화면 아이콘은 지금 눈 · 비에 따라(06f)
   loadHeat();
   renderHeat();
   if (!HEAT) drawHeat();

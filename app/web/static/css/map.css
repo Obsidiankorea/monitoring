@@ -138,7 +138,20 @@ button { font-family: inherit; }
 #rep-job { position: fixed; top: 10px; right: 10px; z-index: 70; display: inline-flex; align-items: center; gap: 8px; max-width: min(420px, calc(100vw - 20px));
   min-height: 36px; padding: 0 14px; font: 600 13px var(--sans); color: var(--ink); background: var(--panel); border: 1px solid var(--line);
   border-radius: 999px; box-shadow: 0 6px 18px rgb(0 0 0 / .35); cursor: pointer; text-align: left; }
-#rep-job[hidden] { display: none; }
+#rep-job[hidden], #rep-jobd[hidden] { display: none; }
+#rep-job.busy { background: linear-gradient(90deg, color-mix(in oklab, var(--accent) 30%, var(--panel)) var(--p, 0%), var(--panel) var(--p, 0%)); }
+#rep-job .car { font-style: normal; color: var(--ink-3); }
+#rep-jobd { position: fixed; top: 52px; right: 10px; z-index: 70; width: min(360px, calc(100vw - 20px)); max-height: 60vh; overflow: auto; padding: 10px 12px;
+  font: 13px/1.5 var(--sans); color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 28px rgb(0 0 0 / .4); }
+#rep-jobd .jd-h { display: flex; justify-content: space-between; gap: 8px; } #rep-jobd .jd-h span { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+#rep-jobd .jd-now { display: flex; align-items: center; gap: 8px; margin: 6px 0; color: var(--accent); }
+#rep-jobd .spin { width: 10px; height: 10px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: repspin .9s linear infinite; }
+#rep-jobd ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+#rep-jobd li { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; padding: 2px 0; border-bottom: 1px solid color-mix(in oklab, var(--line) 60%, transparent); }
+#rep-jobd li b { font-weight: 600; font-variant-numeric: tabular-nums; } #rep-jobd li em { font-style: normal; color: #ffaaa3; }
+#rep-jobd .jd-ft { margin-top: 8px; display: flex; justify-content: flex-end; }
+#rep-jobd button { min-height: 32px; padding: 0 10px; font: 600 12.5px var(--sans); color: var(--ink); background: color-mix(in oklab, var(--panel) 70%, var(--line)); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+@media (prefers-reduced-motion: reduce) { #rep-jobd .spin { animation-duration: 3s; } }
 #rep-job.ok { border-color: #2f7a4f; color: #9be3b8; } #rep-job.warn { border-color: #8a5a12; color: #ffcf8a; } #rep-job.bad { border-color: #8a2f2f; color: #ffaaa3; }
 #rep-job:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #rep-job .spin { width: 12px; height: 12px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: repspin .9s linear infinite; }
@@ -1458,6 +1471,10 @@ body.show-on #play { bottom: 46px; }      /* 점 자리를 비운다 */
 #hud > :not(#mode, .ttl-wrap, #ht-ttl) { grid-column: 1 / -1; }
 #mode { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 9px; background: transparent;
   font: 22px/1 "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif; text-shadow: none; cursor: pointer; transition: background .15s, transform .15s; }
+#mode { position: relative; }
+#mode .mb { position: absolute; right: -3px; bottom: -3px; display: grid; place-items: center; width: 17px; height: 17px; font: 700 12px/1 var(--sans);
+  color: #0b2a5c; background: #E8F2FF; border: 1.5px solid #2B5C9E; border-radius: 50%; }
+#mode.w-snow, #mode.w-both { background: color-mix(in oklab, #8DB6E6 22%, transparent); box-shadow: 0 0 0 1.5px #8DB6E6 inset; }
 #mode:hover { background: color-mix(in oklab, var(--panel) 80%, transparent); transform: scale(1.08); }
 #mode:focus-visible, .ht-exb:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 #ht-ttl, #ht-sub, .hc, #ht-lg { display: none; }

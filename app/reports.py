@@ -266,6 +266,18 @@ class Waiting(Exception):
     """17시 대기 — jaenan 이 '아직 17시 발표 전'(waiting)이라고 답했다. 글 = 지금 상태('통보문 11시 · 단기예보 11시')."""
 
 
+def progress() -> dict:
+    """보고서 서버가 지금 만드는 것 — {running, job, elapsed, calls: [{label, ok, fail}], last: {label, ago}}. 못 물으면 running False."""
+    if not ready() or config.DEMO:
+        return {"running": False}
+    try:
+        r = httpx.get(f"{url()}/api/progress", headers={"Authorization": f"Bearer {_tok()}", "User-Agent": "gn-monitor/1"}, timeout=4)
+        j = r.json() if r.status_code == 200 else {}
+    except (httpx.HTTPError, ValueError):
+        return {"running": False, "err": "보고서 서버에 묻지 못했다"}
+    return {k: j.get(k) for k in ("running", "job", "elapsed", "calls", "last")} if j else {"running": False}
+
+
 def run(rid: str, opts: dict | None = None, client: httpx.Client | None = None, wait1700: bool = False) -> tuple[str, bytes]:
     """fetch 를 한 파일로(여럿이면 zip) — (내려받을 이름, 바이트)."""
     return bundle(fetch(rid, opts, client, wait1700), BY_ID.get(rid))

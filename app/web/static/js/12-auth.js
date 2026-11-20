@@ -46,7 +46,9 @@ function acctPrefsHtml() {
     <div class="row"><span class="k">로그인</span><span class="acct-me">${escH(u.name || u.login)} · ${escH(me.roles[u.role] || u.role)}${u.sigun ? ` · ${escH(u.sigun)}` : ""}</span>
       <span class="seg"><button type="button" data-acct="out">로그아웃</button></span></div>
     ${adm ? `<div class="row"><span class="k">계정 관리</span><span class="seg"><button type="button" data-acct="go" data-href="/admin.html">계정 관리 열기</button></span>
-      ${ACCT.pend ? `<em class="acct-pend" role="status">● 가입 신청 ${ACCT.pend}건 — 승인 대기</em>` : `<span class="note">대기 중인 가입 신청 없음</span>`}</div>` : ""}
+      ${ACCT.pend ? `<em class="acct-pend" role="status">● 가입 신청 ${ACCT.pend}건 — 승인 대기</em>` : `<span class="note">대기 중인 가입 신청 없음</span>`}</div>
+      <div class="row"><span class="k">요청</span><span class="seg"><button type="button" data-acct="go" data-href="/posts.html?tab=request">요청 게시판</button></span>
+      ${ACCT.req ? `<em class="acct-pend" role="status">● 새 요청 ${ACCT.req}건 — 접수 상태</em>` : `<span class="note">새 요청 없음</span>`}</div>` : ""}
     ${u.role !== "sigun" ? `<div class="row"><span class="k">시군 화면</span><select id="acct-as" aria-label="시군 화면으로 보기">
         <option value="">${AS_SIGUN ? "도 화면으로" : "도 화면(지금)"}</option>${(me.siguns || []).map(x => `<option${x === AS_SIGUN ? " selected" : ""}>${escH(x)}</option>`).join("")}</select>
       <span class="note">그 시군 담당자가 보는 화면으로 — 자료 범위(연락처 등)는 내 계정 그대로</span></div>` : ""}
@@ -61,7 +63,7 @@ function acctPrefsHtml() {
 function acctPrefsBind() {
   const box = $("prefs");
   if (!ACCT || !box.querySelector("[data-acct]")) return;
-  [...box.querySelectorAll(".tabs button")].find(b => b.textContent === "계정")?.classList.toggle("alert", ACCT.pend > 0);
+  [...box.querySelectorAll(".tabs button")].find(b => b.textContent === "계정")?.classList.toggle("alert", ACCT.pend > 0 || ACCT.req > 0);
   box.querySelector("#acct-as")?.addEventListener("change", e => acctAs(e.target.value));
   box.querySelectorAll("[data-acct]").forEach(b => b.addEventListener("click", async () => {
     const v = b.dataset.acct;
@@ -84,21 +86,24 @@ function acctAs(sg) {
 /* 관리자 — 가입 신청 대기를 1분마다 본다. 있으면 제목 옆 빨간 동그라미(도구를 숨겨도 보인다, 누르면 설정 › 계정) · 설정 단추에 빨간 점 ·
    설정 › 계정 탭에 빨간 글, 늘면 알림 */
 async function acctPend() {
-  let n;
+  let n, q = 0;
   try { n = (await getJson("/api/auth/users")).users.filter(x => x.pending).length; } catch { return; }
-  ACCT.pend = n;
+  try { q = (await getJson("/api/posts")).request.filter(x => x.status === "open").length; } catch {}   // 새 요청(접수) — 상태를 바꾸면 빠진다
+  ACCT.pend = n; ACCT.req = q;
   const b = $("b-prefs");
-  b?.classList.toggle("alert", n > 0);
-  b?.setAttribute("aria-label", n ? `설정 — 가입 신청 ${n}건 승인 대기` : "설정");
-  if (b) b.title = n ? `설정 (Ctrl+,) — 가입 신청 ${n}건 승인 대기: 설정 › 계정` : "설정 (Ctrl+,)";
+  const what = [n ? `가입 신청 ${n}` : "", q ? `새 요청 ${q}` : ""].filter(Boolean).join(" · ");
+  b?.classList.toggle("alert", !!what);
+  b?.setAttribute("aria-label", what ? `설정 — ${what}` : "설정");
+  if (b) b.title = what ? `설정 (Ctrl+,) — ${what}: 설정 › 계정` : "설정 (Ctrl+,)";
   const dot = $("acct-dot");
   if (dot) {
-    dot.hidden = !n; dot.textContent = `● 가입 신청 ${n}`;
-    dot.title = dot.ariaLabel = `가입 신청 ${n}건 승인 대기 — 눌러서 설정 › 계정`;
-    dot.onclick = () => { PF_TAB = 0; openPrefs(); };   // 계정 탭이 맨 앞
+    dot.hidden = !what; dot.textContent = `● ${what}`;
+    dot.title = dot.ariaLabel = n ? `${what} — 눌러서 설정 › 계정` : `새 요청 ${q}건(접수) — 눌러서 요청 게시판`;
+    dot.onclick = () => { if (n) { PF_TAB = 0; openPrefs(); } else location.href = "/posts.html?tab=request"; };   // 계정 탭이 맨 앞
   }
   if (n > ACCT.seen) toast(`가입 신청 ${n}건이 승인을 기다립니다 — 설정 › 계정 › 계정 관리`);
-  ACCT.seen = n;
+  if (q > (ACCT.seenq ?? 0)) toast(`새 요청 ${q}건이 들어왔습니다 — 공지 · 요청 게시판`);
+  ACCT.seen = n; ACCT.seenq = q;
 }
 
 /* 관리자 · 도 사용자의 '시군 화면으로 보기' — 화면(고정 · 시군 밖 감추기)만 시군처럼. 자료 범위(연락처 등)는 관리자 그대로 */

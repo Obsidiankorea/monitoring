@@ -33,7 +33,7 @@ async function loadSnow() {
   if (SNOW?.sample || CASE || window.GN_SNAP) return;
   try { SNOW = await getJson("/api/snow"); } catch { return; }
   if (SNOW.active && !SNOW_OFF && !OV.has("snow")) OV.add("snow");   // 눈 · 대설특보 — 저절로 켠다(설정에는 남기지 않는다)
-  renderLayers(); drawSnow(); buildLegend(); glLate();
+  renderLayers(); drawSnow(); buildLegend(); glLate(); modeIcon();
   if (CARDS && !CARDS.err) renderCards();
 }
 setInterval(loadSnow, 300e3);
@@ -92,6 +92,23 @@ function snowLegend() {
     ${st.length ? `<table><tr><th>적설</th><th>지금</th><th>3시간</th><th>24시간</th></tr>${st.map(s => `<tr${(s.d24 || 0) >= 5 ? ' class="ov"' : ""}><td>${s.mt ? "▲" : ""}${escH(s.name)}</td><td>${snowTxt(s.sd)}cm</td><td>${s.d3 > 0 ? `+${snowTxt(s.d3)}` : "—"}</td><td>${s.d24 > 0 ? snowTxt(s.d24) : "—"}</td></tr>`).join("")}</table>`
       : `<div class="note">쌓인 눈 없음${SNOW.alert?.length ? ` · 대설특보 ${SNOW.alert.join(" · ")}` : ""}</div>`}
     <div class="note">${SNOW.sample ? "샘플 — 실제 관측이 아님" : `${tm}${tm ? " · " : ""}24시간 5cm 넘으면 굵게(대설주의보 기준)`}</div></div>`;
+}
+/* 왼쪽 위 화면 단추(#mode) — 지금 오는 것(동네예보 실황 강수형태)을 한눈에.
+   비만 · 아무것도 없음 🌧️ · 눈만 🌨️ · 비와 눈이 함께(또는 비/눈) 🌧️ 에 ❄ 배지. 폭염 화면은 ☀️ */
+function snowNow() {
+  const p = (!CASE && SNOW?.pty) || {}, sg = k => Object.keys(p).filter(s => p[s][k]?.length);
+  const snow = [...new Set([...sg("snow"), ...sg("mix")])], rain = [...new Set([...sg("rain"), ...sg("mix")])];
+  return { snow, rain, kind: snow.length && rain.length ? "both" : snow.length ? "snow" : "rain" };
+}
+function modeIcon() {
+  const m = $("mode");
+  if (!m) return;
+  const n = HEAT ? null : snowNow(), k = n?.kind || "rain";
+  m.className = m.className.replace(/\bw-\w+/g, "").trim() + ` w-${HEAT ? "heat" : k}`;
+  m.innerHTML = HEAT ? "☀️" : k === "snow" ? "🌨️" : k === "both" ? `🌧️<b class="mb" aria-hidden="true">❄</b>` : "🌧️";
+  const what = !n || k === "rain" ? "" : k === "snow" ? ` · 지금 눈(${n.snow.join(" · ")})` : ` · 지금 비와 눈(눈 ${n.snow.join(" · ")})`;
+  m.title = `${HEAT ? "폭염" : "호우"} 화면${what} — 눌러서 ${HEAT ? "호우" : "폭염"} 화면으로 (M)`;
+  m.setAttribute("aria-label", m.title);
 }
 /* 강수 누적 줄의 적설 칩 — 그 시군에 쌓인 눈(cm, 산지 뺀 최대). 비만 오는 시군은 없다 */
 function snowChip(sig) {

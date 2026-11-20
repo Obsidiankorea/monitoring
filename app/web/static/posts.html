@@ -31,6 +31,27 @@
   .reply { padding: 8px 10px; border-left: 3px solid var(--ok); background: #0e151e; white-space: pre-wrap; font-size: 13.5px; }
   .adm { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding-top: 6px; border-top: 1px dashed var(--line); }
   .adm textarea { flex: 1 1 100%; min-height: 54px; }
+  .docs { display: grid; gap: 14px; } .docs h3 { margin: 4px 0 0; font-size: 13px; color: var(--ink-3); font-weight: 600; }
+  .dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+  .dl a { display: grid; gap: 4px; padding: 12px 14px; color: var(--ink); text-decoration: none; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+  .dl a:hover { border-color: var(--accent); } .dl b { font-size: 14.5px; } .dl span { font-size: 12.5px; color: var(--ink-2); } .dl small { font-size: 11.5px; color: var(--ink-3); }
+  .doc { padding: 6px 22px 26px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; line-height: 1.75; }
+  .doc .back { display: inline-block; margin-top: 14px; color: var(--accent); }
+  .doc .dh { margin: 10px 0 18px; padding-bottom: 12px; border-bottom: 1px solid var(--line); } .doc .dh small { color: var(--ink-3); }
+  .doc .dh p { margin: 6px 0 0; color: var(--ink-2); }
+  .md h2 { font-size: 22px; margin: 18px 0 8px; } .md h3 { font-size: 17px; margin: 22px 0 8px; padding-left: 10px; border-left: 3px solid var(--accent); }
+  .md h4 { font-size: 15px; margin: 16px 0 6px; } .md h5 { font-size: 14px; margin: 12px 0 4px; color: var(--ink-2); }
+  .md p { margin: 8px 0; } .md ul, .md ol { margin: 6px 0; padding-left: 22px; } .md li { margin: 3px 0; }
+  .md b { color: #fff; } .md code { padding: 1px 5px; font: 12.5px Consolas, monospace; background: #0e151e; border: 1px solid var(--line); border-radius: 4px; }
+  .md pre { padding: 10px 12px; overflow: auto; background: #0e151e; border: 1px solid var(--line); border-radius: 8px; } .md pre code { padding: 0; border: 0; }
+  .md .tw { overflow-x: auto; margin: 10px 0; } .md table { border-collapse: collapse; min-width: 60%; font-size: 13px; }
+  .md th, .md td { padding: 6px 10px; border: 1px solid var(--line); text-align: left; vertical-align: top; } .md th { background: #1b2635; color: var(--ink-2); }
+  .md hr { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
+  .md blockquote { margin: 10px 0; padding: 4px 12px; border-left: 3px solid var(--line); color: var(--ink-2); }
+  .md .co { margin: 12px 0; padding: 8px 14px; border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px; background: #0e151e; }
+  .md .co-h { font-weight: 700; color: var(--accent); } .md .co.warning, .md .co.caution, .md .co.danger { border-left-color: var(--warn); } .md .co.warning .co-h, .md .co.caution .co-h, .md .co.danger .co-h { color: var(--warn); }
+  .md .co.important .co-h, .md .co.tip .co-h { color: var(--ok); } .md .co.important, .md .co.tip { border-left-color: var(--ok); }
+  .md a { color: var(--accent); } .md .wk { color: #c9a6ff; border-bottom: 1px dotted #c9a6ff; }
   .empty { padding: 26px; text-align: center; color: var(--ink-2); background: var(--panel); border: 1px dashed var(--line); border-radius: 12px; }
 </style>
 </head>
@@ -40,6 +61,7 @@
   <div class="tabs" role="tablist">
     <button type="button" role="tab" id="t-notice" aria-selected="true" data-k="notice">공지<span class="n" id="n-notice"></span></button>
     <button type="button" role="tab" id="t-request" aria-selected="false" data-k="request">요청<span class="n" id="n-request"></span></button>
+    <button type="button" role="tab" id="t-doc" aria-selected="false" data-k="doc">문서</button>
   </div>
   <form id="f" hidden>
     <label>제목 <input id="f-title" maxlength="100" required placeholder="예: 강수 누적 카드에서 시군 글자가 겹친다"></label>
@@ -55,7 +77,7 @@
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const REPO = "https://github.com/Obsidiankorea/monitoring/issues/new";
-let ME = null, D = null, TAB = new URLSearchParams(location.search).get("tab") === "request" ? "request" : "notice";
+let ME = null, D = null, DOCS = null, TAB = ({ request: "request", doc: "doc" })[new URLSearchParams(location.search).get("tab")] || (location.hash.startsWith("#doc=") ? "doc" : "notice");
 const admin = () => ME && ME.role === "admin";
 async function call(url, method = "GET", body) {
   const r = await fetch(url, { method, headers: body ? { "content-type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
@@ -64,7 +86,29 @@ async function call(url, method = "GET", body) {
   if (!r.ok) throw new Error(j.detail || `오류 ${r.status}`);
   return j;
 }
+/* 문서 — 목록(묶음별 카드) · 하나 보기(#doc=경로, 위키링크가 다른 문서면 그 문서로) */
+async function drawDocs() {
+  $("f").hidden = true;
+  const want = decodeURIComponent((location.hash.match(/^#doc=(.+)$/) || [])[1] || "");
+  if (want) {
+    try {
+      const d = await call(`/api/docs/view?path=${encodeURIComponent(want)}`);
+      $("list").innerHTML = `<article class="doc"><a class="back" href="#">← 문서 목록</a>
+        <div class="dh"><small>${esc(want)}${d.updated ? ` · 고친 날 ${esc(d.updated)}` : ""}</small>${d.summary ? `<p>${esc(d.summary)}</p>` : ""}</div>
+        <div class="md">${d.html}</div></article>`;
+      scrollTo(0, 0);
+    } catch (err) { $("list").innerHTML = `<div class="empty">문서를 열지 못했습니다 — ${esc(err.message)} <a href="#">목록으로</a></div>`; }
+    return;
+  }
+  DOCS ||= (await call("/api/docs")).rows;
+  const groups = [...new Set(DOCS.map(x => x.group))];
+  $("list").innerHTML = `<div class="docs">${groups.map(g => `<section><h3>${esc(g)}</h3><div class="dl">${DOCS.filter(x => x.group === g).map(x =>
+    `<a href="#doc=${encodeURIComponent(x.path)}"><b>${esc(x.title)}</b>${x.summary ? `<span>${esc(x.summary)}</span>` : ""}${x.updated ? `<small>고친 날 ${esc(x.updated)}</small>` : ""}</a>`).join("")}</div></section>`).join("")}</div>`;
+}
+addEventListener("hashchange", () => { if (location.hash.startsWith("#doc=") && TAB !== "doc") TAB = "doc"; draw(); });
 function draw() {
+  $("t-doc").setAttribute("aria-selected", String(TAB === "doc"));
+  if (TAB === "doc") { for (const k of ["notice", "request"]) $(`t-${k}`).setAttribute("aria-selected", "false"); return void drawDocs(); }
   for (const k of ["notice", "request"]) {
     $(`t-${k}`).setAttribute("aria-selected", String(k === TAB));
     $(`n-${k}`).textContent = D ? (k === "request" ? D.request.filter(x => x.status === "open").length || "" : D.notice.length || "") : "";
@@ -91,7 +135,7 @@ function draw() {
 async function load() { D = await call("/api/posts"); draw(); }
 document.querySelector(".tabs").addEventListener("click", e => {
   const b = e.target.closest("[data-k]"); if (!b) return;
-  TAB = b.dataset.k; history.replaceState(null, "", TAB === "request" ? "?tab=request" : location.pathname); draw();
+  TAB = b.dataset.k; history.replaceState(null, "", TAB === "notice" ? location.pathname : `?tab=${TAB}`); draw();
 });
 $("f").addEventListener("submit", async e => {
   e.preventDefault();

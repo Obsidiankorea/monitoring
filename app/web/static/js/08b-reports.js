@@ -448,19 +448,49 @@ async function repSaveFile(res, fallback) {
   return name;
 }
 /* 오른쪽 위 진행 띠 — 보고서 창을 닫아도(✕ · Esc) 만들기는 계속된다. 누르면 창(끝났으면 결과 · 자료 기준)을 다시 연다 */
-function repJob(st, text) {
+/* 만드는 동안: 띠가 예상 시간만큼 차오르고(지난번 걸린 시간 — 처음은 60초, 95% 에서 멈춘다) · 누르면 아래로 펼쳐 무엇을 받는 중인지
+   (보고서 서버 /api/progress — 기상청 자료마다 받은 수 · 실패 수 · 마지막으로 부른 자료). 끝나면 누르면 보고서 창 */
+function repJob(st, text, pct) {
   let el = $("rep-job");
   if (!el) {
     el = document.createElement("button");
-    el.type = "button"; el.id = "rep-job"; el.setAttribute("aria-live", "polite");
-    el.addEventListener("click", () => { clearTimeout(REP.jobT); if (!REP.busy) el.hidden = true; openRep(); });
-    document.body.appendChild(el);
+    el.type = "button"; el.id = "rep-job"; el.setAttribute("aria-live", "polite"); el.setAttribute("aria-controls", "rep-jobd");
+    el.addEventListener("click", () => {
+      if (REP.busy) return repJobOpen($("rep-jobd").hidden);
+      clearTimeout(REP.jobT); el.hidden = true; repJobOpen(false); openRep();
+    });
+    const d = document.createElement("div");
+    d.id = "rep-jobd"; d.hidden = true; d.setAttribute("role", "region"); d.setAttribute("aria-label", "보고서 만드는 과정");
+    document.body.append(el, d);
   }
   clearTimeout(REP.jobT);
   el.className = st; el.hidden = !st;
-  el.innerHTML = st === "busy" ? `<i class="spin" aria-hidden="true"></i>${escH(text)}` : escH(text);
-  el.title = st === "busy" ? "보고서 서버가 만드는 중 — 창을 닫아도 계속, 끝나면 저절로 받는다. 누르면 보고서 창" : "누르면 보고서 창(결과 · 자료 기준 시각)";
+  el.style.setProperty("--p", `${pct ?? 0}%`);
+  el.innerHTML = st === "busy" ? `<i class="spin" aria-hidden="true"></i><span>${escH(text)}</span><i class="car" aria-hidden="true">${$("rep-jobd").hidden ? "▾" : "▴"}</i>` : escH(text);
+  el.setAttribute("aria-expanded", String(st === "busy" && !$("rep-jobd").hidden));
+  el.title = st === "busy" ? "보고서 서버가 만드는 중 — 창을 닫아도 계속, 끝나면 저절로 받는다. 누르면 무엇을 하는 중인지 펼친다" : "누르면 보고서 창(결과 · 자료 기준 시각)";
+  if (st !== "busy") repJobOpen(false);
   if (st === "ok") REP.jobT = setTimeout(() => { el.hidden = true; }, 12000);   // 실패 · 경고는 누를 때까지 둔다
+}
+function repJobOpen(on) {
+  const d = $("rep-jobd");
+  if (!d) return;
+  d.hidden = !on;
+  if (on) repJobDraw();
+  const el = $("rep-job"), c = el?.querySelector(".car");
+  if (c) c.textContent = on ? "▴" : "▾";
+  el?.setAttribute("aria-expanded", String(!!on));
+}
+function repJobDraw() {
+  const d = $("rep-jobd");
+  if (!d || d.hidden) return;
+  const p = REP.prog || {}, calls = p.calls || [], sec = Math.round((Date.now() - REP.t0) / 1000);
+  const now = !p.running ? "보고서 서버에 묻는 중…" : p.last && p.last.ago <= 5 ? `기상청 '${p.last.label}' 받는 중` : calls.length ? "받은 자료로 그림 · 한글 파일을 만드는 중" : "준비 중";
+  d.innerHTML = `<div class="jd-h"><b>${escH(REP.jobName || "")}</b><span>${sec}초 · 예상 약 ${REP.exp}초</span></div>
+    <div class="jd-now"><i class="spin" aria-hidden="true"></i>${escH(now)}</div>
+    ${calls.length ? `<ul>${calls.map(c => `<li class="${c.fail ? "f" : ""}"><span>${escH(c.label)}</span><b>${c.ok}건</b>${c.fail ? `<em>실패 ${c.fail}</em>` : ""}</li>`).join("")}</ul>` : ""}
+    <div class="jd-ft"><button type="button" data-jd="open">보고서 창 열기</button></div>`;
+  d.querySelector('[data-jd="open"]').onclick = () => openRep();
 }
 async function repRun(id, mode) {
   const r = repById(id);
@@ -475,13 +505,18 @@ async function repRun(id, mode) {
   }
   if (REP.busy) return;
   const p = repPref(), dl = mode === "dl", tg = mode === "tg" || (dl && !!p.tg && !!REP.d?.tg);
-  REP.busy = id; REP.t0 = Date.now(); REP.msg = null; repDraw();
-  const jobText = () => `${r.name} 만드는 중 · ${Math.round((Date.now() - REP.t0) / 1000)}초`;
-  repJob("busy", jobText());
+  REP.busy = id; REP.t0 = Date.now(); REP.msg = null; REP.prog = null; REP.jobName = r.name; repDraw();
+  let took = {};
+  try { took = JSON.parse(localStorage.getItem("gn-rep-took") || "{}"); } catch {}
+  REP.exp = Math.max(15, Math.round(took[id] || 60));                // 지난번 걸린 시간 — 처음은 60초로 어림
+  const pct = () => Math.min(95, Math.round((Date.now() - REP.t0) / 10 / REP.exp));
+  const jobText = () => `${r.name} 만드는 중 · ${pct()}%`;
+  repJob("busy", jobText(), pct());
   REP.tick = setInterval(() => {
     const e = $("rep").querySelector(".rt.busy .sec"); if (e) e.textContent = Math.round((Date.now() - REP.t0) / 1000);
-    repJob("busy", jobText());
+    repJob("busy", jobText(), pct()); repJobDraw();
   }, 1000);
+  REP.ptick = setInterval(async () => { try { REP.prog = await getJson("/api/reports/progress"); } catch {} }, 2000);
   try {
     const res = await fetch("/api/reports/run", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, opts: repSend(r), items: r.compose ? repCmItems() : undefined, extra: r.compose ? repCm().ex : undefined, tg, dl }) });
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || `오류 ${res.status}`);
@@ -497,7 +532,8 @@ async function repRun(id, mode) {
       repBasis(r.name, j.name, j.basis);
     }
   } catch (e) { REP.msg = { ok: false, text: `만들지 못했다 — ${e.message}` }; }
-  clearInterval(REP.tick); REP.busy = null;
+  clearInterval(REP.tick); clearInterval(REP.ptick); REP.busy = null;
+  if (REP.msg?.ok) { took[id] = (Date.now() - REP.t0) / 1000; try { localStorage.setItem("gn-rep-took", JSON.stringify(took)); } catch {} }
   const warn = REP.bs?.list?.some(x => x.warn);
   repJob(!REP.msg?.ok ? "bad" : warn ? "warn" : "ok",
          !REP.msg?.ok ? `✕ ${r.name} — 만들지 못했다(눌러서 보기)` : `✓ ${r.name} 받았다${warn ? " · ⚠ 기상청 조회 실패 — 눌러서 확인" : ""}`);
