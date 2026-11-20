@@ -135,6 +135,15 @@ button { font-family: inherit; }
 #lsrc.fold { font-size: 0; }
 #lsrc.fold::before { content: "출처 ▸"; font-size: 11px; color: var(--ink-3); }
 #badges { display: inline-flex; gap: 6px; text-shadow: none; }
+#rep-job { position: fixed; top: 10px; right: 10px; z-index: 70; display: inline-flex; align-items: center; gap: 8px; max-width: min(420px, calc(100vw - 20px));
+  min-height: 36px; padding: 0 14px; font: 600 13px var(--sans); color: var(--ink); background: var(--panel); border: 1px solid var(--line);
+  border-radius: 999px; box-shadow: 0 6px 18px rgb(0 0 0 / .35); cursor: pointer; text-align: left; }
+#rep-job[hidden] { display: none; }
+#rep-job.ok { border-color: #2f7a4f; color: #9be3b8; } #rep-job.warn { border-color: #8a5a12; color: #ffcf8a; } #rep-job.bad { border-color: #8a2f2f; color: #ffaaa3; }
+#rep-job:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#rep-job .spin { width: 12px; height: 12px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: repspin .9s linear infinite; }
+@keyframes repspin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { #rep-job .spin { animation-duration: 3s; } }
 #rep-bs .ob .warn { color: #ffb547; font-weight: 700; }
 #colwarn { margin-left: 8px; min-height: 26px; padding: 0 10px; font: 700 12px var(--sans); color: #1a0f00; background: #ffb547; border: 0; border-radius: 999px; cursor: pointer; text-shadow: none; }
 #colwarn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

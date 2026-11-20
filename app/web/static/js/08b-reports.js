@@ -435,7 +435,7 @@ function repDraw() {
     <nav aria-label="묶음">${gs.map(g => { const n = g === "전체" ? list.length : list.filter(r => r.group === g).length;
       return `<button type="button" data-g="${escH(g)}" aria-pressed="${g === REP.g}" class="${g === REP.g ? "on" : ""}">${escH(g)} <i>${n}</i></button>`; }).join("")}</nav>
     <div class="grid">${shown.map(repTile).join("") || `<p class="mute">이 묶음에는 아직 보고서가 없다</p>`}</div>
-    <p class="msg${REP.msg && !REP.msg.ok ? " bad" : ""}" role="status">${escH(REP.msg?.text || (REP.busy ? "보고서 서버가 만드는 중 — 풍수해보고는 1분 안팎 걸린다" : "타일을 누르면 받는다 · 오른쪽 누름(⚙)은 옵션 · 구석 단추는 텔레그램으로 보내기만"))}</p></div>
+    <p class="msg${REP.msg && !REP.msg.ok ? " bad" : ""}" role="status">${escH(REP.msg?.text || (REP.busy ? "보고서 서버가 만드는 중 — 창을 닫아도(✕) 계속 만들고, 오른쪽 위에 진행이 보인다. 끝나면 저절로 받는다" : "타일을 누르면 받는다 · 오른쪽 누름(⚙)은 옵션 · 구석 단추는 텔레그램으로 보내기만"))}</p></div>
     <div class="opbg" id="rep-op" hidden></div>${repBsHtml()}`;
   if (REP.bs) $("rep-bs").querySelector(".op").focus();
   else if (REP.op) repOpDraw();
@@ -446,6 +446,21 @@ async function repSaveFile(res, fallback) {
   a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   return name;
+}
+/* 오른쪽 위 진행 띠 — 보고서 창을 닫아도(✕ · Esc) 만들기는 계속된다. 누르면 창(끝났으면 결과 · 자료 기준)을 다시 연다 */
+function repJob(st, text) {
+  let el = $("rep-job");
+  if (!el) {
+    el = document.createElement("button");
+    el.type = "button"; el.id = "rep-job"; el.setAttribute("aria-live", "polite");
+    el.addEventListener("click", () => { clearTimeout(REP.jobT); if (!REP.busy) el.hidden = true; openRep(); });
+    document.body.appendChild(el);
+  }
+  clearTimeout(REP.jobT);
+  el.className = st; el.hidden = !st;
+  el.innerHTML = st === "busy" ? `<i class="spin" aria-hidden="true"></i>${escH(text)}` : escH(text);
+  el.title = st === "busy" ? "보고서 서버가 만드는 중 — 창을 닫아도 계속, 끝나면 저절로 받는다. 누르면 보고서 창" : "누르면 보고서 창(결과 · 자료 기준 시각)";
+  if (st === "ok") REP.jobT = setTimeout(() => { el.hidden = true; }, 12000);   // 실패 · 경고는 누를 때까지 둔다
 }
 async function repRun(id, mode) {
   const r = repById(id);
@@ -461,7 +476,12 @@ async function repRun(id, mode) {
   if (REP.busy) return;
   const p = repPref(), dl = mode === "dl", tg = mode === "tg" || (dl && !!p.tg && !!REP.d?.tg);
   REP.busy = id; REP.t0 = Date.now(); REP.msg = null; repDraw();
-  REP.tick = setInterval(() => { const e = $("rep").querySelector(".rt.busy .sec"); if (e) e.textContent = Math.round((Date.now() - REP.t0) / 1000); }, 1000);
+  const jobText = () => `${r.name} 만드는 중 · ${Math.round((Date.now() - REP.t0) / 1000)}초`;
+  repJob("busy", jobText());
+  REP.tick = setInterval(() => {
+    const e = $("rep").querySelector(".rt.busy .sec"); if (e) e.textContent = Math.round((Date.now() - REP.t0) / 1000);
+    repJob("busy", jobText());
+  }, 1000);
   try {
     const res = await fetch("/api/reports/run", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, opts: repSend(r), items: r.compose ? repCmItems() : undefined, extra: r.compose ? repCm().ex : undefined, tg, dl }) });
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || `오류 ${res.status}`);
@@ -478,6 +498,9 @@ async function repRun(id, mode) {
     }
   } catch (e) { REP.msg = { ok: false, text: `만들지 못했다 — ${e.message}` }; }
   clearInterval(REP.tick); REP.busy = null;
+  const warn = REP.bs?.list?.some(x => x.warn);
+  repJob(!REP.msg?.ok ? "bad" : warn ? "warn" : "ok",
+         !REP.msg?.ok ? `✕ ${r.name} — 만들지 못했다(눌러서 보기)` : `✓ ${r.name} 받았다${warn ? " · ⚠ 기상청 조회 실패 — 눌러서 확인" : ""}`);
   if (!$("rep").hidden) repDraw();
 }
 /* 자료 기준 시각 팝업 — 만들기가 끝나면 이번 파일에 쓴 기상청 자료의 발표 · 기준 시각(문서에는 안 넣는다) + 우리 자료 시각.
