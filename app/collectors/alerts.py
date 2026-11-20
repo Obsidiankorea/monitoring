@@ -135,6 +135,33 @@ def normalize(raw: bytes | str, now: datetime) -> dict:
     return {"groups": out, "pending": pending}
 
 
+async def backfill_raw(hours: int = 72) -> int:
+    """특보 원자료를 지난 hours 시간분까지 10분 간격으로 채운다 — 원자료를 두기 전 시각은 보고서 서버가 기상청에 묻던 것.
+    켤 때 한 번(이미 채웠으면 바로 끝). 천천히(1초에 한 번), 실패한 시각은 건너뛴다 → 채운 시각 수."""
+    import asyncio
+    from datetime import timedelta
+    now = datetime.now().replace(second=0, microsecond=0)
+    first = db.alert_raw_first()
+    end = datetime.strptime(first, "%Y-%m-%d %H:%M") if first else now
+    t = (now - timedelta(hours=hours)).replace(minute=(now.minute // 10) * 10)
+    n = 0
+    while t < end:
+        if db.alert_raw_bf_has(t.strftime("%Y-%m-%d %H:%M")):      # 지난번 켤 때 채운 것 — 다시 묻지 않는다
+            t += timedelta(minutes=10)
+            continue
+        try:
+            raw = await fetch_bytes("/api/typ01/url/wrn_now_data.php", {"fe": "f", "tm": t.strftime("%Y%m%d%H%M"), "disp": "1", "help": "0"})
+            db.put_alert_raw_at(t.strftime("%Y-%m-%d %H:%M"), raw.decode("utf-8"))
+            n += 1
+        except Exception as e:                     # noqa: BLE001 — 그 시각은 보고서 서버가 기상청에 묻는다
+            log.info("특보 원자료 채우기 %s 건너뜀: %s", t, str(e)[:80])
+        t += timedelta(minutes=10)
+        await asyncio.sleep(1)
+    if n:
+        log.info("특보 원자료 %d 시각 채움(%s 까지)", n, end)
+    return n
+
+
 async def collect(now: datetime | None = None) -> dict:
     now = now or datetime.now()
     at = now.strftime("%Y-%m-%d %H:%M")

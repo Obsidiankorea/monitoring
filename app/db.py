@@ -106,6 +106,15 @@ CREATE TABLE IF NOT EXISTS bangjae_hourly (
 );
 CREATE INDEX IF NOT EXISTS idx_bjh_tm ON bangjae_hourly(tm);
 
+-- 기상청 원문 보관(app/kma.py RAW_PATHS) — 매분 관측 · 초단기 격자를 받은 그대로(zlib), 30시간.
+-- 재난상황보고서 서버가 같은 요청을 기상청 대신 여기서 받는다(/api/kma/raw). key = 경로 + 정리한 인자(raw_key)
+CREATE TABLE IF NOT EXISTS kma_raw (
+  key TEXT PRIMARY KEY, at TEXT NOT NULL, ctype TEXT NOT NULL DEFAULT '', body BLOB NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_kma_raw_at ON kma_raw(at);
+-- 특보 원자료 채워 넣기(collectors/alerts.backfill_raw) — 1분마다 두기 전 시각을 10분 간격으로. 그 시각에만 답한다(사이 분은 기상청)
+CREATE TABLE IF NOT EXISTS alert_raw_bf (at TEXT PRIMARY KEY, body TEXT NOT NULL);
+
 -- 공지 · 요청 게시판(app/posts.py) — kind notice 공지(관리자) · request 요청(누구나). 지우지 않고 gone 으로 숨긴다
 CREATE TABLE IF NOT EXISTS post (
   id INTEGER PRIMARY KEY, kind TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL DEFAULT '',
@@ -289,11 +298,52 @@ def put_alert_raw(at: str, body: str) -> bool:
         return True
 
 
+def put_kma_raw(key: str, ctype: str, body: bytes) -> None:
+    """기상청 원문 하나를 둔다(zlib). 30시간 넘은 것은 둘 때 함께 지운다(한 시간에 한 번쯤)."""
+    import zlib
+    from datetime import datetime, timedelta
+    now = datetime.now()
+    with tx() as con:
+        con.execute("INSERT OR REPLACE INTO kma_raw(key, at, ctype, body) VALUES(?,?,?,?)",
+                    (key, now.strftime("%Y-%m-%d %H:%M"), ctype, zlib.compress(body, 6)))
+        if now.minute == 7:
+            con.execute("DELETE FROM kma_raw WHERE at < ?", ((now - timedelta(hours=30)).strftime("%Y-%m-%d %H:%M"),))
+
+
+def get_kma_raw(key: str) -> tuple[str, bytes] | None:
+    import zlib
+    with tx() as con:
+        r = con.execute("SELECT ctype, body FROM kma_raw WHERE key=?", (key,)).fetchone()
+    return (r["ctype"], zlib.decompress(r["body"])) if r else None
+
+
+def put_alert_raw_at(at: str, body: str) -> None:
+    """지난 시각의 특보 원자료(채워 넣기) — alert_raw_bf 에 그 시각 그대로. 그 시각을 물을 때만 쓴다."""
+    with tx() as con:
+        con.execute("INSERT OR REPLACE INTO alert_raw_bf(at, body) VALUES(?,?)", (at, body))
+
+
+def alert_raw_bf_has(at: str) -> bool:
+    with tx() as con:
+        return con.execute("SELECT 1 FROM alert_raw_bf WHERE at=?", (at,)).fetchone() is not None
+
+
+def alert_raw_first() -> str | None:
+    with tx() as con:
+        r = con.execute("SELECT MIN(at) AS a FROM alert_raw").fetchone()
+    return r["a"] if r else None
+
+
 def alert_raw_at(t) -> tuple[str, str] | None:
     """그 시각(datetime) 특보 원자료 (받은 때, 본문). 그 시각 3분 안에 특보를 받은 기록이 없거나
     원자료를 두기 시작하기 전이면 None — 부르는 쪽이 기상청에 묻는다."""
     from datetime import timedelta
     hi, lo = t.strftime("%Y-%m-%d %H:%M"), (t - timedelta(minutes=3)).strftime("%Y-%m-%d %H:%M")
+    first = alert_raw_first()
+    if not first or hi < first:                      # 1분마다 두기 전 — 채워 넣은 10분 시각과 꼭 같을 때만
+        with tx() as con:
+            r = con.execute("SELECT at, body FROM alert_raw_bf WHERE at=?", (hi,)).fetchone()
+        return (r["at"], r["body"]) if r else None
     with tx() as con:
         if not con.execute("SELECT 1 FROM snapshot WHERE kind='alerts' AND base_time BETWEEN ? AND ? LIMIT 1", (lo, hi)).fetchone():
             return None

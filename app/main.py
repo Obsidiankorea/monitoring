@@ -219,6 +219,8 @@ async def lifespan(app: FastAPI):
             if kind not in skip:
                 asyncio.create_task(run_one(kind))
         log.info("수집기 시작: %s", INTERVALS)
+        if "alerts" not in skip:
+            asyncio.create_task(alerts.backfill_raw())   # 특보 원자료 지난 72시간 — 보고서 서버가 기상청 대신 읽게
     try:
         yield
     finally:
@@ -1548,6 +1550,19 @@ async def api_alerts_raw(tm: str = ""):
     lines.append("#7777END")
     return Response("\n".join(lines).encode("euc-kr", "replace"), media_type="text/plain; charset=euc-kr",
                     headers={"X-GN-Alert-At": got[0]})
+
+
+@app.get("/api/kma/raw")
+async def api_kma_raw(path: str, q: str = ""):
+    """재난상황보고서 서버용 — 이 서버가 받아 둔 기상청 원문(매분 관측 · 초단기 격자, 30시간). q = 정리한 인자(kma.raw_key 꼴).
+    없으면 404(그때는 기상청에 묻는다). 받은 그대로라 글자 꼴(euc-kr 등)도 기상청 머리 그대로."""
+    from . import kma as _kma
+    if path not in _kma.RAW_PATHS:
+        raise HTTPException(404, "보관하지 않는 자료")
+    got = await asyncio.to_thread(db.get_kma_raw, f"{path}?{q}")
+    if not got:
+        raise HTTPException(404, "받아 둔 원문이 없다")
+    return Response(got[1], media_type=got[0] or "text/plain")
 
 
 @app.get("/api/clock.js")

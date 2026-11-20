@@ -22,6 +22,22 @@ class KmaError(RuntimeError):
     """조회 실패. ⚠️ '자료 없음'과 절대 같이 다루지 않는다."""
 
 
+# 보고서 서버가 같은 요청을 하는 원문 — 받은 그대로 30시간 둔다(db.kma_raw, /api/kma/raw)
+RAW_PATHS = ("/api/typ01/cgi-bin/url/nph-aws2_min", "/api/typ01/cgi-bin/url/nph-dfs_vsrt_grd")
+
+
+def raw_key(path: str, params) -> str:
+    """원문 열쇠 — 경로 + 인자(인증키 · 기본값 disp=0 · help=0 은 빼고 이름순). 재난상황보고서 kma_guard.raw_key 와 같아야 한다."""
+    items = params.items() if isinstance(params, dict) else params
+    q = sorted((str(k), str(v)) for k, v in items if str(k).lower() != "authkey" and not (k in ("disp", "help") and str(v) == "0"))
+    return path + "?" + "&".join(f"{k}={v}" for k, v in q)
+
+
+def _has_rows(body: bytes) -> bool:
+    """자료 줄이 있나 — 머리말(#)만 온 것('아직 없음')은 두지 않는다."""
+    return any(ln and not ln.startswith(b"#") and any(c in b"0123456789" for c in ln) for ln in body.splitlines()[:40])
+
+
 def _url(path: str) -> str:
     return f"{KMA_HOST}{path}"
 
@@ -56,6 +72,12 @@ async def fetch_bytes(path: str, params: dict) -> bytes:
                             raise KmaError(f"응답 본문이 오류다: {head.strip()[:120]}")
                 if not body:
                     raise KmaError("빈 응답")
+                if path in RAW_PATHS and _has_rows(body):
+                    try:
+                        from . import db
+                        db.put_kma_raw(raw_key(path, params), r.headers.get("content-type", ""), body)
+                    except Exception:                    # noqa: BLE001 — 보관 실패는 수집을 막지 않는다
+                        log.warning("기상청 원문 보관 실패", exc_info=True)
                 return body
         except Exception as e:                      # noqa: BLE001
             last = e
