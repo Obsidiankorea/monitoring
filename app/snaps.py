@@ -79,7 +79,7 @@ def prune_db(db: Path, now: datetime) -> dict:
     c.execute("DELETE FROM obs_hourly WHERE tm > ? OR tm < ?", (T, h120))
     for tbl in PRIVATE:
         c.execute(f"DELETE FROM {tbl}")
-    c.execute("DELETE FROM setting WHERE key='contacts_pin'")
+    c.execute("DELETE FROM setting WHERE key='contacts_pin' OR (key LIKE 'view:%' AND key<>'view:default')")   # 계정마다 저장한 화면(아이디)
     if any(r[1] == "who" for r in c.execute("PRAGMA table_info(decision)")):
         c.execute("UPDATE decision SET who=NULL")      # 판단 기록의 누른 사람 이름
     c.execute("DELETE FROM obs_minute WHERE tm > ? OR tm < ?", (T, h50))

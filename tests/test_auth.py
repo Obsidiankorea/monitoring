@@ -288,3 +288,22 @@ def test_https_behind_tunnel_only_from_inside():
     assert main._https(req("172.17.0.1", "https"))
     assert not main._https(req("172.17.0.1", None))
     assert not main._https(req("58.234.1.2", "https"))      # 인터넷에서 직접 — 꾸밀 수 있다
+
+
+def test_view_saved_per_account_and_admin_default(app_):
+    """화면 저장 — 계정마다(연락처 잠금 번호는 빼고), 관리자의 처음 화면은 저장 안 한 사람에게. 시군은 처음 화면을 못 바꾼다"""
+    main, auth = app_
+    auth.add("boss", "password-1", "admin", "관리자")
+    auth.add("cw", "password-3", "sigun", "창원 담당", sigun="창원")
+    auth.add("gh", "password-4", "sigun", "김해 담당", sigun="김해")
+    a, s, t = TestClient(main.app), TestClient(main.app), TestClient(main.app)
+    _login(a, "boss", "password-1"), _login(s, "cw", "password-3"), _login(t, "gh", "password-4")
+    assert s.put("/api/prefs", json={"data": {"gn-view": '{"fit":"all"}', "gn-ct-pin": "1234", "other": "x"}}).status_code == 200
+    js = s.get("/api/prefs.js").text
+    assert "gn-view" in js and "1234" not in js and "other" not in js and "mine:true" in js
+    assert s.put("/api/prefs/default", json={"data": {"gn-theme": "light"}}).status_code == 403
+    assert "def:false" in t.get("/api/prefs.js").text
+    assert a.put("/api/prefs/default", json={"data": {"gn-theme": "light", "gn-ct-pin": "9"}}).status_code == 200
+    js = t.get("/api/prefs.js").text
+    assert "gn-theme" in js and "mine:false" in js and '"9"' not in js
+    assert "gn-view" in s.get("/api/prefs.js").text                 # 내 것이 있으면 그것

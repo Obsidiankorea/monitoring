@@ -263,9 +263,9 @@ ADMIN_ONLY = ("/api/settings", "/api/keys", "/api/update", "/api/server-update",
               "/api/snaps", "/api/ai/wiki", "/api/ai/task", "/api/ai/llm", "/api/districts/geo", "/api/auth/users", "/admin.html")
 # 관리자가 아닌 사람의 쓰기(POST · PUT · DELETE)는 여기 있는 것만 — 새 쓰기 라우트는 기본으로 관리자 전용(허용 목록)
 WRITE_OK = {
-    "sigun": ("POST /api/auth/logout", "POST /api/reply/ask", "POST /api/refresh/",   # 현장 요청 · 판단 기록은 자기 시군만(main 이 거른다)
+    "sigun": ("POST /api/auth/logout", "PUT /api/prefs", "POST /api/reply/ask", "POST /api/refresh/",   # 현장 요청 · 판단 기록은 자기 시군만(main 이 거른다)
               "POST /api/ai/ask", "POST /api/ai/decisions"),
-    "do": ("POST /api/auth/logout", "POST /api/reply/ask", "POST /api/ai/ask",
+    "do": ("POST /api/auth/logout", "PUT /api/prefs", "POST /api/reply/ask", "POST /api/ai/ask",
            "POST /api/ai/decisions", "PUT /api/ai/sigunstage",                  # 판단 기록 남기기 · 도 비상단계 표시(지우기는 관리자)
            "POST /api/reports/run", "POST /api/reports/wait", "DELETE /api/reports/wait", "POST /api/refresh/"),
 }

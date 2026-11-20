@@ -1822,6 +1822,54 @@ async def api_logout(request: Request):
     return r
 
 
+# ── 화면 저장 — 이 브라우저의 화면 기억(localStorage gn-*)을 계정에 올려 다른 PC · 새 주소에서 그대로 연다.
+# 관리자는 '처음 화면'(view:default)도 — 기억이 하나도 없는 브라우저는 내 것, 없으면 그것으로 시작한다.
+VIEW_SKIP = ("gn-ct-pin",)          # 연락처 잠금 번호는 서버에 올리지 않는다
+
+
+def _view_key(request: Request) -> str | None:
+    u = getattr(request.state, "user", None) or {}
+    return None if not u.get("login") or u.get("demo") or u.get("machine") else "view:" + u["login"]
+
+
+def _view_clean(d) -> dict:
+    if not isinstance(d, dict):
+        raise HTTPException(400, "data")
+    out = {k: str(v)[:20000] for k, v in d.items() if isinstance(k, str) and k.startswith("gn-") and len(k) <= 40 and k not in VIEW_SKIP}
+    if len(json.dumps(out, ensure_ascii=False)) > 200_000:
+        raise HTTPException(413, "화면 기억이 너무 크다")
+    return out
+
+
+@app.get("/api/prefs.js")
+async def api_prefs_js(request: Request):
+    """map.html 이 다른 스크립트보다 먼저 읽는다 — 이 브라우저에 화면 기억이 없으면 계정 것(없으면 처음 화면)을 깔아 둔다."""
+    k = _view_key(request)
+    mine = db.get_setting(k, None) if k else None
+    dflt = db.get_setting("view:default", None)
+    data = json.dumps(mine or dflt or None, ensure_ascii=False).replace("<", "\\u003c")
+    body = ("(function(){var d=" + data + ";window.GN_VIEW={mine:" + json.dumps(bool(mine)) + ",def:" + json.dumps(bool(dflt))
+            + ",can:" + json.dumps(bool(k)) + "};try{var S=localStorage;for(var i=0;i<S.length;i++)if(S.key(i).indexOf('gn-')===0)return;"
+            "if(d)for(var x in d)S.setItem(x,d[x]);}catch(e){}})();")
+    return Response(body, media_type="application/javascript", headers={"Cache-Control": "no-store"})
+
+
+@app.put("/api/prefs")
+async def api_prefs_put(body: dict, request: Request):
+    k = _view_key(request)
+    if not k:
+        raise HTTPException(403, "로그인한 계정만 저장한다")
+    await asyncio.to_thread(db.put_setting, k, _view_clean(body.get("data")))
+    return {"ok": True}
+
+
+@app.put("/api/prefs/default")                            # 관리자만(WRITE_OK 에 없다)
+async def api_prefs_default(body: dict):
+    d = body.get("data")
+    await asyncio.to_thread(db.put_setting, "view:default", _view_clean(d) if d is not None else None)
+    return {"ok": True}
+
+
 @app.get("/api/auth/me")
 async def api_me(request: Request):
     """지금 누구인가 — 계정이 없는 서버면 {open: true}(로그인 없이 쓰는 중)."""
