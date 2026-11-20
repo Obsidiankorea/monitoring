@@ -65,6 +65,15 @@ def _scan(base: str) -> dict[str, tuple[str, tuple]]:
     _GROUPS["v"] = o["groups"]
     if o["stage"]:
         out[f"stage|{o['stage']['stage']}"] = ("met", ("도", o["stage"]["stage"], "비상단계", "", o["stage"]["why"]))
+    from . import snow                                       # 대설 — 24시간 신적설이 특보 기준(5 · 20cm)을 넘었거나 70% 를 넘고 아직 오는 시군(산지 빼고)
+    sd = snow.latest()
+    for sg, v in (sd.get("siguns") or {}).items():
+        d24, fall = v.get("d24") or 0, sg in sd.get("falling", [])
+        for lim, name in ((20, "대설경보 기준"), (5, "대설주의보 기준")):
+            if d24 >= lim or (fall and d24 >= .7 * lim):
+                out[f"snow|{sg}|{name}"] = ("met" if d24 >= lim else "near", (sg, v.get("stn") or "", "대설", name, f"24시간 신적설 {lim}cm — 지금 {d24:g}cm"))
+                _GAP[f"snow|{sg}|{name}"] = {"t": f"{d24:g}/{lim}cm", "pct": round(d24 / lim * 100)}
+                break
     focus = [r["sigun"] for r in o["rows"]
              if r["relay"] or r["cbs"] or r["alerts"] or (r["fc_sum"] or 0) >= 30 or (r["fc_peak"] or 0) >= 20][:8]
     for sg in focus:

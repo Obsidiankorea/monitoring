@@ -51,3 +51,24 @@ def test_api_and_ai_text(tdb):
     t = snow.text()
     assert "거창 4.2cm" in t and "지리산 12cm" in t and "대설주의보 기준" in t
     assert snow.text("창원") is not None and "거창" not in snow.text("창원")
+
+
+def test_pty_and_meeting(tdb, monkeypatch):
+    """실황 강수형태 → 읍면동마다 눈 · 비/눈 · 비, 지금 눈이 오는 시군은 active · AI 줄 · 회의 '적설현황'에."""
+    monkeypatch.setattr(snow, "_pick", lambda vals, w: {"거창": {"북상면": 3.0, "거창읍": 2.0, "남하면": 0.0}, "진주": {"문산읍": 1.0}})
+    pty = snow.pty_by_emd([0.0])
+    assert pty == {"거창": {"snow": ["북상면"], "mix": ["거창읍"], "rain": []}, "진주": {"snow": [], "mix": [], "rain": ["문산읍"]}}
+    st = snow.parse_stations(STN)
+    tot = {k: 0.0 for k in st}
+    d = snow.build(st, tot, {}, [], "202611201500", pty, "202611201450")
+    assert d["active"] and d["falling"] == ["거창"]                  # 비만 오는 진주는 아니다
+    tdb.put_snapshot("snow", "202611201500", "2026-11-20 15:02", d)
+    assert "지금 눈(실황): 거창" in snow.text()
+    lines, basis = snow.meeting_lines(["거창"])
+    assert lines[0]["text"].startswith("거창: 쌓인 눈 없음 · 지금 눈") and basis
+    from app import meeting
+    monkeypatch.setattr(meeting, "alert_siguns", lambda: ([], [], None))
+    body, _ = meeting.extras(["대설"], {"특보지역현황": False, "과거사례": False, "조위현황": False})
+    assert "적설현황" in body
+    tdb.put_snapshot("snow", "202611201510", "2026-11-20 15:12", snow.build(st, tot, {}, [], "202611201510"))
+    assert snow.meeting_lines()[0] is None                          # 눈 · 대설특보가 없으면 넣지 않는다

@@ -1,12 +1,14 @@
 "use strict";
 /* ── 눈 · 적설 — 기상청 적설관측(경남 55곳 남짓, /api/snow · 10분마다 수집) ──
-   레이어 '눈 · 적설': 강수량 색은 그대로 두고 겹으로만 — 최근 3시간 눈이 쌓인 시군 흰 빗금 · 눈 쌓인 지점 ❄ cm(산지는 ▲ · 해발) ·
+   레이어 '눈 · 적설': 강수량 색은 그대로 두고 겹으로만 — 지금 눈이 오는 읍면동(동네예보 실황 강수형태) 흰 빗금 · 비/눈은 성긴 빗금 · 눈 쌓인 지점 ❄ cm(산지는 ▲ · 해발) ·
    강수 누적 줄 ❄ 칩 · 범례 옆 적설 표(지금 · 3시간 · 24시간). 눈이 관측되거나 대설특보가 나면 저절로 켠다(끄면 이 창에서는 그대로 끔).
    하위 '눈만 보기': 비 색을 거의 지우고 시군을 쌓인 눈 깊이로 칠한다. 지점은 0cm 까지 다 — 서부경남은 눈만 오는 날이 있어 시군을 확대해 볼 때.
-   SNOW = { tm, active, alert: [시군], stations: [{stn, name, sigun, lon, lat, ht, mt, sd, d3, d24, day}], siguns: {시군: {sd, d3, d24, stn}} }
+   SNOW = { tm, active, alert: [시군], falling: [시군], pty: {시군: {snow, mix, rain: [읍면동]}}, stations: [{stn, name, sigun, lon, lat, ht, mt, sd, d3, d24, day}], siguns: {시군: {sd, d3, d24, stn}} }
    ?snow=sample · 테스트(T)는 샘플(실제 관측 아님) */
 const SNOW_SAMPLE = {
-  tm: "샘플", sample: true, active: true, alert: ["거창"],
+  tm: "샘플", sample: true, active: true, alert: ["거창"], falling: ["거창", "함양", "산청"],
+  pty: { 거창: { snow: ["북상면", "위천면", "고제면", "주상면", "웅양면", "가북면", "거창읍", "마리면"], mix: ["남상면", "남하면", "신원면", "가조면"], rain: [] },
+         함양: { snow: ["서상면", "서하면", "안의면"], mix: ["함양읍", "수동면"], rain: [] }, 산청: { snow: [], mix: ["시천면", "삼장면"], rain: ["단성면"] } },
   siguns: { 거창: { sd: 4.2, d3: 3.1, d24: 5.5, stn: "거창" }, 함양: { sd: 2.5, d3: 2.0, d24: 3.0, stn: "함양군" },
             산청: { sd: 1.0, d3: 0, d24: 1.0, stn: "산청" }, 합천: { sd: 0.5, d3: 0.5, d24: 0.5, stn: "합천" } },
   stations: [
@@ -42,13 +44,24 @@ function drawSnow() {
   if (!snowOn() || !V || !V.s) { g.innerHTML = ""; return; }
   const only = snowOnly(), sc = V.u / 3.3, gap = Math.max(6, 7 * sc), dim = sg => selOn() && !isSel(sg) ? " dim" : "";
   const defs = `<defs><pattern id="snh" width="${gap.toFixed(1)}" height="${gap.toFixed(1)}" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-      <line x1="0" y1="0" x2="0" y2="${gap.toFixed(1)}" class="snl"/></pattern></defs>`;
+      <line x1="0" y1="0" x2="0" y2="${gap.toFixed(1)}" class="snl"/></pattern>
+    <pattern id="snm" width="${(gap * 2.2).toFixed(1)}" height="${(gap * 2.2).toFixed(1)}" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <line x1="0" y1="0" x2="0" y2="${(gap * 2.2).toFixed(1)}" class="snl"/></pattern></defs>`;
+  // 지금 눈이 오는 곳 — 읍면동 경계가 있으면 읍면동마다, 받는 동안은 시군째(눈이 하나라도 있으면 촘촘히)
+  const pty = SNOW.pty || {};
+  if (Object.keys(pty).length && !ETOPO && !drawSnow.w) drawSnow.w = ensureEmd().then(drawSnow);   // 한 번만 — 못 받으면 시군째로 남는다
+  const fallArea = Object.entries(pty).map(([sg, v]) => {
+    const kinds = [["snow", "snh"], ["mix", "snm"]].filter(([k]) => v[k]?.length);
+    if (!kinds.length) return "";
+    if (!ETOPO) { const ft = FEAT.find(f => f.properties.sigun === sg); return ft ? `<path class="sna${dim(sg)}" d="${PATH(ft)}" fill="url(#${kinds[0][1]})"/>` : ""; }
+    return kinds.map(([k, pat]) => ETOPO.objects.emd.geometries.filter(g => g.properties.sigun === sg && v[k].includes(g.properties.name))
+      .map(g => `<path class="sna${dim(sg)}" d="${PATH(topojson.feature(ETOPO, g))}" fill="url(#${pat})"/>`).join("")).join("");
+  }).join("");
   const areas = Object.entries(SNOW.siguns || {}).map(([sg, s]) => {
     const ft = FEAT.find(f => f.properties.sigun === sg);
     if (!ft) return "";
     const c = only && snowCol(s.sd || 0);
-    return (c ? `<path class="snf${dim(sg)}" d="${PATH(ft)}" style="fill:${c}"/>` : "")
-      + (s.d3 > 0 ? `<path class="sna${dim(sg)}" d="${PATH(ft)}" fill="url(#snh)"/>` : "");
+    return c ? `<path class="snf${dim(sg)}" d="${PATH(ft)}" style="fill:${c}"/>` : "";
   }).join("");
   const r = Math.max(10, Math.min(16, V.u * 1.3)), fs = Math.max(13, Math.min(19, V.u * 2.3));
   // 눈만 보기 · 시군을 골랐으면 0cm 지점도(어디서 재는지) — 아니면 쌓인 곳만
@@ -66,7 +79,7 @@ function drawSnow() {
       <title>${escH(`${s.name}(${s.sigun}${s.mt ? ` · 산지 ${Math.round(s.ht)}m` : ""}) 적설 ${s.sd == null ? "결측" : snowTxt(s.sd) + "cm"}`
         + (s.d3 > 0 ? ` · 3시간 동안 ${snowTxt(s.d3)}cm 쌓임` : "") + (s.d24 > 0 ? ` · 24시간 신적설 ${snowTxt(s.d24)}cm` : ""))}</title></g>`;
   }).join("");
-  g.innerHTML = defs + areas + marks;
+  g.innerHTML = defs + areas + fallArea + marks;
 }
 /* 범례 옆 — 빗금 뜻(눈만 보기면 깊이 색) · 적설 표(많이 쌓인 곳부터, 산지는 ▲) · 관측 시각 */
 function snowLegend() {
@@ -75,7 +88,7 @@ function snowLegend() {
   const tm = /^\d{12}$/.test(SNOW.tm || "") ? `관측 ${SNOW.tm.slice(8, 10)}:${SNOW.tm.slice(10)}` : "";
   return `<div class="snlg">
     ${snowOnly() ? `<div class="snsc">${SNOW_ST.map((t, i) => `<span><b style="background:${SNOW_COL[i]}"></b>${t}</span>`).join("")}<span>cm</span></div>` : ""}
-    <div class="sw"><b class="snk"></b>최근 3시간 눈이 쌓인 시군</div>
+    <div class="sw"><b class="snk"></b>지금 눈이 오는 곳(실황)</div><div class="sw"><b class="snk m"></b>비와 눈이 섞여 오는 곳</div>
     ${st.length ? `<table><tr><th>적설</th><th>지금</th><th>3시간</th><th>24시간</th></tr>${st.map(s => `<tr${(s.d24 || 0) >= 5 ? ' class="ov"' : ""}><td>${s.mt ? "▲" : ""}${escH(s.name)}</td><td>${snowTxt(s.sd)}cm</td><td>${s.d3 > 0 ? `+${snowTxt(s.d3)}` : "—"}</td><td>${s.d24 > 0 ? snowTxt(s.d24) : "—"}</td></tr>`).join("")}</table>`
       : `<div class="note">쌓인 눈 없음${SNOW.alert?.length ? ` · 대설특보 ${SNOW.alert.join(" · ")}` : ""}</div>`}
     <div class="note">${SNOW.sample ? "샘플 — 실제 관측이 아님" : `${tm}${tm ? " · " : ""}24시간 5cm 넘으면 굵게(대설주의보 기준)`}</div></div>`;

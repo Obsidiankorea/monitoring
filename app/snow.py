@@ -3,6 +3,8 @@
   · 늘: kma_snow1.php sd=tot (지금 쌓인 눈, cm) — 눈이 없는 날도 한 번(수집 지연 경고가 헛돌지 않게)
   · 눈이 있거나(어느 지점이든 > 0) 대설 특보 · 예비특보가 있을 때만: 3시간 · 24시간 · 일 신적설을 더 부른다
   · 지점 목록(stn_snow.php)은 하루 한 번 — 법정동코드(LAW_ID) 앞 5자리로 시군, 해발(HT)로 산지
+  · 겨울(11~3월)이거나 눈이 있으면: 동네예보 실황 격자의 강수형태(PTY) — 읍면동마다 눈 · 비/눈 · 비(지금 눈이 오는 곳).
+    초단기예보 격자는 PTY 를 받지 않는다(input variable error, 2026-11-20 확인) — 앞으로의 눈은 아직 없다
 화면(/api/snow): 지점 · 시군 대표(산지 뺀 최대) · 대설 특보 시군. 특보 기준 대조는 24시간 신적설(쌓인 눈이 아니다).
 """
 from __future__ import annotations
@@ -12,6 +14,8 @@ from datetime import datetime
 
 from . import db
 from .kma import KmaError, fetch_text
+from .collectors.forecast import _pick
+from .collectors.grid_rain import _parse_grid, odam_slots
 
 log = logging.getLogger("collect.snow")
 P_STN, P_SD = "/api/typ01/url/stn_snow.php", "/api/typ01/url/kma_snow1.php"
@@ -20,6 +24,7 @@ LAW_SIGUN = {"48121": "창원", "48123": "창원", "48125": "창원", "48127": "
              "48240": "사천", "48250": "김해", "48270": "밀양", "48310": "거제", "48330": "양산", "48720": "의령", "48730": "함안",
              "48740": "창녕", "48820": "고성", "48840": "남해", "48850": "하동", "48860": "산청", "48870": "함양", "48880": "거창",
              "48890": "합천"}
+PTY_KIND = {1: "rain", 5: "rain", 2: "mix", 6: "mix", 3: "snow", 7: "snow"}   # 실황 PTY — 1 비 · 2 비/눈 · 3 눈 · 5 빗방울 · 6 빗방울눈날림 · 7 눈날림
 MT_HT = 500     # shortcut: 해발 500m 이상을 산지로(지리산 · 가야산) — 기상청 '산지' 정의를 확인하면 바꾼다
 NOISE = 0.5     # 레이저 적설계 잡음 — 이보다 적은 신적설 · 증가는 0 으로
 
@@ -70,6 +75,27 @@ def _alert_snow() -> list[str]:
     return sorted(sg)
 
 
+def pty_by_emd(vals: list[float], width: int = 149) -> dict[str, dict[str, list[str]]]:
+    """실황 PTY 격자 → {시군: {snow: [읍면동], mix: [...], rain: [...]}} — 비 · 눈이 있는 시군만."""
+    out: dict[str, dict[str, list[str]]] = {}
+    for sg, emds in _pick(vals, width).items():
+        for emd, v in emds.items():
+            k = PTY_KIND.get(int(v)) if v and v > 0 else None
+            if k:
+                out.setdefault(sg, {"snow": [], "mix": [], "rain": []})[k].append(emd)
+    return out
+
+
+async def _pty(now: datetime) -> tuple[str | None, dict]:
+    """가장 최근 실황 PTY(10분 발표, 아직 없으면 그 전 슬롯)."""
+    for t in odam_slots(now):
+        tm = t.strftime("%Y%m%d%H%M")
+        vals = _parse_grid(await fetch_text("/api/typ01/cgi-bin/url/nph-dfs_odam_grd", {"tmfc": tm, "vars": "PTY"}))
+        if vals:
+            return tm, pty_by_emd(vals)
+    return None, {}
+
+
 async def _stations(now: datetime) -> dict[str, dict]:
     got = db.get_setting("snow_stn", None) or {}
     if got.get("day") == now.strftime("%Y-%m-%d") and got.get("rows"):
@@ -86,8 +112,10 @@ async def _stations(now: datetime) -> dict[str, dict]:
     raise KmaError("적설 지점 목록을 못 받았다(아직 한 번도)")
 
 
-def build(stns: dict, tot: dict, more: dict[str, dict], alert: list[str], tm: str | None) -> dict:
-    """화면 · AI 가 읽는 모양 — stations(지점) · siguns(시군 대표: 산지 뺀 최대) · alert(대설 특보 시군)."""
+def build(stns: dict, tot: dict, more: dict[str, dict], alert: list[str], tm: str | None,
+          pty: dict | None = None, pty_tm: str | None = None) -> dict:
+    """화면 · AI 가 읽는 모양 — stations(지점) · siguns(시군 대표: 산지 뺀 최대) · alert(대설 특보 시군) ·
+    pty(실황 강수형태 {시군: {snow, mix, rain: [읍면동]}})."""
     def cut(v):
         return None if v is None else (0.0 if v < NOISE else v)
     rows = []
@@ -107,8 +135,10 @@ def build(stns: dict, tot: dict, more: dict[str, dict], alert: list[str], tm: st
     for r in rows:                                       # 24시간 신적설은 시군 안 최대(특보 대조) — 산지 빼고
         if not r["mt"] and r["d24"] and r["sigun"] in sig:
             sig[r["sigun"]]["d24"] = max(sig[r["sigun"]]["d24"] or 0, r["d24"])
-    active = any((r["sd"] or 0) > 0 for r in rows) or bool(alert)
-    return {"tm": tm, "active": active, "alert": alert, "stations": rows,
+    pty = pty or {}
+    falling = sorted(sg for sg, v in pty.items() if v["snow"] or v["mix"])
+    active = any((r["sd"] or 0) > 0 for r in rows) or bool(alert) or bool(falling)
+    return {"tm": tm, "active": active, "alert": alert, "stations": rows, "pty": pty, "pty_tm": pty_tm, "falling": falling,
             "siguns": {k: v for k, v in sig.items() if (v["sd"] or 0) > 0 or (v["d24"] or 0) > 0}}
 
 
@@ -124,16 +154,23 @@ async def collect(now: datetime | None = None) -> dict:
         db.log_collect("snow", False, at, str(e))
         raise
     alert, more, errs = _alert_snow(), {}, []
-    if alert or any((tot.get(k) or 0) > 0 for k in stns):     # 눈이 있을 때만 신적설 셋 — 하나가 실패해도 나머지는 그대로
+    pty_tm, pty = None, {}
+    if now.month in (11, 12, 1, 2, 3) or any((tot.get(k) or 0) > 0 for k in stns):
+        try:
+            pty_tm, pty = await _pty(now)
+        except KmaError as e:
+            errs.append(f"강수형태: {str(e)[:60]}")
+    if alert or any(v["snow"] or v["mix"] for v in pty.values()) or any((tot.get(k) or 0) > 0 for k in stns):   # 눈이 있을 때만 신적설 셋 — 하나가 실패해도 나머지는 그대로
         for sd, key in (("3hr", "d3"), ("24h", "d24"), ("day", "day")):
             try:
                 more[key] = parse_values(await fetch_text(P_SD, {"sd": sd, "snow": "2"}))[1]
             except KmaError as e:
                 errs.append(f"{sd}: {str(e)[:60]}")
-    data = build(stns, tot, more, alert, tm)
+    data = build(stns, tot, more, alert, tm, pty, pty_tm)
     db.put_snapshot("snow", tm or at, at, data)
     n = sum(1 for r in data["stations"] if (r["sd"] or 0) > 0)
-    db.log_collect("snow", True, at, (f"눈 {n}곳" if n else "눈 없음") + f" · {len(data['stations'])}곳" + (f" · 일부 실패 {'; '.join(errs)}" if errs else ""))
+    db.log_collect("snow", True, at, (f"눈 {n}곳" if n else "눈 없음") + f" · {len(data['stations'])}곳"
+                   + (f" · 지금 눈 {'·'.join(data['falling'])}" if data["falling"] else "") + (f" · 일부 실패 {'; '.join(errs)}" if errs else ""))
     return {"stations": len(data["stations"]), "snow": n, "err": errs or None}
 
 
@@ -152,8 +189,34 @@ def text(sigun: str | None = None) -> str | None:
     parts = [f"{k} {v['sd']:g}cm" + (f"(24시간 +{v['d24']:g})" if v.get("d24") else "") for k, v in sorted(sg.items(), key=lambda x: -(x[1]["sd"] or 0))[:6]]
     mt = [r for r in d["stations"] if r["mt"] and (r["sd"] or 0) > 0 and (not sigun or r["sigun"] == sigun)]
     over = [k for k, v in sg.items() if (v.get("d24") or 0) >= 5]
+    fall = [k for k in d.get("falling", []) if not sigun or k == sigun]
     mts = " · ".join("%s %gcm" % (r["name"], r["sd"]) for r in mt[:2])
     out = "적설: " + (" · ".join(parts) or "평지 지점 적설 없음") + (f" · 산지 {mts}" if mt else "")
+    if fall:
+        out += f" · 지금 눈(실황): {', '.join(fall)}"
     if over:
         out += f" — 24시간 신적설 5cm 넘은 시군(대설주의보 기준): {', '.join(over)}"
     return out
+
+
+def meeting_lines(sgs: list[str] | None = None) -> tuple[list[dict] | None, list[dict]]:
+    """상황판단회의 '적설현황' — 눈 · 대설특보가 없으면 None(보고서가 소제목째 지운다). 특보 시군(sgs)이 있으면 그 시군부터."""
+    d = latest()
+    if not d.get("active"):
+        return None, []
+    order = list(dict.fromkeys([*(sgs or []), *d.get("alert", []), *d.get("falling", []),
+                                *sorted(d["siguns"], key=lambda k: -(d["siguns"][k]["sd"] or 0))]))
+    out = []
+    for k in order:
+        v, f = d["siguns"].get(k), k in d.get("falling", [])
+        if not v and not f:
+            continue
+        bits = ([f"적설 {v['sd']:g}cm({v['stn']})"] if v and v.get("sd") else []) + ([f"24시간 신적설 {v['d24']:g}cm"] if v and v.get("d24") else [])
+        out.append({"text": f"{k}: " + (" · ".join(bits) or "쌓인 눈 없음") + (" · 지금 눈" if f else ""), "subs": []})
+    mt = [r for r in d["stations"] if r["mt"] and (r["sd"] or 0) > 0]
+    if mt:
+        out.append({"text": "산지: " + " · ".join("%s(%dm) %gcm" % (r["name"], r["ht"], r["sd"]) for r in mt), "subs": []})
+    tm = d.get("tm") or ""
+    tt = f"{int(tm[4:6])}.{int(tm[6:8])}. {tm[8:10]}:{tm[10:12]}" if len(tm) >= 12 else "-"
+    out.append({"text": f"※ 기상청 적설관측 {tt} · 대설특보 기준은 24시간 신적설(주의보 5cm · 경보 20cm, 산지 30cm)", "subs": []})
+    return out, ([{"name": "적설(기상청 적설관측)", "at": f"{tt} 관측"}] if len(tm) >= 12 else [])

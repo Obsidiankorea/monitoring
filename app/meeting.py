@@ -170,7 +170,7 @@ def tide_lines(sgs: list[str], names: list[str]) -> tuple[list[dict] | None, lis
 def extras(kinds: list[str], on: dict | None = None) -> tuple[dict, list[dict]]:
     """켠 묶음만 → (jaenan 본문에 더할 것, 화면 팝업에 보일 우리 자료 시각). on 은 {묶음: bool}(없으면 켬).
     조위는 해당 없으면 본문에 넣지 않는다(jaenan 이 소제목째 지운다)."""
-    on = {k: (on or {}).get(k) is not False for k in ("특보지역현황", "과거사례", "조위현황")}
+    on = {k: (on or {}).get(k) is not False for k in ("특보지역현황", "과거사례", "조위현황", "적설현황")}
     sgs, names, at = alert_siguns()
     body, basis = {}, []
     if at:
@@ -184,5 +184,11 @@ def extras(kinds: list[str], on: dict | None = None) -> tuple[dict, list[dict]]:
         t, b = tide_lines(sgs, names)
         if t is not None:
             body["조위현황"] = t
+            basis += b
+    if on["적설현황"]:                                        # 눈 · 대설특보가 없으면 넣지 않는다(서식에 칸이 있으면 소제목째 지운다)
+        from . import snow
+        t, b = snow.meeting_lines(sgs)
+        if t is not None:
+            body["적설현황"] = t
             basis += b
     return body, basis
