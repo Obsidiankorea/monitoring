@@ -36,7 +36,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import aiwatch, apikeys, events, geocode, heat, its, lawwatch, river, safety, snow, tide, clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, serverupdate, sites, snaps, update
 from . import auth as _auth  # 로그인(도 관리자 · 도 사용자 · 시군 사용자)
-from .collectors import alerts, bangjae_rain, forecast, grid_rain, qpf, rain, shortfc
+from .collectors import alerts, bangjae_rain, forecast, grid_rain, prefetch, qpf, rain, shortfc
 from .config import CACHE, INTERVALS, POLL_DEFAULT
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
@@ -63,7 +63,9 @@ COLLECTORS = {"rain": rain.collect, "forecast": forecast.collect,
               # 조위 — 경남 해안 5곳 실측 · 예측(app/tide.py). 키가 없으면 건너뛴다
               "tide": tide.collect,
               # 적설 — 경남 적설관측 지점(app/snow.py). 눈이 있을 때만 신적설 셋을 더 부른다
-              "snow": snow.collect}
+              "snow": snow.collect,
+              # 보고서용 미리 받기 — 일 최대순간풍속(재난상황보고서 서버가 /api/kma/raw 로 가져간다)
+              "prefetch": prefetch.collect}
 
 def base_intervals() -> dict:
     """수집 주기 — 저장한 것 위에 기본값을 깐다. 저장한 뒤에 생긴 수집기(minute 등)도 기본 주기로 돈다.

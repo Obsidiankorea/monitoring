@@ -23,7 +23,7 @@ class KmaError(RuntimeError):
 
 
 # 보고서 서버가 같은 요청을 하는 원문 — 받은 그대로 30시간 둔다(db.kma_raw, /api/kma/raw)
-RAW_PATHS = ("/api/typ01/cgi-bin/url/nph-aws2_min", "/api/typ01/cgi-bin/url/nph-dfs_vsrt_grd")
+RAW_PATHS = ("/api/typ01/cgi-bin/url/nph-aws2_min", "/api/typ01/cgi-bin/url/nph-dfs_vsrt_grd", "/api/typ01/url/sfc_aws_day.php")
 
 
 def raw_key(path: str, params) -> str:
