@@ -604,10 +604,13 @@ const NOWD = () => (window.GN_NOW ? new Date(window.GN_NOW) : new Date());
    ⚠️ PC 가 서버에서 받는 중이면 시연도 그 서버의 것이다 — 이 PC 의 8001 이 아니라 서버의 8001 */
 let SNAP_HOST = location.hostname;
 if (!window.GN_SNAP) getJson("/api/origin").then(o => { if (o.mode === "server" && o.url) SNAP_HOST = new URL(o.url).hostname; }).catch(() => {});
-const SNAP_URL = (path = "") => `${location.protocol}//${SNAP_HOST}:8001${path}`;
+const TUNNEL = !location.port && /[a-z]/i.test(location.hostname) && location.hostname.includes(".");   // https 터널 주소(gisang.day — 시연은 demo.gisang.day)
+const SNAP_URL = (path = "") => TUNNEL ? `${location.protocol}//${location.hostname.replace(/^(demo\.)?/, "demo.")}${path}`
+  : `${location.protocol}//${SNAP_HOST}:8001${path}`;
 /* 그 시연으로 연다 — 시연 서버가 다른 것을 띄우고 있으면 갈아 탄다(몇 초) */
 const SNAP_OPEN = (name, to) => SNAP_URL(`/snap/${encodeURIComponent(name)}?to=${encodeURIComponent(to)}`);
-const LIVE_URL = (path = "") => `${location.protocol}//${location.hostname}:8000${path}`;
+const LIVE_URL = (path = "") => TUNNEL ? `${location.protocol}//${location.hostname.replace(/^demo\./, "")}${path}`
+  : `${location.protocol}//${location.hostname}:8000${path}`;
 const hm = t => t ? `${t.slice(8, 10)}:${t.slice(10, 12)}` : "—";
 const md = t => t ? `${+t.slice(4, 6)}.${+t.slice(6, 8)}.` : "";
 function when(gr) {

@@ -1740,6 +1740,19 @@ def _who_key(request: Request) -> str:
     return "ip:" + ip
 
 
+def _https(request: Request) -> bool:
+    """https 로 들어왔나 — Cloudflare 터널(cloudflared)은 서버에 http 로 넘기고 X-Forwarded-Proto 를 붙인다.
+    같은 망 안(터널 · 도커)에서 온 것만 그 머리를 믿는다."""
+    import ipaddress
+    if request.url.scheme == "https":
+        return True
+    try:
+        return (ipaddress.ip_address(request.client.host if request.client else "").is_private
+                and request.headers.get("x-forwarded-proto", "").lower() == "https")
+    except ValueError:
+        return False
+
+
 @app.middleware("http")
 async def rate_and_headers(request: Request, call_next):
     import time as _t
@@ -1795,7 +1808,7 @@ async def api_login(body: dict, request: Request):
         raise HTTPException(401, str(e)) from e
     r = JSONResponse({"user": u})
     r.set_cookie(_auth.COOKIE, tok, max_age=_auth.DAYS * 86400, httponly=True, samesite="lax",
-                 secure=request.url.scheme == "https", path="/")
+                 secure=_https(request), path="/")
     return r
 
 
@@ -1836,7 +1849,7 @@ async def api_signup(body: dict):
 
 
 @app.post("/api/auth/setup")
-async def api_setup(body: dict):
+async def api_setup(body: dict, request: Request):
     """처음 관리자 — 계정이 하나도 없을 때만(그 뒤로는 403). 만들고 바로 로그인한 채로 돌려준다."""
     try:
         u = await asyncio.to_thread(_auth.first_admin, str(body.get("login") or ""), str(body.get("password") or ""),
@@ -1847,7 +1860,8 @@ async def api_setup(body: dict):
         raise HTTPException(400, str(e)) from e
     tok, u = await asyncio.to_thread(_auth.login, u["login"], str(body.get("password") or ""))
     r = JSONResponse({"user": u})
-    r.set_cookie(_auth.COOKIE, tok, max_age=_auth.DAYS * 86400, httponly=True, samesite="lax", path="/")
+    r.set_cookie(_auth.COOKIE, tok, max_age=_auth.DAYS * 86400, httponly=True, samesite="lax",
+                 secure=_https(request), path="/")
     return r
 
 

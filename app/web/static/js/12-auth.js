@@ -19,13 +19,13 @@
   if (me.open || !u) {                                     // 계정이 아직 없다 — 첫 관리자를 만들라는 안내(누르면 로그인 화면의 처음 설정)
     if (!me.open) return;
     el.innerHTML = `<span>로그인 없이 쓰는 중</span><a href="/login.html">처음 설정 — 관리자 만들기</a>`
-      + `<a href="${location.protocol}//${location.hostname}:8001/map.html">시연 화면</a>`;
+      + `<a href="${SNAP_URL("/map.html")}">시연 화면</a>`;
     document.body.appendChild(el);
     return;
   }
   el.innerHTML = `<span>${esc(u.name || u.login)} · ${esc(me.roles[u.role] || u.role)}${u.sigun ? ` · ${esc(u.sigun)}` : ""}</span>`
     + `<a href="/board.html">파견 현황</a>`
-    + `<a href="${location.protocol}//${location.hostname}:8001/map.html">시연 화면</a>`
+    + `<a href="${SNAP_URL("/map.html")}">시연 화면</a>`
     + (u.role === "admin" ? `<a href="/admin.html">계정 관리</a>` : "")
     + `<button type="button" id="who-out">로그아웃</button>`;
   document.body.appendChild(el);

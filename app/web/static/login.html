@@ -56,7 +56,8 @@
 <script>
   const $ = id => document.getElementById(id);
   const next = (() => { const n = new URLSearchParams(location.search).get("next") || "/map.html"; return n.startsWith("/") && !n.startsWith("//") ? n : "/map.html"; })();
-  $("demo").href = `${location.protocol}//${location.hostname}:8001/map.html`;   // 시연 서버는 같은 주소의 8001
+  { const h = location.hostname, tun = !location.port && /[a-z]/i.test(h) && h.includes(".");   // https 터널(gisang.day)이면 demo.gisang.day
+    $("demo").href = tun ? `${location.protocol}//${h.replace(/^(demo\.)?/, "demo.")}/map.html` : `${location.protocol}//${h}:8001/map.html`; }
   let SETUP = false;                                   // 계정이 하나도 없는 서버 — 첫 관리자를 만든다
   fetch("/api/auth/me").then(r => r.json()).then(j => {
     if (j.signup) {                                       // 계정 신청 — 관리자가 승인

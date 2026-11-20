@@ -278,3 +278,13 @@ def test_field_name_strips_markup():
     assert reply._plain('<img src=x onerror="a">홍\'길`동\x01 ') == "img src=x onerror=a홍길동"
     js = (Path(__file__).parent.parent / "app/web/static/js/09-prefs.js").read_text("utf-8")
     assert "&quot;" in js.split("const escH", 1)[1].split("\n", 1)[0]
+
+
+def test_https_behind_tunnel_only_from_inside():
+    """터널(cloudflared)이 붙인 X-Forwarded-Proto 는 같은 망 안에서 온 것만 믿는다 — 쿠키 Secure"""
+    from types import SimpleNamespace as NS
+    from app import main
+    req = lambda ip, proto: NS(url=NS(scheme="http"), client=NS(host=ip), headers={"x-forwarded-proto": proto} if proto else {})
+    assert main._https(req("172.17.0.1", "https"))
+    assert not main._https(req("172.17.0.1", None))
+    assert not main._https(req("58.234.1.2", "https"))      # 인터넷에서 직접 — 꾸밀 수 있다
