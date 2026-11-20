@@ -1757,7 +1757,7 @@ async def terrain_tile(layer: str, z: int, x: int, y: int):
 
 # ── 반복 호출 제한 · 보안 머리글 — 바깥에 열린 서버(공유기 포트 · 터널). need_login 안쪽이라 누구인지 안다 ──
 # (방법, 경로 앞, 횟수, 초) — 사람 하나(로그인 아이디, 없으면 보낸 주소)마다. 이 컴퓨터 · 서버 자신(LOCAL)은 세지 않는다
-RATE = (("POST", "/api/auth/login", 20, 600), ("POST", "/api/auth/signup", 5, 3600), ("POST", "/api/auth/setup", 10, 600),
+RATE = (("POST", "/api/posts", 30, 3600), ("POST", "/api/auth/login", 20, 600), ("POST", "/api/auth/signup", 5, 3600), ("POST", "/api/auth/setup", 10, 600),
         ("POST", "/api/reply/ask", 120, 600), ("POST", "/api/reports/run", 20, 600), ("POST", "/api/ai/ask", 30, 600))
 _HITS: dict[tuple, list[float]] = {}
 SEC_HEAD = {"X-Content-Type-Options": "nosniff", "X-Frame-Options": "SAMEORIGIN", "Referrer-Policy": "strict-origin-when-cross-origin",
@@ -1906,6 +1906,49 @@ async def api_prefs_js(request: Request):
             "if(!put)return;if(clear)for(i=0;i<ks.length;i++)S.removeItem(ks[i]);"
             "if(d)for(x in d)S.setItem(x,d[x]);if(me){S.setItem('gnv-owner',me);S.setItem('gnv-at',at);}}catch(e){}})();")
     return Response(body, media_type="application/javascript", headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/posts")
+async def api_posts():
+    """공지 · 요청 게시판 — {notice: [...], request: [...], status: {코드: 이름}}. 로그인한 사람은 다 본다."""
+    from . import posts
+    return JSONResponse(await asyncio.to_thread(posts.all_posts), headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/posts/popup")
+async def api_posts_popup():
+    """지도를 열 때 띄울 공지(팝업으로 표시한 것, 새것부터 5개)."""
+    from . import posts
+    return JSONResponse({"rows": await asyncio.to_thread(posts.popups)}, headers={"Cache-Control": "no-store"})
+
+
+@app.post("/api/posts")
+async def api_posts_add(body: dict, request: Request):
+    """글 쓰기 — 요청은 누구나, 공지는 관리자만. 쓴 사람은 로그인 이름 · 시군으로 붙인다."""
+    from . import posts
+    u = getattr(request.state, "user", None) or {}
+    kind = str(body.get("kind") or "request")
+    if config.DEMO:
+        raise HTTPException(403, "시연 화면에서는 글을 쓰지 않는다")
+    if kind == "notice" and u.get("role", "admin") != "admin":
+        raise HTTPException(403, "공지는 관리자만 쓴다")
+    author = f"{u.get('name') or u.get('login') or '이 컴퓨터'}" + (f"({u['sigun']})" if u.get("sigun") else "")
+    try:
+        return await asyncio.to_thread(posts.add, kind, str(body.get("title") or ""), str(body.get("body") or ""), author, bool(body.get("popup")))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.put("/api/posts/{pid}")
+async def api_posts_put(pid: int, body: dict):
+    """관리자 — 처리 상태 · 답 · 팝업 · 제목 · 본문 고치기, gone=true 면 숨기기(auth: 관리자 전용 쓰기)."""
+    from . import posts
+    try:
+        return await asyncio.to_thread(posts.update, pid, body)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except KeyError:
+        raise HTTPException(404, "없는 글")
 
 
 @app.put("/api/prefs")

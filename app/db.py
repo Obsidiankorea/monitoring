@@ -106,6 +106,13 @@ CREATE TABLE IF NOT EXISTS bangjae_hourly (
 );
 CREATE INDEX IF NOT EXISTS idx_bjh_tm ON bangjae_hourly(tm);
 
+-- 공지 · 요청 게시판(app/posts.py) — kind notice 공지(관리자) · request 요청(누구나). 지우지 않고 gone 으로 숨긴다
+CREATE TABLE IF NOT EXISTS post (
+  id INTEGER PRIMARY KEY, kind TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL DEFAULT '',
+  author TEXT NOT NULL DEFAULT '', created TEXT NOT NULL, updated TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'open', reply TEXT NOT NULL DEFAULT '', popup INTEGER NOT NULL DEFAULT 0, gone INTEGER NOT NULL DEFAULT 0
+);
+
 -- 특보 원자료(wrn_now_data JSON 행 목록) — 바뀔 때만 한 줄. 재난상황보고서 서버가 기상청 대신 읽는다(/api/alerts/raw)
 CREATE TABLE IF NOT EXISTS alert_raw (
   at   TEXT PRIMARY KEY,                -- 'YYYY-MM-DD HH:MM' 이 내용을 처음 받은 때

@@ -318,3 +318,26 @@ def test_view_auto_saved_with_time_and_owner(app_):
     assert a.put("/api/prefs", json={"data": {"gn-view": "A"}, "at": "2026-11-20T03:00:00Z"}).json()["at"] == "2026-11-20T03:00:00Z"
     js = a.get("/api/prefs.js").text
     assert 'me="a1"' in js and 'at="2026-11-20T03:00:00Z"' in js and "_at" not in js and "gnv-owner" in js
+
+
+def test_posts_board(app_):
+    """공지 · 요청 게시판 — 요청은 누구나(쓴 사람 · 시군이 붙는다), 공지 · 처리 상태 · 숨기기는 관리자만, 팝업 공지는 지도가 읽는다."""
+    main, auth = app_
+    auth.add("boss", "password-1", "admin", "관리자")
+    auth.add("cw", "password-3", "sigun", "창원 담당", sigun="창원")
+    s, a = TestClient(main.app), TestClient(main.app)
+    _login(s, "cw", "password-3"); _login(a, "boss", "password-1")
+    r = s.post("/api/posts", json={"kind": "request", "title": "카드 글자 겹침", "body": "강수 누적 카드"})
+    assert r.status_code == 200 and r.json()["author"] == "창원 담당(창원)" and r.json()["status"] == "open"
+    assert s.post("/api/posts", json={"kind": "notice", "title": "x"}).status_code == 403
+    assert s.post("/api/posts", json={"kind": "request", "title": "  "}).status_code == 400
+    n = a.post("/api/posts", json={"kind": "notice", "title": "업데이트 때 1~2분 멈춤", "popup": True}).json()
+    assert [x["id"] for x in s.get("/api/posts/popup").json()["rows"]] == [n["id"]]
+    pid = r.json()["id"]
+    assert s.put(f"/api/posts/{pid}", json={"status": "done"}).status_code == 403
+    got = a.put(f"/api/posts/{pid}", json={"status": "done", "reply": "고쳤습니다"}).json()
+    assert got["status_name"] == "반영함" and got["reply"] == "고쳤습니다"
+    a.put(f"/api/posts/{n['id']}", json={"popup": False})
+    assert s.get("/api/posts/popup").json()["rows"] == []
+    a.put(f"/api/posts/{pid}", json={"gone": True})
+    assert s.get("/api/posts").json()["request"] == []

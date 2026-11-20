@@ -2360,6 +2360,15 @@ body.sj-on > header, body.sj-on #stage, body.sj-on #tl, body.sj-on #rail { displ
 #who a:hover, #who button:hover { background: color-mix(in oklab, var(--accent) 14%, transparent); }
 #who :is(a, button):focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 #who > b { color: var(--accent); font: 700 12px var(--sans); }
+#notice { position: fixed; inset: 0; z-index: 95; display: grid; place-items: center; padding: 16px; background: rgb(0 0 0 / .5); }
+#notice .nt-card { width: min(480px, 100%); max-height: 80vh; overflow: auto; display: grid; gap: 10px; padding: 14px 16px; font: 14px/1.6 var(--sans); color: var(--ink);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 18px 48px rgb(0 0 0 / .5); }
+#notice .nt-top, #notice .nt-bt { display: flex; align-items: center; gap: 8px; } #notice .sp { flex: 1; }
+#notice h3 { margin: 0; font-size: 16px; } #notice p { margin: 4px 0 0; white-space: pre-wrap; color: var(--ink-2); } #notice .nt-meta { font-size: 12px; color: var(--ink-3); }
+#notice section + section { padding-top: 10px; border-top: 1px solid var(--line); }
+#notice button { min-height: 36px; padding: 0 12px; font: 600 13px var(--sans); color: var(--ink); background: color-mix(in oklab, var(--panel) 70%, var(--line)); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+#notice button.pri { color: #06121f; background: var(--accent); border-color: var(--accent); }
+#notice a { color: var(--accent); font-size: 13px; } #notice :is(a, button):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 body.tour-on #tools { display: flex; opacity: 1; pointer-events: auto; }
 #tour { position: fixed; inset: 0; z-index: 90; pointer-events: none; }
 #tour .tr-ring { position: fixed; border: 2px solid var(--accent); border-radius: 10px; box-shadow: 0 0 0 9999px rgb(0 0 0 / .55); transition: all .2s ease-out; }

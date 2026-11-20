@@ -55,7 +55,7 @@ function acctPrefsHtml() {
       ${adm ? `<button type="button" data-acct="def">모든 계정의 처음 화면으로</button>` : ""}</span></div>
     <div class="row"><span class="k"></span><span class="note">지도 · 층 · 창 위치 같은 화면은 계정마다 저절로 저장된다(2분마다 · 창을 닫거나 로그아웃할 때) — 어느 PC에서든 마지막 화면으로 시작. 연락처 잠금 번호는 저장하지 않는다.</span></div>
     <div class="row"><span class="k">처음 안내</span><span class="seg"><button type="button" data-acct="tour">처음 안내 다시 보기</button></span><span class="note">주요 기능을 한 단계씩 짚는 안내 — Esc 로 건너뛴다</span></div>
-    <div class="row"><span class="k">바로 가기</span><span class="seg"><button type="button" data-acct="go" data-href="/board.html">파견 현황</button>
+    <div class="row"><span class="k">바로 가기</span><span class="seg"><button type="button" data-acct="go" data-href="/posts.html">공지 · 요청</button><button type="button" data-acct="go" data-href="/board.html">파견 현황</button>
       <button type="button" data-acct="go" data-href="${escH(SNAP_URL("/map.html"))}">시연 화면</button></span></div>`;
 }
 function acctPrefsBind() {
