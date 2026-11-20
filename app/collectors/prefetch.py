@@ -20,7 +20,8 @@ async def collect(now: datetime | None = None) -> dict:
     errs = []
     for d1 in (yday, today):
         try:
-            await fetch_text(WIND, {"tm1": d1, "tm2": today, "obs": "ws_ins_max", "stn": "0"})
+            # disp=0 · help=0 을 꼭 — 이 API 는 disp 를 빼면 쉼표 꼴로 답한다(보고서는 빈칸 꼴을 읽는다). 열쇠(raw_key)는 둘을 빼고 만든다
+            await fetch_text(WIND, {"tm1": d1, "tm2": today, "obs": "ws_ins_max", "stn": "0", "disp": "0", "help": "0"})
         except KmaError as e:
             errs.append(f"순간풍속 {d1[4:]}~: {str(e)[:60]}")
     db.log_collect("prefetch", not errs, at, "; ".join(errs) or "순간최대풍속 2묶음")

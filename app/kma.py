@@ -27,7 +27,8 @@ RAW_PATHS = ("/api/typ01/cgi-bin/url/nph-aws2_min", "/api/typ01/cgi-bin/url/nph-
 
 
 def raw_key(path: str, params) -> str:
-    """원문 열쇠 — 경로 + 인자(인증키 · 기본값 disp=0 · help=0 은 빼고 이름순). 재난상황보고서 kma_guard.raw_key 와 같아야 한다."""
+    """원문 열쇠 — 경로 + 인자(인증키 · disp=0 · help=0 은 빼고 이름순). 재난상황보고서 kma_guard.raw_key 와 같아야 한다.
+    ⚠️ disp=0 이 기본값이 아닌 API 가 있다(sfc_aws_day 는 빼면 쉼표 꼴) — 그런 것은 받을 때 disp=0 을 꼭 붙인다(prefetch)."""
     items = params.items() if isinstance(params, dict) else params
     q = sorted((str(k), str(v)) for k, v in items if str(k).lower() != "authkey" and not (k in ("disp", "help") and str(v) == "0"))
     return path + "?" + "&".join(f"{k}={v}" for k, v in q)
