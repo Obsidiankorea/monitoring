@@ -1,0 +1,11 @@
+/* 따로 떨어진 화면(게시판 posts · 진행판 board · 계정 admin · 로그인 login)의 밝은 테마 — 지도에서 고른 테마(gn-theme)를 따른다.
+   어두운 색은 각 화면 <style> 의 :root 에 그대로 두고, 밝을 때만 여기서 덮는다. 색 값은 map.css 의 밝은 테마와 같다. */
+:root { --btn: #1b2635; --field: #0e151e; --on: #06121f; color-scheme: dark; }
+:root[data-theme="light"] {
+  --bg: #EEF2F7; --panel: #FFFFFF; --line: #D3DCE7; --ink: #101821; --ink-2: #47596D; --ink-3: #7688A0;
+  --accent: #1B7FBF; --doing: #1B7FBF; --warn: #B7791F; --bad: #C4521E; --ok: #12805A;
+  --btn: #F5F8FC; --field: #F5F8FC; --on: #FFFFFF; color-scheme: light;
+}
+:root[data-theme="light"] .md .wk { color: #6B46C1; border-bottom-color: #6B46C1; }
+:root[data-theme="light"] .warn { color: #7A4B00; background: #FFF4E0; border-color: #E8C27A; }
+:root[data-theme="light"] .chip.open, :root[data-theme="light"] .tag.h { color: #FFFFFF; }

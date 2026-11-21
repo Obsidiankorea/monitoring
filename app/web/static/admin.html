@@ -15,9 +15,9 @@
   h2 { margin: 0 0 12px; font-size: 15px; color: var(--ink-2); }
   .add { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; align-items: end; }
   label { display: grid; gap: 4px; font-size: 12.5px; color: var(--ink-2); }
-  input, select { height: 40px; padding: 0 10px; font-family: inherit; font-size: 14px; font-weight: 500; color: var(--ink); background: #0e151e; border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
-  button { height: 40px; padding: 0 14px; font-family: inherit; font-size: 13px; font-weight: 600; color: var(--ink); background: #1b2635; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
-  button.pri { background: var(--accent); color: #06121f; border-color: var(--accent); }
+  input, select { height: 40px; padding: 0 10px; font-family: inherit; font-size: 14px; font-weight: 500; color: var(--ink); background: var(--field); border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
+  button { height: 40px; padding: 0 14px; font-family: inherit; font-size: 13px; font-weight: 600; color: var(--ink); background: var(--btn); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+  button.pri { background: var(--accent); color: var(--on); border-color: var(--accent); }
   :is(input, select, button):focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   table { width: 100%; border-collapse: collapse; } th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
   th { font-size: 12px; color: var(--ink-3); font-weight: 600; } td small { color: var(--ink-3); }
@@ -26,6 +26,8 @@
   label.ck input { width: 18px; height: 18px; accent-color: var(--accent); } .msg.bad { color: var(--bad); } .msg.ok { color: var(--ok); }
   @media (max-width: 640px) { thead { display: none; } tr { display: grid; padding: 8px 0; border-bottom: 1px solid var(--line); } td { border: 0; padding: 3px 0; } }
 </style>
+<link rel="stylesheet" href="css/pages.css">
+<script>try { if (localStorage.getItem("gn-theme") === "light") document.documentElement.dataset.theme = "light"; } catch (e) {}</script>
 </head>
 <body>
 <main>

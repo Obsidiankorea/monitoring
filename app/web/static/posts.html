@@ -12,11 +12,11 @@
   main { max-width: 900px; margin: 0 auto; padding: 18px 16px 48px; display: grid; gap: 14px; }
   header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   header h1 { margin: 0; font-size: 20px; flex: 1; } header a { color: var(--accent); }
-  input, textarea, select, button { font: inherit; font-size: 13.5px; color: var(--ink); background: #1b2635; border: 1px solid var(--line); border-radius: 8px; }
+  input, textarea, select, button { font: inherit; font-size: 13.5px; color: var(--ink); background: var(--btn); border: 1px solid var(--line); border-radius: 8px; }
   input, select, button { min-height: 36px; padding: 0 10px; } textarea { width: 100%; padding: 8px 10px; resize: vertical; }
-  button { cursor: pointer; } button.pri { color: #06121f; background: var(--accent); border-color: var(--accent); font-weight: 700; }
+  button { cursor: pointer; } button.pri { color: var(--on); background: var(--accent); border-color: var(--accent); font-weight: 700; }
   :is(input, textarea, select, button, a):focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .tabs { display: flex; gap: 6px; } .tabs button[aria-selected="true"] { color: #06121f; background: var(--accent); border-color: var(--accent); font-weight: 700; }
+  .tabs { display: flex; gap: 6px; } .tabs button[aria-selected="true"] { color: var(--on); background: var(--accent); border-color: var(--accent); font-weight: 700; }
   .tabs .n { margin-left: 4px; font-size: 12px; opacity: .8; }
   form { display: grid; gap: 8px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
   form label { display: grid; gap: 4px; font-size: 12.5px; color: var(--ink-2); } form .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
@@ -25,10 +25,10 @@
   .post.pop { border-color: color-mix(in oklab, var(--accent) 55%, var(--line)); }
   .post h2 { margin: 0; font-size: 16px; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
   .meta { font-size: 12px; color: var(--ink-3); } .body { white-space: pre-wrap; overflow-wrap: anywhere; }
-  .chip { padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 600; background: #1b2635; color: var(--ink-2); }
-  .chip.open { color: #1a1206; background: var(--warn); } .chip.doing { color: #06121f; background: var(--accent); } .chip.done { color: #06200f; background: var(--ok); }
+  .chip { padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--btn); color: var(--ink-2); }
+  .chip.open { color: #1a1206; background: var(--warn); } .chip.doing { color: var(--on); background: var(--accent); } .chip.done { color: #06200f; background: var(--ok); }
   .chip.pop { color: var(--accent); border: 1px solid var(--accent); background: none; }
-  .reply { padding: 8px 10px; border-left: 3px solid var(--ok); background: #0e151e; white-space: pre-wrap; font-size: 13.5px; }
+  .reply { padding: 8px 10px; border-left: 3px solid var(--ok); background: var(--field); white-space: pre-wrap; font-size: 13.5px; }
   .adm { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding-top: 6px; border-top: 1px dashed var(--line); }
   .adm textarea { flex: 1 1 100%; min-height: 54px; }
   .docs { display: grid; gap: 14px; } .docs h3 { margin: 4px 0 0; font-size: 13px; color: var(--ink-3); font-weight: 600; }
@@ -42,18 +42,20 @@
   .md h2 { font-size: 22px; margin: 18px 0 8px; } .md h3 { font-size: 17px; margin: 22px 0 8px; padding-left: 10px; border-left: 3px solid var(--accent); }
   .md h4 { font-size: 15px; margin: 16px 0 6px; } .md h5 { font-size: 14px; margin: 12px 0 4px; color: var(--ink-2); }
   .md p { margin: 8px 0; } .md ul, .md ol { margin: 6px 0; padding-left: 22px; } .md li { margin: 3px 0; }
-  .md b { color: #fff; } .md code { padding: 1px 5px; font: 12.5px Consolas, monospace; background: #0e151e; border: 1px solid var(--line); border-radius: 4px; }
-  .md pre { padding: 10px 12px; overflow: auto; background: #0e151e; border: 1px solid var(--line); border-radius: 8px; } .md pre code { padding: 0; border: 0; }
+  .md b { color: var(--ink); } .md code { padding: 1px 5px; font: 12.5px Consolas, monospace; background: var(--field); border: 1px solid var(--line); border-radius: 4px; }
+  .md pre { padding: 10px 12px; overflow: auto; background: var(--field); border: 1px solid var(--line); border-radius: 8px; } .md pre code { padding: 0; border: 0; }
   .md .tw { overflow-x: auto; margin: 10px 0; } .md table { border-collapse: collapse; min-width: 60%; font-size: 13px; }
-  .md th, .md td { padding: 6px 10px; border: 1px solid var(--line); text-align: left; vertical-align: top; } .md th { background: #1b2635; color: var(--ink-2); }
+  .md th, .md td { padding: 6px 10px; border: 1px solid var(--line); text-align: left; vertical-align: top; } .md th { background: var(--btn); color: var(--ink-2); }
   .md hr { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
   .md blockquote { margin: 10px 0; padding: 4px 12px; border-left: 3px solid var(--line); color: var(--ink-2); }
-  .md .co { margin: 12px 0; padding: 8px 14px; border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px; background: #0e151e; }
+  .md .co { margin: 12px 0; padding: 8px 14px; border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px; background: var(--field); }
   .md .co-h { font-weight: 700; color: var(--accent); } .md .co.warning, .md .co.caution, .md .co.danger { border-left-color: var(--warn); } .md .co.warning .co-h, .md .co.caution .co-h, .md .co.danger .co-h { color: var(--warn); }
   .md .co.important .co-h, .md .co.tip .co-h { color: var(--ok); } .md .co.important, .md .co.tip { border-left-color: var(--ok); }
   .md a { color: var(--accent); } .md .wk { color: #c9a6ff; border-bottom: 1px dotted #c9a6ff; }
   .empty { padding: 26px; text-align: center; color: var(--ink-2); background: var(--panel); border: 1px dashed var(--line); border-radius: 12px; }
 </style>
+<link rel="stylesheet" href="css/pages.css">
+<script>try { if (localStorage.getItem("gn-theme") === "light") document.documentElement.dataset.theme = "light"; } catch (e) {}</script>
 </head>
 <body>
 <main>

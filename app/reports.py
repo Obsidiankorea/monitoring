@@ -267,7 +267,8 @@ class Waiting(Exception):
 
 
 def progress() -> dict:
-    """보고서 서버가 지금 만드는 것 — {running, job, elapsed, calls: [{label, ok, fail}], last: {label, ago}}. 못 물으면 running False."""
+    """보고서 서버가 지금 만드는 것 — {running, job, elapsed, calls: [{label, ok, fail}], last: {label, ago}, basis: [{name, at}], jobs: [같은 꼴…]}.
+    맨 위는 먼저 받은 것 하나(예전 꼴). 못 물으면 running False."""
     if not ready() or config.DEMO:
         return {"running": False}
     try:
@@ -275,7 +276,10 @@ def progress() -> dict:
         j = r.json() if r.status_code == 200 else {}
     except (httpx.HTTPError, ValueError):
         return {"running": False, "err": "보고서 서버에 묻지 못했다"}
-    return {k: j.get(k) for k in ("running", "job", "elapsed", "calls", "last")} if j else {"running": False}
+    keep = ("running", "job", "elapsed", "calls", "last", "basis")
+    out = {k: j.get(k) for k in keep} if j else {"running": False}
+    out["jobs"] = [{k: x.get(k) for k in keep} for x in (j.get("jobs") or [])]      # 동시에 만드는 보고서마다(보고서 서버 일꾼들)
+    return out
 
 
 def run(rid: str, opts: dict | None = None, client: httpx.Client | None = None, wait1700: bool = False) -> tuple[str, bytes]:
