@@ -90,7 +90,7 @@ function repTile(r) {
 /* 자세히 — 왼쪽 목록 한 줄(고르기만, 받기는 오른쪽 창에서) */
 function repDli(r) {
   const J = REP.jobs[r.id], D = REP.done[r.id];
-  const st = J ? (J.run ? `만드는 중 · ${repPct(J)}%` : "차례 기다림") : D ? (D.ok ? "다 됐다" : "만들지 못했다") : r.ready ? r.group : "준비 중";
+  const st = J ? (J.run ? `만드는 중 · ${repPct(J)}%` : "차례 기다림") : D ? (D.ok ? "다 됐다" : "만들지 못했다") : r.brief ? "샘플받기" : r.ready ? r.group : "준비 중";
   return `<button type="button" class="dli${r.id === REP.sel ? " on" : ""}${r.ready ? "" : " off"}" role="option" aria-selected="${r.id === REP.sel}" data-sel="${escH(r.id)}">`
     + `<span class="mi">${r.thumb ? `<img src="img/reports/${escH(r.id)}.png" alt="" loading="lazy">` : ""}</span>`
     + `<span class="dn"><b>${escH(r.name)}</b><small>${escH(st)}</small></span>${J ? `<i class="spin" aria-hidden="true"></i>` : D && !D.ok ? `<i class="x" aria-hidden="true">!</i>` : ""}</button>`;
@@ -572,6 +572,15 @@ function repJobDraw() {
 async function repRun(id, mode) {
   const r = repById(id);
   if (!r) return;
+  if (r.brief) {                                                  /* 태풍 4기관 브리핑 — 지금은 샘플받기만(가상 자료 공개 링크) */
+    try {
+      const res = await fetch("/api/reports/brief-sample", { method: "POST" });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || `오류 ${res.status}`);
+      const j = await res.json();
+      REP.msg = { ok: true, text: "샘플 브리핑 링크를 만들었다 — 가상 자료(태풍이 오면 4기관 자료로 만든다)", share: j.share };
+    } catch (e) { REP.msg = { ok: false, text: `샘플을 받지 못했다 — ${e.message}` }; }
+    return repDraw();
+  }
   if (mode === "dl" && REP.w[id]?.state === "ready") {         /* 17시 대기로 만들어 둔 것 */
     try {
       const res = await fetch(`/api/reports/wait/file?id=${encodeURIComponent(id)}`);

@@ -57,3 +57,14 @@ def path(tok: str):
 
 def url(tok: str) -> str:
     return f"{base()}/t/{tok}"
+
+
+SAMPLE = config.ROOT / "app" / "samples" / "typhoon_brief.json"   # 가상 4기관 자료(태풍 4기관 브리핑 '샘플받기')
+SAMPLE_TOKEN = "typhoon-brief-sample"
+
+
+def sample() -> str:
+    """샘플 브리핑 링크 — 늘 같은 주소(가상 자료라 감출 것이 없다). 부를 때마다 다시 써서 30일 지우기에 걸리지 않게."""
+    DIR.mkdir(parents=True, exist_ok=True)
+    (DIR / f"{SAMPLE_TOKEN}.json").write_bytes(SAMPLE.read_bytes())
+    return url(SAMPLE_TOKEN)

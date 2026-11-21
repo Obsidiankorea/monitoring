@@ -98,6 +98,8 @@ REG = [
      "opts": [_TM, _TITLE, _o("stage", "위기경보 칸", "text", "", "특보", "예) 경계(초기대응단계) — 비우면 빈칸", max=40)]},
     {"id": "snow", "name": "대설 대처 상황 보고", "group": "기후재난", "job": "snow", "ready": True,
      "desc": "특보 · 현재기온 + 24시간 신적설 · 그림 셋 · 붙임 강수형태 분포도", "opts": [_TM, _TITLE]},
+    {"id": "typhoon_brief", "name": "태풍 4기관 브리핑", "group": "기후재난", "job": "", "ready": True, "brief": "sample", "opts": [],
+     "desc": "휴대폰으로 보는 4기관 예상진로 · 반경 · 경남 영향 시간(공개 링크) — 지금은 샘플받기만(가상 자료), 태풍이 오면 4기관 자료로"},
     {"id": "heat", "name": "폭염 상황보고", "group": "기후재난", "job": "", "desc": "준비 중 — 재난상황보고서 서버에 아직 없다", "opts": [], "ready": False},
     {"id": "temp", "name": "3일 기온표", "group": "움짤", "job": "temp", "ready": True,
      "desc": "시군별 일 최고기온(11~3월은 최저) 3일 + 내일 예상 · 대표지점 외 AWS (그림) — 런처 특보이미지의 기온표",
@@ -155,7 +157,7 @@ def sample(rid: str):
 
 def listing() -> dict:
     return {"reports": [{**{k: r[k] for k in ("id", "name", "group", "desc", "opts", "ready")}, "wait": bool(r.get("wait")),
-                         "compose": r.get("compose") or "",
+                         "compose": r.get("compose") or "", "brief": bool(r.get("brief")),
                          **({"sample": bool(sample(r["id"])), "live": r["id"] in DEMO_LIVE and ready()} if config.DEMO else {}),
                          "thumb": (THUMBS / f"{r['id']}.png").is_file()} for r in REG],
             "groups": list(GROUPS),

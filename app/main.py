@@ -1227,6 +1227,13 @@ async def _reports_run(body: dict):
                                                                    "Access-Control-Expose-Headers": "X-Tg, X-Basis, X-Share, Content-Disposition", "Cache-Control": "no-store"})
 
 
+@app.post("/api/reports/brief-sample")
+async def api_brief_sample():
+    """태풍 4기관 브리핑 — 샘플받기(가상 자료). 진짜는 태풍이 오면 4기관 자료로(아직 없다)."""
+    from . import share
+    return {"ok": True, "share": await asyncio.to_thread(share.sample)}
+
+
 @app.get("/t/{token}")
 async def share_page(token: str):
     """태풍 브리핑 공유 페이지 — 로그인 없이(auth.OPEN '/t/'). 자료는 같은 주소 아래 data.json."""

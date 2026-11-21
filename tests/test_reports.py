@@ -383,3 +383,15 @@ def test_typhoon_brief_share_link(tmp_path, monkeypatch):
     path = "/t/" + link.rsplit("/", 1)[1]
     assert c.get(path).status_code == 200 and c.get(path + "/data.json").content == brief
     assert c.get("/t/../etc").status_code == 404 and c.get("/t/abc").status_code == 404
+
+
+def test_typhoon_brief_sample(tmp_path, monkeypatch):
+    """태풍 4기관 브리핑 샘플받기 — 늘 같은 공개 링크, 가상 자료(sample=true · 4기관)."""
+    from fastapi.testclient import TestClient
+    from app import main, share
+    monkeypatch.setattr(share, "DIR", tmp_path)
+    c = TestClient(main.app)
+    j = c.post("/api/reports/brief-sample").json()
+    assert j["ok"] and j["share"].endswith("/t/typhoon-brief-sample")
+    d = c.get("/t/typhoon-brief-sample/data.json").json()
+    assert d["sample"] is True and len(d["agencies"]) == 4 and d["base"].startswith("data:image/")
