@@ -110,9 +110,9 @@ BANGJAE_BASE=스방 주소(내부망)
 ## 4. 지켜 온 약속
 
 - **작업 흐름**: 개발 브랜치에서 일하고, main 은 사용자가 'ㅇㅇ' · '합쳐' 할 때만 fast-forward(`git push origin HEAD:main`).
-  지도 커밋은 `MAP:` 머리. 끝내기 전에 `python -m pytest -q`(109개) · `<script>` 를 뽑아 `node --check`(`.cjs` 로 — `.mjs` 는 strict 라 틀린 오류) ·
+  지도 커밋은 `MAP:` 머리. 끝내기 전에 `python -m pytest -q` · `<script>` 를 뽑아 `node --check`(`.cjs` 로 — `.mjs` 는 strict 라 틀린 오류) ·
   화면은 시험 서버(`GN_STATE=<임시 폴더> python -m app.main --no-collect --port 8766`)에 Playwright 로 띄워 스크린숏.
-- 화면을 바꾸면 README 해당 절과 지도 도움말(`map.html` `<dt>`) · 설정 설명도 같이 고친다.
+- 화면을 바꾸면 README 해당 절과 지도 도움말(`map.html` · `js/` 의 `<dt>`) · 설정 설명도 같이 고친다.
 
 - 키 · 토큰은 커밋하지 않고 화면·로그에 찍지 않는다(텔레그램 봇 토큰은 사용자가 그대로 두기로 함 — 재발급을 권하지 않는다).
 - 커밋·푸시·서버 갱신은 사용자가 말할 때만.

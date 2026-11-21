@@ -481,26 +481,36 @@ def note(token: str, body: dict) -> dict:
     memo = str(body.get("memo") or "").strip()[:500]
     if not memo and not body.get("photo"):
         raise HTTPException(400, "덧붙일 말이나 사진을 넣어 주세요")
+    jpg = _jpeg(body["photo"]) if body.get("photo") else None      # 쓰기 잠금 밖에서 — 줄이기 · 다시 쓰기는 느리다
     with db.tx() as con:
         rid, _, _ = _link(con, token)
         who, more = _actor(con, rid, body)
         lid = con.execute("INSERT INTO duty_log(rid, at, kind, who, more, memo) VALUES(?,?,?,?,?,?)", (rid, _now(), "note", who, more, memo)).lastrowid
-        if body.get("photo"):
-            con.execute("UPDATE duty_log SET photo=? WHERE id=?", (_photo(lid, body["photo"]), lid))
+        if jpg:
+            con.execute("UPDATE duty_log SET photo=? WHERE id=?", (_save(lid, jpg), lid))
     return {"ok": True}
 
 
-def _photo(log_id: int, data_url: str) -> str:
-    """화면이 보낸 사진(data URL)을 JPEG 로 다시 써서 둔다 — 그림이 아니면 받지 않는다. 파일 이름."""
+def _jpeg(data_url: str) -> bytes:
+    """화면이 보낸 사진(data URL)을 JPEG 로 다시 쓴 바이트 — 그림이 아니면 받지 않는다(400).
+    ⚠️ DB 쓰기 잠금 **밖에서** 부른다. 안에서 줄이고 다시 쓰면 사진 한 장마다 잠금을 쥐어, 여럿이 한꺼번에
+    보내면 줄을 서다 'database is locked' 로 떨어졌다(300명 동시 시험에서 절반 가까이, 2026-11-21)."""
     from PIL import Image
     try:
         im = Image.open(io.BytesIO(base64.b64decode(data_url.split(",", 1)[-1])))
         im = im.convert("RGB")
         im.thumbnail((1600, 1600))
+        out = io.BytesIO()
+        im.save(out, "JPEG", quality=82)
     except Exception as e:                                   # noqa: BLE001 — 깨진 그림 · 그림 아닌 것
         raise HTTPException(400, "사진을 읽지 못했습니다") from e
+    return out.getvalue()
+
+
+def _save(log_id: int, jpg: bytes) -> str:
+    """다시 쓴 사진을 <기록 번호>.jpg 로 — 파일 쓰기만(빠르다). 파일 이름."""
     DIR.mkdir(parents=True, exist_ok=True)
-    im.save(DIR / f"{log_id}.jpg", "JPEG", quality=82)
+    (DIR / f"{log_id}.jpg").write_bytes(jpg)
     return f"{log_id}.jpg"
 
 
@@ -510,6 +520,7 @@ def answer(token: str, body: dict) -> dict:
     action, more = body.get("action"), body.get("more")
     if action not in ACTIONS or more not in ("yes", "no"):
         raise HTTPException(400, "조치 여부와 추가 배치 필요를 골라 주세요")
+    jpg = _jpeg(body["photo"]) if body.get("photo") else None      # 깨진 사진은 여기서 400 — 줄을 쓰기 전에
     with db.tx() as con:
         rid, _, _ = _link(con, token)
         p = next((p for p in _current(con, rid) if p["id"] == body.get("id")), None)
@@ -517,8 +528,8 @@ def answer(token: str, body: dict) -> dict:
             raise HTTPException(400, "담당자로 등록한 뒤 보내 주세요")
         lid = con.execute("INSERT INTO duty_log(rid, at, kind, who, action, more, memo) VALUES(?,?,?,?,?,?,?)",
                           (rid, _now(), "reply", _who(p), action, more, str(body.get("memo") or "").strip()[:500])).lastrowid
-        if body.get("photo"):                                # 사진이 깨졌으면 예외 → 이 줄도 함께 되돌린다
-            con.execute("UPDATE duty_log SET photo=? WHERE id=?", (_photo(lid, body["photo"]), lid))
+        if jpg:
+            con.execute("UPDATE duty_log SET photo=? WHERE id=?", (_save(lid, jpg), lid))
     return {"ok": True}
 
 

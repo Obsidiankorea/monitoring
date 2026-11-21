@@ -12,5 +12,5 @@ HANDOFF 에 지금까지 한 일 · 남은 일 · 지켜 온 약속이 있다. �
 
 ## 어디에 무엇이
 - 서버: `app/main.py`(FastAPI) · `app/gridview.py`(격자 · 지도 설정) · `app/collectors/`(수집) · `app/domain/regions.py`(시군 · 특보구역)
-- 화면: `app/web/static/map.html`(경남 강수 지도) · `app/web/static/index.html`(종합 화면) — 각각 한 파일
+- 화면: `app/web/static/map.html` + `js/`(경남 강수 지도) · `app/web/static/index.html`(종합 화면)
 - 시험: `python -m pytest -q`
