@@ -258,7 +258,7 @@ def _later(days: int = DAYS) -> str:
 
 
 # ── 요청 거르기(main.py 미들웨어가 부른다) ─────────────────
-OPEN = ("/login.html", "/css/pages.css", "/api/auth/login", "/api/auth/me", "/api/auth/setup", "/api/auth/signup", "/api/status", "/favicon.ico", "/r/")
+OPEN = ("/login.html", "/css/pages.css", "/api/auth/login", "/api/auth/me", "/api/auth/setup", "/api/auth/signup", "/api/status", "/favicon.ico", "/r/", "/t/")   # /t/ = 태풍 브리핑 공유 링크(공개 기상 자료만 — app/share.py)
 ADMIN_ONLY = ("/api/settings", "/api/keys", "/api/update", "/api/server-update", "/api/origin", "/api/storage",
               "/api/snaps", "/api/ai/wiki", "/api/ai/task", "/api/ai/llm", "/api/districts/geo", "/api/auth/users", "/admin.html")
 # 관리자가 아닌 사람의 쓰기(POST · PUT · DELETE)는 여기 있는 것만 — 새 쓰기 라우트는 기본으로 관리자 전용(허용 목록)

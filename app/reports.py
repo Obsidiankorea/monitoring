@@ -353,6 +353,11 @@ def fetch(rid: str, opts: dict | None = None, client: httpx.Client | None = None
             if got.status_code != 200 or not got.content:
                 raise RuntimeError(f"보고서 파일을 받지 못했다({got.status_code})")
             out.append((file_name(stored, r), got.content))
+        brief = [f for f, stored in pairs if stored.endswith(".brief.json")]
+        if brief and meta is not None:             # 태풍 보고서의 휴대폰 브리핑 자료 — 공개 링크로 연다(app/share.py)
+            got = c.get(f"{url()}{brief[0]}", headers=hd)
+            if got.status_code == 200 and got.content:
+                meta["brief"] = got.content
         if meta is not None:                       # 화면 팝업 — 이번 파일에 쓴 기상청 자료 시각(jaenan) + 이번 요청에 넣은 우리 자료 시각
             meta["basis"] = [{"name": str(x.get("name"))[:60], "at": str(x.get("at"))[:120]}
                              for x in j.get("basis") or [] if isinstance(x, dict)][:20] + local

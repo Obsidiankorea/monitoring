@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>태풍 진로 브리핑</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* 태풍 진로 브리핑 — 공개 링크(/t/<토큰>, 로그인 없음). 자료는 ./data.json(보고서 서버 typhoon_brief 가 만든 공개 기상 자료).
+   한 줄 세로 흐름: 지도 → 시간 → 경남 상태 → 영향 시간 → 설명. 휴대폰 한 손 조작이 기준 */
+:root {
+  --bg: #F3F5F8; --surface: #FFFFFF; --ink: #142233; --ink-2: #4A5A6E; --line: #D6DDE6;
+  --accent: #C8281E; --gale: #F5C542; --gale-ink: #5C4300; --storm: #E8612C; --storm-ink: #FFFFFF;
+  --agree-1: #BFD7EA; --agree-2: #7FB3D5; --agree-3: #2E86C1; --agree-4: #1B4F72; --chip-off: #E7ECF2;
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-num: "IBM Plex Mono", ui-monospace, Consolas, monospace; --r: 14px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --bg: #0E1520; --surface: #16202D; --ink: #E6ECF3; --ink-2: #9AABBE; --line: #2A3747; --accent: #FF6B5E; --chip-off: #223042; color-scheme: dark } }
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.55;
+  padding: max(14px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 40px max(16px, env(safe-area-inset-left)); }
+main { max-width: 760px; margin: 0 auto; display: grid; gap: 14px; }
+header { display: grid; gap: 4px; }
+.eyebrow { font-size: 12px; letter-spacing: .06em; color: var(--ink-2); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pill { font-size: 11.5px; padding: 2px 8px; border-radius: 999px; background: var(--accent); color: #fff; }
+h1 { font-size: 22px; line-height: 1.3; margin: 0; text-wrap: balance; }
+.sub { color: var(--ink-2); font-size: 13.5px; margin: 0; }
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.share { justify-self: start; min-height: 44px; padding: 8px 16px; border-radius: 12px; border: 0; background: #FEE500; color: #191600;
+  font: 700 14.5px var(--font-body); cursor: pointer; display: inline-flex; gap: 8px; align-items: center; }
+.share small { font-weight: 500; }
+.map { position: relative; border-radius: var(--r); overflow: hidden; background: #DDE6F0; border: 1px solid var(--line); width: 100%; max-height: 72vh; }
+.map svg { width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+.zoom { position: absolute; right: 10px; top: 10px; display: grid; gap: 6px; }
+.zoom button, .play { width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-size: 20px; display: grid; place-items: center; cursor: pointer; }
+button:focus-visible, input:focus-visible, .tl:focus-visible { outline: 3px solid var(--agree-3); outline-offset: 2px; }
+.hint { position: absolute; left: 10px; bottom: 10px; font-size: 11.5px; background: var(--surface); opacity: .9; color: var(--ink-2); padding: 3px 8px; border-radius: 8px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { min-height: 40px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: 500 13.5px var(--font-body); display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.chip i { width: 18px; height: 4px; border-radius: 2px; background: var(--c); }
+.chip[aria-pressed="false"] { background: var(--chip-off); color: var(--ink-2); }
+.time { display: grid; grid-template-columns: 44px 1fr; gap: 10px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; }
+.time .t { font-weight: 700; } .time .t small { font-weight: 400; color: var(--ink-2); margin-left: 6px; }
+input[type=range] { width: 100%; height: 32px; accent-color: var(--accent); }
+.cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; display: grid; gap: 2px; min-width: 0; }
+.card b { font-size: 11.5px; color: var(--ink-2); font-weight: 500; }
+.card .v { font-size: 19px; font-weight: 700; } .card .s { font-size: 12px; color: var(--ink-2); }
+.state { justify-self: start; font-size: 12.5px; font-weight: 700; padding: 2px 8px; border-radius: 6px; background: var(--chip-off); color: var(--ink-2); }
+.state.gale { background: var(--gale); color: var(--gale-ink); } .state.storm { background: var(--storm); color: var(--storm-ink); }
+.dots { display: flex; gap: 4px; margin-top: 4px; } .dots span { width: 12px; height: 12px; border-radius: 50%; background: var(--chip-off); } .dots span.on { background: var(--agree-3); }
+@media (max-width: 420px) { .cards { grid-template-columns: 1fr 1fr; } .cards .card:last-child { grid-column: span 2; } }
+section.box { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; display: grid; gap: 8px; min-width: 0; }
+section.box h2 { font-size: 15px; margin: 0; }
+.tl { width: 100%; height: auto; display: block; cursor: pointer; } .tl text { fill: var(--ink-2); font: 11px var(--font-body); }
+ul.notes { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; } .sw { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
+.foot { font-size: 12px; color: var(--ink-2); margin: 0; }
+.err { padding: 24px; text-align: center; color: var(--ink-2); }
+</style>
+</head>
+<body>
+<main id="main">
+  <header>
+    <div class="eyebrow">경상남도 재난안전대책본부 · 태풍 진로 브리핑 <span class="pill" id="pill" hidden>샘플 · 가상 자료</span></div>
+    <h1 id="ttl">태풍 진로 브리핑</h1>
+    <p class="sub" id="issued">자료를 불러오는 중…</p>
+    <button type="button" class="share" id="share">카톡 등으로 보내기 <small id="sharemsg"></small></button>
+  </header>
+  <div class="map" id="map">
+    <svg id="svg" role="img" aria-label="태풍 예상진로 지도 — 끌어서 옮기고, 두 손가락으로 확대"></svg>
+    <div class="zoom"><button type="button" id="zin" aria-label="확대">+</button><button type="button" id="zout" aria-label="축소">−</button><button type="button" id="zreset" aria-label="처음 범위로" style="font-size:14px">⟲</button></div>
+    <div class="hint">끌기 · 두 손가락 확대 · 점 누르면 자세히</div>
+  </div>
+  <div class="chips" id="chips" role="group" aria-label="기관 켜고 끄기" hidden></div>
+  <div class="time"><button type="button" class="play" id="play" aria-label="재생">▶</button>
+    <div><div class="t" id="tlabel">—</div><input type="range" id="slider" min="0" max="0" step="1" value="0" aria-label="예측 시간"></div></div>
+  <div class="cards" aria-live="polite">
+    <div class="card"><b>경남(창원)</b><span class="state" id="st">—</span><span class="s" id="sts">기상청 반경 기준</span></div>
+    <div class="card"><b>창원까지</b><span class="v num" id="dist">—</span><span class="s">태풍 중심(기상청 예측)</span></div>
+    <div class="card" id="c3"><b id="c3b">가장 가까울 때</b><span class="v num" id="c3v">—</span><span class="s" id="c3s"></span><div class="dots" id="dots" hidden><span></span><span></span><span></span><span></span></div></div>
+  </div>
+  <section class="box"><h2>경남 영향 시간</h2><svg class="tl" id="tl" viewBox="0 0 700 120" tabindex="0" aria-label="시간 막대 — 누르면 그 시각으로"></svg></section>
+  <section class="box"><h2>설명</h2><ul class="notes" id="notes"></ul>
+    <div class="legend"><span><i class="sw" style="background:var(--gale)"></i>강풍반경 15m/s</span><span><i class="sw" style="background:var(--storm)"></i>폭풍반경 25m/s</span>
+      <span><i class="sw" style="background:#E8607E;opacity:.45"></i>70% 확률반경</span><span>★ 경남(창원)</span><span>● 숫자 = 강도</span></div>
+    <p class="foot" id="foot">자료: 기상청 태풍정보 · 바탕도 기상청 태풍 지도 서버(람베르트 정각원추). 반경 밖이어도 비 · 바람이 강할 수 있으니 기상청 특보를 함께 확인하세요.</p>
+  </section>
+</main>
+<script>
+(async () => {
+  const NS = 'http://www.w3.org/2000/svg', $ = id => document.getElementById(id);
+  const el = (tag, a = {}, p) => { const e = document.createElementNS(NS, tag); for (const k in a) e.setAttribute(k, a[k]); if (p) p.appendChild(e); return e; };
+  const pts = a => a.map(p => p.join(',')).join(' ');
+  let D;
+  try { D = await (await fetch(location.pathname.replace(/\/$/, '') + '/data.json')).json(); }
+  catch (e) { $('main').innerHTML = '<p class="err">브리핑 자료를 불러오지 못했습니다. 링크가 지났을 수 있습니다(30일).</p>'; return; }
+  const multi = D.agencies.length > 1, n = D.hours.length, on = new Set(D.agencies.map(a => a.id));
+  let idx = 0, timer = null;
+  document.title = `${D.title} 진로 브리핑`;
+  $('ttl').textContent = `${D.title} 예상진로`;
+  $('issued').textContent = `${D.issued} · 3시간 간격` + (D.name_note ? ` · ${D.name_note}` : '');
+  $('pill').hidden = !D.sample;
+  $('share').onclick = async () => {
+    const data = { title: `${D.title} 진로 브리핑`, text: `${D.title} 예상진로 · 경남 영향 시간(${D.issued})`, url: location.href };
+    try { if (navigator.share) { await navigator.share(data); return; } } catch (e) { if (e.name === 'AbortError') return; }
+    try { await navigator.clipboard.writeText(location.href); $('sharemsg').textContent = '링크를 복사했습니다 — 카톡에 붙여 넣으세요'; }
+    catch { $('sharemsg').textContent = location.href; }
+  };
+
+  // 지도
+  const svg = $('svg'); $('map').style.aspectRatio = `${D.W} / ${D.H}`;
+  const vb0 = [0, 0, D.W, D.H]; let vb = vb0.slice();
+  const setVB = () => svg.setAttribute('viewBox', vb.map(v => v.toFixed(1)).join(' ')); setVB();
+  el('image', { href: D.base, x: 0, y: 0, width: D.W, height: D.H }, svg);
+  const gg = el('g', { stroke: '#7d8ba0', 'stroke-width': 1, 'stroke-dasharray': '4 6', opacity: .45, fill: 'none' }, svg);
+  for (const g of D.grid) el('polyline', { points: pts(g.pts) }, gg);
+  const gz = el('g', { fill: 'none', 'stroke-width': 3, opacity: .55 }, svg);
+  for (const z of D.zones) el('polyline', { points: pts(z.pts), stroke: z.color }, gz);
+  const gCone = el('g', { opacity: .32, fill: '#E8607E' }, svg);
+  for (const c of D.cone) el('polygon', { points: pts(c) }, gCone);
+  if (D.past && D.past.length) el('polyline', { points: pts(D.past), fill: 'none', stroke: '#333', 'stroke-width': 3, opacity: .7 }, svg);
+  const gWind = el('g', {}, svg);
+  const p15 = el('polygon', { fill: '#F5C542', 'fill-opacity': .38, stroke: '#B88A00', 'stroke-width': 2 }, gWind);
+  const p25 = el('polygon', { fill: '#E8612C', 'fill-opacity': .45, stroke: '#A93C12', 'stroke-width': 2 }, gWind);
+  const gT = el('g', {}, svg), gP = el('g', {}, svg), tracks = {}, now = {};
+  const tipT = el('text', { 'font-size': 26, fill: '#142233', stroke: '#fff', 'stroke-width': 7, 'paint-order': 'stroke', visibility: 'hidden' });
+  const tip = (x, y, s) => { tipT.textContent = s; tipT.setAttribute('x', x + 18); tipT.setAttribute('y', y - 16); tipT.setAttribute('visibility', 'visible'); clearTimeout(tip.t); tip.t = setTimeout(() => tipT.setAttribute('visibility', 'hidden'), 3500); };
+  for (const a of D.agencies) {
+    const g = el('g', {}, gT);
+    el('polyline', { points: pts(a.track), fill: 'none', stroke: a.color, 'stroke-width': 6, 'stroke-dasharray': '14 8', 'stroke-linecap': 'round' }, g);
+    for (const p of a.points) {
+      el('circle', { cx: p.xy[0], cy: p.xy[1], r: 15, fill: a.color, stroke: '#fff', 'stroke-width': 3 }, g);
+      if (p.strength) { const t = el('text', { x: p.xy[0], y: p.xy[1] + 7, 'text-anchor': 'middle', 'font-size': 19, 'font-weight': 700, fill: '#fff' }, g); t.textContent = p.strength; }
+      const s = `${a.name} · ${p.label || ''} · ${Math.round(p.ws)}m/s` + (p.strength ? ` · 강도 ${p.strength}` : '');
+      const c = el('circle', { cx: p.xy[0], cy: p.xy[1], r: 32, fill: 'transparent', tabindex: 0, role: 'button', 'aria-label': s }, g);
+      c.addEventListener('click', () => tip(p.xy[0], p.xy[1], s));
+      c.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') tip(p.xy[0], p.xy[1], s); });
+    }
+    tracks[a.id] = g;
+    now[a.id] = el('circle', { r: 16, fill: a.color, stroke: '#fff', 'stroke-width': 5 }, gP);
+  }
+  const star = el('text', { x: D.gn[0], y: D.gn[1] + 14, 'text-anchor': 'middle', 'font-size': 42, fill: '#FFD400', stroke: '#222', 'stroke-width': 2 }, svg); star.textContent = '★';
+  const gl = el('text', { x: D.gn[0] + 26, y: D.gn[1] + 8, 'font-size': 26, 'font-weight': 700, fill: '#142233', stroke: '#fff', 'stroke-width': 6, 'paint-order': 'stroke' }, svg); gl.textContent = '경남(창원)';
+  svg.appendChild(tipT);
+
+  const ptrs = new Map(); let last = null;
+  const toSvg = (cx, cy) => { const r = svg.getBoundingClientRect(); const s = Math.max(vb[2] / r.width, vb[3] / r.height); return [vb[0] + (cx - r.left) * s - (r.width * s - vb[2]) / 2, vb[1] + (cy - r.top) * s - (r.height * s - vb[3]) / 2, s]; };
+  const clamp = () => { vb[0] = Math.min(Math.max(vb[0], 0), D.W - vb[2]); vb[1] = Math.min(Math.max(vb[1], 0), D.H - vb[3]); };
+  const zoomAt = (f, cx, cy) => { const [sx, sy] = toSvg(cx, cy); const w = Math.min(D.W, Math.max(D.W / 8, vb[2] / f)), h = w * vb[3] / vb[2]; vb = [sx - (sx - vb[0]) * w / vb[2], sy - (sy - vb[1]) * h / vb[3], w, h]; clamp(); setVB(); };
+  svg.addEventListener('pointerdown', e => { svg.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); last = null; });
+  svg.addEventListener('pointermove', e => {
+    if (!ptrs.has(e.pointerId)) return; const prev = ptrs.get(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+    if (ptrs.size === 1) { const s = toSvg(0, 0)[2]; vb[0] -= (e.clientX - prev[0]) * s; vb[1] -= (e.clientY - prev[1]) * s; clamp(); setVB(); }
+    else if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (last) zoomAt(d / last, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2); last = d; }
+  });
+  const up = e => { ptrs.delete(e.pointerId); last = null; };
+  svg.addEventListener('pointerup', up); svg.addEventListener('pointercancel', up);
+  svg.addEventListener('wheel', e => { e.preventDefault(); zoomAt(e.deltaY < 0 ? 1.2 : 1 / 1.2, e.clientX, e.clientY); }, { passive: false });
+  const center = () => { const r = svg.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
+  $('zin').onclick = () => zoomAt(1.4, ...center()); $('zout').onclick = () => zoomAt(1 / 1.4, ...center()); $('zreset').onclick = () => { vb = vb0.slice(); setVB(); };
+
+  if (multi) {
+    $('chips').hidden = false;
+    for (const a of D.agencies) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.style.setProperty('--c', a.color); b.setAttribute('aria-pressed', 'true'); b.innerHTML = `<i></i>${a.name}`;
+      b.onclick = () => { on.has(a.id) ? on.delete(a.id) : on.add(a.id); b.setAttribute('aria-pressed', on.has(a.id)); draw(); }; $('chips').appendChild(b);
+    }
+  }
+
+  // 영향 시간 막대
+  const tl = $('tl'), X = i => 70 + i * (620 / Math.max(1, n - 1)), bw = 620 / Math.max(1, n - 1);
+  const lab = (y, s) => { const t = el('text', { x: 0, y, 'dominant-baseline': 'middle' }, tl); t.textContent = s; };
+  lab(22, '강풍권'); lab(52, '폭풍권'); if (D.agree) lab(88, '기관 합의');
+  D.hours.forEach((h, i) => {
+    if (D.gale[i]) el('rect', { x: X(i) - bw / 2, y: 10, width: bw, height: 24, fill: 'var(--gale)' }, tl);
+    if (D.storm[i]) el('rect', { x: X(i) - bw / 2, y: 40, width: bw, height: 24, fill: 'var(--storm)' }, tl);
+    if (D.agree && D.agree[i]) el('rect', { x: X(i) - bw / 2, y: 100 - 8 * D.agree[i], width: bw, height: 8 * D.agree[i], fill: `var(--agree-${D.agree[i]})` }, tl);
+    if (h % 24 === 0) { const t = el('text', { x: X(i), y: 114, 'text-anchor': 'middle' }, tl); t.textContent = D.frames[i].label.split(' ')[0]; }
+  });
+  if (!D.gale.some(Boolean)) { const t = el('text', { x: 380, y: 40, 'text-anchor': 'middle' }, tl); t.textContent = '기상청 예측으로는 경남이 강풍 · 폭풍 반경에 들지 않습니다'; }
+  const cursor = el('rect', { y: 4, width: 3, height: 100, fill: 'var(--accent)' }, tl);
+  tl.addEventListener('pointerdown', e => { const r = tl.getBoundingClientRect(); const x = (e.clientX - r.left) / r.width * 700; set(Math.round(Math.min(n - 1, Math.max(0, (x - 70) / bw)))); });
+  tl.addEventListener('keydown', e => { if (e.key === 'ArrowRight') set(Math.min(n - 1, idx + 1)); if (e.key === 'ArrowLeft') set(Math.max(0, idx - 1)); });
+
+  // 설명
+  const 구간 = f => { const o = []; let s = null; f.forEach((v, i) => { if (v && s === null) s = i; if (!v && s !== null) { o.push([s, i - 1]); s = null; } }); if (s !== null) o.push([s, n - 1]); return o; };
+  const L = i => D.frames[i].label, g = 구간(D.gale), st = 구간(D.storm), mi = D.dist.indexOf(Math.min(...D.dist));
+  const notes = [
+    g.length ? `경남 강풍권(15m/s 이상): ${L(g[0][0])} ~ ${L(g.at(-1)[1])}.` : '기상청 예측으로는 경남이 강풍반경(15m/s) 밖입니다.',
+    st.length ? `경남 폭풍권(25m/s 이상): ${L(st[0][0])} ~ ${L(st.at(-1)[1])}.` : '경남 폭풍권(25m/s 이상): 들지 않을 것으로 보입니다.',
+    `가장 가까울 때: ${L(mi)}, 창원에서 약 ${D.dist[mi].toLocaleString()}km.`,
+  ];
+  if (D.agree) { const am = Math.max(...D.agree); notes.push(`기관 합의 최대: ${L(D.agree.indexOf(am))} 무렵 ${D.agencies.length}곳 중 ${am}곳의 진로에서 경남이 강풍반경 안.`); }
+  notes.push('예측은 발표 때마다 바뀝니다. 새 발표가 나오면 다시 확인하세요.');
+  for (const s of notes) { const li = document.createElement('li'); li.textContent = s; $('notes').appendChild(li); }
+  if (!D.agree) { $('c3v').textContent = `${D.dist[mi].toLocaleString()}km`; $('c3s').textContent = L(mi); }
+  else { $('c3b').textContent = '기관 합의'; $('dots').hidden = false; }
+
+  function draw() {
+    const f = D.frames[idx];
+    for (const a of D.agencies) { const v = on.has(a.id); tracks[a.id].style.display = v ? '' : 'none'; now[a.id].style.display = v ? '' : 'none'; const p = a.pos[idx]; now[a.id].setAttribute('cx', p[0]); now[a.id].setAttribute('cy', p[1]); }
+    const kma = on.has('kma'); gWind.style.display = kma ? '' : 'none'; gCone.style.display = kma ? '' : 'none';
+    p15.setAttribute('points', pts(f.p15 || [])); p25.setAttribute('points', pts(f.p25 || []));
+    $('tlabel').innerHTML = `${f.label} <small>+${f.h}시간</small>`; $('slider').value = idx;
+    const s = $('st');
+    if (D.storm[idx]) { s.textContent = '폭풍권 안'; s.className = 'state storm'; } else if (D.gale[idx]) { s.textContent = '강풍권 안'; s.className = 'state gale'; } else { s.textContent = '반경 밖'; s.className = 'state'; }
+    $('sts').textContent = f.r15 ? `강풍 ${f.r15}km · 폭풍 ${f.r25}km` : '반경 정보 없음';
+    $('dist').textContent = `${D.dist[idx].toLocaleString()}km`;
+    if (D.agree) { $('c3v').textContent = `${D.agree[idx]} / ${D.agencies.length}`; [...$('dots').children].forEach((d, i) => d.classList.toggle('on', i < D.agree[idx])); }
+    cursor.setAttribute('x', X(idx) - 1.5);
+  }
+  const set = i => { idx = i; draw(); };
+  $('slider').max = n - 1; $('slider').addEventListener('input', e => set(+e.target.value));
+  $('play').onclick = () => {
+    if (timer) { clearInterval(timer); timer = null; $('play').textContent = '▶'; $('play').setAttribute('aria-label', '재생'); return; }
+    $('play').textContent = '❚❚'; $('play').setAttribute('aria-label', '멈춤'); timer = setInterval(() => set(idx >= n - 1 ? 0 : idx + 1), 450);
+  };
+  set(D.gale.indexOf(true) >= 0 ? D.gale.indexOf(true) : 0);
+})();
+</script>
+</body>
+</html>

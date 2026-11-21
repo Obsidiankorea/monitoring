@@ -505,6 +505,9 @@ function repDraw() {
     ${det ? `<div class="dv"><div class="dl" role="listbox" aria-label="보고서">${shown.map(repDli).join("") || `<p class="mute">이 묶음에는 아직 보고서가 없다</p>`}</div>
       <section class="dp${REP.sel !== REP.drawn ? " in" : ""}" aria-live="polite">${repDet(repById(REP.sel))}</section></div>`
       : `<div class="grid">${shown.map(repTile).join("") || `<p class="mute">이 묶음에는 아직 보고서가 없다</p>`}</div>`}
+    ${REP.msg?.share ? `<div class="shr"><b>📱 휴대폰 브리핑</b><a href="${escH(REP.msg.share)}" target="_blank" rel="noopener">${escH(REP.msg.share)}</a>
+      <button type="button" data-shr="copy">링크 복사</button><button type="button" data-shr="send">카톡 등으로 보내기</button>
+      <span class="mute">로그인 없이 열린다 · 30일 뒤 사라진다</span></div>` : ""}
     <p class="msg${REP.msg && !REP.msg.ok ? " bad" : ""}" role="status">${escH(REP.msg?.text || (repBusy() ? "보고서 서버가 만드는 중 — 여러 개를 걸어 두면 차례대로 만든다. 창을 닫아도(✕) 계속, 오른쪽 위에 진행이 보이고 끝나면 저절로 받는다" : "타일을 누르면 받는다 · 오른쪽 누름(⚙)은 옵션 · 구석 단추는 텔레그램으로 보내기만"))}</p></div>
     <div class="opbg" id="rep-op" hidden></div>${repBsHtml()}`;
   $("rep").querySelectorAll("[data-nw]").forEach(e => REP.seen.add(e.dataset.nw));
@@ -590,13 +593,13 @@ async function repRun(id, mode) {
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || `오류 ${res.status}`);
     if (dl) {
       const t = res.headers.get("X-Tg"), name = await repSaveFile(res, `${id}.hwp`);
-      REP.msg = { ok: t !== "fail", text: `받았다 — ${name}${t === "ok" ? " · 텔레그램에도 보냈다" : t === "fail" ? " · 텔레그램은 보내지 못했다" : ""}` };
+      REP.msg = { ok: t !== "fail", text: `받았다 — ${name}${t === "ok" ? " · 텔레그램에도 보냈다" : t === "fail" ? " · 텔레그램은 보내지 못했다" : ""}`, share: res.headers.get("X-Share") || "" };
       let b = [];
       try { b = JSON.parse(decodeURIComponent(res.headers.get("X-Basis") || "[]")); } catch {}
       repBasis(r.name, name, b);
     } else {
       const j = await res.json();
-      REP.msg = { ok: true, text: `텔레그램으로 보냈다 — ${j.name}` };
+      REP.msg = { ok: true, text: `텔레그램으로 보냈다 — ${j.name}`, share: j.share || "" };
       repBasis(r.name, j.name, j.basis);
     }
   } catch (e) { REP.msg = { ok: false, text: `만들지 못했다 — ${e.message}` }; }
@@ -715,6 +718,13 @@ $("rep").addEventListener("click", ev => {
   const sel = t.closest("[data-sel]");
   if (sel) { REP.sel = sel.dataset.sel; repDraw(); return $("rep").querySelector(`[data-sel="${CSS.escape(REP.sel)}"]`)?.focus(); }
   const g = t.closest("[data-g]");
+  const shr = ev.target.closest("[data-shr]");
+  if (shr && REP.msg?.share) {                                 // 태풍 브리핑 공개 링크 — 복사 · 휴대폰 공유 창(카톡)
+    const u = REP.msg.share;
+    if (shr.dataset.shr === "send" && navigator.share) { navigator.share({ title: "태풍 진로 브리핑", url: u }).catch(() => {}); return; }
+    navigator.clipboard?.writeText(u).then(() => toast("링크를 복사했다 — 카톡에 붙여 넣으면 된다"), () => toast(u));
+    return;
+  }
   if (g) { REP.g = g.dataset.g; repDraw(); return $("rep").querySelector(`[data-g="${CSS.escape(REP.g)}"]`)?.focus(); }
   const op = t.closest("[data-op]");
   if (op) return repOpOpen(op.dataset.op);

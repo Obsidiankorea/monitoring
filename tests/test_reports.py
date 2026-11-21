@@ -70,7 +70,7 @@ def test_api_download_korean_name_and_tg(keys, monkeypatch):
     assert r.status_code == 200 and r.content == HWP and r.headers["x-tg"] == "ok" and sent == ["풍수해보고_202611161358.hwp"]
     assert "filename*=UTF-8''" in cd and unquote(cd.split("UTF-8''")[1]) == "풍수해보고_202611161358.hwp" and cd.isascii()
     j = c.post("/api/reports/run", json={"id": "nature", "tg": True, "dl": False}).json()
-    assert j == {"ok": True, "name": "풍수해보고_202611161358.hwp", "tg": "ok", "basis": []}
+    assert j == {"ok": True, "name": "풍수해보고_202611161358.hwp", "tg": "ok", "basis": [], "share": ""}
     assert c.post("/api/reports/run", json={"id": "nature", "tg": False, "dl": False}).status_code == 400
 
 
@@ -361,3 +361,25 @@ def test_jaenan_kma_failures_shown_first(keys):
     reports.fetch("daily", {}, httpx.Client(transport=httpx.MockTransport(h)), meta=meta)
     assert meta["warn"] == "기상특보 18/207번 · 파고 1/1번(못 받음)"
     assert meta["basis"][0]["warn"] and meta["basis"][1] == {"name": "특보", "at": "a"}
+
+
+def test_typhoon_brief_share_link(tmp_path, monkeypatch):
+    """태풍 보고서의 브리핑 자료 → 공개 링크(/t/<토큰>) — 로그인 없이 페이지 · 자료가 열리고, 꼴이 틀린 토큰은 404."""
+    import json
+    from fastapi.testclient import TestClient
+    from app import main, reports, share
+    monkeypatch.setattr(share, "DIR", tmp_path)
+    brief = json.dumps({"frames": [], "base": "data:image/jpeg;base64,AA", "title": "t"}).encode()
+
+    def fake(rid, opts, picked=None, extra=None, meta=None):
+        meta["brief"] = brief
+        return [("태풍예상경로보고_1.hwp", b"HWP")]
+    monkeypatch.setattr(reports, "fetch", fake)
+    monkeypatch.setattr(reports, "ready", lambda: True)
+    c = TestClient(main.app)
+    r = c.post("/api/reports/run", json={"id": "typhoon"})
+    link = r.headers["x-share"]
+    assert link.startswith(share.base() + "/t/")
+    path = "/t/" + link.rsplit("/", 1)[1]
+    assert c.get(path).status_code == 200 and c.get(path + "/data.json").content == brief
+    assert c.get("/t/../etc").status_code == 404 and c.get("/t/abc").status_code == 404

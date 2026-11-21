@@ -1198,11 +1198,19 @@ async def _reports_run(body: dict):
         raise HTTPException(400, str(e)) from e
     except RuntimeError as e:
         raise HTTPException(502, reports._mask(e)[:300]) from e
+    share = ""
+    if meta.get("brief"):                                   # 태풍 보고서 — 휴대폰 브리핑 공개 링크(카톡으로 보내는 용)
+        from . import share as _share
+        try:
+            share = _share.url(await asyncio.to_thread(_share.save, meta["brief"]))
+        except (ValueError, OSError) as e:
+            log.warning("태풍 브리핑 링크를 못 만들었다: %s", e)
     st, why = "off", ""
     if tg:
         try:
             for i, (n, d) in enumerate(files):
-                cap = f"📄 {reports.BY_ID[rid]['name']} — 경남 강수 지도에서 보냄" + (f"\n⚠️ 기상청 조회 실패: {meta['warn']} — 확인 필요" if meta.get("warn") else "")
+                cap = (f"📄 {reports.BY_ID[rid]['name']} — 경남 강수 지도에서 보냄" + (f"\n📱 휴대폰 브리핑: {share}" if share else "")
+                       + (f"\n⚠️ 기상청 조회 실패: {meta['warn']} — 확인 필요" if meta.get("warn") else ""))
                 await asyncio.to_thread(reports.send_tg, n, d, cap if not i else "")
             st = "ok"
         except RuntimeError as e:
@@ -1211,11 +1219,30 @@ async def _reports_run(body: dict):
     if not dl:
         if st == "fail":
             raise HTTPException(502, why)
-        return {"ok": True, "name": name, "tg": st, "basis": meta.get("basis") or []}
+        return {"ok": True, "name": name, "tg": st, "basis": meta.get("basis") or [], "share": share}
     # 자료 기준 시각(화면 팝업) — 한글이라 퍼센트 인코딩한 JSON 하나
     xb = quote(json.dumps(meta.get("basis") or [], ensure_ascii=False))
     return Response(data, media_type=reports.media(name), headers={"Content-Disposition": reports.disposition(name), "X-Tg": st, "X-Basis": xb,
-                                                                   "Access-Control-Expose-Headers": "X-Tg, X-Basis, Content-Disposition", "Cache-Control": "no-store"})
+                                                                   "X-Share": share,
+                                                                   "Access-Control-Expose-Headers": "X-Tg, X-Basis, X-Share, Content-Disposition", "Cache-Control": "no-store"})
+
+
+@app.get("/t/{token}")
+async def share_page(token: str):
+    """태풍 브리핑 공유 페이지 — 로그인 없이(auth.OPEN '/t/'). 자료는 같은 주소 아래 data.json."""
+    from . import share
+    if not share.path(token):
+        raise HTTPException(404, "없거나 지난(30일) 링크입니다")
+    return FileResponse(STATIC / "t.html", media_type="text/html", headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/t/{token}/data.json")
+async def share_data(token: str):
+    from . import share
+    p = share.path(token)
+    if not p:
+        raise HTTPException(404, "없거나 지난(30일) 링크입니다")
+    return FileResponse(p, media_type="application/json", headers={"Cache-Control": "private, max-age=600"})
 
 
 async def _demo_report(rid: str, body: dict) -> Response:
