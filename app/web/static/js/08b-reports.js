@@ -5,7 +5,7 @@
    타일 오른쪽 누름(· 메뉴 키 · Shift+F10 · 타일의 ⚙) = 그 보고서 옵션창 — 런처(윈도우 앱) 옵션 가운데 서버에서 되는 것. 이 브라우저에 보고서별로 기억하고,
    보낼 때는 기본값과 다른 것만(안 보낸 것은 서버 설정을 따른다). 머리 ⚙ = 전체 설정(받을 때 텔레그램에도).
    17시 대기(등록부 wait) — 서버가 1분마다 묻고, 이 화면은 상태만 1분마다 가볍게(걸린 것이 있을 때만) 물어 타일 · 도구 줄 단추에 표시 */
-const REP = { d: null, g: "전체", busy: null, jobs: {}, tick: 0, set: false, back: null, msg: null, w: {}, op: null, opBack: null,
+const REP = { d: null, g: "", busy: null, jobs: {}, tick: 0, set: false, back: null, msg: null, w: {}, op: null, opBack: null,
   sel: null, done: {}, seen: new Set(), wide: false };
 /* '자세히' 보기 — 보고서마다 끌어오는 자료(이름, 어디서). 만드는 동안은 보고서 서버가 보낸 기준 시각 · 기상청 호출로 바뀐다 */
 const REP_SRC = {
@@ -17,6 +17,11 @@ const REP_SRC = {
     ["순간최대풍속", "지도 서버"], ["하천 수위", "홍수통제소"], ["조위", "국립해양조사원"], ["특보지역 우려지구", "위키 · 지도 서버"]],
   report: [["강수량 · 다우지점", "기상청 AWS"], ["초단기 강수 예측", "기상청"], ["특보 현황", "지도 서버"]],
   temp: [["기온(관측) 3일", "기상청 AWS"], ["내일 예상기온", "기상청 단기예보"]],
+  outlook: [["기상전망(통보문)", "기상청"], ["3시간 강수량 분포도", "기상청 단기예보"]],
+  winter: [["통보문 종합", "기상청"], ["특보 현황", "기상청"], ["현재기온", "기상청 AWS"], ["예보 최저 · 최고", "기상청 단기예보"], ["특보 · 기온 분포 · 레이더 그림", "기상청"]],
+  winter5: [["통보문 종합", "기상청"], ["특보 현황", "기상청"], ["기온 분포도", "기상청 AWS 객관분석"], ["닷새 최저 · 최고", "기상청 단기 · 중기예보"]],
+  cold: [["한파특보", "기상청"], ["현재기온", "기상청 AWS"], ["예보 최저 · 최고", "기상청 단기예보"], ["특보 · 기온 분포 · 레이더 그림", "기상청"]],
+  snow: [["특보 현황", "기상청"], ["현재기온", "기상청 AWS"], ["24시간 신적설", "기상청 적설 관측"], ["특보 · 신적설 분포 · 레이더 그림", "기상청"], ["강수형태 분포도", "기상청 단기예보"]],
   gif: [["초단기 강수 예측 격자", "지도 서버"]], combo: [["강수 현황 · 예측", "지도 서버"]], alert: [["특보 현황 · 지도", "지도 서버"]],
 };
 const repView = () => repPref().view === "det" ? "det" : "grid";
@@ -477,13 +482,14 @@ function repCmChange(t, r) {
   }
 }
 function repDraw() {
-  const d = REP.d, list = d?.reports || [], gs = ["전체", ...(d?.groups || [])];
-  const shown = REP.g === "전체" ? list : list.filter(r => r.group === REP.g);
+  const d = REP.d, list = d?.reports || [], gs = d?.groups || [];
+  if (gs.length && !gs.includes(REP.g)) REP.g = gs[0];
+  const shown = list.filter(r => r.group === REP.g);
   const note = !d ? "목록을 받는 중…" : d.err ? `목록을 받지 못했다 — ${d.err}` : d.demo ? "시연 화면 — 기상상황보고는 지금 시각으로 만들고(안 되면 샘플), 나머지는 미리 만든 샘플 파일을 받는다 · 텔레그램은 안 보낸다"
     : !d.ready ? `재난상황보고서 서버 토큰(JAENAN_TOKEN)이 없다 — 설정 › API 키에서 넣는다${d.tg ? "" : " · 텔레그램 키도 없다"}`
     : !d.tg ? "텔레그램 키가 없어 받기만 된다" : "";
   const det = repView() === "det";
-  if (det && !list.some(r => r.id === REP.sel)) REP.sel = (shown.find(r => r.ready) || shown[0] || list[0])?.id || null;
+  if (det && !shown.some(r => r.id === REP.sel)) REP.sel = (shown.find(r => r.ready) || shown[0] || list[0])?.id || null;
   const wide = det && !!(REP.jobs[REP.sel] || REP.done[REP.sel]);
   $("rep").innerHTML = `<div class="box${det ? " det" : ""}${det && REP.wide ? " wide" : ""}" role="dialog" aria-modal="true" aria-labelledby="rep-t" tabindex="-1">
     <div class="top"><b id="rep-t">보고서</b><span class="mute">재난상황보고서 서버에서 한글 파일 · 그림으로</span><span class="sp"></span>
@@ -492,7 +498,7 @@ function repDraw() {
       <button type="button" id="rep-x" aria-label="닫기 (Esc)" title="닫기 (Esc)">✕</button></div>
     ${note ? `<p class="note">${escH(note)}</p>` : ""}
     ${REP.set ? repSettings() : ""}
-    <nav aria-label="묶음">${gs.map(g => { const n = g === "전체" ? list.length : list.filter(r => r.group === g).length;
+    <nav aria-label="묶음">${gs.map(g => { const n = list.filter(r => r.group === g).length;
       return `<button type="button" data-g="${escH(g)}" aria-pressed="${g === REP.g}" class="${g === REP.g ? "on" : ""}">${escH(g)} <i>${n}</i></button>`; }).join("")}</nav>
     ${det ? `<div class="dv"><div class="dl" role="listbox" aria-label="보고서">${shown.map(repDli).join("") || `<p class="mute">이 묶음에는 아직 보고서가 없다</p>`}</div>
       <section class="dp${REP.sel !== REP.drawn ? " in" : ""}" aria-live="polite">${repDet(repById(REP.sel))}</section></div>`

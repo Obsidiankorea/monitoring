@@ -26,7 +26,7 @@ from . import config
 
 URL0 = "http://100.106.116.92:8765"
 TIMEOUT = 1500                                     # 풍수해보고는 1분 안팎 · 기상청이 느리면 몇 분(늦은 자료는 보고서 서버가 빼고 만든다) · 다른 작업이 잠금을 쥐고 있으면 그만큼 더
-GROUPS = ("풍수해", "폭염", "일상", "긴급", "그림")
+GROUPS = ("풍수해", "기후재난", "재난상황과", "움짤")          # 보고서 창 탭 — 자연재난과 두 담당(풍수해 · 기후재난) · 재난상황과 · 카톡용 그림
 KINDS = ("호우", "태풍", "강풍", "풍랑", "대설", "한파", "폭염")       # 상황판단회의 재난 종류(문구 kinds 와 같은 말)
 
 
@@ -36,6 +36,7 @@ def _o(key, label, kind, default="", sec="", hint="", **k) -> dict:
 
 
 _TM = _o("tm", "기준 일시", "datetime", sec="기준", hint="비우면 지금 — 그 시각 자료로 만든다")
+_TITLE = _o("title", "제목", "text", "", "제목", "비우면 날짜로 — 예) 12. 25~26. 한파 대처상황 보고", max=60)
 _HWP = [_TM, _o("wicon", "날씨 칸", "choice", "icon", "날씨 칸", "시군이 가장 많은 날씨 하나를 그림으로 · 또는 집계 글자 전부",
                 values=[["icon", "아이콘 하나"], ["text", "글자로 전부(맑음10,구름많음8)"]]),
         _o("wicon_mm", "아이콘 높이(mm)", "int", 8, "날씨 칸", min=3, max=30),
@@ -48,9 +49,9 @@ _CODES = [["W", "강풍"], ["R", "호우"], ["C", "한파"], ["D", "건조"], ["
 
 # 보고서 등록부 — 한 줄 더하면 창에 타일이 하나 는다. wait=True 면 옵션창에 '17시 발표 대기'(jaenan 인자 wait1700)
 REG = [
-    {"id": "weather", "name": "기상상황보고", "group": "일상", "job": "weather", "desc": "단기 · 중기 예보, 기온, 통보문, 특보", "opts": _HWP,
+    {"id": "weather", "name": "기상상황보고", "group": "재난상황과", "job": "weather", "desc": "단기 · 중기 예보, 기온, 통보문, 특보", "opts": _HWP,
      "ready": True, "wait": True},
-    {"id": "daily", "name": "일일상황보고", "group": "일상", "job": "daily", "desc": "기온 · 강수량 · 다우지점 · 예보 · 특보", "opts": _HWP + _DAW,
+    {"id": "daily", "name": "일일상황보고", "group": "재난상황과", "job": "daily", "desc": "기온 · 강수량 · 다우지점 · 예보 · 특보", "opts": _HWP + _DAW,
      "ready": True, "wait": False},                # 같은 엔진이라 wait=True 로 켜면 17시 대기가 된다(이번에는 기상상황보고만)
     {"id": "nature", "name": "풍수해보고", "group": "풍수해", "job": "nature", "desc": "호우 대처상황보고 — 특보 이력 · 기상전망 · 강우 현황 · 그림", "ready": True,
      "opts": [_o("start", "기간 시작", "datetime", sec="기간", hint="비우면 전일 00시"),
@@ -61,7 +62,7 @@ REG = [
               _o("wrn", "특보 이력에 넣을 종류", "multi", ["호우"], "특보 이력", values=[[x, x] for x in ("호우", "태풍", "강풍", "풍랑", "대설")]),
               _o("stage", "비상단계 칸", "text", "", "특보 이력", "예) 상시대비단계 (10.19. 02:00~) — 비우면 빈칸", max=60),
               _o("step", "특보 훑기 간격(분)", "int", 10, "특보 이력", "해제 시각은 분 단위로 다시 좁힌다", min=1, max=60)] + _DAW},
-    {"id": "report", "name": "긴급상황보고", "group": "긴급", "job": "report", "desc": "강수량 · 다우지점 표(시제품)", "ready": True,
+    {"id": "report", "name": "긴급상황보고", "group": "재난상황과", "job": "report", "desc": "강수량 · 다우지점 표(시제품)", "ready": True,
      "opts": [_TM,
               _o("codes", "강조할 특보", "multi", ["R"], "특보", "표로 넣을 특보 — 나머지는 아래 요약 줄", values=_CODES),
               _o("rain_mode", "강수 기간", "choice", "days", "강수량", values=[["days", "며칠(누적)"], ["hours", "최근 몇 시간"]]),
@@ -82,17 +83,32 @@ REG = [
               _o("end", "기간 끝", "datetime", sec="기간", hint="비우면 지금")],
      # 서식 하천 수위 표의 열 차례(현수위1~10 · 수위상태1~10) — 홍수통제소 지점 이름의 괄호 안
      "river": ["성하리", "적포교", "남포동", "삼랑진교", "소랑교", "덕오리", "대사교", "황강교", "일중리", "읍내리"]},
-    {"id": "heat", "name": "폭염 상황보고", "group": "폭염", "job": "", "desc": "준비 중 — 재난상황보고서 서버에 아직 없다", "opts": [], "ready": False},
-    {"id": "temp", "name": "3일 기온표", "group": "폭염", "job": "temp", "ready": True,
+    {"id": "outlook", "name": "기상전망보고", "group": "풍수해", "job": "outlook", "ready": True,
+     "desc": "통보문 · 예상 강수량 · 3시간 강수량 분포도(사흘)", "opts": [_TM, _TITLE]},
+    {"id": "typhoon", "name": "태풍 예상경로보고", "group": "풍수해", "job": "", "ready": False,
+     "desc": "준비 중 — 태풍 정보 표 · 감시 · 경계 · 비상구역 · 예상진로 비교", "opts": []},
+    {"id": "typhoon_meeting", "name": "태풍 대비 상황판단회의", "group": "풍수해", "job": "", "ready": False,
+     "desc": "준비 중 — 태풍 정보 · 우리 도 영향범위 · 결정사항 · 중점 대처계획", "opts": []},
+    {"id": "winter", "name": "기상 전망 보고", "group": "기후재난", "job": "winter", "ready": True,
+     "desc": "통보문 종합 · 특보 · 그림 셋 · 현재기온 + 이틀 최저/최고", "opts": [_TM, _TITLE]},
+    {"id": "winter5", "name": "상세 기상 전망 보고", "group": "기후재난", "job": "winter5", "ready": True,
+     "desc": "통보문 종합 · 특보 · 기온 분포도 · 닷새 최저/최고(단기 · 중기예보)", "opts": [_TM, _TITLE]},
+    {"id": "cold", "name": "한파 대처상황 보고", "group": "기후재난", "job": "cold", "ready": True,
+     "desc": "한파특보 표 · 예보 기온 범위 · 현재기온 + 내일 · 모레 최저 · 그림 셋",
+     "opts": [_TM, _TITLE, _o("stage", "위기경보 칸", "text", "", "특보", "예) 경계(초기대응단계) — 비우면 빈칸", max=40)]},
+    {"id": "snow", "name": "대설 대처 상황 보고", "group": "기후재난", "job": "snow", "ready": True,
+     "desc": "특보 · 현재기온 + 24시간 신적설 · 그림 셋 · 붙임 강수형태 분포도", "opts": [_TM, _TITLE]},
+    {"id": "heat", "name": "폭염 상황보고", "group": "기후재난", "job": "", "desc": "준비 중 — 재난상황보고서 서버에 아직 없다", "opts": [], "ready": False},
+    {"id": "temp", "name": "3일 기온표", "group": "움짤", "job": "temp", "ready": True,
      "desc": "시군별 일 최고기온(11~3월은 최저) 3일 + 내일 예상 · 대표지점 외 AWS (그림) — 런처 특보이미지의 기온표",
      "opts": [_TM, _o("extra_n", "대표지점 외 AWS", "int", 6, "목록", "표 아래 몇 곳", min=0, max=20)]},
-    {"id": "gif", "name": "강수 예측 움짤", "group": "그림", "job": "gif", "ready": True, "opts": [],
+    {"id": "gif", "name": "강수 예측 움짤", "group": "움짤", "job": "gif", "ready": True, "opts": [],
      "desc": "앞으로 N시간 분포도 + 예측 표 (GIF) — 범위 · 시간은 런처 긴급보고서 설정"},
-    {"id": "combo", "name": "강수현황 종합", "group": "그림", "job": "combo", "ready": True,
+    {"id": "combo", "name": "강수현황 종합", "group": "움짤", "job": "combo", "ready": True,
      "desc": "지금까지 · 최근 1시간 · 앞으로 · 특보 — 휴대폰 화면 1~2장 (그림)",
      "opts": [_o("pages", "장 수", "choice", "", "종합", values=[["", "런처 설정대로"], ["1", "1장"], ["2", "2장"]]),
               _o("theme", "바탕", "choice", "", "종합", values=[["", "런처 설정대로"], ["light", "밝게"], ["dark", "어둡게"]])]},
-    {"id": "alert", "name": "특보이미지", "group": "그림", "job": "alert", "ready": True,
+    {"id": "alert", "name": "특보이미지", "group": "움짤", "job": "alert", "ready": True,
      "desc": "특보 지도 모자이크 + 지역 목록 (그림) — 표기는 런처 특보이미지 설정",
      "opts": [_o("wrn", "넣을 특보", "multi", [], "특보", "비우면 런처 설정대로", values=_CODES)]},
 ]
