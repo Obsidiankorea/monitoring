@@ -8,4 +8,4 @@
 }
 :root[data-theme="light"] .md .wk { color: #6B46C1; border-bottom-color: #6B46C1; }
 :root[data-theme="light"] .warn { color: #7A4B00; background: #FFF4E0; border-color: #E8C27A; }
-:root[data-theme="light"] .chip.open, :root[data-theme="light"] .tag.h { color: #FFFFFF; }
+:root[data-theme="light"] .chip.open, :root[data-theme="light"] .chip.doing, :root[data-theme="light"] .chip.done, :root[data-theme="light"] .tag.h { color: #FFFFFF; }
