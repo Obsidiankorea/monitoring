@@ -6,7 +6,10 @@
 # 폴더(/mnt/user/appdata/gn-monitor):
 #   repo/      저장소 받은 것(이 서버에서는 고치지 않는다 — ff-only 로만 당긴다)
 #   config/    api_keys.txt(기상청 API허브 기관용 키 ORG_API_KEY) — PC 에서 SSH 로 복사해 둔다
+#   config/claude/token.txt  AI 자유 질문용 Claude 장기 토큰(PC 에서 `claude setup-token`) — 넣으면 바로 켜진다(재배포 불필요)
+#   terrain/   지형 확대용 조각(PC 에서 tools/build_terrain.py --tiles 로 만들어 올린다) — 두 컨테이너가 /terrain 읽기 전용
 #   state/     DB(gnweather.db) · 격자 캐시 · 시연(snaps/) · 갱신 부탁/상태(update/ — updater.sh) — 컨테이너를 갈아도 남는다(GN_STATE)
+# AI 상황판단(지도 I): 위키는 Hermes 에 넣어 둔 것을 읽기 전용으로 연결한다(WIKI). 자유 질문은 GN_AI(기본 claude-cli).
 # 화면: http://<서버>:8000/  (지도: /map.html)
 # ⚠️ 스방(내부망)은 집 서버에서 닿지 않는다 — 수집기를 끈다(SKIP_COLLECT=bangjae, Dockerfile).
 # ⚠️ PC 에서도 수집기가 돌면 기상청 호출이 두 배가 된다(같은 키).
@@ -15,8 +18,11 @@ D=/mnt/user/appdata/gn-monitor
 REPO=https://github.com/Obsidiankorea/monitoring.git
 NAME=gn-monitor
 PORT=${PORT:-8000}
+WIKI=${WIKI:-/mnt/user/appdata/hermes-agent/knowledge/재난}
+GN_AI=${GN_AI:-claude-cli}
 
-mkdir -p "$D/config" "$D/state/snaps" "$D/state/update"
+mkdir -p "$D/config/claude" "$D/state/snaps" "$D/state/update" "$D/terrain"
+chmod 700 "$D/config/claude"
 # ⚠️ 받은 뒤에는 **새로 받은 이 스크립트로 다시** 시작한다 — bash 는 스크립트를 읽어 가며 돌아서,
 #    도는 중에 git 이 이 파일을 바꾸면 나머지가 옛 내용으로 돈다.
 if [ -z "${DEPLOY_PULLED:-}" ]; then
@@ -32,30 +38,53 @@ V=$(git -C "$D/repo" rev-parse --short HEAD)
 echo "[deploy] 판 $V"
 [ -s "$D/config/api_keys.txt" ] || { echo "[deploy] ⚠ $D/config/api_keys.txt 가 없다(ORG_API_KEY)"; exit 1; }
 
+AI=(-e GN_AI="$GN_AI" -v "$D/config/claude:/app/config/claude:ro" -e GN_TERRAIN=/terrain -v "$D/terrain:/terrain:ro")   # 지형 조각도 같이(두 컨테이너)
+if [ -d "$WIKI" ]; then AI+=(-e GN_WIKI=/wiki -v "$WIKI:/wiki:ro"); else echo "[deploy] ⚠ 위키가 없다($WIKI) — AI 보고에 기준 · 우려지역이 빠진다"; fi
+
+PREV=$(docker inspect --format '{{.Config.Image}}' "$NAME" 2>/dev/null || true)   # 안 뜨면 이것으로 되돌린다
+# 보고서를 기다리는 요청이 있으면 끝날 때까지(최대 20분) — 갈아 끼우면 그 요청이 끊겨 보고서를 못 받는다(2026-11-20)
+for i in $(seq 1 240); do
+  n=$(curl -fsS "http://127.0.0.1:$PORT/api/status" 2>/dev/null | grep -o '"reports_busy": *[0-9]*' | grep -o '[0-9]*$' || echo 0)
+  [ "${n:-0}" -gt 0 ] || break
+  [ "$i" = 1 ] && echo "[deploy] 보고서 $n개를 기다리는 중 — 끝나면 갈아 끼운다"
+  sleep 5
+done
 docker build -q -t "$NAME:$V" -t "$NAME:latest" --build-arg APP_VERSION="$V" "$D/repo" >/dev/null
-docker rm -f "$NAME" >/dev/null 2>&1 || true
-docker run -d --name "$NAME" --restart unless-stopped --memory 2g -p "$PORT:8000" \
-  -e TZ=Asia/Seoul \
-  -v "$D/state:/state" \
-  -v "$D/config/api_keys.txt:/app/config/api_keys.txt:ro" \
-  -l net.unraid.docker.webui="http://[IP]:[PORT:8000]/" \
-  "$NAME:$V" >/dev/null
+run_main() {
+  docker rm -f "$NAME" >/dev/null 2>&1 || true
+  docker run -d --name "$NAME" --restart unless-stopped --memory 2g -p "$PORT:8000" \
+    -e TZ=Asia/Seoul "${AI[@]}" \
+    -v "$D/state:/state" \
+    -v "$D/config/api_keys.txt:/app/config/api_keys.txt" \
+    -l net.unraid.docker.webui="http://[IP]:[PORT:8000]/" \
+    "$1" >/dev/null
+}
+run_main "$NAME:$V"
 
 # 시연 서버 gn-demo :8001 — 굳혀 둔 것(state/snaps, 실황 화면의 '지금 저장')을 읽기 전용으로 받아 띄운다.
 #   처음엔 가장 새 것, /snap/<이름> 으로 열면 그것으로 갈아 탄다(같은 컨테이너 안에서 다시 뜬다).
 #   같은 이미지, 수집 안 함 · 시계 멈춤 · 키 없음. 실황 DB 는 연결하지 않는다 — 굳힌 것을 /tmp/snap 사본으로 떠서 쓴다.
 for c in $(docker ps -a --format '{{.Names}}' | grep -E '^gn-demo(-[0-9]+)?$'); do docker rm -f "$c" >/dev/null; done
-docker run -d --name gn-demo --restart unless-stopped --memory 1g -p 8001:8000   -e TZ=Asia/Seoul -e GN_DEMO=1 -e GN_SNAPS=/snaps -e GN_SNAP_STATE=/tmp/snap   -v "$D/state/snaps:/snaps:ro"   -l net.unraid.docker.webui="http://[IP]:[PORT:8001]/"   "$NAME:$V" >/dev/null
+# 시연 키 — 재난상황보고서 서버 주소 · 토큰만(기상상황보고를 지금 시각으로 만들 때). 다른 키(기상청 · 텔레그램 …)는 시연에 주지 않는다
+grep -E '^(JAENAN_URL|JAENAN_TOKEN)=' "$D/config/api_keys.txt" > "$D/config/demo_keys.txt" 2>/dev/null || true
+chmod 600 "$D/config/demo_keys.txt" 2>/dev/null || true
+docker run -d --name gn-demo --restart unless-stopped --memory 1g -p 8001:8000   -e TZ=Asia/Seoul "${AI[@]}" -e GN_DEMO=1 -e GN_SNAPS=/snaps -e GN_SNAP_STATE=/tmp/snap   -v "$D/state/snaps:/snaps:ro" -v "$D/config/demo_keys.txt:/app/config/api_keys.txt:ro"   -l net.unraid.docker.webui="http://[IP]:[PORT:8001]/"   "$NAME:$V" >/dev/null
 echo "[deploy] 시연 gn-demo($(ls -1 "$D/state/snaps" 2>/dev/null | grep -vc '^\.tmp' || true)개) → http://<서버>:8001/"
 
-# 옛 판 이미지 정리(지금 판 · latest 만 남긴다)
-docker image ls "$NAME" --format '{{.Tag}}' | grep -vE "^($V|latest)$" \
-  | xargs -r -I{} docker rmi "$NAME:{}" >/dev/null 2>&1 || true
-
-# 뜰 때까지 기다린다(첫 수집은 뒤에서 돈다)
+# 뜰 때까지 기다린다(첫 수집은 뒤에서 돈다). 뜬 뒤에만 옛 판 이미지를 치운다 — 안 뜨면 앞 판으로 되돌린다
 for _ in $(seq 1 40); do
-  curl -fsS -o /dev/null "http://127.0.0.1:$PORT/api/status" && { echo "[deploy] $NAME $V 떴다 → http://<서버>:$PORT/"; exit 0; }
+  if curl -fsS -o /dev/null "http://127.0.0.1:$PORT/api/status"; then
+    echo "[deploy] $NAME $V 떴다 → http://<서버>:$PORT/"
+    docker image ls "$NAME" --format '{{.Tag}}' | grep -vE "^($V|latest)$" \
+      | xargs -r -I{} docker rmi "$NAME:{}" >/dev/null 2>&1 || true      # 지금 판 · latest 만 남긴다
+    exit 0
+  fi
   sleep 2
 done
 echo "[deploy] ⚠ 80초 안에 안 떴다 — docker logs $NAME"
+docker logs --tail 30 "$NAME" 2>&1 | sed 's/^/  | /'
+if [ -n "$PREV" ] && [ "$PREV" != "$NAME:$V" ]; then
+  echo "[deploy] 앞 판($PREV)으로 되돌린다"
+  run_main "$PREV"
+fi
 exit 1

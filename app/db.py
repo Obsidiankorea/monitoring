@@ -106,6 +106,28 @@ CREATE TABLE IF NOT EXISTS bangjae_hourly (
 );
 CREATE INDEX IF NOT EXISTS idx_bjh_tm ON bangjae_hourly(tm);
 
+-- 기상청 원문 보관(app/kma.py RAW_PATHS) — 매분 관측 · 초단기 격자를 받은 그대로(zlib), 30시간.
+-- 재난상황보고서 서버가 같은 요청을 기상청 대신 여기서 받는다(/api/kma/raw). key = 경로 + 정리한 인자(raw_key)
+CREATE TABLE IF NOT EXISTS kma_raw (
+  key TEXT PRIMARY KEY, at TEXT NOT NULL, ctype TEXT NOT NULL DEFAULT '', body BLOB NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_kma_raw_at ON kma_raw(at);
+-- 특보 원자료 채워 넣기(collectors/alerts.backfill_raw) — 1분마다 두기 전 시각을 10분 간격으로. 그 시각에만 답한다(사이 분은 기상청)
+CREATE TABLE IF NOT EXISTS alert_raw_bf (at TEXT PRIMARY KEY, body TEXT NOT NULL);
+
+-- 공지 · 요청 게시판(app/posts.py) — kind notice 공지(관리자) · request 요청(누구나). 지우지 않고 gone 으로 숨긴다
+CREATE TABLE IF NOT EXISTS post (
+  id INTEGER PRIMARY KEY, kind TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL DEFAULT '',
+  author TEXT NOT NULL DEFAULT '', created TEXT NOT NULL, updated TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'open', reply TEXT NOT NULL DEFAULT '', popup INTEGER NOT NULL DEFAULT 0, gone INTEGER NOT NULL DEFAULT 0
+);
+
+-- 특보 원자료(wrn_now_data JSON 행 목록) — 바뀔 때만 한 줄. 재난상황보고서 서버가 기상청 대신 읽는다(/api/alerts/raw)
+CREATE TABLE IF NOT EXISTS alert_raw (
+  at   TEXT PRIMARY KEY,                -- 'YYYY-MM-DD HH:MM' 이 내용을 처음 받은 때
+  body TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS snapshot (
   kind       TEXT NOT NULL,            -- 'alerts'
   base_time  TEXT NOT NULL,
@@ -122,6 +144,44 @@ CREATE TABLE IF NOT EXISTS collect_log (
   ok         INTEGER NOT NULL DEFAULT 0,
   detail     TEXT
 );
+
+-- 상황판단 모드의 판단 기록 — 누른 결정을 그 시각 수치와 함께(판례가 묻는 '정보를 안 시점 · 한 조치'). 서버 공유
+CREATE TABLE IF NOT EXISTS decision (
+  id     INTEGER PRIMARY KEY AUTOINCREMENT,
+  at     TEXT NOT NULL,                -- 누른 시각
+  sigun  TEXT NOT NULL,
+  emd    TEXT,
+  fam    TEXT,                         -- 산사태 · 하천 · 지하공간
+  stage  TEXT,                         -- 통제 · 사전대피 · 긴급대피
+  act    TEXT NOT NULL,                -- 통제 지시 · 사전대피 권고 · 대피명령 요청 · 보류 · 메모
+  pct    INTEGER,                      -- 그때 기준 도달률
+  eta    TEXT,                         -- 그때 도달 예상 시각
+  note   TEXT
+);
+
+-- 호우 사건 묶음(app/events.py) — 시작~끝 · 걸린 특보. end 가 비면 진행 중, last 는 마지막으로 특보나 기준 근접이 있던 때
+CREATE TABLE IF NOT EXISTS event (
+  id     INTEGER PRIMARY KEY AUTOINCREMENT,
+  start  TEXT NOT NULL,
+  end    TEXT,
+  last   TEXT NOT NULL,
+  alerts TEXT NOT NULL DEFAULT '[]'
+);
+
+-- 단계가 바뀐 이력 — 처음 그 단계에 이르렀거나(near) 충족으로 오른(met) 때만 한 줄
+CREATE TABLE IF NOT EXISTS stage_log (
+  id     INTEGER PRIMARY KEY AUTOINCREMENT,
+  event  INTEGER NOT NULL,
+  at     TEXT NOT NULL,
+  sigun  TEXT NOT NULL,
+  emd    TEXT,
+  fam    TEXT,
+  stage  TEXT,
+  st     TEXT NOT NULL,                -- near · met
+  rule   TEXT,
+  pct    INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_stage_log_event ON stage_log(event);
 
 -- 설정. 벽면 화면이라 브라우저가 아니라 서버에 둔다 — 어느 화면에서 바꿔도 같이 간다.
 CREATE TABLE IF NOT EXISTS setting (
@@ -141,6 +201,34 @@ CREATE TABLE IF NOT EXISTS qpf_frame (
   tmfc TEXT NOT NULL, ef INTEGER NOT NULL,
   path TEXT NOT NULL, bytes INTEGER NOT NULL, fetched_at TEXT NOT NULL,
   PRIMARY KEY (tmfc, ef)
+);
+
+-- 현장 회신(app/reply.py). 지구마다 변하지 않는 링크(token) 하나 — 담당자가 바뀌어도 링크는 그대로 넘겨받는다.
+CREATE TABLE IF NOT EXISTS duty_link (
+  rid TEXT PRIMARY KEY, token TEXT NOT NULL UNIQUE,
+  sigun TEXT NOT NULL, name TEXT NOT NULL, addr TEXT NOT NULL    -- '창원시' · 지구 이름 · 시군 읍면동 리
+);
+-- 링크 페이지에서 스스로 등록한 담당자. until 이 비어 있으면 지금 담당(지구마다 둘까지), 채워지면 지난 담당.
+CREATE TABLE IF NOT EXISTS duty_person (
+  id INTEGER PRIMARY KEY, rid TEXT NOT NULL,
+  rank TEXT NOT NULL, name TEXT NOT NULL, tel TEXT NOT NULL,
+  since TEXT NOT NULL, until TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_duty_person ON duty_person(rid, until);
+-- 진행 기록(지우지 않고 쌓는다) — kind: ask 상황실 요청 · reply 현장 회신 · on 담당 등록 · off 담당에서 빠짐
+CREATE TABLE IF NOT EXISTS duty_log (
+  id INTEGER PRIMARY KEY, rid TEXT NOT NULL, at TEXT NOT NULL, kind TEXT NOT NULL,
+  who TEXT NOT NULL, action TEXT, more TEXT, memo TEXT NOT NULL, photo TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_duty_log ON duty_log(rid, id);
+-- 로그인(app/auth.py) — 비밀번호는 scrypt 해시, 접속은 쿠키의 sha256 만
+CREATE TABLE IF NOT EXISTS app_user (
+  id INTEGER PRIMARY KEY, login TEXT UNIQUE NOT NULL, name TEXT NOT NULL DEFAULT '',
+  role TEXT NOT NULL CHECK (role IN ('admin','do','sigun')), sigun TEXT,
+  pw TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, created TEXT, last_login TEXT
+);
+CREATE TABLE IF NOT EXISTS app_session (
+  token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL, created TEXT, expires TEXT, ip TEXT
 );
 """
 
@@ -168,6 +256,10 @@ _ADDED_COLUMNS = {
     # 15분 강수량 — '지금 어디에 쏟아지고 있나'는 이 값이 제일 빨리 말해 준다.
     # 60분치는 이미 지나간 한 시간을 담고 있어 한 박자 늦다.
     "obs_minute": [("rn_15m", "REAL")],
+    # 판단 기록 — 누른 사람(로그인 이름 · 역할), 지우기는 표시만(gone = '시각 · 누가'). AI 쪽(aireport)에는 who 를 넘기지 않는다
+    "decision": [("who", "TEXT"), ("gone", "TEXT")],
+    # 계정 신청 — 로그인 화면에서 신청하면 pending=1 · active=0, 관리자가 승인하면 pending=0 · active=1
+    "app_user": [("pending", "INTEGER NOT NULL DEFAULT 0")],
 }
 
 
@@ -193,6 +285,70 @@ def log_collect(kind: str, ok: bool, at: str, detail: str = "") -> None:
                  ok_at=CASE WHEN excluded.ok=1 THEN excluded.ok_at ELSE collect_log.ok_at END""",
             (kind, at if ok else None, at, 1 if ok else 0, detail[:300]),
         )
+
+
+def put_alert_raw(at: str, body: str) -> bool:
+    """특보 원자료 — 앞의 것과 같으면 두지 않는다(바뀔 때만). 둔 것이면 True.
+    shortcut: 지우지 않는다 — 하루 몇 줄이라 작다, 커지면 maint 에서 40일 넘은 것 지우기."""
+    with tx() as con:
+        r = con.execute("SELECT body FROM alert_raw ORDER BY at DESC LIMIT 1").fetchone()
+        if r and r["body"] == body:
+            return False
+        con.execute("INSERT OR REPLACE INTO alert_raw(at, body) VALUES(?,?)", (at, body))
+        return True
+
+
+def put_kma_raw(key: str, ctype: str, body: bytes) -> None:
+    """기상청 원문 하나를 둔다(zlib). 30시간 넘은 것은 둘 때 함께 지운다(한 시간에 한 번쯤)."""
+    import zlib
+    from datetime import datetime, timedelta
+    now = datetime.now()
+    with tx() as con:
+        con.execute("INSERT OR REPLACE INTO kma_raw(key, at, ctype, body) VALUES(?,?,?,?)",
+                    (key, now.strftime("%Y-%m-%d %H:%M"), ctype, zlib.compress(body, 6)))
+        if now.minute == 7:
+            con.execute("DELETE FROM kma_raw WHERE at < ?", ((now - timedelta(hours=30)).strftime("%Y-%m-%d %H:%M"),))
+
+
+def get_kma_raw(key: str) -> tuple[str, bytes] | None:
+    import zlib
+    with tx() as con:
+        r = con.execute("SELECT ctype, body FROM kma_raw WHERE key=?", (key,)).fetchone()
+    return (r["ctype"], zlib.decompress(r["body"])) if r else None
+
+
+def put_alert_raw_at(at: str, body: str) -> None:
+    """지난 시각의 특보 원자료(채워 넣기) — alert_raw_bf 에 그 시각 그대로. 그 시각을 물을 때만 쓴다."""
+    with tx() as con:
+        con.execute("INSERT OR REPLACE INTO alert_raw_bf(at, body) VALUES(?,?)", (at, body))
+
+
+def alert_raw_bf_has(at: str) -> bool:
+    with tx() as con:
+        return con.execute("SELECT 1 FROM alert_raw_bf WHERE at=?", (at,)).fetchone() is not None
+
+
+def alert_raw_first() -> str | None:
+    with tx() as con:
+        r = con.execute("SELECT MIN(at) AS a FROM alert_raw").fetchone()
+    return r["a"] if r else None
+
+
+def alert_raw_at(t) -> tuple[str, str] | None:
+    """그 시각(datetime) 특보 원자료 (받은 때, 본문). 그 시각 3분 안에 특보를 받은 기록이 없거나
+    원자료를 두기 시작하기 전이면 None — 부르는 쪽이 기상청에 묻는다."""
+    from datetime import timedelta
+    hi, lo = t.strftime("%Y-%m-%d %H:%M"), (t - timedelta(minutes=3)).strftime("%Y-%m-%d %H:%M")
+    first = alert_raw_first()
+    if not first or hi < first:                      # 1분마다 두기 전 — 채워 넣은 10분 시각과 꼭 같을 때만
+        with tx() as con:
+            r = con.execute("SELECT at, body FROM alert_raw_bf WHERE at=?", (hi,)).fetchone()
+        return (r["at"], r["body"]) if r else None
+    with tx() as con:
+        if not con.execute("SELECT 1 FROM snapshot WHERE kind='alerts' AND base_time BETWEEN ? AND ? LIMIT 1", (lo, hi)).fetchone():
+            return None
+        r = con.execute("SELECT at, body FROM alert_raw WHERE at<=? ORDER BY at DESC LIMIT 1", (hi,)).fetchone()
+    return (r["at"], r["body"]) if r else None
 
 
 def put_snapshot(kind: str, base_time: str, fetched_at: str, payload: Any) -> None:

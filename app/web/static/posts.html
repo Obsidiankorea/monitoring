@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>공지 · 요청 — 경남 기상지도</title>
+<style>
+  :root { --bg: #0b1017; --panel: #121a24; --line: #253244; --ink: #e8eef6; --ink-2: #a9b6c7; --ink-3: #7c8a9c; --accent: #6cb4ff;
+          --warn: #ffb74d; --bad: #ff6b6b; --ok: #7ad19b; }
+  * { box-sizing: border-box; } [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.6 "Pretendard", "Malgun Gothic", system-ui, sans-serif; }
+  main { max-width: 900px; margin: 0 auto; padding: 18px 16px 48px; display: grid; gap: 14px; }
+  header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 20px; flex: 1; } header a { color: var(--accent); }
+  input, textarea, select, button { font: inherit; font-size: 13.5px; color: var(--ink); background: #1b2635; border: 1px solid var(--line); border-radius: 8px; }
+  input, select, button { min-height: 36px; padding: 0 10px; } textarea { width: 100%; padding: 8px 10px; resize: vertical; }
+  button { cursor: pointer; } button.pri { color: #06121f; background: var(--accent); border-color: var(--accent); font-weight: 700; }
+  :is(input, textarea, select, button, a):focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .tabs { display: flex; gap: 6px; } .tabs button[aria-selected="true"] { color: #06121f; background: var(--accent); border-color: var(--accent); font-weight: 700; }
+  .tabs .n { margin-left: 4px; font-size: 12px; opacity: .8; }
+  form { display: grid; gap: 8px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+  form label { display: grid; gap: 4px; font-size: 12.5px; color: var(--ink-2); } form .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .hint { font-size: 12px; color: var(--ink-3); } .msg { font-size: 13px; color: var(--ok); } .msg.bad { color: var(--bad); }
+  .post { padding: 12px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; display: grid; gap: 6px; }
+  .post.pop { border-color: color-mix(in oklab, var(--accent) 55%, var(--line)); }
+  .post h2 { margin: 0; font-size: 16px; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .meta { font-size: 12px; color: var(--ink-3); } .body { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .chip { padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 600; background: #1b2635; color: var(--ink-2); }
+  .chip.open { color: #1a1206; background: var(--warn); } .chip.doing { color: #06121f; background: var(--accent); } .chip.done { color: #06200f; background: var(--ok); }
+  .chip.pop { color: var(--accent); border: 1px solid var(--accent); background: none; }
+  .reply { padding: 8px 10px; border-left: 3px solid var(--ok); background: #0e151e; white-space: pre-wrap; font-size: 13.5px; }
+  .adm { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding-top: 6px; border-top: 1px dashed var(--line); }
+  .adm textarea { flex: 1 1 100%; min-height: 54px; }
+  .docs { display: grid; gap: 14px; } .docs h3 { margin: 4px 0 0; font-size: 13px; color: var(--ink-3); font-weight: 600; }
+  .dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+  .dl a { display: grid; gap: 4px; padding: 12px 14px; color: var(--ink); text-decoration: none; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+  .dl a:hover { border-color: var(--accent); } .dl b { font-size: 14.5px; } .dl span { font-size: 12.5px; color: var(--ink-2); } .dl small { font-size: 11.5px; color: var(--ink-3); }
+  .doc { padding: 6px 22px 26px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; line-height: 1.75; }
+  .doc .back { display: inline-block; margin-top: 14px; color: var(--accent); }
+  .doc .dh { margin: 10px 0 18px; padding-bottom: 12px; border-bottom: 1px solid var(--line); } .doc .dh small { color: var(--ink-3); }
+  .doc .dh p { margin: 6px 0 0; color: var(--ink-2); }
+  .md h2 { font-size: 22px; margin: 18px 0 8px; } .md h3 { font-size: 17px; margin: 22px 0 8px; padding-left: 10px; border-left: 3px solid var(--accent); }
+  .md h4 { font-size: 15px; margin: 16px 0 6px; } .md h5 { font-size: 14px; margin: 12px 0 4px; color: var(--ink-2); }
+  .md p { margin: 8px 0; } .md ul, .md ol { margin: 6px 0; padding-left: 22px; } .md li { margin: 3px 0; }
+  .md b { color: #fff; } .md code { padding: 1px 5px; font: 12.5px Consolas, monospace; background: #0e151e; border: 1px solid var(--line); border-radius: 4px; }
+  .md pre { padding: 10px 12px; overflow: auto; background: #0e151e; border: 1px solid var(--line); border-radius: 8px; } .md pre code { padding: 0; border: 0; }
+  .md .tw { overflow-x: auto; margin: 10px 0; } .md table { border-collapse: collapse; min-width: 60%; font-size: 13px; }
+  .md th, .md td { padding: 6px 10px; border: 1px solid var(--line); text-align: left; vertical-align: top; } .md th { background: #1b2635; color: var(--ink-2); }
+  .md hr { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
+  .md blockquote { margin: 10px 0; padding: 4px 12px; border-left: 3px solid var(--line); color: var(--ink-2); }
+  .md .co { margin: 12px 0; padding: 8px 14px; border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px; background: #0e151e; }
+  .md .co-h { font-weight: 700; color: var(--accent); } .md .co.warning, .md .co.caution, .md .co.danger { border-left-color: var(--warn); } .md .co.warning .co-h, .md .co.caution .co-h, .md .co.danger .co-h { color: var(--warn); }
+  .md .co.important .co-h, .md .co.tip .co-h { color: var(--ok); } .md .co.important, .md .co.tip { border-left-color: var(--ok); }
+  .md a { color: var(--accent); } .md .wk { color: #c9a6ff; border-bottom: 1px dotted #c9a6ff; }
+  .empty { padding: 26px; text-align: center; color: var(--ink-2); background: var(--panel); border: 1px dashed var(--line); border-radius: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <header><h1>공지 · 요청</h1><a href="/map.html">← 지도</a></header>
+  <div class="tabs" role="tablist">
+    <button type="button" role="tab" id="t-notice" aria-selected="true" data-k="notice">공지<span class="n" id="n-notice"></span></button>
+    <button type="button" role="tab" id="t-request" aria-selected="false" data-k="request">요청<span class="n" id="n-request"></span></button>
+    <button type="button" role="tab" id="t-doc" aria-selected="false" data-k="doc">문서</button>
+  </div>
+  <form id="f" hidden>
+    <label>제목 <input id="f-title" maxlength="100" required placeholder="예: 강수 누적 카드에서 시군 글자가 겹친다"></label>
+    <label>내용 <textarea id="f-body" rows="5" maxlength="4000" placeholder="어느 화면에서 · 무엇이 · 어떻게 바뀌면 좋은지"></textarea></label>
+    <div class="row"><label class="row" id="f-pop-l" hidden><input type="checkbox" id="f-pop"> 지도를 열 때 팝업으로 띄우기</label>
+      <span style="flex:1"></span><button class="pri" type="submit" id="f-go">올리기</button></div>
+    <div class="hint" id="f-hint"></div><div class="msg" id="f-msg" role="status"></div>
+  </form>
+  <div id="list"></div>
+</main>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const REPO = "https://github.com/Obsidiankorea/monitoring/issues/new";
+let ME = null, D = null, DOCS = null, TAB = ({ request: "request", doc: "doc" })[new URLSearchParams(location.search).get("tab")] || (location.hash.startsWith("#doc=") ? "doc" : "notice");
+const admin = () => ME && ME.role === "admin";
+async function call(url, method = "GET", body) {
+  const r = await fetch(url, { method, headers: body ? { "content-type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
+  const j = await r.json().catch(() => ({}));
+  if (r.status === 401) location.replace("/login.html?next=/posts.html");
+  if (!r.ok) throw new Error(j.detail || `오류 ${r.status}`);
+  return j;
+}
+/* 문서 — 목록(묶음별 카드) · 하나 보기(#doc=경로, 위키링크가 다른 문서면 그 문서로) */
+async function drawDocs() {
+  $("f").hidden = true;
+  const want = decodeURIComponent((location.hash.match(/^#doc=(.+)$/) || [])[1] || "");
+  if (want) {
+    try {
+      const d = await call(`/api/docs/view?path=${encodeURIComponent(want)}`);
+      $("list").innerHTML = `<article class="doc"><a class="back" href="#">← 문서 목록</a>
+        <div class="dh"><small>${esc(want)}${d.updated ? ` · 고친 날 ${esc(d.updated)}` : ""}</small>${d.summary ? `<p>${esc(d.summary)}</p>` : ""}</div>
+        <div class="md">${d.html}</div></article>`;
+      scrollTo(0, 0);
+    } catch (err) { $("list").innerHTML = `<div class="empty">문서를 열지 못했습니다 — ${esc(err.message)} <a href="#">목록으로</a></div>`; }
+    return;
+  }
+  DOCS ||= (await call("/api/docs")).rows;
+  const groups = [...new Set(DOCS.map(x => x.group))];
+  $("list").innerHTML = `<div class="docs">${groups.map(g => `<section><h3>${esc(g)}</h3><div class="dl">${DOCS.filter(x => x.group === g).map(x =>
+    `<a href="#doc=${encodeURIComponent(x.path)}"><b>${esc(x.title)}</b>${x.summary ? `<span>${esc(x.summary)}</span>` : ""}${x.updated ? `<small>고친 날 ${esc(x.updated)}</small>` : ""}</a>`).join("")}</div></section>`).join("")}</div>`;
+}
+addEventListener("hashchange", () => { if (location.hash.startsWith("#doc=") && TAB !== "doc") TAB = "doc"; draw(); });
+function draw() {
+  $("t-doc").setAttribute("aria-selected", String(TAB === "doc"));
+  if (TAB === "doc") { for (const k of ["notice", "request"]) $(`t-${k}`).setAttribute("aria-selected", "false"); return void drawDocs(); }
+  for (const k of ["notice", "request"]) {
+    $(`t-${k}`).setAttribute("aria-selected", String(k === TAB));
+    $(`n-${k}`).textContent = D ? (k === "request" ? D.request.filter(x => x.status === "open").length || "" : D.notice.length || "") : "";
+  }
+  const canWrite = TAB === "request" || admin();
+  $("f").hidden = !canWrite;
+  $("f-pop-l").hidden = TAB !== "notice";
+  $("f-hint").textContent = TAB === "request" ? "고칠 것 · 바랄 것을 적어 주세요. 관리자가 읽고 처리 상태와 답을 남깁니다. 연락처 · 개인정보는 적지 마세요." : "공지는 관리자만 씁니다. '팝업'을 켜면 지도를 열 때 한 번 뜹니다.";
+  const rows = D ? D[TAB] : [];
+  $("list").innerHTML = rows.length ? rows.map(p => `<article class="post${p.popup ? " pop" : ""}" data-id="${p.id}">
+      <h2>${esc(p.title)}${p.kind === "request" ? `<span class="chip ${esc(p.status)}">${esc(p.status_name)}</span>` : p.popup ? `<span class="chip pop">팝업</span>` : ""}</h2>
+      <div class="meta">${esc(p.author)} · ${esc(p.created)}${p.updated !== p.created ? ` · 고침 ${esc(p.updated)}` : ""}</div>
+      ${p.body ? `<div class="body">${esc(p.body)}</div>` : ""}
+      ${p.reply ? `<div class="reply"><b>답</b> ${esc(p.reply)}</div>` : ""}
+      ${admin() ? `<div class="adm">
+        ${p.kind === "request" ? `<select data-a="status" aria-label="처리 상태">${Object.entries(D.status).map(([k, n]) => `<option value="${k}"${k === p.status ? " selected" : ""}>${esc(n)}</option>`).join("")}</select>
+          <button type="button" data-a="gh" title="저장소가 공개라 자동으로 올리지 않는다 — 내용이 채워진 쓰기 창을 열면 다듬어서 올린다(쓴 사람 이름은 넣지 않는다)">GitHub 이슈로</button>`
+          : `<button type="button" data-a="pop">${p.popup ? "팝업 끄기" : "팝업 켜기"}</button>`}
+        <button type="button" data-a="hide">숨기기</button>
+        ${p.kind === "request" ? `<textarea data-a="reply" placeholder="답(쓴 사람이 봅니다)">${esc(p.reply)}</textarea><button type="button" data-a="save">답 저장</button>` : ""}
+      </div>` : ""}</article>`).join("")
+    : `<div class="empty">${TAB === "request" ? "아직 요청이 없습니다 — 위에 적어 주세요." : "공지가 없습니다."}</div>`;
+}
+async function load() { D = await call("/api/posts"); draw(); }
+document.querySelector(".tabs").addEventListener("click", e => {
+  const b = e.target.closest("[data-k]"); if (!b) return;
+  TAB = b.dataset.k; history.replaceState(null, "", TAB === "notice" ? location.pathname : `?tab=${TAB}`); draw();
+});
+$("f").addEventListener("submit", async e => {
+  e.preventDefault();
+  const m = $("f-msg"); m.className = "msg"; m.textContent = "";
+  try {
+    await call("/api/posts", "POST", { kind: TAB, title: $("f-title").value, body: $("f-body").value, popup: $("f-pop").checked });
+    $("f").reset(); m.textContent = "올렸습니다"; await load();
+  } catch (err) { m.className = "msg bad"; m.textContent = `올리지 못했습니다 — ${err.message}`; }
+});
+$("list").addEventListener("click", async e => {
+  const b = e.target.closest("button[data-a]"); if (!b) return;
+  const art = b.closest("[data-id]"), id = art.dataset.id, p = D[TAB].find(x => String(x.id) === id);
+  try {
+    if (b.dataset.a === "gh") {
+      const body = `${p.body}\n\n---\n대시보드 요청 게시판 #${p.id} (${p.created})`;
+      window.open(`${REPO}?title=${encodeURIComponent(p.title)}&body=${encodeURIComponent(body)}`, "_blank", "noopener");
+      return;
+    }
+    if (b.dataset.a === "hide" && !confirm(`'${p.title}' 글을 숨길까요? 기록은 서버에 남습니다.`)) return;
+    const data = b.dataset.a === "pop" ? { popup: !p.popup } : b.dataset.a === "hide" ? { gone: true } : { reply: art.querySelector('[data-a="reply"]').value };
+    await call(`/api/posts/${id}`, "PUT", data); await load();
+  } catch (err) { alert(`바꾸지 못했습니다 — ${err.message}`); }
+});
+$("list").addEventListener("change", async e => {
+  const s = e.target.closest('select[data-a="status"]'); if (!s) return;
+  try { await call(`/api/posts/${s.closest("[data-id]").dataset.id}`, "PUT", { status: s.value }); await load(); }
+  catch (err) { alert(`바꾸지 못했습니다 — ${err.message}`); }
+});
+(async () => {
+  try { const m = await call("/api/auth/me"); ME = m.user || { role: "admin" }; } catch { ME = null; }
+  await load();
+})();
+</script>
+</body>
+</html>

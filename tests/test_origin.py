@@ -64,7 +64,7 @@ def test_server_unreachable_is_502(tdb, monkeypatch):
     monkeypatch.setattr(origin, "_client", httpx.AsyncClient(transport=httpx.MockTransport(handler)))
     origin.put({"mode": "server", "url": "http://srv:8000"})
     r = TestClient(main.app).get("/api/alerts")
-    assert r.status_code == 502 and "닿지 않는다" in r.json()["detail"]
+    assert r.status_code == 502 and "연결하지 못했다" in r.json()["detail"]
 
 
 def test_server_update_asks_by_file(tmp_path, monkeypatch):

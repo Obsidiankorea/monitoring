@@ -23,17 +23,20 @@ if __name__ == "__main__" and ("--snap" in sys.argv or "--demo" in sys.argv):
     if "--port" not in sys.argv:
         os.environ.setdefault("PORT", "8001")
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
+from urllib.parse import quote
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi import Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from . import clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, serverupdate, snaps, update
-from .collectors import alerts, bangjae_rain, forecast, grid_rain, qpf, rain, shortfc
+from . import aiwatch, apikeys, events, geocode, heat, its, lawwatch, river, safety, snow, tide, clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, serverupdate, sites, snaps, update
+from . import auth as _auth  # 로그인(도 관리자 · 도 사용자 · 시군 사용자)
+from .collectors import alerts, bangjae_rain, forecast, grid_rain, prefetch, qpf, rain, shortfc
 from .config import CACHE, INTERVALS, POLL_DEFAULT
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
@@ -56,12 +59,44 @@ COLLECTORS = {"rain": rain.collect, "forecast": forecast.collect,
               # 단기예보 격자 — 권역·시군 예보 판. 받은 발표분은 다시 부르지 않는다.
               "short": shortfc.collect,
               # 경남 지도 — 500m 격자(15분·60분·일)와 실황 5km. 경남 bbox 만 잘라 둔다.
-              "grid": grid_rain.collect, "odam": grid_rain.collect_odam}
+              "grid": grid_rain.collect, "odam": grid_rain.collect_odam,
+              # 조위 — 경남 해안 5곳 실측 · 예측(app/tide.py). 키가 없으면 건너뛴다
+              "tide": tide.collect,
+              # 적설 — 경남 적설관측 지점(app/snow.py). 눈이 있을 때만 신적설 셋을 더 부른다
+              "snow": snow.collect,
+              # 보고서용 미리 받기 — 일 최대순간풍속(재난상황보고서 서버가 /api/kma/raw 로 가져간다)
+              "prefetch": prefetch.collect}
 
-def intervals() -> dict:
+def base_intervals() -> dict:
     """수집 주기 — 저장한 것 위에 기본값을 깐다. 저장한 뒤에 생긴 수집기(minute 등)도 기본 주기로 돈다.
     ⚠️ 저장한 것만 읽으면 새 수집기가 영영 예약되지 않는다."""
     return {**INTERVALS, **db.get_setting("intervals", INTERVALS)}
+
+
+def saver() -> dict:
+    """API 절약 모드 — 켜면 수집 주기가 min 분보다 짧은 수집기를 min 분마다로 늦춘다(긴 것은 그대로).
+    alerts=False 면 특보(발표 리듬이 없고 늦으면 안 된다)는 늦추지 않는다."""
+    c = {"on": False, "min": 5, "alerts": False, **(db.get_setting("api_saver", {}) or {})}
+    c["min"] = max(1, min(60, int(c["min"])))
+    return c
+
+
+def intervals() -> dict:
+    """실제로 도는 수집 주기(초) — 기본 · 저장값에 절약 모드를 얹은 것."""
+    cur, sv = base_intervals(), saver()
+    if not sv["on"]:
+        return cur
+    return {k: (v if (k == "alerts" and not sv["alerts"]) else max(v, sv["min"] * 60)) for k, v in cur.items()}
+
+
+def reschedule_all() -> None:
+    sched = getattr(app.state, "sched", None)
+    if not sched:
+        return
+    for k, sec in intervals().items():
+        job = sched.get_job(k)
+        if job:
+            job.reschedule("interval", seconds=sec)
 
 
 # 한 자료를 두 번 동시에 받지 않게 — 주기가 겹치거나 수동 조회가 끼어들 수 있다
@@ -74,6 +109,8 @@ async def run_one(kind: str, force: bool = False) -> dict:
     if config.DEMO:
         # 시연 — 기상청을 부르지 않는다(굳힌 시각 뒤 자료가 끼면 '가장 새 것'이 바뀐다). 수동 조회·과거 메우기도
         return {"ok": False, "kind": kind, "error": "시연 — 수집하지 않는다"}
+    if kind == "bangjae" and sites.gn_off():
+        return {"ok": False, "kind": kind, "error": "경남 AWS(내부망) 끔 — 설정 › 관측소에서 켠다"}
     async with _locks[kind]:
         try:
             fn = COLLECTORS[kind]
@@ -87,17 +124,55 @@ async def run_one(kind: str, force: bool = False) -> dict:
 
 
 async def _nightly() -> None:
+    try:
+        await asyncio.to_thread(maint.backup)              # 정리와 상관없이 매일 — 판단 기록 · 파견 기록 · 계정이 DB 에만 있다
+    except Exception:                                       # noqa: BLE001
+        log.exception("DB 백업 실패")
     if not maint.cfg().get("auto", True):
         return
     res = await asyncio.to_thread(maint.cleanup)
     log.info("정리: %s · %.1fMB 회수", res["removed"], res["freed_bytes"] / 1048576)
 
 
+async def _judge_warm() -> None:
+    from . import judge
+    if config.DEMO:
+        return
+    try:
+        n = await asyncio.to_thread(judge.warm)
+        if n:
+            log.info("상황판단 미리 계산 %d건", n)
+    except Exception as e:                                 # noqa: BLE001 — 다음 차례에 다시
+        log.warning("상황판단 미리 계산 실패: %s", e)
+
+
+async def _demo_events() -> None:
+    """시연 — 수집기가 없어 단계 이력(사건)이 안 쌓인다. 뜬 뒤 한 번 그 시각으로 훑어 적는다."""
+    await asyncio.sleep(20)
+    try:
+        await asyncio.to_thread(aiwatch.log_once, f"http://127.0.0.1:{os.environ.get('PORT', '8000')}")
+    except Exception:                                       # noqa: BLE001
+        log.exception("시연 단계 이력 실패")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.init()
+    _auth.init()
+    # 지구 좌표 — 켤 때마다 브이월드에 묻고 메모리에만(약관: 저장 금지, app/geocode.py). 수집기와 상관없이
+    asyncio.create_task(geocode.run())
     if config.DEMO and config.SNAP:
         snaps.add_bangjae(config.DB_PATH, config.SNAP)   # 서버 시연에 없는 경남 AWS(내부망에서 받아 둔 것)
+        snaps.add_scene(config.SNAP)
+        try:
+            snaps.add_dispatch(clock.now())                 # 파견 현황 · 회신(가짜, 이름 · 번호 없음)
+        except Exception:                                   # noqa: BLE001 — 시연 화면은 그래도 뜬다
+            log.exception("시연 파견 기록 실패")
+        try:
+            await asyncio.to_thread(snaps.add_ante)          # 선행 강우 5일 — 굳힌 72시간 앞을 가짜로
+        except Exception:                                   # noqa: BLE001
+            log.exception("시연 선행 강우 실패")
+        asyncio.create_task(_demo_events())
     if os.environ.get("NO_COLLECT") == "1":
         # 화면만 띄운다(개발용). ⚠️ 같은 PC 에서 수집기가 둘 돌면 기상청 호출이 두 배가 된다.
         log.info("수집기 끔(NO_COLLECT) — 저장된 자료만 보여 준다")
@@ -106,7 +181,7 @@ async def lifespan(app: FastAPI):
         return
     sched = AsyncIOScheduler(timezone="Asia/Seoul")   # 시각은 전부 KST. UTC로 바꾸지 않는다.
     app.state.sched = sched
-    # 수집기 골라 끄기 — SKIP_COLLECT=bangjae 처럼(쉼표). 언레이드(집)에서는 스방(내부망)에 닿지 않아 실패만 쌓인다
+    # 수집기 골라 끄기 — SKIP_COLLECT=bangjae 처럼(쉼표). 언레이드(집)에서는 스방(내부망)에 접속할 수 없어 실패만 쌓인다
     skip = {x.strip() for x in os.environ.get("SKIP_COLLECT", "").split(",") if x.strip()}
     app.state.skip = skip
     if skip:
@@ -116,6 +191,22 @@ async def lifespan(app: FastAPI):
             continue
         sched.add_job(run_one, "interval", seconds=sec, args=[kind],
                       id=kind, max_instances=1, coalesce=True)
+    # AI 기준 근접 알림 — 5분마다 훑는다. 켜 둔 서버에서만 보낸다(설정 › AI 알림, 기본 끔 — aiwatch.py)
+    sched.add_job(aiwatch.run, "interval", seconds=300, id="aiwatch", max_instances=1, coalesce=True)
+    # 상황판단 창 미리 계산 — 2분마다, 최근 15분 안에 창을 연 기본 인자만(app/judge.warm). 시연에서는 돌지 않는다
+    sched.add_job(_judge_warm, "interval", seconds=120, id="judgewarm", max_instances=1, coalesce=True)
+    # 보고서 17시 대기 — 1분마다, 걸린 것이 있을 때만(app/reports.py wait_tick)
+    sched.add_job(_reports_tick, "interval", seconds=60, id="reportwait", max_instances=1, coalesce=True)
+    # 법령 변경 감시 — 하루 한 번(LAW_OC 가 있는 서버에서만). 위키는 고치지 않고 제안 파일만 남긴다(app/lawwatch.py)
+    sched.add_job(lawwatch.run, "cron", hour=9, minute=10, id="lawwatch", max_instances=1, coalesce=True)
+    # 하천 수위 · 댐 · 보 — 10분마다(HRFCO_KEY 가 있는 서버에서만, app/river.py). 켠 지 20초 뒤 첫 수집
+    sched.add_job(river.run, "interval", minutes=10, id="river", max_instances=1, coalesce=True,
+                  next_run_time=datetime.now() + timedelta(seconds=20))
+    # 재난안전데이터 — 산사태 예보 · 예측, 위험저수지, 침수흔적(키마다 따로, 하루 1000건 — app/safety.py). 켠 지 40초 뒤 첫 수집
+    sched.add_job(safety.run, "interval", minutes=10, id="safety", max_instances=1, coalesce=True,
+                  next_run_time=datetime.now() + timedelta(seconds=40))
+    # 지하차도 침수 위험 경보 — 경남 호우특보 중에만 부른다(ITS_KEY, 월 1000건 — app/its.py)
+    sched.add_job(its.run, "interval", minutes=15, id="its", max_instances=1, coalesce=True)
     # 하루 한 번 묵은 자료 치우기 — 안 하면 DB 와 이미지 캐시가 계속 자란다
     sched.add_job(_nightly, "cron", hour=4, minute=20, id="maint",
                   max_instances=1, coalesce=True)
@@ -130,6 +221,8 @@ async def lifespan(app: FastAPI):
             if kind not in skip:
                 asyncio.create_task(run_one(kind))
         log.info("수집기 시작: %s", INTERVALS)
+        if "alerts" not in skip:
+            asyncio.create_task(alerts.backfill_raw())   # 특보 원자료 지난 72시간 — 보고서 서버가 기상청 대신 읽게
     try:
         yield
     finally:
@@ -137,6 +230,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="경남 기상 대시보드", lifespan=lifespan)
+app.add_middleware(GZipMiddleware, minimum_size=2000)          # 경남 전체 판정 · 시간별 줄이 수 MB — 사무실 망에서 느렸다
 
 
 @app.get("/api/rain")
@@ -317,6 +411,7 @@ async def api_grid_testrain(hours: int = Query(12, ge=1, le=48)):
 # 바뀔 일이 드물지만 저장소 갱신 뒤 새로고침 한 번에 따라오게 하루만 캐시한다.
 _GEO_FILES = {"gyeongnam.topo.json": "application/json", "grids.json": "application/json",
               "stations.json": "application/json", "emd.topo.json": "application/json",
+              "ri.topo.json": "application/json",
               "mask_sigun.u8.gz": None, "mask_emd.u16.gz": None}
 
 
@@ -405,6 +500,889 @@ async def api_server_update_ask(body: dict | None = None, request: Request = Non
         raise HTTPException(404, str(e))
 
 
+@app.get("/api/ai/shrt_emd")
+async def api_ai_shrt_emd(sigun: str, start: str):
+    """읍면동별 단기예보 1시간 강수 — start(YYYYMMDDHH) 뒤부터 내일 24시까지(상황판단 도달 시각용)."""
+    return await asyncio.to_thread(queries.short_emd, sigun, start)
+
+
+@app.get("/api/ai/decisions")
+async def api_ai_decisions(sigun: str | None = None, limit: int = 50):
+    """상황판단 모드 판단 기록 — 새것부터. 서버 공유(어느 PC 에서 눌러도 같이 보인다)."""
+    q, a = "SELECT * FROM decision WHERE gone IS NULL", []
+    if sigun:
+        q, a = q + " AND sigun=?", [sigun]
+    with db.tx() as con:
+        return {"rows": [dict(r) for r in con.execute(q + " ORDER BY id DESC LIMIT ?", (*a, max(1, min(limit, 500))))]}
+
+
+@app.post("/api/ai/decisions")
+async def api_ai_decisions_post(body: dict, request: Request):
+    """{sigun, emd, fam, stage, act, pct, eta, note} — 결정을 기록만 한다(문자 · 보고를 보내지 않는다)."""
+    acts = ("통제 지시", "사전대피 권고", "대피명령 요청", "보류", "메모")
+    if not body.get("sigun") or body.get("act") not in acts:
+        raise HTTPException(400, f"sigun 과 act({' · '.join(acts)}) 가 필요하다")
+    mine = _my_sigun(request)
+    if mine and body.get("sigun") != mine:                 # 시군 사용자는 자기 시군 판단만 남긴다
+        raise HTTPException(403, f"{mine} 판단만 남길 수 있다")
+    s = lambda k, n=80: (str(body.get(k) or "").strip()[:n] or None)  # noqa: E731
+    pct = body.get("pct")
+    with db.tx() as con:
+        con.execute("INSERT INTO decision(at, sigun, emd, fam, stage, act, pct, eta, note, who) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                    (clock.now().isoformat(timespec="seconds"), s("sigun", 10), s("emd", 20), s("fam", 10), s("stage", 10), body["act"],
+                     int(pct) if isinstance(pct, (int, float)) else None, s("eta", 20), s("note", 300), _who_str(request)))
+    return await api_ai_decisions(body["sigun"])
+
+
+@app.get("/api/events")
+async def api_events(limit: int = 30):
+    """호우 사건 묶음 목록 — 새것부터(시작~끝 · 걸린 특보 · 단계 이력과 판단 기록 건수)."""
+    return {"rows": await asyncio.to_thread(events.listing, limit)}
+
+
+@app.get("/api/events/{eid}")
+async def api_event(eid: int):
+    """사건 하나 — 단계가 바뀐 이력과 그 사이 판단 기록을 시각 순으로."""
+    d = await asyncio.to_thread(events.detail, eid)
+    if not d:
+        raise HTTPException(404, "그런 사건이 없다")
+    return d
+
+
+@app.delete("/api/ai/decisions/{did}")
+async def api_ai_decisions_del(did: int, request: Request):
+    """잘못 누른 결정 하나를 지운다 — 줄은 남기고 지운 표시만(언제 · 누가). 목록 · 사건 · AI 에서 빠진다(관리자만, auth.WRITE_OK)."""
+    with db.tx() as con:
+        con.execute("UPDATE decision SET gone=? WHERE id=? AND gone IS NULL",
+                    (f"{clock.now().isoformat(timespec='seconds')} · {_who_str(request)}", did))
+    return {"ok": True}
+
+
+def _who_str(request: Request) -> str:
+    """기록에 남길 누른 사람 — '이름(역할)'. 로그인 없는 서버 · 이 컴퓨터는 '상황실'."""
+    u = getattr(request.state, "user", None) or {}
+    if not u or u.get("local"):
+        return "상황실"
+    return f"{u.get('name') or u.get('login')}({_auth.ROLES.get(u.get('role'), u.get('role'))})"[:60]
+
+
+_PIN_FAIL: list[float] = []                                   # 잠금 번호 틀린 시각 — 5분에 5번 넘으면 막는다(4자리 맞히기 방지)
+
+
+def _contacts_pin(pin: str | None) -> None:
+    from . import contacts
+    import time as _t
+    _PIN_FAIL[:] = [x for x in _PIN_FAIL if _t.time() - x < 300]
+    if len(_PIN_FAIL) >= 5:
+        raise HTTPException(429, "잠금 번호를 여러 번 틀렸다 — 5분 뒤 다시")
+    if not contacts.pin_ok(pin):
+        _PIN_FAIL.append(_t.time())
+        raise HTTPException(401, "잠금 번호가 필요하다")
+
+
+def _my_sigun(request: Request) -> str | None:
+    """시군 사용자면 그 시군(두 글자), 아니면 None(도 · 관리자 · 로그인 없는 서버)."""
+    u = getattr(request.state, "user", None)
+    return u["sigun"] if u and u.get("role") == "sigun" else None
+
+
+def _rid_sigun() -> dict[str, str]:
+    """지역ID → 시군(두 글자) — 시군 사용자가 자기 시군 지구만 다루게."""
+    from . import ai, reply
+    short = {v: k for k, v in ai.SIGUN_FULL.items()}
+    return {rid: short.get(v[0], v[0]) for rid, v in reply._districts().items()}
+
+
+@app.get("/api/contacts")
+async def api_contacts(sigun: str, request: Request, x_pin: str | None = Header(None)):
+    """상황판단 모드 전용 — 시군 우려지역 담당자 연락처(상태 폴더 contacts.csv). AI 쪽 코드는 이것을 부르지 않는다.
+    시군 사용자는 자기 시군만."""
+    from . import contacts
+    mine = _my_sigun(request)
+    if mine and sigun != mine:
+        raise HTTPException(403, f"{mine} 사용자는 {mine} 연락처만 본다")
+    _contacts_pin(x_pin)
+    return JSONResponse(await asyncio.to_thread(contacts.of_sigun, sigun), headers={"Cache-Control": "no-store"})
+
+
+@app.post("/api/reply/ask")
+async def api_reply_ask(body: dict, request: Request, x_pin: str | None = Header(None)):
+    """{rids, note, base, preview} — 지구 담당자에게 보낼 회신 링크를 만든다(문자는 화면에서). 이름 · 번호가 나가므로 잠금 번호 뒤.
+    single=true 면 지구마다 따로 · 그 지구 이름이 든 글(상황판단), info 는 그때의 단계 · %(기록에만).
+    preview=true 면 요청 기록 없이 글 · 링크만(상황판단 미리보기 — 문자 앱 열기 · 복사를 누를 때 preview 없이 다시 부른다)."""
+    from . import reply
+    _contacts_pin(x_pin)
+    mine = _my_sigun(request)
+    if mine:                                               # 시군 사용자는 자기 시군 지구에만 요청한다
+        where = await asyncio.to_thread(_rid_sigun)
+        other = [r for r in body.get("rids") or [] if where.get(str(r)) != mine]
+        if other:
+            raise HTTPException(403, f"{mine} 지구가 아닌 것이 섞였다 — {len(other)}곳")
+    preview = body.get("preview") is True
+    if config.DEMO and not preview:                        # 시연 — 미리보기(가짜 연락처 · 링크)는 보여 주고 요청 기록은 남기지 않는다
+        raise HTTPException(403, "시연 화면에서는 요청을 만들지 않는다")
+    base = str(body.get("base") or "").strip() or str(request.base_url)
+    from . import ai
+    u = getattr(request.state, "user", None) or {}
+    org = ai.SIGUN_FULL.get(mine, mine) if mine else "경남도"          # 문자 머리글 — 보낸 곳
+    who = (u.get("name") or u.get("login")) if u and not u.get("local") else ""
+    by = f"{org if mine else '도'} · {who}" if who else (org if mine else "상황실")   # 기록 · 도 현황판 · 현장 화면의 '요청' 칸
+    out = await asyncio.to_thread(reply.ask, [str(x) for x in body.get("rids") or []], str(body.get("note") or ""), base, preview,
+                                  body.get("single") is True, str(body.get("info") or ""), by, org)
+    return JSONResponse({**out, "demo": config.DEMO}, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/reply/list")
+async def api_reply_list(request: Request, x_pin: str | None = Header(None)):
+    """현장 회신 현황 — 요청한 것 전부와 회신(조치 여부 · 추가 배치 · 사진 유무). 시군 사용자는 자기 시군 지구만."""
+    from . import reply
+    _contacts_pin(x_pin)
+    rows = await asyncio.to_thread(reply.rows)
+    mine = _my_sigun(request)
+    if mine:
+        where = await asyncio.to_thread(_rid_sigun)
+        rows = [r for r in rows if where.get(r["rid"]) == mine]
+    return JSONResponse({"rows": rows}, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/reply/board")
+async def api_reply_board(request: Request, hours: int = Query(24, ge=1, le=168), x_pin: str | None = Header(None)):
+    """도 파견 현황판 — 시군별 요청 · 단계 · 미확인 경고(이름 · 번호 없음). 시군 사용자는 자기 시군만.
+    잠금 번호가 맞으면(또는 잠금이 없으면) 지구 줄에 마지막 조치 메모 · 사진 표시도(메모에 이름이 들 수 있다)."""
+    from . import contacts, reply
+    out = await asyncio.to_thread(reply.board, hours, None, contacts.pin_ok(x_pin))
+    mine = _my_sigun(request)
+    if mine:
+        out = [g for g in out if g["sigun"] == mine]
+    return JSONResponse({"siguns": out, "hours": hours}, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/reply/history")
+async def api_reply_history(rid: str, request: Request, x_pin: str | None = Header(None)):
+    """지구 하나의 현장 기록 전부(요청마다 단계 표 · 메모 · 사진 표시) — 잠금 번호 뒤, 시군 사용자는 자기 시군 지구만."""
+    from . import reply
+    _contacts_pin(x_pin)
+    mine = _my_sigun(request)
+    if mine and (await asyncio.to_thread(_rid_sigun)).get(rid) != mine:
+        raise HTTPException(403, f"{mine} 지구가 아니다")
+    d = await asyncio.to_thread(reply.history, rid)
+    if not d:
+        raise HTTPException(404, "이 지구에는 현장 기록이 없다")
+    return JSONResponse(d, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/field/actions")
+async def api_field_actions(request: Request, sigun: str | None = None, hours: int = Query(24, ge=1, le=168)):
+    """현장 조치 요약(문자 회신) — AI 상황판단 맥락용. 이름 · 번호 · 메모 글 없음(메모에서 뽑은 낱말만). 시군 사용자는 자기 시군만."""
+    from . import reply
+    sg = _my_sigun(request) or sigun
+    rows = await asyncio.to_thread(reply.actions, hours)
+    return JSONResponse({"rows": [r for r in rows if not sg or r["sigun"] == sg]}, headers={"Cache-Control": "no-store"})
+
+
+from . import reply as _reply  # noqa: E402 — 회신 화면(/r/…). 같은 망에서는 대시보드 주소로도 열린다(밖에는 app.reply 서버만)
+app.include_router(_reply.router)
+
+
+@app.get("/api/wiki/page")
+async def api_wiki_page(name: str):
+    """상황판단 모드 매뉴얼 칸 — 위키 문서 하나의 본문(머리말 뺀 마크다운). 이름은 위키 목록에 있는 것만(경로를 받지 않는다)."""
+    from . import aireport
+    p = aireport._index().get(name)
+    if not p:
+        raise HTTPException(404, f"위키에 없는 문서: {name}")
+    t = await asyncio.to_thread(p.read_text, "utf-8")
+    body = t.split("---", 2)[2] if t.startswith("---") else t
+    return {**aireport.page(name), "text": body.strip()}
+
+
+@app.get("/api/districts")
+async def api_districts(sigun: str):
+    """상황판단 모드 — 시군 우려지역 지구 이름 · 리 · 지번 · 유형(위키 공개 자료, 잠금 없이). 담당자는 /api/contacts."""
+    from . import contacts
+    return await asyncio.to_thread(contacts.districts, sigun)
+
+
+def _dz_tg(t: dict) -> dict | None:
+    """지도 지구 카드의 '지형' 칸 — 표고 · 경사(등고선 둘레 최대) · 하천 · 저수지 · 해안 · 건물(app/terrain.py 값 그대로)."""
+    if not t:
+        return None
+    g = {k: t[k] for k in ("el", "cs", "b300", "bk", "bo", "bb", "sv") if t.get(k) is not None}
+    if t.get("sl50", t.get("sl")) is not None:
+        g["sl"] = t.get("sl50", t.get("sl"))
+    for k in ("rv", "lk"):
+        if t.get(k):
+            g[k] = {x: t[k].get(x) for x in ("n", "d", "dh")}
+    return g
+
+
+@app.get("/api/districts/all")
+async def api_districts_all():
+    """지도 레이어 '우려지역 지구'(U) — 좌표가 있는 지구 전부(위키 공개 자료). 연락처는 없다."""
+    from . import ai, contacts, terrain
+
+    def one():
+        out = []
+        for sg in ai.SIGUN_FULL:
+            for emd, ds in contacts.districts(sg)["emd"].items():
+                out += [{"sigun": sg, "emd": emd, **{k: d[k] for k in ("id", "name", "ri", "jibun", "kind", "fam", "shelter", "rule", "pos", "approx")},
+                         "tf": t.get("flags"), "tg": _dz_tg(t)}   # 지역 여건 꼬리표 · 지형 값(지도 지구 카드)
+                        for d in ds if d["pos"] for t in [terrain.of({**d, "sigun": sg, "emd": emd}) or {}]]
+        return out
+    rows = await asyncio.to_thread(one)
+    return {"rows": rows, "geo": geocode.status()}
+
+
+@app.get("/api/districts/geo")
+async def api_districts_geo():
+    """'좌표 확인 · 고치기' 목록 — 지구 전부(좌표 · 출처 · 근사인가 · 화면에서 넣은 메모). 위키 공개 자료라 잠금 없이."""
+    from . import ai, contacts
+    dbp = geocode.db_pos()
+
+    def one():
+        out = []
+        for sg in ai.SIGUN_FULL:
+            for emd, ds in contacts.districts(sg)["emd"].items():
+                out += [{"sigun": sg, "emd": emd, **{k: d[k] for k in ("id", "name", "ri", "jibun", "kind", "fam", "pos", "approx")},
+                         "src": geocode.SRC.get(d["id"]) or ("" if d["pos"] else "없음"), "note": (dbp.get(d["id"]) or {}).get("note", "")}
+                        for d in ds]
+        return out
+    return {"rows": await asyncio.to_thread(one), "demo": config.DEMO}
+
+
+@app.put("/api/districts/geo")
+async def api_districts_geo_put(body: dict):
+    """좌표 직접 넣기 — {id, lat, lon, note}. lat · lon 이 비면 지우고 원래(지적도 · 브이월드)로 되돌린다. 시연 서버는 바꾸지 않는다."""
+    if config.DEMO:
+        raise HTTPException(403, "시연 서버에서는 좌표를 바꾸지 않는다")
+    rid = str(body.get("id") or "")
+    if not any(w["지역ID"] == rid for w in geocode._rows()):
+        raise HTTPException(404, "그런 지구가 없다")
+    try:
+        pos = geocode.set_manual(rid, body.get("lat"), body.get("lon"), str(body.get("note") or ""))
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    if pos is None:
+        asyncio.create_task(geocode.run())                    # 지웠다 — 지적도 · 브이월드 좌표로 다시
+    return {"id": rid, "pos": pos, "src": geocode.SRC.get(rid, "")}
+
+
+@app.get("/api/districts/shapes")
+async def api_districts_shapes():
+    """지구 필지 모양(위키 data/지구필지.geojson.gz, 경위도) — 압축은 위키 글자 검색(Hermes)에 3MB 한 줄이 걸리지 않게. 없으면 옛 .geojson, 그것도 없으면 빈 묶음."""
+    from . import ai
+    try:
+        d = ai.wiki() / "data"
+        gz = d / "지구필지.geojson.gz"
+        body = gzip.decompress(gz.read_bytes()) if gz.exists() else (d / "지구필지.geojson").read_bytes()
+        return Response(body, media_type="application/json")
+    except OSError:
+        return {"type": "FeatureCollection", "features": []}
+
+
+@app.get("/api/geocode")
+async def api_geocode():
+    """지구 좌표 받기 진행 — 받는 중 · 끝 · 키 없음, 찾은 곳 수, 못 찾은 이유 묶음. 좌표 값은 /api/districts 에."""
+    return geocode.status()
+
+
+@app.post("/api/geocode")
+async def api_geocode_run():
+    """다시 받기(키를 넣은 뒤 등) — 이미 받는 중이면 그대로."""
+    asyncio.create_task(geocode.run())
+    return geocode.status()
+
+
+@app.get("/api/settings/contacts-pin")
+async def api_contacts_pin_get():
+    from . import contacts
+    return {"locked": contacts.locked(), "file": contacts.FILE.exists()}
+
+
+@app.put("/api/settings/contacts-pin")
+async def api_contacts_pin_put(body: dict):
+    """{old, new} — 연락처 잠금 번호. 이미 있으면 old 가 맞아야 바꾼다. new 가 비면 푼다."""
+    from . import contacts
+    if contacts.locked():
+        _contacts_pin(str(body.get("old") or ""))
+    try:
+        contacts.set_pin(str(body.get("old") or ""), str(body.get("new") or "").strip())
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return await api_contacts_pin_get()
+
+
+_JZ: dict[int, tuple[dict, bytes]] = {}                  # 판정 결과(캐시된 그 객체) → 압축해 둔 응답. 8MB 를 부를 때마다 다시 글로 바꾸고 누르면 몇 초 걸린다
+
+
+def _judge_gz(got: dict) -> bytes:
+    hit = _JZ.get(id(got))
+    if hit and hit[0] is got:
+        return hit[1]
+    b = gzip.compress(json.dumps(got, ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode("utf-8"), 5)
+    if len(_JZ) >= 6:
+        _JZ.clear()
+    _JZ[id(got)] = (got, b)
+    return b
+
+
+@app.get("/api/judge")
+async def api_judge(request: Request, sigun: str = "all", k: float = 1.0, add_h: float = 0.0, add_24: float = 0.0, series: int = 0, sb: str = "",
+                    min_: float = Query(0, alias="min"), r: str = "", fresh: int = 0):
+    """상황판단 모드 — 지구 한 줄씩(위키 지구 × 기상청 격자 · AWS 면 두 기준의 강수 · 통제 · 사전대피 · 긴급대피 %).
+    sigun=all 이면 경남 전체(시군 차트 + 지구 목록). series=1 이면 지구마다 앞으로 시간별 % (차트 줄 · 재생). 연락처는 넣지 않는다(/api/contacts).
+    min=50 이면 지금 · 예보(초단기 포함)로 50% 까지 못 오르는 지구는 빼고(n_all 은 전체 수, 시군 차트는 전체로) — r 지구는 남긴다(주소로 바로 연 지구).
+    결과는 judge.BTTL 초 캐시(computed_at = 계산 시각), fresh=1 이면 다시 센다."""
+    from . import judge
+    me = f"http://127.0.0.1:{os.environ.get('PORT', '8000')}"
+    try:
+        got = await asyncio.to_thread(judge.cached, sigun, me, max(0.5, min(3.0, k)), max(0.0, min(100.0, add_h)), max(0.0, min(500.0, add_24)), bool(series), sb if sb in ("grid", "aws") else None,
+                                      max(0.0, min(100.0, min_)), r or None, bool(fresh))
+        if "gzip" not in request.headers.get("accept-encoding", ""):
+            return got
+        return Response(await asyncio.to_thread(_judge_gz, got), media_type="application/json", headers={"Content-Encoding": "gzip", "Vary": "Accept-Encoding"})
+    except FileNotFoundError as e:
+        raise HTTPException(503, f"LLM 위키를 못 찾았다(설정 › AI 위키): {e}")
+
+
+@app.get("/api/ai/situation")
+async def api_ai_situation(sigun: str, base: str | None = None, k: float = 1.0):
+    """AI 상황판단 — 시군 하나의 지금 수치(이 서버 API)와 LLM 위키 기준(산사태 지구 대피기준까지 %)을 맞대 놓는다.
+    판단하지 않는다(app/ai.py). base 를 주면 그 대시보드 서버의 자료로(시험용 — 예: NAS)."""
+    from . import ai
+    me = base or f"http://127.0.0.1:{os.environ.get('PORT', '8000')}"
+    try:
+        s = await asyncio.to_thread(ai.situation, sigun, me, max(0.5, min(2.0, k)))
+    except FileNotFoundError as e:
+        raise HTTPException(503, f"LLM 위키를 못 찾았다(설정 › AI 위키): {e}")
+    s["brief"] = ai.brief(s)
+    return s
+
+
+@app.get("/api/ai/emdwin")
+async def api_grid_emdwin(basis: str = "grid", pts: int = 0):
+    """경남 읍면동마다 1 · 3 · 12 · 24 · 48시간 누적 · 15분 최대 칸(격자 500m) — 한 번에. AI 상황판단 · Hermes 도구용.
+    pts=1 이면 좌표가 있는 지구마다 그 자리(둘레 1.5km) 값도(pts) — 상황판단 지구별 판정."""
+    try:
+        return await asyncio.to_thread(gridview.emd_windows, (1, 3, 12, 24, 48), None, "aws" if basis == "aws" else "grid",
+                                       geocode.exact() if pts else None)
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
+
+
+@app.get("/api/law")
+async def api_law():
+    """법령 변경 감시 — 켜졌나(LAW_OC) · 마지막으로 본 결과 · 제안 파일 목록."""
+    return lawwatch.status()
+
+
+@app.post("/api/law/run")
+async def api_law_run():
+    """지금 한 번 본다(시험용). 처음이면 기준만 기억하고 제안은 만들지 않는다."""
+    if not config.KEYS.get("LAW_OC"):
+        raise HTTPException(400, "LAW_OC 없음 — config/api_keys.txt")
+    return await lawwatch.run()
+
+
+@app.get("/api/heat")
+async def api_heat():
+    """폭염 화면 — 시군별 관측 기온(app/heat.py)."""
+    return heat.status()
+
+
+@app.get("/api/snow")
+async def api_snow():
+    """적설 — 지점(적설 · 3시간 · 24시간 · 일 신적설, 산지 표시) · 시군 대표(산지 뺀 최대) · 대설 특보 시군 · active(눈 · 대설특보)."""
+    return JSONResponse(await asyncio.to_thread(snow.latest), headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/tide")
+async def api_tide():
+    """경남 해안 조위 — 지점별 실측 · 예측 · 단계 · 다음 만조 · 7일 최고 만조 + 대조기(계산)."""
+    return tide.status()
+
+
+@app.get("/api/river")
+async def api_river():
+    """지도 레이어 '하천·댐' — 경남 수위 · 댐 · 보 최신값(10분)과 홍수예보 발령. 키가 없으면 on=false."""
+    if river.status()["on"] and not config.DEMO and not river._LIVE["at"]:
+        await river.run()                                     # 첫 요청이 스케줄러보다 먼저 오면 그 자리에서 한 번 받는다
+    return river.status() | {"road": its.status()}
+
+
+@app.get("/api/safety")
+async def api_safety():
+    """지도 레이어 '산사태 · 저수지 · 침수흔적' — 산사태 예보 · 예측, 위험저수지 계측 경보(경남). 키가 없으면 on=false."""
+    return safety.status()
+
+
+@app.put("/api/settings/slide")
+async def api_slide_put(body: dict):
+    """산사태 예보 · 예측 받기 — {mode: auto(호우 · 태풍 특보 때만) | on(늘)}. 켜면 바로 한 번 받는다."""
+    m = body.get("mode")
+    if m not in ("auto", "on"):
+        raise HTTPException(400, "mode 는 auto · on")
+    db.put_setting("sd_slide", {"mode": m})
+    if safety.slide_why():
+        safety._LIVE["at"].pop("fcst", None)
+        safety._LIVE["at"].pop("pred", None)
+        await safety.run()
+    return safety.status()
+
+
+@app.get("/api/slide/vuln")
+async def api_slide_vuln():
+    """산사태취약지역 지정현황(경남, 공공데이터포털 15014457) — 지번을 좌표로 바꿔 둔 것(tools/build_slide_vuln.py). 지도 '산사태' 레이어의 작은 마름모."""
+    p = config.DATA / "geo" / "slide_vuln.json"
+    return json.loads(p.read_text("utf-8")) if p.exists() else {"rows": [], "n": 0}
+
+
+@app.get("/api/safety/flood")
+async def api_safety_flood():
+    """경남 침수흔적 다각형(경위도) — 7일마다 받아 둔 파일 그대로."""
+    return PlainTextResponse(safety.flood(), media_type="application/json")
+
+
+@app.get("/api/keys")
+async def api_keys():
+    """설정 › API 키 — 어떤 키가 설정돼 있나(값은 주지 않는다: 설정됨 · 끝 네 글자만)."""
+    return {"keys": apikeys.status(), "demo": config.DEMO}
+
+
+@app.get("/api/keydoc/{slug}")
+async def api_keydoc(slug: str):
+    """설정 › API 키 줄의 '문서' 링크 — docs/api/ 의 정리 문서(마크다운 글 그대로). 목록에 있는 이름만."""
+    if slug not in apikeys.SLUGS and slug != "00-목록":
+        raise HTTPException(404)
+    try:
+        return PlainTextResponse((apikeys.DOCS / f"{slug}.md").read_text("utf-8-sig"))
+    except OSError as e:
+        raise HTTPException(404) from e
+
+
+@app.put("/api/keys")
+async def api_keys_put(body: dict):
+    """{name, value} — 키 하나를 config/api_keys.txt 에 쓰고 바로 반영. value 가 비면 지운다. 시연 서버는 바꾸지 않는다."""
+    if config.DEMO:
+        raise HTTPException(403, "시연 서버에서는 키를 바꾸지 않는다")
+    try:
+        apikeys.save(str(body.get("name") or ""), str(body.get("value") or ""))
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    except OSError as e:
+        raise HTTPException(500, f"파일에 쓰지 못했다 — {e}") from e
+    if body.get("name") == "HRFCO_KEY":                       # 키를 넣자마자 한 번 받아 지도에 바로 뜨게
+        asyncio.create_task(river.run())
+    if str(body.get("name") or "").startswith("SD_"):
+        asyncio.create_task(safety.run())
+    return {"keys": apikeys.status(), "demo": config.DEMO}
+
+
+@app.get("/api/ai/sigunstage")
+async def api_ai_sigunstage():
+    """도 비상단계 + 시군 매뉴얼이 위키에 있는 시군(거제 · 통영)의 비상단계 — 지금 특보 기준에 사람이 바꾼 값을 얹어서."""
+    from . import ai
+    return ai.sigun_stages(queries.alerts().get("data") or {}, ai.overrides())
+
+
+@app.put("/api/ai/sigunstage")
+async def api_ai_sigunstage_put(body: dict):
+    """사람이 도 · 시군 단계를 바꾼다 — {sigun('도' 포함), stage}. stage 가 없거나 null 이면 특보 기준으로 되돌린다.
+    실제 발령은 상황판단회의 · 본부장 판단이라 특보 기준과 다를 수 있다. 24시간 뒤 저절로 풀린다. 시연 서버는 뜰 때마다 새로 뜨는 사본에 쓴다."""
+    from . import aireport, ai
+    try:
+        ai.set_override(str(body.get("sigun") or ""), body.get("stage") or None)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    aireport.reset_cache()
+    aiwatch._SNAP["v"] = None                                # 근접 목록 캐시(2분)도 비운다
+    return ai.sigun_stages(queries.alerts().get("data") or {}, ai.overrides())
+
+
+@app.put("/api/ai/task")
+async def api_ai_task(body: dict):
+    """할 일 적용 — {tasks: [{text, done}]}. 보고의 '조치 완료'에 남고 24시간 뒤 저절로 풀린다."""
+    from . import ai
+    raw = body.get("tasks")
+    if not isinstance(raw, list) or not raw or len(raw) > 50:
+        raise HTTPException(400, "tasks 목록이 필요하다")
+    tasks = [{"text": str(t.get("text") or "").strip(), "done": bool(t.get("done"))} for t in raw if isinstance(t, dict)]
+    if not tasks or any(not t["text"] or len(t["text"]) > 500 for t in tasks):
+        raise HTTPException(400, "할 일 글이 없거나 너무 길다")
+    ai.set_tasks(tasks)
+    return {"ok": True}
+
+
+@app.get("/api/ai/watch")
+async def api_ai_watch():
+    """지금 위키 기준(통제 · 사전대피 · 긴급대피)에 가까워졌거나(70%↑) 넘은 곳 — 지도 표식 · 왼쪽 위험 아이콘용.
+    텔레그램 알림 설정과 무관하게 언제나 읽는다(2분 캐시)."""
+    try:
+        return await asyncio.to_thread(aiwatch.snapshot, _ai_base(None))
+    except Exception as e:                      # noqa: BLE001
+        raise HTTPException(503, aiwatch._mask(e)[:200]) from e
+
+
+@app.get("/api/ai/ante")
+async def api_ai_ante():
+    """경남 읍면동마다 직전 5일(120시간) 누적 최대 칸 — 정시 격자가 5일치 모이지 않았으면 ok=false(계산하지 않는다)."""
+    try:
+        return await asyncio.to_thread(gridview.emd_antecedent)
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
+
+
+def _ai_base(base: str | None) -> str:
+    return base or f"http://127.0.0.1:{os.environ.get('PORT', '8000')}"
+
+
+@app.get("/api/ai/report")
+async def api_ai_report(sigun: str | None = None, base: str | None = None, mode: str = "all"):
+    """AI 상황판단 보고 — 시군이 없으면 경남 전체. 상황 · 중요한 점 · 할 일 · 살펴볼 곳 · 다음 확인 · 참고(책자 쪽수).
+    규칙으로 만든다(LLM 없이). 예상 질문 목록을 같이 준다(app/aireport.py)."""
+    from . import aireport, llm
+    try:
+        r = await asyncio.to_thread(aireport.report, _ai_base(base), sigun or None, mode)
+        from . import ai
+        ai.apply_tasks(r, sigun or None)
+    except FileNotFoundError as e:
+        raise HTTPException(503, f"LLM 위키를 못 찾았다(설정 › AI 위키): {e}")
+    r["llm"] = llm.mode()
+    r["modes"] = [{"id": k, "label": v} for k, v in aireport.MODES]
+    r.setdefault("mode", "all")
+    return r
+
+
+@app.post("/api/ai/wiki/reset")
+async def api_ai_wiki_reset():
+    """위키 폴더 내용이 바뀐 뒤(tools/sync_wiki.sh) 위키에서 읽어 둔 것(우려지역 표 · 보고 캐시)을 비운다. 폴더 설정은 그대로."""
+    from . import ai
+    await asyncio.to_thread(ai.reset_wiki_cache)
+    aiwatch._SNAP["v"] = None
+    return ai.wiki_check(ai.wiki())
+
+
+@app.get("/api/settings/ai-wiki")
+async def api_ai_wiki_get():
+    from . import ai
+    path, src = ai.wiki_source()
+    return {**await asyncio.to_thread(ai.wiki_check, path), "source": src, "default": ai.DEFAULT_WIKI}
+
+
+@app.put("/api/settings/ai-wiki")
+async def api_ai_wiki_put(body: dict, request: Request):
+    """LLM 위키 폴더 — {path}. 빈 값이면 설정을 지우고 환경변수(GN_WIKI) · 기본으로 돌아간다.
+    ⚠️ 이 서버를 켠 PC 에서만 바꾼다 — 그 폴더의 tools/lookup.py 를 서버가 불러 돌린다(남이 고르면 남의 코드가 돈다)."""
+    from . import ai
+    if (request.client.host if request.client else "") not in ("127.0.0.1", "::1"):
+        raise HTTPException(403, "위키 폴더는 서버를 켠 PC 의 화면에서만 바꿀 수 있다(서버는 환경변수 GN_WIKI)")
+    r = await asyncio.to_thread(ai.set_wiki, str(body.get("path") or ""))
+    if not r["saved"]:
+        why = "폴더가 없다" if not r["dir"] else "tools/lookup.py 가 없다" if not r["lookup"] else "문서(.md)가 없다"
+        raise HTTPException(400, f"위키로 쓸 수 없다 — {why}: {r['path']}")
+    return {**r, "source": ai.wiki_source()[1], "default": ai.DEFAULT_WIKI}
+
+
+@app.get("/api/ai/ladder-list")
+async def api_ai_ladder_list():
+    """도움말 '판정 기준' — 대시보드가 우려지역 유형마다 대조하는 조건(숫자는 위키 판정값). 자료가 없어 '모름'으로 두는 것도."""
+    from . import ai
+    return {"rows": ai.ladder_list()}
+
+
+@app.get("/api/ai/rules")
+async def api_ai_rules():
+    """위키 판정값(data/판정값.csv) — 도움말이 숫자를 채운다. 못 읽으면 기본값 + err."""
+    from . import ai
+    return await asyncio.to_thread(ai.rules)
+
+
+@app.get("/api/settings/ai-llm")
+async def api_ai_llm_get():
+    from . import llm
+    return {**llm.setting(), "now": llm.mode(), "env": llm.configured(), "local_url": llm.LOCAL_URL,
+            **await asyncio.to_thread(llm.ping)}
+
+
+@app.put("/api/settings/ai-llm")
+async def api_ai_llm_put(body: dict):
+    """AI 자유 질문을 누가 답할지 — {mode: auto|off|claude-api|claude-cli|local|openai, url, model}. 키는 받지 않는다."""
+    from . import llm
+    try:
+        s = llm.put_setting(body)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    if s["mode"] == "local":                   # 로컬을 고르면 꺼져 있을 때 바로 켠다(뜨기는 기다리지 않는다)
+        return await api_ai_llm_start()
+    return await api_ai_llm_get()
+
+
+@app.post("/api/settings/ai-llm/start")
+async def api_ai_llm_start():
+    """이 PC 의 llama-server 를 켠다 — 이미 켜져 있으면 그대로."""
+    from . import llm
+    try:
+        r = await asyncio.to_thread(llm.start_local)
+    except RuntimeError as e:
+        return {**await api_ai_llm_get(), "start_err": str(e)}
+    return {**await api_ai_llm_get(), "starting": r["started"] and not r["up"]}
+
+
+@app.get("/api/settings/ai-alert")
+async def api_ai_alert_get():
+    return aiwatch.status()
+
+
+@app.put("/api/settings/ai-alert")
+async def api_ai_alert_put(body: dict):
+    """기준 근접 알림 켜고 끄기 — {on: bool}. 켜는 서버는 한 곳만(PC 와 서버를 둘 다 켜면 두 번 간다)."""
+    on = bool(body.get("on"))
+    if on and not aiwatch.ready():
+        raise HTTPException(400, "텔레그램 키가 없다 — config/api_keys.txt 의 TELEGRAM_BOT_TOKEN · TELEGRAM_CHAT_ID")
+    db.put_setting("ai_alert", {"on": on})
+    if not on:
+        db.put_setting("ai_alert_state", {})
+    return aiwatch.status()
+
+
+@app.get("/api/reports")
+async def api_reports():
+    """보고서 창 — 등록부(app/reports.py REG) · 재난상황보고서 서버 토큰이 있나 · 텔레그램이 준비됐나. 키 값은 내지 않는다."""
+    from . import reports
+    return reports.listing()
+
+
+@app.get("/api/reports/progress")
+async def api_reports_progress():
+    """보고서 서버가 지금 만드는 것의 진행 — 오른쪽 위 진행 띠가 만드는 동안 2초마다 읽는다."""
+    from . import reports
+    return JSONResponse(await asyncio.to_thread(reports.progress), headers={"Cache-Control": "no-store"})
+
+
+REP_BUSY = {"n": 0}      # 지금 보고서 서버를 기다리는 요청 수 — 배포(deploy.sh)가 0 이 될 때까지 기다린다(/api/status reports_busy)
+
+
+@app.post("/api/reports/run")
+async def api_reports_run(body: dict):
+    REP_BUSY["n"] += 1
+    try:
+        return await _reports_run(body)
+    finally:
+        REP_BUSY["n"] -= 1
+
+
+async def _reports_run(body: dict):
+    """{id, opts, items, tg, dl} — 언레이드 jaenan-weather 에서 보고서를 만들어 받는다. dl 이면 첨부로(파일이 여럿이면 zip,
+    텔레그램 결과는 X-Tg: ok|fail|off), dl=false 면 텔레그램만 보내고 JSON {ok, name, tg}. 텔레그램은 파일마다.
+    items = 작성 창(상황판단회의)이 고른 문구 {중점유의사항: [{text, subs}], 조치계획: [...]}. 시연(DEMO)에서는 만들지 않는다."""
+    from . import reports
+    rid, tg, dl = str(body.get("id") or ""), body.get("tg") is True, body.get("dl") is not False
+    if config.DEMO:
+        return await _demo_report(rid, body)
+    if not dl and not tg:
+        raise HTTPException(400, "받기나 텔레그램 중 하나는 골라 주세요")
+    try:
+        meta: dict = {}
+        files = await asyncio.to_thread(reports.fetch, rid, body.get("opts") if isinstance(body.get("opts"), dict) else {},
+                                        picked=body.get("items") if isinstance(body.get("items"), dict) else None,
+                                        extra=body.get("extra") if isinstance(body.get("extra"), dict) else None, meta=meta)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    except RuntimeError as e:
+        raise HTTPException(502, reports._mask(e)[:300]) from e
+    st, why = "off", ""
+    if tg:
+        try:
+            for i, (n, d) in enumerate(files):
+                cap = f"📄 {reports.BY_ID[rid]['name']} — 경남 강수 지도에서 보냄" + (f"\n⚠️ 기상청 조회 실패: {meta['warn']} — 확인 필요" if meta.get("warn") else "")
+                await asyncio.to_thread(reports.send_tg, n, d, cap if not i else "")
+            st = "ok"
+        except RuntimeError as e:
+            st, why = "fail", reports._mask(e)[:200]
+    name, data = reports.bundle(files, reports.BY_ID.get(rid))
+    if not dl:
+        if st == "fail":
+            raise HTTPException(502, why)
+        return {"ok": True, "name": name, "tg": st, "basis": meta.get("basis") or []}
+    # 자료 기준 시각(화면 팝업) — 한글이라 퍼센트 인코딩한 JSON 하나
+    xb = quote(json.dumps(meta.get("basis") or [], ensure_ascii=False))
+    return Response(data, media_type=reports.media(name), headers={"Content-Disposition": reports.disposition(name), "X-Tg": st, "X-Basis": xb,
+                                                                   "Access-Control-Expose-Headers": "X-Tg, X-Basis, Content-Disposition", "Cache-Control": "no-store"})
+
+
+async def _demo_report(rid: str, body: dict) -> Response:
+    """시연 — 텔레그램은 보내지 않는다. 기상상황보고는 지금 시각으로 실제로(재난상황보고서 서버), 안 되면 · 나머지는 샘플."""
+    from datetime import datetime
+    from . import reports
+    if rid not in reports.BY_ID:
+        raise HTTPException(400, "모르는 보고서")
+    if rid in reports.DEMO_LIVE and reports.ready():
+        try:
+            meta: dict = {}
+            files = await asyncio.to_thread(reports.fetch, rid, body.get("opts") if isinstance(body.get("opts"), dict) else {}, meta=meta)
+            name, data = reports.bundle(files, reports.BY_ID[rid])
+            return Response(data, media_type=reports.media(name), headers={
+                "Content-Disposition": reports.disposition(name), "X-Tg": "off",
+                "X-Basis": quote(json.dumps(meta.get("basis") or [], ensure_ascii=False)),
+                "Access-Control-Expose-Headers": "X-Tg, X-Basis, Content-Disposition", "Cache-Control": "no-store"})
+        except (ValueError, RuntimeError) as e:                 # 안 되면 샘플로
+            log.warning("시연 기상상황보고 — 지금 시각으로 못 만들어 샘플로: %s", reports._mask(e)[:200])
+    f = reports.sample(rid)
+    if not f:
+        raise HTTPException(404, "이 보고서는 시연 샘플이 없다")
+    name = f"샘플_{reports.BY_ID[rid]['name']}{f.suffix}"
+    basis = [{"name": "시연 샘플 — 미리 만들어 둔 파일(지금 자료 아님)", "at": datetime.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d %H:%M")}]
+    return Response(f.read_bytes(), media_type=reports.media(name), headers={
+        "Content-Disposition": reports.disposition(name), "X-Tg": "off", "X-Basis": quote(json.dumps(basis, ensure_ascii=False)),
+        "Access-Control-Expose-Headers": "X-Tg, X-Basis, Content-Disposition", "Cache-Control": "no-store"})
+
+
+@app.get("/api/reports/phrases")
+async def api_reports_phrases():
+    """상황판단회의 작성 창의 문구 후보 — 재난상황보고서 서버(jaenan /api/phrases/meeting)를 대신 부른다(5분 캐시, 토큰은 서버 안에만)."""
+    from . import reports
+    if config.DEMO:                                       # 시연 — 받아 둔 후보(일반 문구뿐, 이름 · 번호 없음)
+        return json.loads((config.DATA / "demo" / "meeting_phrases.json").read_text("utf-8"))
+    try:
+        return await asyncio.to_thread(reports.phrases)
+    except (RuntimeError, ValueError) as e:
+        raise HTTPException(502, reports._mask(e)[:200]) from e
+
+
+@app.get("/api/reports/wait")
+async def api_reports_wait_get():
+    """17시 대기 상태 — {id: {state: waiting|ready|fail, status, since, until, name, tg, why}}. 지도 단추가 1분마다 가볍게 묻는다."""
+    from . import reports
+    return {"wait": reports.wait_state()}
+
+
+@app.post("/api/reports/wait")
+async def api_reports_wait_set(body: dict):
+    """{id, opts, tg} — 17시 발표 대기를 건다(서버 스케줄러가 1분마다 jaenan 에 묻는다). 시연에서는 걸지 않는다."""
+    from . import reports
+    if config.DEMO:
+        raise HTTPException(403, "시연 화면에서는 17시 대기를 걸지 않는다")
+    try:
+        st = reports.wait_set(str(body.get("id") or ""), body.get("opts") if isinstance(body.get("opts"), dict) else {}, body.get("tg") is True)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    asyncio.get_running_loop().run_in_executor(None, reports.wait_tick)   # 이미 나와 있으면 바로 만든다(기다리지 않고 답한다)
+    return {"wait": st}
+
+
+@app.delete("/api/reports/wait")
+async def api_reports_wait_cancel(id: str):
+    from . import reports
+    return {"wait": reports.wait_cancel(id)}
+
+
+@app.get("/api/reports/wait/file")
+async def api_reports_wait_file(id: str):
+    """17시 대기로 만들어 둔 파일 받기."""
+    from . import reports
+    try:
+        name, data = reports.wait_file(id)
+    except ValueError as e:
+        raise HTTPException(404, str(e)) from e
+    return Response(data, media_type="application/x-hwp", headers={"Content-Disposition": reports.disposition(name), "Cache-Control": "no-store"})
+
+
+def _rep_logo_guard() -> None:
+    if config.DEMO:
+        raise HTTPException(403, "시연 화면에서는 로고를 보거나 올리지 않는다")
+
+
+@app.get("/api/reports/logos")
+async def api_reports_logos():
+    """보고서 [로고] 칸 그림 목록 · 고른 것 — 재난상황보고서 서버(jaenan /api/logos)를 대신 부른다(토큰은 서버 안에만)."""
+    from . import reports
+    _rep_logo_guard()
+    try:
+        return await asyncio.to_thread(reports.logos)
+    except RuntimeError as e:
+        raise HTTPException(502, reports._mask(e)[:200]) from e
+
+
+@app.put("/api/reports/logos/selected")
+async def api_reports_logo_select(body: dict):
+    from . import reports
+    _rep_logo_guard()
+    try:
+        return {"selected": await asyncio.to_thread(reports.logo_select, str(body.get("name") or ""))}
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    except RuntimeError as e:
+        raise HTTPException(502, reports._mask(e)[:200]) from e
+
+
+@app.post("/api/reports/logos")
+async def api_reports_logo_upload(request: Request, name: str = "로고"):
+    """로고 올리기 — 본문 = 그림 바이트(PNG · JPG · WEBP, 2MB 이하). 검사는 여기서도 한 번, jaenan 이 PNG 로 바꿔 둔다."""
+    from . import reports
+    _rep_logo_guard()
+    if int(request.headers.get("content-length") or 0) > reports.LOGO_MAX:
+        raise HTTPException(400, "그림은 2MB 이하로 올려 주세요")
+    data = await request.body()
+    try:
+        return {"name": await asyncio.to_thread(reports.logo_upload, name, data)}
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    except RuntimeError as e:
+        raise HTTPException(502, reports._mask(e)[:200]) from e
+
+
+@app.get("/api/reports/logos/img")
+async def api_reports_logo_img(name: str):
+    from . import reports
+    _rep_logo_guard()
+    try:
+        data = await asyncio.to_thread(reports.logo_img, name)
+    except (ValueError, RuntimeError) as e:
+        raise HTTPException(404, reports._mask(e)[:200]) from e
+    return Response(data, media_type="image/png", headers={"Cache-Control": "private, max-age=300"})
+
+
+async def _reports_tick() -> None:
+    """17시 대기 — 걸린 것이 있을 때만 한 바퀴(1분마다). 시연에서는 돌지 않는다."""
+    from . import reports
+    if config.DEMO or not reports.wait_any():
+        return
+    try:
+        await asyncio.to_thread(reports.wait_tick)
+    except Exception as e:                                 # noqa: BLE001 — 다음 차례에 다시
+        log.warning("17시 대기 확인 실패: %s", str(e)[:200])
+
+
+@app.post("/api/ai/alert-test")
+async def api_ai_alert_test():
+    """시험 발송 — 누르는 사람이 직접 한 번. 기준 판정과 무관한 짧은 글 한 줄."""
+    if not aiwatch.ready():
+        raise HTTPException(400, "텔레그램 키가 없다")
+    try:
+        await aiwatch.send("⚠️ 경남 AI 상황판단 — 시험 알림입니다(설정에서 눌렀을 때만 갑니다).")
+    except Exception as e:                      # noqa: BLE001
+        raise HTTPException(502, aiwatch._mask(e)[:200]) from e
+    return {"ok": True}
+
+
+@app.post("/api/ai/ask")
+async def api_ai_ask(body: dict):
+    """예상 질문(q = id) 은 규칙으로, 자유 질문(text) 은 LLM(GN_AI)으로 답한다."""
+    from . import aireport
+    sigun = body.get("sigun") or None
+    if body.get("q"):
+        return await asyncio.to_thread(aireport.answer, _ai_base(body.get("base")), str(body["q"]), sigun)
+    text = str(body.get("text") or "").strip()[:500]
+    if not text:
+        raise HTTPException(400, "q 또는 text")
+    if config.DEMO:                                       # 시연은 로그인 없이 열린다 — 자유 질문은 실제 AI(사용량)를 부른다
+        raise HTTPException(403, "시연 화면에서는 자유 질문을 받지 않는다 — 위의 예상 질문만")
+    try:
+        return await asyncio.to_thread(aireport.ask_free, _ai_base(body.get("base")), text, sigun)
+    except FileNotFoundError as e:
+        raise HTTPException(503, f"LLM 위키를 못 찾았다(GN_WIKI): {e}")
+
+
 @app.get("/api/aws/match")
 async def api_aws_match():
     """경남 AWS(스방) 지점마다 경남 AWS 목록과 짝지어졌나 — 위치 출처(kma · aws · emd 임시 · none). 내부망 점검용."""
@@ -487,7 +1465,7 @@ async def api_update_restart():
 
 @app.get("/api/status")
 async def api_status():
-    return {"collect": queries.status(), "poll": POLL_DEFAULT,
+    return {"collect": queries.status(), "poll": POLL_DEFAULT, "reports_busy": REP_BUSY["n"],
             "intervals": intervals(),
             "qpf": qpf.cfg(), "publish": db.publish_stats()}
 
@@ -522,16 +1500,36 @@ async def api_settings_qpf(body: dict):
 @app.put("/api/settings/intervals")
 async def api_settings_intervals(body: dict):
     """수집 주기. ⚠️ 화면 갱신 주기와 다르다 — 이건 기상청을 실제로 부르는 간격이다."""
-    cur = intervals()
+    cur = base_intervals()
     for k in COLLECTORS:
         if k in body:
-            sec = max(30, min(3600, int(body[k])))
-            cur[k] = sec
-            job = app.state.sched.get_job(k) if app.state.sched else None
-            if job:
-                job.reschedule("interval", seconds=sec)
+            cur[k] = max(30, min(3600, int(body[k])))
     db.put_setting("intervals", cur)
-    return {"intervals": cur}
+    reschedule_all()
+    return {"intervals": intervals()}
+
+
+@app.get("/api/settings/saver")
+async def api_saver_get():
+    return {**saver(), "intervals": intervals(), "base": base_intervals()}
+
+
+@app.put("/api/settings/saver")
+async def api_saver_put(body: dict):
+    """API 절약 모드 — {on, min(1~60분), alerts}. 켜면 기상청 호출 간격을 min 분 이상으로 늦춘다."""
+    cur = saver()
+    if "on" in body:
+        cur["on"] = bool(body["on"])
+    if "alerts" in body:
+        cur["alerts"] = bool(body["alerts"])
+    if "min" in body:
+        try:
+            cur["min"] = max(1, min(60, int(body["min"])))
+        except (TypeError, ValueError):
+            raise HTTPException(400, "min: 1~60 분 숫자")
+    db.put_setting("api_saver", cur)
+    reschedule_all()
+    return {**saver(), "intervals": intervals(), "base": base_intervals()}
 
 
 @app.post("/api/refresh/{kind}")
@@ -545,13 +1543,48 @@ async def api_refresh(kind: str, force: bool = False):
 
 
 # ── 시연(스냅숏) — 시계와 목록 ─────────────────────────────────────────────
+ALERT_RAW_KEYS = ("REG_UP", "REG_UP_KO", "REG_ID", "REG_KO", "TM_FC", "TM_EF", "WRN", "LVL", "CMD", "ED_TM")
+
+
+@app.get("/api/alerts/raw")
+async def api_alerts_raw(tm: str = ""):
+    """재난상황보고서 서버용 — 그 시각(YYYYMMDDHHMM, 비우면 지금) 특보 현황을 기상청 wrn_now_data(disp=0) 글 모양 그대로(euc-kr).
+    1분마다 받아 바뀔 때만 둔 원자료에서 — 그 시각 수집이 없으면 404(그때는 기상청에 묻는다)."""
+    try:
+        t = min(datetime.strptime(tm, "%Y%m%d%H%M"), clock.now()) if tm else clock.now()
+    except ValueError as e:
+        raise HTTPException(400, "tm=YYYYMMDDHHMM") from e
+    got = await asyncio.to_thread(db.alert_raw_at, t)
+    if not got:
+        raise HTTPException(404, "그 시각 특보 수집 기록이 없다")
+    rows = json.loads(got[1])
+    lines = ["#START7777", f"# gn-monitor 특보 원자료 — {got[0]} 에 받은 것"]
+    lines += [", ".join(str(r.get(k, "")) for k in ALERT_RAW_KEYS) + "=" for r in rows]
+    lines.append("#7777END")
+    return Response("\n".join(lines).encode("euc-kr", "replace"), media_type="text/plain; charset=euc-kr",
+                    headers={"X-GN-Alert-At": got[0]})
+
+
+@app.get("/api/kma/raw")
+async def api_kma_raw(path: str, q: str = ""):
+    """재난상황보고서 서버용 — 이 서버가 받아 둔 기상청 원문(매분 관측 · 초단기 격자, 30시간). q = 정리한 인자(kma.raw_key 꼴).
+    없으면 404(그때는 기상청에 묻는다). 받은 그대로라 글자 꼴(euc-kr 등)도 기상청 머리 그대로."""
+    from . import kma as _kma
+    if path not in _kma.RAW_PATHS:
+        raise HTTPException(404, "보관하지 않는 자료")
+    got = await asyncio.to_thread(db.get_kma_raw, f"{path}?{q}")
+    if not got:
+        raise HTTPException(404, "받아 둔 원문이 없다")
+    return Response(got[1], media_type=got[0] or "text/plain")
+
+
 @app.get("/api/clock.js")
 async def api_clock_js():
     """화면이 맨 먼저 읽는 작은 스크립트 — 시연이면 멈춘 시각(ms)과 그 시연, 실황이면 null."""
     snap = None
     if config.SNAP_META:
         m = config.SNAP_META
-        snap = {k: m.get(k) for k in ("name", "title", "now", "note", "alerts")}
+        snap = {k: m.get(k) for k in ("name", "title", "now", "note", "alerts", "fake")}
         snap["acc"] = m.get("acc") or ({"from": "hours", "hours": m["hours"]} if m.get("hours") else None)
     body = f"window.GN_NOW={json.dumps(clock.epoch_ms())};window.GN_SNAP={json.dumps(snap, ensure_ascii=False)};"
     return Response(body, media_type="application/javascript", headers={"Cache-Control": "no-store"})
@@ -720,6 +1753,356 @@ async def no_cache_html(request, call_next):
     return resp
 
 
+@app.get("/", include_in_schema=False)
+@app.get("/index.html", include_in_schema=False)
+async def root_to_map(request: Request):
+    """종합 대시보드(index.html)는 폐기 — 경남 기상지도(map.html)로 통일. 쿼리(show · 시연 등)는 그대로 넘긴다."""
+    q = request.url.query
+    return RedirectResponse("/map.html" + (f"?{q}" if q else ""), status_code=307)
+
+
+_MAP_PAGE: dict = {"v": None, "html": ""}
+
+
+@app.get("/map.html", include_in_schema=False)
+async def map_page():
+    """지도 화면 — 쪼갠 js · css 파일 주소의 {{V}} 에 파일 수정 시각으로 만든 버전 값을 넣어 내보낸다.
+    (옛 파일이 브라우저에 남아 새 map.html 과 섞이지 않게. map.html 자체는 아래 미들웨어가 늘 새로 받게 한다)"""
+    files = [STATIC / "map.html", *(STATIC / "js").glob("*.js"), *(STATIC / "css").glob("*.css")]
+    v = format(max(f.stat().st_mtime_ns for f in files), "x")[-10:]
+    if _MAP_PAGE["v"] != v:
+        _MAP_PAGE.update(v=v, html=(STATIC / "map.html").read_text("utf-8").replace("{{V}}", v))
+    return HTMLResponse(_MAP_PAGE["html"])
+
+
+# 빈 조각(바다 · 아직 안 만든 곳) — 404 대신 투명 1px(지도가 오류로 적지 않게)
+_BLANK_PNG = bytes.fromhex("89504e470d0a1a0a0000000d4948445200000001000000010804000000b51c0c02"
+                           "0000000b49444154789c636060000000030001b8ad3a630000000049454e44ae426082")
+
+
+@app.get("/terrain/t/{layer}/{z}/{x}/{y}.png", include_in_schema=False)
+async def terrain_tile(layer: str, z: int, x: int, y: int):
+    """지형 · 건물 확대용 조각 — config.TERRAIN/{relief,low,bldg}/z/x/y.png. 없으면 투명. 바뀔 일이 드물어 하루 캐시."""
+    if layer not in ("relief", "low", "bldg"):
+        raise HTTPException(404)
+    fp = config.TERRAIN / layer / str(z) / str(x) / f"{y}.png"
+    hdr = {"Cache-Control": "public, max-age=86400"}
+    return FileResponse(fp, media_type="image/png", headers=hdr) if fp.is_file() else Response(_BLANK_PNG, media_type="image/png", headers=hdr)
+
+
+# ── 반복 호출 제한 · 보안 머리글 — 바깥에 열린 서버(공유기 포트 · 터널). need_login 안쪽이라 누구인지 안다 ──
+# (방법, 경로 앞, 횟수, 초) — 사람 하나(로그인 아이디, 없으면 보낸 주소)마다. 이 컴퓨터 · 서버 자신(LOCAL)은 세지 않는다
+RATE = (("POST", "/api/posts", 30, 3600), ("POST", "/api/auth/login", 20, 600), ("POST", "/api/auth/signup", 5, 3600), ("POST", "/api/auth/setup", 10, 600),
+        ("POST", "/api/reply/ask", 120, 600), ("POST", "/api/reports/run", 20, 600), ("POST", "/api/ai/ask", 30, 600))
+_HITS: dict[tuple, list[float]] = {}
+SEC_HEAD = {"X-Content-Type-Options": "nosniff", "X-Frame-Options": "SAMEORIGIN", "Referrer-Policy": "strict-origin-when-cross-origin",
+            "Permissions-Policy": "geolocation=(), microphone=(), payment=()"}
+
+
+def _who_key(request: Request) -> str:
+    """누가 — 로그인 아이디, 없으면 보낸 주소. 같은 망 안(도커 · 터널)에서 온 것이면 Cloudflare 가 붙인 원래 주소를 쓴다
+    (인터넷에서 직접 온 요청의 CF-Connecting-IP 는 믿지 않는다 — 꾸밀 수 있다)."""
+    import ipaddress
+    u = getattr(request.state, "user", None)
+    if u and not u.get("local"):
+        return "u:" + str(u.get("login"))
+    ip = request.client.host if request.client else ""
+    try:
+        if ipaddress.ip_address(ip).is_private and request.headers.get("cf-connecting-ip"):
+            ip = request.headers["cf-connecting-ip"]
+    except ValueError:
+        pass
+    return "ip:" + ip
+
+
+def _https(request: Request) -> bool:
+    """https 로 들어왔나 — Cloudflare 터널(cloudflared)은 서버에 http 로 넘기고 X-Forwarded-Proto 를 붙인다.
+    같은 망 안(터널 · 도커)에서 온 것만 그 머리를 믿는다."""
+    import ipaddress
+    if request.url.scheme == "https":
+        return True
+    try:
+        return (ipaddress.ip_address(request.client.host if request.client else "").is_private
+                and request.headers.get("x-forwarded-proto", "").lower() == "https")
+    except ValueError:
+        return False
+
+
+@app.middleware("http")
+async def rate_and_headers(request: Request, call_next):
+    import time as _t
+    u = getattr(request.state, "user", None)
+    if not (u and u.get("local")):
+        rule = next((r for r in RATE if request.method == r[0] and request.url.path.startswith(r[1])), None)
+        if rule:
+            k, now = (rule[1], _who_key(request)), _t.time()
+            hits = [t for t in _HITS.get(k, []) if now - t < rule[3]]
+            if len(hits) >= rule[2]:
+                return JSONResponse({"detail": f"너무 자주 불렀다 — {rule[3] // 60}분 안에 {rule[2]}번까지. 잠시 뒤 다시"}, status_code=429,
+                                    headers={"Retry-After": str(int(rule[3] - (now - hits[0])) + 1), **SEC_HEAD})
+            _HITS[k] = hits + [now]
+            if len(_HITS) > 5000:                          # 주소가 많이 바뀌어도 기억이 끝없이 크지 않게
+                _HITS.clear()
+    resp = await call_next(request)
+    for h, v in SEC_HEAD.items():
+        resp.headers.setdefault(h, v)
+    return resp
+
+
+# ── 로그인(app/auth.py) — 계정이 하나라도 생기면 로그인을 요구한다. 맨 바깥 미들웨어(아래 것이 먼저 돈다) ──
+@app.middleware("http")
+async def need_login(request: Request, call_next):
+    path = request.url.path
+    host = request.client.host if request.client else ""
+    code, user = await asyncio.to_thread(_auth.decide, path, request.method, host,
+                                         request.cookies.get(_auth.COOKIE), request.headers.get("x-gn-key"),
+                                         request.headers.get("host") or "", request.headers.get("origin"))
+    if code == 401:
+        if path.startswith("/api/") or request.method != "GET":
+            return JSONResponse({"detail": "로그인이 필요하다"}, status_code=401)
+        nxt = path + (f"?{request.url.query}" if request.url.query else "")
+        return RedirectResponse("/login.html?next=" + quote(nxt, safe=""), status_code=303)
+    if code == 403:
+        return JSONResponse({"detail": "이 계정으로는 할 수 없다"}, status_code=403)
+    request.state.user = user
+    return await call_next(request)
+
+
+def _me(request: Request) -> dict | None:
+    return getattr(request.state, "user", None)
+
+
+@app.post("/api/auth/login")
+async def api_login(body: dict, request: Request):
+    try:
+        tok, u = await asyncio.to_thread(_auth.login, str(body.get("login") or ""), str(body.get("password") or ""),
+                                         request.client.host if request.client else "")
+    except PermissionError as e:
+        raise HTTPException(429, str(e)) from e
+    except ValueError as e:
+        raise HTTPException(401, str(e)) from e
+    r = JSONResponse({"user": u})
+    r.set_cookie(_auth.COOKIE, tok, max_age=_auth.DAYS * 86400, httponly=True, samesite="lax",
+                 secure=_https(request), path="/")
+    return r
+
+
+@app.post("/api/auth/logout")
+async def api_logout(request: Request):
+    tok = request.cookies.get(_auth.COOKIE)
+    if tok:
+        await asyncio.to_thread(_auth.logout, tok)
+    r = JSONResponse({"ok": True})
+    r.delete_cookie(_auth.COOKIE, path="/")
+    return r
+
+
+# ── 화면 저장 — 이 브라우저의 화면 기억(localStorage gn-*)을 계정에 올려 다른 PC · 새 주소에서 그대로 연다.
+# 관리자는 '처음 화면'(view:default)도 — 기억이 하나도 없는 브라우저는 내 것, 없으면 그것으로 시작한다.
+VIEW_SKIP = ("gn-ct-pin",)          # 연락처 잠금 번호는 서버에 올리지 않는다
+
+
+def _view_key(request: Request) -> str | None:
+    u = getattr(request.state, "user", None) or {}
+    return None if not u.get("login") or u.get("demo") or u.get("machine") else "view:" + u["login"]
+
+
+def _view_clean(d) -> dict:
+    if not isinstance(d, dict):
+        raise HTTPException(400, "data")
+    out = {k: str(v)[:20000] for k, v in d.items() if isinstance(k, str) and k.startswith("gn-") and len(k) <= 40 and k not in VIEW_SKIP}
+    if len(json.dumps(out, ensure_ascii=False)) > 200_000:
+        raise HTTPException(413, "화면 기억이 너무 크다")
+    return out
+
+
+@app.get("/api/prefs.js")
+async def api_prefs_js(request: Request):
+    """map.html 이 다른 스크립트보다 먼저 읽는다 — 계정마다 마지막 화면.
+    · 이 브라우저의 화면 기억이 다른 계정 것이면(gnv-owner) 지우고 이 계정 것(없으면 처음 화면)으로 바꾼다.
+    · 같은 계정이어도 다른 PC 에서 더 늦게 저장했으면(_at > gnv-at) 그것으로.
+    · 기억이 하나도 없으면 계정 것 · 처음 화면. 주인 표시가 없던 기억(이 기능 전)은 지우지 않고 이 계정 것으로 삼는다.
+    이 PC(로컬)는 계정이 없어 예전처럼 — 비었을 때만 처음 화면."""
+    k = _view_key(request)
+    u = getattr(request.state, "user", None) or {}
+    mine = db.get_setting(k, None) if k else None
+    dflt = db.get_setting("view:default", None)
+    at = str((mine or {}).get("_at") or "")
+    d = {x: v for x, v in (mine or dflt or {}).items() if x.startswith("gn-")}
+    me = u.get("login") if k and not u.get("local") else None
+    data = json.dumps(d or None, ensure_ascii=False).replace("<", "\\u003c")
+    body = ("(function(){var d=" + data + ",me=" + json.dumps(me) + ",at=" + json.dumps(at)
+            + ";window.GN_VIEW={mine:" + json.dumps(bool(mine)) + ",def:" + json.dumps(bool(dflt)) + ",can:" + json.dumps(bool(k)) + ",me:me};"
+            "try{var S=localStorage,own=S.getItem('gnv-owner'),lat=S.getItem('gnv-at')||'',ks=[],i,x;"
+            "for(i=0;i<S.length;i++){x=S.key(i);if(x.indexOf('gn-')===0&&x!=='gn-ct-pin')ks.push(x);}"
+            "var put=!ks.length,clear=false;"
+            "if(me){if(own&&own!==me){put=clear=true;}else if(!own){S.setItem('gnv-owner',me);}"
+            "else if(at&&at>lat){put=clear=true;}}"
+            "if(!put)return;if(clear)for(i=0;i<ks.length;i++)S.removeItem(ks[i]);"
+            "if(d)for(x in d)S.setItem(x,d[x]);if(me){S.setItem('gnv-owner',me);S.setItem('gnv-at',at);}}catch(e){}})();")
+    return Response(body, media_type="application/javascript", headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/posts")
+async def api_posts():
+    """공지 · 요청 게시판 — {notice: [...], request: [...], status: {코드: 이름}}. 로그인한 사람은 다 본다."""
+    from . import posts
+    return JSONResponse(await asyncio.to_thread(posts.all_posts), headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/docs")
+async def api_docs():
+    """게시판 '문서' 탭 — docs/ 맨 위 · 재난온톨로지 · 아이디어의 문서 목록(제목 · 요약 · 고친 날). docs/api 는 뺀다."""
+    from . import mdview
+    return {"rows": await asyncio.to_thread(mdview.listing)}
+
+
+@app.get("/api/docs/view")
+async def api_docs_view(path: str):
+    """문서 하나를 서식 입힌 HTML 로 — 목록에 있는 경로만."""
+    from . import mdview
+    d = await asyncio.to_thread(mdview.view, path)
+    if not d:
+        raise HTTPException(404, "없는 문서")
+    return d
+
+
+@app.get("/api/posts/popup")
+async def api_posts_popup():
+    """지도를 열 때 띄울 공지(팝업으로 표시한 것, 새것부터 5개)."""
+    from . import posts
+    return JSONResponse({"rows": await asyncio.to_thread(posts.popups)}, headers={"Cache-Control": "no-store"})
+
+
+@app.post("/api/posts")
+async def api_posts_add(body: dict, request: Request):
+    """글 쓰기 — 요청은 누구나, 공지는 관리자만. 쓴 사람은 로그인 이름 · 시군으로 붙인다."""
+    from . import posts
+    u = getattr(request.state, "user", None) or {}
+    kind = str(body.get("kind") or "request")
+    if config.DEMO:
+        raise HTTPException(403, "시연 화면에서는 글을 쓰지 않는다")
+    if kind == "notice" and u.get("role", "admin") != "admin":
+        raise HTTPException(403, "공지는 관리자만 쓴다")
+    author = f"{u.get('name') or u.get('login') or '이 컴퓨터'}" + (f"({u['sigun']})" if u.get("sigun") else "")
+    try:
+        return await asyncio.to_thread(posts.add, kind, str(body.get("title") or ""), str(body.get("body") or ""), author, bool(body.get("popup")))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.put("/api/posts/{pid}")
+async def api_posts_put(pid: int, body: dict):
+    """관리자 — 처리 상태 · 답 · 팝업 · 제목 · 본문 고치기, gone=true 면 숨기기(auth: 관리자 전용 쓰기)."""
+    from . import posts
+    try:
+        return await asyncio.to_thread(posts.update, pid, body)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except KeyError:
+        raise HTTPException(404, "없는 글")
+
+
+@app.put("/api/prefs")
+async def api_prefs_put(body: dict, request: Request):
+    k = _view_key(request)
+    if not k:
+        raise HTTPException(403, "로그인한 계정만 저장한다")
+    at = str(body.get("at") or datetime.now().isoformat(timespec="seconds"))[:32]     # 화면이 보낸 저장 시각(다른 PC 와 견준다)
+    await asyncio.to_thread(db.put_setting, k, {**_view_clean(body.get("data")), "_at": at})
+    return {"ok": True, "at": at}
+
+
+@app.put("/api/prefs/default")                            # 관리자만(WRITE_OK 에 없다)
+async def api_prefs_default(body: dict):
+    d = body.get("data")
+    await asyncio.to_thread(db.put_setting, "view:default", _view_clean(d) if d is not None else None)
+    return {"ok": True}
+
+
+@app.get("/api/auth/me")
+async def api_me(request: Request):
+    """지금 누구인가 — 계정이 없는 서버면 {open: true}(로그인 없이 쓰는 중)."""
+    u = await asyncio.to_thread(_auth.decide, "/api/x", "GET", request.client.host if request.client else "",
+                                request.cookies.get(_auth.COOKIE), None)
+    if config.DEMO:                                       # 시연은 늘 도 사용자로 바로 열린다(로그인 · 처음 설정 없음)
+        return {"open": False, "user": _auth.DEMO, "roles": _auth.ROLES, "siguns": _auth.SIGUNS, "signup": False}
+    op = not await asyncio.to_thread(_auth.any_user)
+    return {"open": op, "user": u[1] if u[0] == 0 else None, "roles": _auth.ROLES, "siguns": _auth.SIGUNS, "signup": not op}
+
+
+@app.post("/api/auth/signup")
+async def api_signup(body: dict):
+    """계정 신청(로그인 화면) — 도 사용자 · 시군 사용자. 관리자가 계정 관리에서 승인하면 로그인된다. 계정이 없는 서버는 '처음 설정'으로."""
+    if config.DEMO or not await asyncio.to_thread(_auth.any_user):
+        raise HTTPException(403, "지금은 신청을 받지 않는다")
+    try:
+        u = await asyncio.to_thread(_auth.signup, str(body.get("login") or ""), str(body.get("password") or ""),
+                                    str(body.get("name") or "")[:40], str(body.get("role") or ""), body.get("sigun"))
+    except PermissionError as e:
+        raise HTTPException(429, str(e)) from e
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return {"ok": True, "login": u["login"]}
+
+
+@app.post("/api/auth/setup")
+async def api_setup(body: dict, request: Request):
+    """처음 관리자 — 계정이 하나도 없을 때만(그 뒤로는 403). 만들고 바로 로그인한 채로 돌려준다."""
+    try:
+        u = await asyncio.to_thread(_auth.first_admin, str(body.get("login") or ""), str(body.get("password") or ""),
+                                    str(body.get("name") or ""))
+    except PermissionError as e:
+        raise HTTPException(403, str(e)) from e
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    tok, u = await asyncio.to_thread(_auth.login, u["login"], str(body.get("password") or ""))
+    r = JSONResponse({"user": u})
+    r.set_cookie(_auth.COOKIE, tok, max_age=_auth.DAYS * 86400, httponly=True, samesite="lax",
+                 secure=_https(request), path="/")
+    return r
+
+
+@app.get("/api/auth/users")
+async def api_users():
+    return {"users": await asyncio.to_thread(_auth.users)}
+
+
+@app.post("/api/auth/users")
+async def api_user_add(body: dict, request: Request):
+    if not await asyncio.to_thread(_auth.any_user) and (request.client.host if request.client else "") not in ("127.0.0.1", "::1"):
+        # 계정이 없을 때는 아무나 들어온다 — 첫 관리자를 같은 망 아무 화면에서나 만들면 그 사람이 주인이 된다
+        raise HTTPException(403, "첫 관리자는 로그인 화면(/login.html)의 '처음 설정'에서 만든다")
+    try:
+        return await asyncio.to_thread(_auth.add, str(body.get("login") or ""), str(body.get("password") or ""),
+                                       str(body.get("role") or ""), str(body.get("name") or ""), body.get("sigun"))
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@app.delete("/api/auth/users/{uid}")
+async def api_user_reject(uid: int):
+    """신청 거절 — 승인 전 것만(관리자, /api/auth/users 아래)."""
+    try:
+        await asyncio.to_thread(_auth.reject, uid)
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
+    return {"ok": True}
+
+
+@app.put("/api/auth/users/{uid}")
+async def api_user_put(uid: int, body: dict):
+    kw = {k: body[k] for k in ("role", "sigun", "name", "active") if k in body}
+    if body.get("password"):
+        kw["pw"] = str(body["password"])
+    try:
+        return await asyncio.to_thread(lambda: _auth.update(uid, **kw))
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
 if STATIC.exists():
     app.mount("/", StaticFiles(directory=STATIC, html=True), name="static")
 
@@ -737,10 +2120,12 @@ if __name__ == "__main__":
         os.environ["NO_COLLECT"] = "1"
     if "--port" in argv:
         os.environ["PORT"] = argv[argv.index("--port") + 1]
+    if "--ai" in argv:                        # AI 상황판단 자유 질문 — claude-cli(이 PC 시험) | openai(Hermes 등)
+        os.environ["GN_AI"] = argv[argv.index("--ai") + 1]
     if "--snap" in argv or "--demo" in argv:   # 시연 서버 — 굳혀 둔 그 시각 자료로(수집 안 함). 기본 포트 8001
         os.environ["GN_DEMO"] = "1"
         if "--snap" in argv:
             os.environ["GN_SNAP"] = argv[argv.index("--snap") + 1]
         os.environ.setdefault("PORT", "8001")
     uvicorn.run("app.main:app", host=os.environ.get("HOST", "127.0.0.1"),
-                port=int(os.environ.get("PORT", "8000")))
+                port=int(os.environ.get("PORT", "8000")), server_header=False)   # 'server: uvicorn' 을 내지 않는다

@@ -5,10 +5,11 @@
 띄우기는 시연 서버(:8001, GN_DEMO) — /snap/<이름> 으로 열면 그 시연으로 갈아 탄다(main.snap_open).
 
 잘라 두는 것(그 시각 T 뒤는 다 버린다 — 화면이 '가장 새 것'을 고르므로 뒤 자료가 남으면 안 된다):
-  관측 매시 72시간 · 매분 50시간 · 격자 실측 72시간(그전까지 온 비)
+  관측 매시 120시간(선행 강우 5일) · 매분 50시간 · 격자 실측 72시간(그전까지 온 비)
   초단기(읍면동 · 격자) · 단기(오늘~모레) · 예측 분포 그림 — T 이전 마지막 두 발표분(그림은 마지막 하나)
   특보 — T 에 기상청에서 다시 읽은 것(tm=T). 못 읽으면 모아 둔 것
   설정(지도 층 · 누적 구간 …) · 수집 기록은 그대로
+  사람 기록(현장 담당 · 회신 · 계정 · 접속)은 버린다 — 시연은 로그인 없이 열린다(PRIVATE)
 ⚠️ 지난 시각으로 굳히지 않는다 — 서버는 예측 격자 · 그림을 마지막 몇 발표분만 남겨서 그때 예측이 없다.
 """
 from __future__ import annotations
@@ -36,6 +37,24 @@ def root() -> Path:
     return config.SNAPS
 
 
+def add_scene(name: str) -> None:
+    """가상 시연의 하천 · 조위 · 도로 값(tools/make_scene.py)과 재난안전데이터(tools/scene_extra.py).
+    시연은 수집하지 않으므로 띄울 때 그 값을 넣어 둔다. 침수흔적은 스냅숏 폴더 flood.json 을 사본 상태 폴더로."""
+    from . import its, river, safety, tide
+    f = root() / name / "scene.json"
+    if f.exists():
+        d = json.loads(f.read_text("utf-8"))
+        river._LIVE.update(d["river"])
+        tide._LIVE.update(d["tide"])
+        its._LIVE.update(d["road"])
+        if d.get("safety"):
+            safety._LIVE.update(d["safety"])
+    fl = root() / name / "flood.json"
+    if fl.exists():
+        safety.FLOOD_FILE.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(fl, safety.FLOOD_FILE)
+
+
 def check_name(name: str) -> str:
     if not NAME_RE.match(name or "") or name.startswith(".tmp"):
         raise ValueError(f"시연 이름이 낯설다: {name!r}")
@@ -47,14 +66,22 @@ def _keys_upto(names, t, n=None):
     return set(ks[-n:]) if n else set(ks)
 
 
+PRIVATE = ("duty_link", "duty_person", "duty_log", "app_user", "app_session")   # 시연에 남기지 않는 사람 기록
+
+
 def prune_db(db: Path, now: datetime) -> dict:
     T = now.strftime("%Y-%m-%d %H:%M")
     T12, T10 = now.strftime("%Y%m%d%H%M"), now.strftime("%Y%m%d%H")
     c = sqlite3.connect(db)
     out = {}
-    h72 = (now - timedelta(hours=72)).strftime("%Y-%m-%d %H:%M")
+    h120 = (now - timedelta(hours=120)).strftime("%Y-%m-%d %H:%M")
     h50 = (now - timedelta(hours=50)).strftime("%Y-%m-%d %H:%M")
-    c.execute("DELETE FROM obs_hourly WHERE tm > ? OR tm < ?", (T, h72))
+    c.execute("DELETE FROM obs_hourly WHERE tm > ? OR tm < ?", (T, h120))
+    for tbl in PRIVATE:
+        c.execute(f"DELETE FROM {tbl}")
+    c.execute("DELETE FROM setting WHERE key='contacts_pin' OR (key LIKE 'view:%' AND key<>'view:default')")   # 계정마다 저장한 화면(아이디)
+    if any(r[1] == "who" for r in c.execute("PRAGMA table_info(decision)")):
+        c.execute("UPDATE decision SET who=NULL")      # 판단 기록의 누른 사람 이름
     c.execute("DELETE FROM obs_minute WHERE tm > ? OR tm < ?", (T, h50))
     for tbl, col, t, n in (("fcst_rn1", "tmfc", T12, 2), ("fcst_short", "tmfc", T10, 2),
                            ("fcst_short_run", "tmfc", T10, 2), ("qpf_frame", "tmfc", T12, 1)):
@@ -272,7 +299,83 @@ def start(**kw) -> dict:
     return job
 
 
-# ── 경남 AWS(스방) 덧붙이기 — 서버(언레이드)는 스방에 닿지 않아 굳힌 시연에 경남 AWS 가 없다 ────────────────
+# ── 시연 파견 현황 — 사람 기록을 지우고 가짜 요청 · 회신을 넣는다(이름 · 번호 없음) ────────────────────────
+# 시연을 띄울 때 사본 DB 에. 특보가 걸린 시군의 지구 몇 곳에 단계가 고루 보이게(조치 완료 · 조치 중 · 지원 필요 · 확인 없음 …).
+# (요청 몇 분 전, [(몇 분 전, 회신 단계 | view)]) — 단계 이름은 reply.STEPS · STAMPS
+SCRIPT = ((42, [(38, "view"), (35, "ack"), (30, "doing"), (12, "done"), (11, "note:통제선 설치 · 주민 3세대 대피 안내 완료")]),
+          (40, [(36, "view"), (33, "ack"), (25, "doing"), (24, "note:하천변 산책로 출입 통제 중")]),
+          (35, [(30, "view"), (28, "ack"), (20, "help"), (19, "note:배수펌프 1대 추가 필요")]),
+          (25, []),
+          (18, [(15, "view")]),
+          (30, [(27, "view"), (25, "ack"), (20, "doing"), (6, "done")]),
+          (8, [(5, "view"), (4, "ack")]),
+          (4, []))
+
+
+def add_dispatch(now: datetime) -> int:
+    """시연 사본 DB(config.DB_PATH) 에 가짜 파견 기록 → 넣은 지구 수. 지구는 위키 우려지역(공개 자료)."""
+    import secrets
+    from . import ai, reply
+    al = _alerts_kept(_db.DB_PATH) or {"groups": []}
+    sg = list(dict.fromkeys(s for g in al["groups"] for s in g.get("siguns", []))) or ["창원", "김해", "진주", "고성"]
+    by_sg: dict[str, list] = {}
+    for rid, (full, name, addr, _, _) in reply._districts().items():
+        by_sg.setdefault(full, []).append((rid, name, addr))
+    picks = []
+    for s in sg[:4]:
+        full = ai.SIGUN_FULL.get(s, s)
+        picks += [(s, full, *d) for d in by_sg.get(full, [])[:2]]
+    f = lambda m: (now - timedelta(minutes=m)).strftime("%Y-%m-%d %H:%M")   # noqa: E731
+    with _db.tx() as con:
+        for tbl in PRIVATE:
+            con.execute(f"DELETE FROM {tbl}")
+        con.execute("DELETE FROM setting WHERE key='contacts_pin'")
+        con.execute("UPDATE decision SET who=NULL")
+        for i, ((s, full, rid, name, addr), (ask_m, evs)) in enumerate(zip(picks, SCRIPT)):
+            con.execute("INSERT INTO duty_link(rid, token, sigun, name, addr) VALUES(?,?,?,?,?)",
+                        (rid, secrets.token_urlsafe(9), full, name, addr))
+            by = "도 · 상황실(시연)" if i % 2 else f"{full} · 담당(시연)"
+            con.execute("INSERT INTO duty_log(rid, at, kind, who, more, memo) VALUES(?,?,?,?,?,?)",
+                        (rid, f(ask_m), "ask", by, None, reply.NOTE))
+            for m, k in evs:
+                if k.startswith("note:"):                   # 조치 메모(가짜)
+                    con.execute("INSERT INTO duty_log(rid, at, kind, who, memo) VALUES(?,?,?,?,?)", (rid, f(m), "note", "현장 담당(시연)", k[5:]))
+                    continue
+                con.execute("INSERT INTO duty_log(rid, at, kind, who, action, memo) VALUES(?,?,?,?,?,?)",
+                            (rid, f(m), "view" if k == "view" else "reply", "" if k == "view" else "현장 담당(시연)",
+                             None if k == "view" else k, ""))
+    log.info("시연 파견 기록 %d곳", min(len(picks), len(SCRIPT)))
+    return min(len(picks), len(SCRIPT))
+
+
+ANTE_H, ANTE_SCALE = 120, 0.4   # 선행 강우 5일 — 굳힌 것에 없는 앞 시간은 72시간 뒤 같은 시각 격자의 40%(가짜)
+
+
+def add_ante(hours: int = ANTE_H) -> int:
+    """시연 사본의 정시 격자(obs60)가 hours 시간치 안 되면 앞 빈 시간을 가짜로 채운다 → 채운 칸 수.
+    굳힌 것은 72시간뿐이라 AI 상황판단의 선행 강우(5일)가 '모자람'으로 비던 것. 사본에만 쓴다."""
+    from . import gridstore
+    ks = [k for k in gridstore.keys("obs60") if k.endswith("00")]
+    if not ks:
+        return 0
+    last = datetime.strptime(ks[-1], "%Y%m%d%H%M")
+    n = 0
+    for h in range(hours - 1, -1, -1):
+        t = last - timedelta(hours=h)
+        k = t.strftime("%Y%m%d%H%M")
+        if gridstore.has("obs60", k):
+            continue
+        for back in (72, 48, 96):                     # 본뜰 실제 격자(그 뒤 같은 시각)
+            src = gridstore.load("obs60", (t + timedelta(hours=back)).strftime("%Y%m%d%H%M"))
+            if src is not None and (t + timedelta(hours=back)) <= last:
+                gridstore.save("obs60", k, src * ANTE_SCALE)
+                n += 1
+                break
+    log.info("시연 선행 강우 — 정시 격자 %d칸을 가짜로 채웠다", n)
+    return n
+
+
+# ── 경남 AWS(스방) 덧붙이기 — 서버(언레이드)는 스방에 접속할 수 없어 굳힌 시연에 경남 AWS 가 없다 ────────────────
 # 내부망 PC 에서 그 시각까지의 스방 시간 강수를 받아 저장소(data/demo/bangjae/<시연 이름>.json)에 넣어 두면
 # (tools/snap_bangjae.py), 시연 서버가 그 시연을 띄울 때 **사본** DB 에 얹는다 — 굳힌 원본은 손대지 않는다.
 BANGJAE_DIR = config.DATA / "demo" / "bangjae"

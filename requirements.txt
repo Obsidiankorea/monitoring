@@ -13,3 +13,6 @@ h5py>=3.12
 # 윈도에서만 — 옆 bangjae 프로그램이 DPAPI 로 잠가 둔 스방 계정을 읽는 데 쓴다.
 # 없으면 config/api_keys.txt 의 BANGJAE_ID/BANGJAE_PW 를 쓴다(맥은 이쪽).
 pywin32>=306; sys_platform == "win32"
+
+# AI 자유 질문 — Claude API(config/api_keys.txt ANTHROPIC_API_KEY). 없으면 그 기능만 꺼진다
+anthropic>=2.7

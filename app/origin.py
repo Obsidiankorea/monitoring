@@ -75,14 +75,14 @@ def client() -> httpx.AsyncClient:
 
 async def forward(base: str, method: str, path: str, query: str, body: bytes,
                   ctype: str | None) -> tuple[int, bytes, dict]:
-    """서버로 한 번 넘긴다 → (상태, 몸, 머리). 닿지 않으면 502 와 까닭."""
+    """서버로 한 번 넘긴다 → (상태, 몸, 머리). 연결하지 못하면 502 와 까닭."""
     url = f"{base}{path}" + (f"?{query}" if query else "")
     try:
         r = await client().request(method, url, content=body or None,
                                    headers={"content-type": ctype} if ctype else None)
     except httpx.HTTPError as e:
-        log.warning("서버에 닿지 않는다(%s): %s", base, e)
-        msg = f"서버({base})에 닿지 않는다 — {type(e).__name__}"
+        log.warning("서버에 연결하지 못했다(%s): %s", base, e)
+        msg = f"서버({base})에 연결하지 못했다 — {type(e).__name__}"
         return 502, ('{"detail": "%s"}' % msg).encode(), {"content-type": "application/json"}
     head = {k: v for k, v in r.headers.items() if k.lower() not in _DROP}
     return r.status_code, r.content, head

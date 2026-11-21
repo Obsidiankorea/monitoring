@@ -49,9 +49,9 @@ LAYERS = [
      "src": "기상청 동네예보 실황 RN1(5km)", "stale_min": 30},
     {"id": "vsrt", "label": "초단기 예측", "short": "초단기", "group": "예측", "grid": "dfs",
      "src": "기상청 초단기예보 RN1(5km)", "stale_min": 30},
-    {"id": "shrt_today", "label": "단기 오늘 누적", "short": "단기 오늘", "group": "예측",
+    {"id": "shrt_today", "label": "오늘 더 올 비", "short": "오늘 더 올 비", "group": "예측",
      "grid": "dfs", "src": "기상청 단기예보 PCP(5km)"},
-    {"id": "shrt_tomorrow", "label": "단기 내일 누적", "short": "단기 내일", "group": "예측",
+    {"id": "shrt_tomorrow", "label": "내일 올 비", "short": "내일 올 비", "group": "예측",
      "grid": "dfs", "src": "기상청 단기예보 PCP(5km)"},
 ]
 BY_ID = {x["id"]: x for x in LAYERS}
@@ -961,6 +961,123 @@ def acc_sum(hours: int = 12, since: str | None = None, now: datetime | None = No
     return out
 
 
+_WIN_CACHE: dict[tuple, dict] = {}
+_ANTE_CACHE: dict[tuple, dict] = {}
+ANTE_MISS_OK = 3        # 직전 5일 120시간 중 이만큼까지 빠져도 쓴다(그 이상이면 데이터가 모자란 것)
+
+
+def _emd_max(arr: np.ndarray) -> dict[int, float]:
+    """칸 배열 → {읍면동 id: 그 읍면동 안 가장 큰 칸}. 결측 칸은 뺀다."""
+    _, memd = gridstore.masks()
+    ids, v = memd.ravel(), np.asarray(arr, dtype="f8").ravel()
+    ok = (ids > 0) & np.isfinite(v)
+    out = np.full(int(memd.max()) + 1, -np.inf)
+    np.maximum.at(out, ids[ok].astype(np.int64), v[ok])
+    return {int(i): float(out[i]) for i in np.nonzero(np.isfinite(out))[0]}
+
+
+def _pt_cells(points: dict) -> list[tuple[str, int, int]]:
+    """{지구ID: (위도, 경도)} → [(지구ID, 행, 열)] 500m 격자 배열 칸. 경남 격자 밖은 뺀다."""
+    hb = gridstore.geo()["hr"]["bbox"]
+    out = []
+    for rid, (lat, lon) in points.items():
+        x, y = gridproj.hr_xy(lon, lat)
+        c, r = round(x) - hb["i0"], round(y) - hb["j0"]
+        if 0 <= r < hb["h"] and 0 <= c < hb["w"]:
+            out.append((rid, r, c))
+    return out
+
+
+def _pt_max(arr: np.ndarray, cells: list[tuple[str, int, int]]) -> dict[str, float]:
+    """지구 칸과 그 둘레 8칸(1.5km) 중 가장 큰 값 — 필지 중심 한 점이라 이웃 칸까지 본다(안전 쪽, 상한). 다 결측이면 뺀다."""
+    a = np.asarray(arr, dtype="f8")
+    out = {}
+    for rid, r, c in cells:
+        w = a[max(0, r - 1):r + 2, max(0, c - 1):c + 2]
+        if np.isfinite(w).any():
+            out[rid] = round(float(np.nanmax(w)), 1)
+    return out
+
+
+def _pt_hours(frames: list, cells: list[tuple[str, int, int]]) -> dict[str, list]:
+    """지구 자리(둘레 8칸 최대)의 매시 강수 — 오래된 것부터, 없는 시각은 None. 상황판단 평면의 지난 자취(검은 선)용."""
+    if not cells:
+        return {}
+    R = np.array([r for _, r, _ in cells]); C = np.array([c for _, _, c in cells])
+    cols = []
+    for f in frames:
+        if f is None:
+            cols.append([None] * len(cells))
+            continue
+        a = np.pad(np.asarray(f, dtype="f8"), 1, constant_values=np.nan)
+        w = np.stack([a[R + 1 + dr, C + 1 + dc] for dr in (-1, 0, 1) for dc in (-1, 0, 1)])
+        ok = np.isfinite(w).any(axis=0)
+        m = np.where(ok, np.nanmax(np.where(np.isfinite(w), w, -np.inf), axis=0), np.nan)
+        cols.append([round(float(v), 1) if np.isfinite(v) else None for v in m])
+    return {rid: [col[i] for col in cols] for i, (rid, _, _) in enumerate(cells)}
+
+
+def emd_windows(windows=(1, 3, 12, 24, 48), now: datetime | None = None, basis: str = "grid", points: dict | None = None) -> dict:
+    """경남 읍면동마다 1 · 3 · 12 · 24 · 48시간 누적 최대 칸과 15분 최대 칸 — 한 번에(AI 상황판단용).
+    basis=aws 면 누적은 AWS 관측소 합의 IDW 면(aws_frame)의 읍면동 최대 칸 — 15분은 격자뿐이라 그대로 격자.
+    강수 누적 카드(acc)와 같은 합: 정시 60분 격자 + '지금' 칸(일강수 증분). 48시간치를 한 번만 읽어 창마다 더한다.
+    ⚠️ 시군 줄의 읍면동 이름은 읍면동 지도(mask) 기준 — 카드의 '최대 칸 읍면동'과 경계 칸에서 다를 수 있다.
+    points = {지구ID: (위도, 경도)} 를 주면 "pts" 에 지구 자리(둘레 1.5km) 최대 칸도 같이 — 지구별 판정(judge)용."""
+    now = now or clock.now()
+    top = max(windows)
+    cells = _pt_cells(points) if points else []
+    want, have = _acc_keys(top, None, now, False)
+    tk = _grid_tail_key(want[-1])
+    k15 = gridstore.keys("obs15")
+    ck = (tuple(want), tuple(have), tk, k15[-1] if k15 else None, tuple(windows), basis, len(cells))
+    if ck in _WIN_CACHE:
+        return _WIN_CACHE[ck]
+    frames = _acc_frames(want, have, now, False)
+    tail = _grid_tail(want[-1], tk) if tk else None
+    emds = {e["id"]: e for e in gridstore.geo()["emd"]}
+    per: dict[int, dict] = {}
+    pts: dict[str, dict] = {}
+    for h in windows:
+        if basis == "aws":
+            try:
+                tot = aws_frame(h, None, now)["arr"]
+            except LookupError:
+                continue
+            for i, v in _emd_max(tot).items():
+                per.setdefault(i, {})[f"{h}h"] = round(v, 1)
+            for rid, v in _pt_max(tot, cells).items():
+                pts.setdefault(rid, {})[f"{h}h"] = v
+            continue
+        got = [f for f in frames[-h:] if f is not None]
+        if not got:
+            continue
+        tot = got[0].copy()
+        for f in got[1:]:
+            tot = tot + f
+        if tail is not None:
+            tot = np.where(np.isfinite(tail), tot + tail, tot)
+        for i, v in _emd_max(tot).items():
+            per.setdefault(i, {})[f"{h}h"] = round(v, 1)
+        for rid, v in _pt_max(tot, cells).items():
+            pts.setdefault(rid, {})[f"{h}h"] = v
+    for rid, hs in _pt_hours(frames, cells).items():          # 지난 48시간 매시(격자 — AWS 기준에서도 자취 모양은 격자로)
+        pts.setdefault(rid, {})["hrs"] = hs
+    if k15:
+        a15 = gridstore.load("obs15", k15[-1])
+        if a15 is not None:
+            for i, v in _emd_max(a15).items():
+                per.setdefault(i, {})["15m"] = round(v, 1)
+            for rid, v in _pt_max(a15, cells).items():
+                pts.setdefault(rid, {})["15m"] = v
+    rows = [{"sig": emds[i]["sigun"], "emd": emds[i]["name"], **vals} for i, vals in per.items() if i in emds]
+    out = {"tm": tk or want[-1], "hourly_to": want[-1], "tail": tk, "m15_tm": k15[-1] if k15 else None,
+           "windows": list(windows), "missing": len(want) - len(have), "rows": rows, "basis": basis, **({"pts": pts} if points else {})}
+    if len(_WIN_CACHE) > 4:
+        _WIN_CACHE.pop(next(iter(_WIN_CACHE)))
+    _WIN_CACHE[ck] = out
+    return out
+
+
 def acc(hours: int = 12, sigun: str | None = None, now: datetime | None = None,
         test: bool = False, since: str | None = None) -> dict:
     """지난 hours 시간(가장 최근 정시 격자까지) 격자 누적 — 시군 줄, 또는 sigun 의 읍면동 줄.
@@ -1182,6 +1299,8 @@ SETTING_DEFAULT = {"layer": "obs60", "x4": False, "vsrt_n": 1,
                    "al_pre": True,
                    # 비활성화한 AWS — [{id, name, sigun, org}]. 지도에서 관측소 점 오른쪽 클릭 → 비활성화. 면 · 카드 · 지금 오는 비에서 뺀다
                    "aws_off": [],
+                   # 경남 AWS(스방 · 내부망) 전체 끄기 — 켜면 수집을 멈추고 면 · 카드 · 지금 오는 비에서 경남 AWS 를 모두 뺀다(기상청 AWS 만)
+                   "gn_off": False,
                    # 누적(격자 · AWS) 범례 눈금 — 0: 자동(자료 크기에 맞춰), 그 밖은 끝 눈금(㎜)으로 고정. 범례 오른쪽 클릭
                    "acc_scale": 0,
                    # 바다 위젯 돌리기 — 0 이면 고른 탭 그대로, 아니면 그 초마다 예측 상위 → 지금 오는 비 → 시군 평균(화면 재생과 따로)
@@ -1195,7 +1314,7 @@ SETTING_DEFAULT = {"layer": "obs60", "x4": False, "vsrt_n": 1,
                    "shows": [],
                    # 지도 위에 겹칠 레이어(왼쪽 위 '레이어'에서 켠다). 차츰 늘린다.
                    "overlays": []}
-OVERLAYS = ("alerts", "stations", "stnval")   # stnval = 관측소 옆 값 글자(관측소에 딸림)
+OVERLAYS = ("alerts", "stations", "stnval", "river", "slide", "reservoir", "flood", "tide", "temp", "district", "relief", "low", "water", "waterall", "waterlbl", "bldg")   # stnval = 관측소 옆 값 글자(관측소에 딸림) · river = 하천 수위 · 댐 · 보 · slide · reservoir · flood = app/safety.py
 _CHOICES = {"flow_step": (10, 20, 30, 60), "flow_hours": (1, 3, 6, 12),
             "play_ms": (400, 600, 1200, 2000, 3000), "tl_stat": ("max", "mean"),
             "qpf_ms": (250, 400, 600, 1000, 1500),
@@ -1266,7 +1385,7 @@ def put_setting(body: dict) -> dict:
     if "layer" in body:
         split(str(body["layer"]))            # 모르는 층이면 LookupError
         cur["layer"] = str(body["layer"])
-    for k in ("x4", "tl_on", "sel_zoom", "acc_fc", "acc_h1", "acc_full", "aws_live", "acc_qpf", "acc_hdr_pin", "acc_tone", "al_pre"):
+    for k in ("x4", "tl_on", "sel_zoom", "acc_fc", "acc_h1", "acc_full", "aws_live", "acc_qpf", "acc_hdr_pin", "acc_tone", "al_pre", "gn_off"):
         if k in body:
             cur[k] = bool(body[k])
     if "vsrt_n" in body:
@@ -1354,4 +1473,37 @@ def _synth(kind: str, grid: str, off_min: int) -> np.ndarray:
         x, y = gridproj.hr_xy(128.35, 35.55)      # 의령·합천 사이 한 조각을 결측으로
         out[(abs(col - x) < 6) & (abs(row - y) < 4)] = np.nan
     out.setflags(write=False)                     # 기억해 두고 나눠 쓰므로 고치지 못하게
+    return out
+
+
+def emd_antecedent(hours: int = 120, now: datetime | None = None) -> dict:
+    """읍면동마다 직전 5일(120시간) 누적 최대 칸 — 위키 '선행 누적강우량'([[통제·대피 기준]]). AI 상황판단용.
+    정시 60분 격자 + '지금' 칸. **정시 격자가 hours 시간치 모여 있지 않으면 계산하지 않는다**(빠진 시간이 ANTE_MISS_OK 를 넘으면
+    ok=False, rows 없음) — 모자란 채 합하면 선행강우를 작게 말하는 거짓이 된다. 격자는 정시 칸을 9일 보관한다(gridstore.KEEP_HOURLY_DAYS)."""
+    now = now or clock.now()
+    want, have = _acc_keys(hours, None, now, False)
+    miss = hours - len(have)                       # 짧게 받았으면(보관 시작 전) want 가 hours 보다 짧을 수 있다
+    out = {"hours": hours, "have": len(have), "want": hours, "missing": miss, "ok": False, "from": want[0] if want else None,
+           "to": want[-1] if want else None, "rows": []}
+    if len(want) < hours or miss > ANTE_MISS_OK:
+        return out
+    tk = _grid_tail_key(want[-1])
+    ck = (tuple(have), tk)
+    if ck in _ANTE_CACHE:
+        return _ANTE_CACHE[ck]
+    frames = _acc_frames(want, have, now, False)
+    got = [f for f in frames if f is not None]
+    tot = got[0].copy()
+    for f in got[1:]:
+        tot = tot + f
+    tail = _grid_tail(want[-1], tk) if tk else None
+    if tail is not None:
+        tot = np.where(np.isfinite(tail), tot + tail, tot)
+    emds = {e["id"]: e for e in gridstore.geo()["emd"]}
+    out["ok"] = True
+    out["tail"] = tk
+    out["rows"] = [{"sig": emds[i]["sigun"], "emd": emds[i]["name"], "mm": round(v, 1)} for i, v in _emd_max(tot).items() if i in emds]
+    if len(_ANTE_CACHE) > 3:
+        _ANTE_CACHE.pop(next(iter(_ANTE_CACHE)))
+    _ANTE_CACHE[ck] = out
     return out

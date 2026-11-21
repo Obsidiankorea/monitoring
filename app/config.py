@@ -20,6 +20,8 @@ STATE = Path(os.environ["GN_STATE"]) if os.environ.get("GN_STATE") else DATA
 # GN_DEMO=1(또는 --demo) 은 시연 서버(:8001) — 이름이 없으면 가장 새 것, /snap/<이름> 으로 갈아 탄다(main).
 # ⚠️ 굳힌 것은 손대지 않는다 — 뜰 때마다 쓰는 사본(GN_SNAP_STATE, 기본 data/cache/snap-<이름>)으로 새로 떠서 쓴다.
 #    발표 중에 바꾼 설정(층 · 시군 등)은 다음에 띄우면 처음으로 돌아간다. 실황 DB(GN_STATE)는 절대 쓰지 않는다.
+# 지형 확대용 조각(tools/build_terrain.py --tiles) — 저장소 밖. NAS 는 appdata/gn-monitor/terrain → /terrain
+TERRAIN = Path(os.environ["GN_TERRAIN"]) if os.environ.get("GN_TERRAIN") else DATA / "terrain"
 SNAPS = Path(os.environ["GN_SNAPS"]) if os.environ.get("GN_SNAPS") else STATE / "snaps"
 DEMO = bool(os.environ.get("GN_DEMO")) or bool(os.environ.get("GN_SNAP"))
 SNAP = os.environ.get("GN_SNAP") or None
@@ -35,9 +37,10 @@ def _newest_snap() -> str | None:
             t = json.loads(m.read_text("utf-8")).get("now") or ""
         except ValueError:
             continue
-        if best is None or (t, m.parent.name) > best:
-            best = (t, m.parent.name)
-    return best[1] if best else None
+        pin = bool(json.loads(m.read_text("utf-8")).get("pin"))   # pin = 시연 서버 기본(tools/scene_extra.py)
+        if best is None or (pin, t, m.parent.name) > best:
+            best = (pin, t, m.parent.name)
+    return best[2] if best else None
 
 
 if DEMO and not SNAP:
@@ -75,8 +78,8 @@ def _load_keys() -> dict[str, str]:
             if v.startswith("여기에"):   # api_keys.example.txt 의 자리표시자 — 키 없음으로 본다
                 continue
             out[k.strip()] = v
-    for k in ("ORG_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
-              "DISABLE_SSL_VERIFICATION", "BANGJAE_ID", "BANGJAE_PW",
+    for k in ("ORG_API_KEY", "LAW_OC", "DATA_GO_KR_KEY", "HRFCO_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
+              "JAENAN_URL", "JAENAN_TOKEN", "DISABLE_SSL_VERIFICATION", "BANGJAE_ID", "BANGJAE_PW",
               "BANGJAE_BASE"):
         if os.environ.get(k):
             out[k] = os.environ[k]
@@ -101,6 +104,9 @@ INTERVALS = {
     "short": 600,       # 단기예보 격자. 발표는 3시간마다지만 받은 발표분은 다시 안 부른다.
     "grid": 600,        # 경남 지도 500m(15분·60분·일). NetCDF 셋 — 하루 432회, 20~100MB
     "odam": 600,        # 경남 지도 실황 5km. 10분 발표 — 하루 144~290회, 50MB
+    "snow": 600,
+    "prefetch": 600,    # 보고서용 일 최대순간풍속 2묶음 — 하루 288회(collectors/prefetch.py)        # 적설 경남 55곳 남짓 — 평시 하루 144회(지금 적설만), 눈 · 대설특보 때 4배
+    "tide": 600,        # 조위(공공데이터포털) 6곳 — 하루 864회 + 앞날 예측 하루 한 번 90회. 응답 수십 KB
 }
 
 # 화면이 폴링하는 기본 주기(초). 패널마다 따로 두고 화면에서 바꾼다.

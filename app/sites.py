@@ -105,11 +105,30 @@ def off_key(stn: str, name: str, sigun: str, org: str) -> str:
     return f"gn:{sigun}:{a['name'] if a else name}"
 
 
-def off_keys() -> set[str]:
-    """지도 판에서 비활성화한 AWS(서버 설정 map.aws_off) — 면 · 카드 · 지금 오는 비 계산에서 뺀다."""
+class _Off(set):
+    """비활성 열쇠 — all_gn 이면 경남 AWS('gn:' 열쇠) 전부가 들어 있는 것으로 본다."""
+    all_gn = False
+
+    def __contains__(self, k):
+        return super().__contains__(k) or (self.all_gn and isinstance(k, str) and k.startswith("gn:"))
+
+    def __bool__(self):
+        return self.all_gn or bool(len(self))
+
+
+def gn_off() -> bool:
+    """경남 AWS(스방 · 내부망) 전체 끄기(서버 설정 map.gn_off)."""
     from . import db
-    lst = (db.get_setting("map", {}) or {}).get("aws_off") or []
-    return {str(x.get("id")) for x in lst if isinstance(x, dict) and x.get("id")}
+    return bool((db.get_setting("map", {}) or {}).get("gn_off"))
+
+
+def off_keys() -> set[str]:
+    """지도 판에서 비활성화한 AWS(서버 설정 map.aws_off, 경남 AWS 전체 끄기 map.gn_off) — 면 · 카드 · 지금 오는 비 계산에서 뺀다."""
+    from . import db
+    m = db.get_setting("map", {}) or {}
+    out = _Off(str(x.get("id")) for x in (m.get("aws_off") or []) if isinstance(x, dict) and x.get("id"))
+    out.all_gn = bool(m.get("gn_off"))
+    return out
 
 
 def org_of(stn: str, name: str, sigun: str, kma: bool) -> str:

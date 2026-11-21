@@ -106,6 +106,9 @@ def normalize(raw: bytes | str, now: datetime) -> dict:
         sig = None if sea else sigun_of(reg)
         if sig and sig not in g["siguns"]:
             g["siguns"].append(sig)
+        if sig:                            # 시군마다 가장 최근 발표 — AI 가 발표가 얼마나 새것인지 본다(ai.outlook)
+            g.setdefault("at", {})
+            g["at"][sig] = max(g["at"].get(sig, ""), p[I_TM_FC])
 
     def lv_of(name: str) -> str:
         if "중대경보" in name:
@@ -124,12 +127,46 @@ def normalize(raw: bytes | str, now: datetime) -> dict:
             # 해상은 시군 개념이 없어 개소로 셀 수밖에 없다
             "count": len(g["regions"]) if g["sea"] else len(g["siguns"]),
             "unit": "개소" if g["sea"] else "개시군",
-            "regions": g["regions"], "siguns": g["siguns"],
+            "regions": g["regions"], "siguns": g["siguns"], "at": g.get("at", {}),
         })
 
     order = {"severe": 0, "warn": 1, "watch": 2}
     out.sort(key=lambda a: (order.get(a["lv"], 3), a["sea"], -a["count"]))
     return {"groups": out, "pending": pending}
+
+
+async def backfill_raw(hours: int = 72, workers: int = 4) -> int:
+    """특보 원자료를 지난 hours 시간분까지 10분 간격으로 채운다 — 원자료를 두기 전 시각은 보고서 서버가 기상청에 묻던 것.
+    켤 때 한 번(이미 채운 시각은 건너뛴다). **최근 시각부터**(보고서는 보통 전일 00시부터) · workers 개씩 동시에
+    (기상청이 느린 날 한 시각 30초 넘게 걸린다). 실패한 시각은 건너뛴다 → 채운 시각 수."""
+    import asyncio
+    from datetime import timedelta
+    now = datetime.now().replace(second=0, microsecond=0)
+    first = db.alert_raw_first()
+    end = datetime.strptime(first, "%Y-%m-%d %H:%M") if first else now
+    start = (now - timedelta(hours=hours)).replace(minute=(now.minute // 10) * 10)
+    todo, t = [], end.replace(minute=(end.minute // 10) * 10)
+    while t >= start:
+        if t < end and not db.alert_raw_bf_has(t.strftime("%Y-%m-%d %H:%M")):
+            todo.append(t)
+        t -= timedelta(minutes=10)
+    gate, n = asyncio.Semaphore(workers), 0
+
+    async def one(t):
+        nonlocal n
+        async with gate:
+            try:
+                raw = await fetch_bytes("/api/typ01/url/wrn_now_data.php", {"fe": "f", "tm": t.strftime("%Y%m%d%H%M"), "disp": "1", "help": "0"})
+                db.put_alert_raw_at(t.strftime("%Y-%m-%d %H:%M"), raw.decode("utf-8"))
+                n += 1
+            except Exception as e:                 # noqa: BLE001 — 그 시각은 보고서 서버가 기상청에 묻는다
+                log.info("특보 원자료 채우기 %s 건너뜀: %s", t, str(e)[:80])
+            await asyncio.sleep(0.5)
+    for i in range(0, len(todo), workers * 4):     # 최근 것부터 차례로(한꺼번에 띄우지 않는다)
+        await asyncio.gather(*(one(t) for t in todo[i:i + workers * 4]))
+    if n:
+        log.info("특보 원자료 %d 시각 채움(%s ~ %s)", n, start, end)
+    return n
 
 
 async def collect(now: datetime | None = None) -> dict:
@@ -145,5 +182,9 @@ async def collect(now: datetime | None = None) -> dict:
         raise
 
     db.put_snapshot("alerts", at, at, data)
+    try:                                           # 원자료는 바뀔 때만 — 재난상황보고서 서버가 기상청 대신 읽는다
+        db.put_alert_raw(at, raw.decode("utf-8"))
+    except Exception:                              # noqa: BLE001 — 지도 수집은 막지 않는다
+        pass
     db.log_collect("alerts", True, at, f"{len(data['groups'])}종")
     return data

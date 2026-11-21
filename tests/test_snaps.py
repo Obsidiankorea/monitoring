@@ -140,3 +140,41 @@ def test_add_bangjae_to_snapshot_copy(tmp_path, monkeypatch):
     c = _sq.connect(f)
     assert c.execute("SELECT mm FROM bangjae_hourly WHERE stn='8438'").fetchone()[0] == 25.5
     assert c.execute("SELECT ok FROM collect_log WHERE kind='bangjae'").fetchone()[0] == 1
+
+
+def test_add_ante_fills_front_hours_with_fake(tmp_path, monkeypatch):
+    """시연 선행 강우 — 정시 격자가 72시간뿐이면 앞 48시간을 72시간 뒤 격자의 40%로 채워 5일(120시간)이 찬다."""
+    from datetime import datetime, timedelta
+    from app import gridstore, gridview
+    monkeypatch.setattr(gridstore, "ROOT", tmp_path / "grid")
+    last = datetime(2026, 10, 19, 0, 0)
+    for h in range(72):
+        gridstore.save("obs60", (last - timedelta(hours=h)).strftime("%Y%m%d%H%M"), np.full(gridstore.shape("hr"), 10.0))
+    assert snaps.add_ante() == 48 and snaps.add_ante() == 0
+    assert gridstore.load("obs60", (last - timedelta(hours=119)).strftime("%Y%m%d%H%M"))[0, 0] == 4.0
+    _, have = gridview._acc_keys(120, None, last, False)
+    assert len(have) == 120
+
+
+def test_prune_drops_people(tmp_path):
+    """A2 — 굳힌 시연(로그인 없이 열린다)에는 담당 · 회신 링크 · 계정 · 접속 · 잠금 번호 · 판단 기록의 누른 사람이 없다."""
+    import sqlite3
+    from datetime import datetime
+    from app import db
+    p = tmp_path / "s.db"
+    c = sqlite3.connect(p)
+    c.executescript(db.SCHEMA)
+    c.execute("ALTER TABLE decision ADD COLUMN who TEXT")
+    c.execute("INSERT INTO duty_link VALUES('r','tok','창원시','가','주소')")
+    c.execute("INSERT INTO app_user(login, name, role, pw, created) VALUES('a','a','admin','x','t')")
+    c.execute("INSERT INTO setting VALUES('contacts_pin','\"h\"')")
+    c.execute("INSERT INTO decision(at, sigun, act, who) VALUES('2026-10-19T00:00:00','창원','메모','홍길동(도 사용자)')")
+    c.commit()
+    c.close()
+    snaps.prune_db(p, datetime(2026, 10, 19, 0, 24))
+    c = sqlite3.connect(p)
+    for t in snaps.PRIVATE:
+        assert c.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] == 0, t
+    assert c.execute("SELECT COUNT(*) FROM setting WHERE key='contacts_pin'").fetchone()[0] == 0
+    assert c.execute("SELECT who FROM decision").fetchone()[0] is None
+    c.close()
