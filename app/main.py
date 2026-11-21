@@ -1227,6 +1227,35 @@ async def _reports_run(body: dict):
                                                                    "Access-Control-Expose-Headers": "X-Tg, X-Basis, X-Share, Content-Disposition", "Cache-Control": "no-store"})
 
 
+@app.put("/api/reports/layout")
+async def api_reports_layout(body: dict):
+    """{groups, place, order} — 보고서 창 폴더 · 자리 · 차례(서버 전체에 하나)."""
+    from . import reports
+    try:
+        return await asyncio.to_thread(reports.set_layout, body)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@app.delete("/api/reports/layout")
+async def api_reports_layout_reset():
+    """기본 폴더 · 차례로 돌린다(참고자료 · 메모는 그대로)."""
+    from . import db, reports
+    await asyncio.to_thread(db.put_setting, reports.LAYOUT_KEY, {})
+    return reports.layout()
+
+
+@app.put("/api/reports/meta/{rid}")
+async def api_reports_meta(rid: str, body: dict, request: Request):
+    """{refs: [{name, where}], memo} — 보고서마다 사용자가 적는 참고자료 · 메모."""
+    from . import reports
+    u = getattr(request.state, "user", None) or {}
+    try:
+        return await asyncio.to_thread(reports.set_meta, rid, body, (u.get("name") or u.get("login") or "") if not u.get("local") else "")
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
 @app.post("/api/reports/brief-sample")
 async def api_brief_sample():
     """태풍 4기관 브리핑 — 샘플받기(가상 자료). 진짜는 태풍이 오면 4기관 자료로(아직 없다)."""

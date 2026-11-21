@@ -155,12 +155,68 @@ def sample(rid: str):
     return next((p for p in sorted(d.glob(f"{rid}.*")) if p.is_file()), None) if d.exists() else None
 
 
+# ── 사용자가 꾸미는 폴더 · 차례 · 참고자료 · 메모 — 서버 전체에 하나(로고처럼 모두에게 같다), DB 설정 ──
+LAYOUT_KEY, META_KEY = "report_layout", "report_meta"
+
+
+def layout() -> dict:
+    """{groups: [폴더…], place: {보고서: 폴더}, order: [보고서…]} — 저장한 것 위에 기본(REG 묶음)을 채운다."""
+    from . import db
+    s = db.get_setting(LAYOUT_KEY, {}) or {}
+    groups = [g for g in s.get("groups") or [] if isinstance(g, str) and g.strip()] or list(GROUPS)
+    place = {r["id"]: (s.get("place") or {}).get(r["id"]) or r["group"] for r in REG}
+    for rid, g in place.items():               # 지운 폴더에 있던 것 · 기본 묶음이 폴더에 없는 것은 첫 폴더로
+        if g not in groups:
+            place[rid] = groups[0]
+    order = [x for x in s.get("order") or [] if x in BY_ID] + [r["id"] for r in REG if r["id"] not in (s.get("order") or [])]
+    return {"groups": groups, "place": place, "order": order}
+
+
+def set_layout(body: dict) -> dict:
+    """폴더 이름(1~20자, 30개까지, 겹치지 않게) · 자리 · 차례를 받아 저장. 틀리면 ValueError."""
+    from . import db
+    groups = [str(g).strip()[:20] for g in body.get("groups") or []]
+    if not groups or len(groups) > 30 or len(set(groups)) != len(groups) or any(not g for g in groups):
+        raise ValueError("폴더 이름은 1~20자, 겹치지 않게, 30개까지")
+    place = {str(k): str(v) for k, v in (body.get("place") or {}).items() if str(k) in BY_ID and str(v) in groups}
+    order = [str(x) for x in body.get("order") or [] if str(x) in BY_ID]
+    db.put_setting(LAYOUT_KEY, {"groups": groups, "place": place, "order": list(dict.fromkeys(order))})
+    return layout()
+
+
+def meta() -> dict:
+    from . import db
+    m = db.get_setting(META_KEY, {}) or {}
+    return m if isinstance(m, dict) else {}
+
+
+def set_meta(rid: str, body: dict, who: str = "") -> dict:
+    """보고서 하나의 참고자료(이름 · 어디서, 30줄까지)와 메모(2000자) — 빈 것은 지운다."""
+    from datetime import datetime
+    from . import db
+    if rid not in BY_ID:
+        raise ValueError("모르는 보고서")
+    refs = [{"name": str(x.get("name") or "").strip()[:80], "where": str(x.get("where") or "").strip()[:120]}
+            for x in (body.get("refs") or [])[:30] if isinstance(x, dict) and str(x.get("name") or "").strip()]
+    memo = str(body.get("memo") or "").strip()[:2000]
+    m = meta()
+    if refs or memo:
+        m[rid] = {"refs": refs, "memo": memo, "by": who[:40], "at": datetime.now().strftime("%Y-%m-%d %H:%M")}
+    else:
+        m.pop(rid, None)
+    db.put_setting(META_KEY, m)
+    return m.get(rid) or {}
+
+
 def listing() -> dict:
-    return {"reports": [{**{k: r[k] for k in ("id", "name", "group", "desc", "opts", "ready")}, "wait": bool(r.get("wait")),
+    lay, mt = layout(), meta()
+    rank = {rid: i for i, rid in enumerate(lay["order"])}
+    return {"reports": [{**{k: r[k] for k in ("id", "name", "desc", "opts", "ready")}, "group": lay["place"][r["id"]], "home": r["group"],
+                         "meta": mt.get(r["id"]) or None, "wait": bool(r.get("wait")),
                          "compose": r.get("compose") or "", "brief": bool(r.get("brief")),
                          **({"sample": bool(sample(r["id"])), "live": r["id"] in DEMO_LIVE and ready()} if config.DEMO else {}),
-                         "thumb": (THUMBS / f"{r['id']}.png").is_file()} for r in REG],
-            "groups": list(GROUPS),
+                         "thumb": (THUMBS / f"{r['id']}.png").is_file()} for r in sorted(REG, key=lambda r: rank[r["id"]])],
+            "groups": lay["groups"],
             "ready": ready(), "tg": tg_ready(), "demo": config.DEMO,
             "missing": [n for n, ok in (("JAENAN_TOKEN", ready()), ("TELEGRAM_BOT_TOKEN · TELEGRAM_CHAT_ID", tg_ready())) if not ok]}
 

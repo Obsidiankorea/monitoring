@@ -2460,3 +2460,28 @@ body.tour-on #tools { display: flex; opacity: 1; pointer-events: auto; }
 #rep .shr a { color: var(--accent); word-break: break-all; min-width: 0; }
 #rep .shr button { min-height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); font: 600 12.5px var(--sans); cursor: pointer; }
 #rep .shr button[data-shr="send"] { background: #FEE500; color: #191600; border-color: #E6CF00; }
+
+/* 보고서 창 — 사용자 폴더 · 메뉴 · 끌어 놓기 · 참고자료와 메모 */
+#rep nav .gadd { min-width: 36px; padding: 0 10px; font-size: 16px; }
+#rep .rctx { position: absolute; z-index: 8; min-width: 200px; max-width: 300px; max-height: 70%; overflow: auto; padding: 6px; border-radius: 12px;
+  background: var(--panel); border: 1px solid var(--line); box-shadow: 0 10px 30px rgba(0, 0, 0, .35); }
+#rep .rctx[hidden] { display: none; }
+#rep .rctx [role=menu] { display: grid; gap: 2px; }
+#rep .rctx .mh { padding: 6px 10px 2px; font-size: 11.5px; color: var(--ink-3); font-weight: 600; }
+#rep .rctx button { min-height: 36px; padding: 0 10px; text-align: left; border: 0; border-radius: 8px; background: transparent; color: var(--ink); font: 500 13px var(--sans); cursor: pointer; }
+#rep .rctx button:hover:not(:disabled), #rep .rctx button:focus-visible { background: var(--panel-2); }
+#rep .rctx button:disabled { opacity: .45; cursor: default; }
+#rep .rctx .mi { display: flex; gap: 6px; padding: 4px 6px; }
+#rep .rctx .mi input { flex: 1; min-width: 0; height: 34px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); color: var(--ink); font: 13px var(--sans); }
+#rep .rctx .mi button { background: var(--accent); color: #fff; font-weight: 600; }
+#rep [data-id].drag { opacity: .45; }
+#rep .dropto { outline: 2px dashed var(--accent); outline-offset: 2px; }
+#rep .rt .mm { font-style: normal; font-size: 10.5px; font-weight: 600; padding: 1px 5px; border-radius: 4px; background: color-mix(in oklab, var(--accent) 22%, transparent); color: var(--ink); vertical-align: 2px; }
+#rep .dp h4 .mtb { margin-left: 8px; min-height: 26px; padding: 0 10px; font: 600 11.5px var(--sans); border-radius: 6px; border: 1px solid var(--line); background: var(--panel-2); color: var(--ink); cursor: pointer; }
+#rep .dp .memo { margin: 6px 0 0; padding: 10px 12px; border-radius: 8px; background: var(--panel-2); font-size: 13px; line-height: 1.6; }
+#rep .dp .mtat { margin: 4px 0 0; font-size: 11.5px; }
+#rep .op.mte .mtr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) 34px; gap: 6px; margin-bottom: 6px; }
+#rep .op.mte .mtr input, #rep .op.mte textarea { width: 100%; min-height: 34px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); color: var(--ink); font: 13px var(--sans); }
+#rep .op.mte .mtr button, #rep #rep-mtadd { min-height: 34px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); color: var(--ink); cursor: pointer; }
+#rep .op.mte textarea { resize: vertical; line-height: 1.55; }
+@media (max-width: 480px) { #rep .op.mte .mtr { grid-template-columns: 1fr 34px; } }

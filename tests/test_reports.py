@@ -395,3 +395,26 @@ def test_typhoon_brief_sample(tmp_path, monkeypatch):
     assert j["ok"] and j["share"].endswith("/t/typhoon-brief-sample")
     d = c.get("/t/typhoon-brief-sample/data.json").json()
     assert d["sample"] is True and len(d["agencies"]) == 4 and d["base"].startswith("data:image/")
+
+
+def test_report_layout_and_meta(monkeypatch):
+    """보고서 창 폴더 · 자리 · 차례 · 참고자료 · 메모 — 저장하면 목록에 반영, 지운 폴더의 보고서는 첫 폴더로, 틀린 이름은 400."""
+    from fastapi.testclient import TestClient
+    from app import db, main, reports
+    store = {}
+    monkeypatch.setattr(db, "get_setting", lambda k, d: store.get(k, d))
+    monkeypatch.setattr(db, "put_setting", lambda k, v: store.__setitem__(k, v))
+    c = TestClient(main.app)
+    lay = c.put("/api/reports/layout", json={"groups": ["내 폴더", "풍수해"], "place": {"cold": "내 폴더", "weather": "없는 폴더"},
+                                              "order": ["cold", "nature"]}).json()
+    assert lay["groups"] == ["내 폴더", "풍수해"] and lay["place"]["cold"] == "내 폴더" and lay["order"][:2] == ["cold", "nature"]
+    assert lay["place"]["weather"] == "내 폴더"            # 기본 묶음(재난상황과)이 폴더에 없다 → 첫 폴더
+    lst = c.get("/api/reports").json()
+    assert lst["groups"] == ["내 폴더", "풍수해"] and lst["reports"][0]["id"] == "cold"
+    assert c.put("/api/reports/layout", json={"groups": ["a", "a"]}).status_code == 400
+    m = c.put("/api/reports/meta/cold", json={"refs": [{"name": "현재기온", "where": "기상청 AWS"}, {"name": ""}], "memo": "도로과와 숫자 맞춤"}).json()
+    assert m["refs"] == [{"name": "현재기온", "where": "기상청 AWS"}] and m["memo"] == "도로과와 숫자 맞춤"
+    assert next(r for r in c.get("/api/reports").json()["reports"] if r["id"] == "cold")["meta"]["memo"] == "도로과와 숫자 맞춤"
+    assert c.put("/api/reports/meta/없는것", json={}).status_code == 400
+    c.delete("/api/reports/layout")
+    assert c.get("/api/reports").json()["groups"] == list(reports.GROUPS)

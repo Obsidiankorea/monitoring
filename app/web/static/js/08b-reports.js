@@ -5,7 +5,7 @@
    타일 오른쪽 누름(· 메뉴 키 · Shift+F10 · 타일의 ⚙) = 그 보고서 옵션창 — 런처(윈도우 앱) 옵션 가운데 서버에서 되는 것. 이 브라우저에 보고서별로 기억하고,
    보낼 때는 기본값과 다른 것만(안 보낸 것은 서버 설정을 따른다). 머리 ⚙ = 전체 설정(받을 때 텔레그램에도).
    17시 대기(등록부 wait) — 서버가 1분마다 묻고, 이 화면은 상태만 1분마다 가볍게(걸린 것이 있을 때만) 물어 타일 · 도구 줄 단추에 표시 */
-const REP = { d: null, g: "", busy: null, jobs: {}, tick: 0, set: false, back: null, msg: null, w: {}, op: null, opBack: null,
+const REP = { d: null, g: "", share: {}, ctx: null, mt: null, swallow: false, busy: null, jobs: {}, tick: 0, set: false, back: null, msg: null, w: {}, op: null, opBack: null,
   sel: null, done: {}, seen: new Set(), wide: false };
 /* '자세히' 보기 — 보고서마다 끌어오는 자료(이름, 어디서). 만드는 동안은 보고서 서버가 보낸 기준 시각 · 기상청 호출로 바뀐다 */
 const REP_SRC = {
@@ -79,9 +79,9 @@ function repTile(r) {
     + (busy ? `<em class="run" role="status"><i class="ldbar"><i></i></i>${J.run ? `만드는 중 · <span class="sec" data-sec="${escH(r.id)}">${Math.round((Date.now() - J.run) / 1000)}</span>초` : "차례 기다림"}</em>` : "")
     + (!r.ready ? `<em class="soon">준비 중</em>` : "") + (r.ready && repChanged(r) ? `<em class="chg" title="기본값과 다른 옵션이 있다">옵션</em>` : "") + `</span>`;
   const lab = rd ? `${r.name} — 17시 보고서 받기` : `${r.name} 받기${why ? ` — ${why}` : ""}`;
-  return `<div class="rt${busy ? " busy" : ""}${r.ready ? "" : " off"}${w ? ` w-${escH(w.state)}` : ""}" data-id="${escH(r.id)}">`
+  return `<div class="rt${busy ? " busy" : ""}${r.ready ? "" : " off"}${w ? ` w-${escH(w.state)}` : ""}" data-id="${escH(r.id)}" draggable="true">`
     + `<button type="button" class="rt-main" data-get="${escH(r.id)}"${off && !rd && !r.compose ? " disabled" : ""} title="${escH(rd ? "저장해 둔 17시 보고서를 받는다" : r.compose ? `${r.name} 작성 — 문구를 골라 만든다` : why || `${r.name} 받기 · 오른쪽 누름: 옵션`)}" aria-label="${escH(r.compose ? `${r.name} 작성 창 열기` : lab)}">`
-    + `${th}<span class="nm"><b>${escH(r.name)}</b><small>${escH(r.desc)}</small></span></button>`
+    + `${th}<span class="nm"><b>${escH(r.name)}${r.meta?.memo ? ` <i class="mm" title="${escH(r.meta.memo)}">메모</i>` : ""}</b><small>${escH(r.desc)}</small></span></button>`
     + (r.ready && !r.compose ? `<button type="button" class="rt-tg" data-tg="${escH(r.id)}"${off || !d.tg ? " disabled" : ""} aria-label="${escH(`${r.name} 텔레그램으로 보내기`)}"`
       + ` title="${escH(why || (d.tg ? "텔레그램으로 보내기만(받지 않음)" : "텔레그램 키가 없다 — 설정 › API 키"))}">${REP_TG}</button>`
       : "") + (r.ready ? `<button type="button" class="rt-op${r.compose ? " cm" : ""}" data-op="${escH(r.id)}" aria-label="${escH(`${r.name} ${r.compose ? "작성 창" : "옵션"}`)}" title="${r.compose ? "작성 창" : "옵션"} — 타일 오른쪽 누름 · Shift+F10 과 같다">⚙</button>` : "")
@@ -91,7 +91,7 @@ function repTile(r) {
 function repDli(r) {
   const J = REP.jobs[r.id], D = REP.done[r.id];
   const st = J ? (J.run ? `만드는 중 · ${repPct(J)}%` : "차례 기다림") : D ? (D.ok ? "다 됐다" : "만들지 못했다") : r.brief ? "샘플받기" : r.ready ? r.group : "준비 중";
-  return `<button type="button" class="dli${r.id === REP.sel ? " on" : ""}${r.ready ? "" : " off"}" role="option" aria-selected="${r.id === REP.sel}" data-sel="${escH(r.id)}">`
+  return `<button type="button" class="dli${r.id === REP.sel ? " on" : ""}${r.ready ? "" : " off"}" role="option" aria-selected="${r.id === REP.sel}" data-sel="${escH(r.id)}" data-id="${escH(r.id)}" draggable="true">`
     + `<span class="mi">${r.thumb ? `<img src="img/reports/${escH(r.id)}.png" alt="" loading="lazy">` : ""}</span>`
     + `<span class="dn"><b>${escH(r.name)}</b><small>${escH(st)}</small></span>${J ? `<i class="spin" aria-hidden="true"></i>` : D && !D.ok ? `<i class="x" aria-hidden="true">!</i>` : ""}</button>`;
 }
@@ -125,7 +125,19 @@ function repDet(r) {
     + (r.ready && !r.compose ? `<button type="button" data-tg="${escH(r.id)}"${off || J || !REP.d?.tg ? " disabled" : ""}>텔레그램으로</button>` : "")
     + (r.ready ? `<button type="button" data-op="${escH(r.id)}">${r.compose ? "작성 창" : "옵션"}</button>` : "") + `</div>
     ${J ? `<div class="dpb" style="--p:${repPct(J)}%"><i></i></div>` : ""}<p class="dst${D && !D.ok ? " bad" : ""}" role="status">${escH(st)}</p>
-    ${rows ? `<h4>${head}</h4><ul class="dsrc">${rows}</ul>` : ""}`;
+    ${REP.share[r.id] ? `<div class="shr"><b>📱 휴대폰 브리핑</b><a href="${escH(REP.share[r.id])}" target="_blank" rel="noopener">${escH(REP.share[r.id])}</a>
+      <button type="button" data-shr="copy" data-rid="${escH(r.id)}">링크 복사</button><button type="button" data-shr="send" data-rid="${escH(r.id)}">카톡 등으로 보내기</button>
+      <span class="mute">로그인 없이 열린다</span></div>` : ""}
+    ${rows ? `<h4>${head}</h4><ul class="dsrc">${rows}</ul>` : ""}
+    ${repMetaView(r)}`;
+}
+/* 사용자가 적은 참고자료 · 메모(서버 전체에 하나) — 자세히 창 아래 */
+function repMetaView(r) {
+  const m = r.meta || {}, refs = m.refs || [];
+  return `<h4>참고자료 · 메모 <button type="button" class="mtb" data-mt="${escH(r.id)}">${refs.length || m.memo ? "고치기" : "적기"}</button></h4>`
+    + (refs.length ? `<ul class="dsrc">${refs.map(x => `<li><i class="dot" aria-hidden="true"></i><span>${escH(x.name)}${x.where ? `<em class="src">${escH(x.where)}</em>` : ""}</span><span class="at"></span></li>`).join("")}</ul>` : "")
+    + (m.memo ? `<p class="memo">${escH(m.memo).replace(/\n/g, "<br>")}</p>` : "")
+    + (m.at ? `<p class="mute mtat">${escH(m.by ? `${m.by} · ` : "")}${escH(m.at)}</p>` : refs.length || m.memo ? "" : `<p class="mute">이 보고서에 대한 참고자료(어디서 무엇을 가져오는지) · 메모를 적어 둘 수 있다</p>`);
 }
 function repSettings() {
   const d = REP.d || {}, p = repPref();
@@ -487,9 +499,7 @@ function repDraw() {
   const d = REP.d, list = d?.reports || [], gs = d?.groups || [];
   if (gs.length && !gs.includes(REP.g)) REP.g = gs[0];
   const shown = list.filter(r => r.group === REP.g);
-  const note = !d ? "목록을 받는 중…" : d.err ? `목록을 받지 못했다 — ${d.err}` : d.demo ? "시연 화면 — 기상상황보고는 지금 시각으로 만들고(안 되면 샘플), 나머지는 미리 만든 샘플 파일을 받는다 · 텔레그램은 안 보낸다"
-    : !d.ready ? `재난상황보고서 서버 토큰(JAENAN_TOKEN)이 없다 — 설정 › API 키에서 넣는다${d.tg ? "" : " · 텔레그램 키도 없다"}`
-    : !d.tg ? "텔레그램 키가 없어 받기만 된다" : "";
+  const empty = !d ? "목록을 받는 중…" : d.err ? `목록을 받지 못했다 — ${d.err}` : "이 폴더에는 아직 보고서가 없다";   /* 위 안내 줄은 뺐다(사용자 요청) — 키가 없으면 받을 때 오류로 알린다 */
   const det = repView() === "det";
   if (det && !shown.some(r => r.id === REP.sel)) REP.sel = (shown.find(r => r.ready) || shown[0] || list[0])?.id || null;
   const wide = det && !!(REP.jobs[REP.sel] || REP.done[REP.sel]);
@@ -498,18 +508,15 @@ function repDraw() {
       <div class="vw" role="group" aria-label="보기">${[["grid", "목록"], ["det", "자세히"]].map(([k, t]) => `<button type="button" data-vw="${k}" aria-pressed="${repView() === k}" class="${repView() === k ? "on" : ""}">${t}</button>`).join("")}</div>
       <button type="button" id="rep-cog" class="${REP.set ? "on" : ""}" aria-expanded="${REP.set}" aria-controls="rep-set" aria-label="전체 설정" title="전체 설정 — 받을 때 텔레그램에도">⚙</button>
       <button type="button" id="rep-x" aria-label="닫기 (Esc)" title="닫기 (Esc)">✕</button></div>
-    ${note ? `<p class="note">${escH(note)}</p>` : ""}
     ${REP.set ? repSettings() : ""}
     <nav aria-label="묶음">${gs.map(g => { const n = list.filter(r => r.group === g).length;
-      return `<button type="button" data-g="${escH(g)}" aria-pressed="${g === REP.g}" class="${g === REP.g ? "on" : ""}">${escH(g)} <i>${n}</i></button>`; }).join("")}</nav>
-    ${det ? `<div class="dv"><div class="dl" role="listbox" aria-label="보고서">${shown.map(repDli).join("") || `<p class="mute">이 묶음에는 아직 보고서가 없다</p>`}</div>
+      return `<button type="button" data-g="${escH(g)}" aria-pressed="${g === REP.g}" class="${g === REP.g ? "on" : ""}" title="오른쪽 누름(길게 누름): 이름 · 차례 · 지우기 · 보고서를 끌어 놓으면 이 폴더로">${escH(g)} <i>${n}</i></button>`; }).join("")}<button type="button" class="gadd" data-gadd="1" aria-label="새 폴더" title="새 폴더">＋</button></nav>
+    ${det ? `<div class="dv"><div class="dl" role="listbox" aria-label="보고서">${shown.map(repDli).join("") || `<p class="mute">${escH(empty)}</p>`}</div>
       <section class="dp${REP.sel !== REP.drawn ? " in" : ""}" aria-live="polite">${repDet(repById(REP.sel))}</section></div>`
-      : `<div class="grid">${shown.map(repTile).join("") || `<p class="mute">이 묶음에는 아직 보고서가 없다</p>`}</div>`}
-    ${REP.msg?.share ? `<div class="shr"><b>📱 휴대폰 브리핑</b><a href="${escH(REP.msg.share)}" target="_blank" rel="noopener">${escH(REP.msg.share)}</a>
-      <button type="button" data-shr="copy">링크 복사</button><button type="button" data-shr="send">카톡 등으로 보내기</button>
-      <span class="mute">로그인 없이 열린다 · 30일 뒤 사라진다</span></div>` : ""}
-    <p class="msg${REP.msg && !REP.msg.ok ? " bad" : ""}" role="status">${escH(REP.msg?.text || (repBusy() ? "보고서 서버가 만드는 중 — 여러 개를 걸어 두면 차례대로 만든다. 창을 닫아도(✕) 계속, 오른쪽 위에 진행이 보이고 끝나면 저절로 받는다" : "타일을 누르면 받는다 · 오른쪽 누름(⚙)은 옵션 · 구석 단추는 텔레그램으로 보내기만"))}</p></div>
-    <div class="opbg" id="rep-op" hidden></div>${repBsHtml()}`;
+      : `<div class="grid">${shown.map(repTile).join("") || `<p class="mute">${escH(empty)}</p>`}</div>`}
+    <p class="msg${REP.msg && !REP.msg.ok ? " bad" : ""}" role="status">${escH(REP.msg?.text || (repBusy() ? "보고서 서버가 만드는 중 — 여러 개를 걸어 두면 차례대로 만든다. 창을 닫아도(✕) 계속, 오른쪽 위에 진행이 보이고 끝나면 저절로 받는다" : "타일을 누르면 받는다 · 오른쪽 누름(길게 누름)은 메뉴 — 옵션 · 폴더 옮기기 · 참고자료와 메모 · 끌어서 폴더 탭에 놓아도 옮겨진다"))}</p></div>
+    <div class="opbg" id="rep-op" hidden></div><div class="opbg" id="rep-mt" hidden></div><div class="rctx" id="rep-ctx" hidden></div>${repBsHtml()}`;
+  if (REP.mt) repMtDraw();
   $("rep").querySelectorAll("[data-nw]").forEach(e => REP.seen.add(e.dataset.nw));
   REP.drawn = det ? REP.sel : null;                          /* 오른쪽 창은 고른 보고서가 바뀔 때만 떠오른다(2초마다 다시 그려도 깜빡이지 않게) */
   if (wide !== REP.wide) { const b = $("rep").querySelector(".box"); requestAnimationFrame(() => b.classList.toggle("wide", wide)); REP.wide = wide; }
@@ -577,8 +584,11 @@ async function repRun(id, mode) {
       const res = await fetch("/api/reports/brief-sample", { method: "POST" });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || `오류 ${res.status}`);
       const j = await res.json();
-      REP.msg = { ok: true, text: "샘플 브리핑 링크를 만들었다 — 가상 자료(태풍이 오면 4기관 자료로 만든다)", share: j.share };
+      REP.share[id] = j.share;
+      REP.msg = { ok: true, text: `${r.name} — 샘플 링크를 만들었다(오른쪽 창)` };
     } catch (e) { REP.msg = { ok: false, text: `샘플을 받지 못했다 — ${e.message}` }; }
+    REP.sel = id;                                                 /* 링크는 그 보고서를 고른 자세히 창에만 */
+    if (repView() !== "det") repSave({ view: "det" });
     return repDraw();
   }
   if (mode === "dl" && REP.w[id]?.state === "ready") {         /* 17시 대기로 만들어 둔 것 */
@@ -603,12 +613,14 @@ async function repRun(id, mode) {
     if (dl) {
       const t = res.headers.get("X-Tg"), name = await repSaveFile(res, `${id}.hwp`);
       REP.msg = { ok: t !== "fail", text: `받았다 — ${name}${t === "ok" ? " · 텔레그램에도 보냈다" : t === "fail" ? " · 텔레그램은 보내지 못했다" : ""}`, share: res.headers.get("X-Share") || "" };
+      if (REP.msg.share) REP.share[id] = REP.msg.share;
       let b = [];
       try { b = JSON.parse(decodeURIComponent(res.headers.get("X-Basis") || "[]")); } catch {}
       repBasis(r.name, name, b);
     } else {
       const j = await res.json();
       REP.msg = { ok: true, text: `텔레그램으로 보냈다 — ${j.name}`, share: j.share || "" };
+      if (j.share) REP.share[id] = j.share;
       repBasis(r.name, j.name, j.basis);
     }
   } catch (e) { REP.msg = { ok: false, text: `만들지 못했다 — ${e.message}` }; }
@@ -728,8 +740,8 @@ $("rep").addEventListener("click", ev => {
   if (sel) { REP.sel = sel.dataset.sel; repDraw(); return $("rep").querySelector(`[data-sel="${CSS.escape(REP.sel)}"]`)?.focus(); }
   const g = t.closest("[data-g]");
   const shr = ev.target.closest("[data-shr]");
-  if (shr && REP.msg?.share) {                                 // 태풍 브리핑 공개 링크 — 복사 · 휴대폰 공유 창(카톡)
-    const u = REP.msg.share;
+  if (shr && REP.share[shr.dataset.rid]) {                     // 태풍 브리핑 공개 링크 — 복사 · 휴대폰 공유 창(카톡)
+    const u = REP.share[shr.dataset.rid];
     if (shr.dataset.shr === "send" && navigator.share) { navigator.share({ title: "태풍 진로 브리핑", url: u }).catch(() => {}); return; }
     navigator.clipboard?.writeText(u).then(() => toast("링크를 복사했다 — 카톡에 붙여 넣으면 된다"), () => toast(u));
     return;
@@ -790,3 +802,185 @@ document.addEventListener("keydown", ev => {
   else if (!ev.shiftKey && i === fs.length - 1) { ev.preventDefault(); fs[0].focus(); }
 }, true);
 $("b-rep").onclick = () => ($("rep").hidden ? openRep() : closeRep());
+
+/* ── 사용자가 꾸미는 보고서 창: 폴더(탭) · 자리 · 차례 · 참고자료 · 메모 — 서버 전체에 하나(PUT /api/reports/layout · meta) ──
+   오른쪽 누름(휴대폰 길게 누름) 메뉴 · 타일을 폴더 탭에 끌어 놓기(그 폴더로) · 다른 타일 위에 놓기(그 앞으로) */
+const repLay = () => { const d = REP.d || {}; return { groups: [...(d.groups || [])], place: Object.fromEntries((d.reports || []).map(r => [r.id, r.group])), order: (d.reports || []).map(r => r.id) }; };
+async function repLaySave(lay, msg) {
+  try {
+    const res = await fetch("/api/reports/layout", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(lay) });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || `오류 ${res.status}`);
+    REP.d = await getJson("/api/reports");
+    if (msg) toast(msg);
+  } catch (e) { toast(`바꾸지 못했다 — ${e.message}`); }
+  repDraw();
+}
+function repMove(id, g, before) {
+  const lay = repLay();
+  if (g) lay.place[id] = g;
+  if (before && before !== id) { lay.order = lay.order.filter(x => x !== id); lay.order.splice(lay.order.indexOf(before), 0, id); }
+  return repLaySave(lay, g && !before ? `「${repById(id)?.name}」 → ${g}` : "");
+}
+function repStep(id, k) {                                        /* 보이는 폴더 안에서 앞 · 뒤로 한 칸 */
+  const lay = repLay(), same = lay.order.filter(x => lay.place[x] === lay.place[id]), i = same.indexOf(id), j = i + k;
+  if (j < 0 || j >= same.length) return;
+  const a = lay.order.indexOf(id), b = lay.order.indexOf(same[j]);
+  [lay.order[a], lay.order[b]] = [lay.order[b], lay.order[a]];
+  repLaySave(lay);
+}
+/* 메뉴 — items: [{t, fn, off} | {h} | {input, ph, ok, value, fn}] · 누른 자리 옆에 뜬다 */
+function repCtx(x, y, items) {
+  const m = $("rep-ctx"); if (!m) return;
+  REP.ctx = items;
+  m.innerHTML = `<div role="menu">${items.map((it, i) => it.h ? `<b class="mh">${escH(it.h)}</b>`
+    : it.input ? `<form class="mi" data-ci="${i}"><input id="rep-ctx-in" maxlength="20" value="${escH(it.value || "")}" placeholder="${escH(it.ph || "")}" aria-label="${escH(it.ph || "이름")}"><button type="submit">${escH(it.ok || "확인")}</button></form>`
+    : `<button type="button" role="menuitem" data-ci="${i}"${it.off ? " disabled" : ""}>${escH(it.t)}</button>`).join("")}</div>`;
+  m.hidden = false;
+  const box = $("rep").getBoundingClientRect(), w = m.offsetWidth, h = m.offsetHeight;
+  m.style.left = `${Math.max(8, Math.min(x - box.left, box.width - w - 8))}px`;
+  m.style.top = `${Math.max(8, Math.min(y - box.top, box.height - h - 8))}px`;
+  m.querySelector("input, button:not([disabled])")?.focus();
+}
+const repCtxClose = () => { const m = $("rep-ctx"); if (m) m.hidden = true; REP.ctx = null; };
+function repCtxReport(id, x, y) {
+  const r = repById(id); if (!r) return;
+  const gs = repLay().groups.filter(g => g !== r.group);
+  repCtx(x, y, [{ h: r.name },
+    ...(r.ready && !r.brief ? [{ t: r.compose ? "작성 창" : "옵션", fn: () => repOpOpen(id) }] : []),
+    { t: "참고자료 · 메모 적기", fn: () => repMtOpen(id) },
+    { t: "앞으로", fn: () => repStep(id, -1) }, { t: "뒤로", fn: () => repStep(id, 1) },
+    { h: "폴더로 옮기기" }, ...gs.map(g => ({ t: `→ ${g}`, fn: () => repMove(id, g) })),
+    { input: true, ph: "새 폴더 이름", ok: "만들어 옮기기", fn: v => { const l = repLay(); if (!l.groups.includes(v)) l.groups.push(v); l.place[id] = v; REP.g = v; repLaySave(l, `「${r.name}」 → 새 폴더 ${v}`); } }]);
+}
+function repCtxGroup(g, x, y) {
+  const lay = repLay(), i = lay.groups.indexOf(g), n = (REP.d?.reports || []).filter(r => r.group === g).length, to = lay.groups[i ? 0 : 1] || "";
+  repCtx(x, y, [{ h: `폴더 ${g}` },
+    { input: true, value: g, ph: "폴더 이름", ok: "이름 바꾸기", fn: v => {
+      if (v === g) return;
+      if (lay.groups.includes(v)) return toast("같은 이름 폴더가 있다");
+      lay.groups[i] = v; for (const k in lay.place) if (lay.place[k] === g) lay.place[k] = v;
+      if (REP.g === g) REP.g = v;
+      repLaySave(lay); } },
+    { t: "왼쪽으로", off: i === 0, fn: () => { [lay.groups[i - 1], lay.groups[i]] = [lay.groups[i], lay.groups[i - 1]]; repLaySave(lay); } },
+    { t: "오른쪽으로", off: i === lay.groups.length - 1, fn: () => { [lay.groups[i + 1], lay.groups[i]] = [lay.groups[i], lay.groups[i + 1]]; repLaySave(lay); } },
+    { t: n ? `폴더 지우기 — 보고서 ${n}개는 「${to}」 로` : "폴더 지우기", off: lay.groups.length < 2, fn: () => {
+      lay.groups.splice(i, 1); for (const k in lay.place) if (lay.place[k] === g) lay.place[k] = to;
+      REP.g = to; repLaySave(lay, `폴더 ${g} 를 지웠다`); } },
+    { h: "모두" },
+    { t: "처음 모양으로(기본 폴더 · 차례)", fn: async () => { await fetch("/api/reports/layout", { method: "DELETE" }); REP.d = await getJson("/api/reports"); repDraw(); toast("처음 모양으로 돌렸다"); } }]);
+}
+function repCtxAdd(x, y) {
+  repCtx(x, y, [{ h: "새 폴더" }, { input: true, ph: "폴더 이름(20자까지)", ok: "만들기", fn: v => {
+    const l = repLay(); if (l.groups.includes(v)) return toast("같은 이름 폴더가 있다");
+    l.groups.push(v); REP.g = v; repLaySave(l, `폴더 ${v} 를 만들었다 — 보고서를 끌어 놓거나 오른쪽 누름으로 옮긴다`); } }]);
+}
+
+/* 참고자료 · 메모 편집 창 */
+function repMtOpen(id) { const m = repById(id)?.meta || {}; REP.mt = { id, refs: (m.refs || []).map(x => ({ ...x })), memo: m.memo || "" }; repMtDraw(); }
+function repMtDraw() {
+  const box = $("rep-mt"), M = REP.mt, r = M && repById(M.id);
+  if (!box) return;
+  if (!r) { box.hidden = true; return; }
+  if (!M.refs.length) M.refs.push({ name: "", where: "" });
+  box.hidden = false;
+  box.innerHTML = `<div class="op mte" role="dialog" aria-modal="true" aria-labelledby="rep-mt-t" tabindex="-1">
+    <div class="oh"><div><b id="rep-mt-t">${escH(r.name)} — 참고자료 · 메모</b><small class="mute">모두에게 같이 보인다 · 자세히 창 아래에 나온다</small></div>
+      <button type="button" id="rep-mtx" aria-label="닫기 (Esc)" title="닫기 (Esc)">✕</button></div>
+    <div class="ob"><fieldset class="sec"><legend>참고자료 — 무엇을 · 어디서</legend>
+      ${M.refs.map((x, i) => `<div class="mtr"><input id="rep-mtn${i}" maxlength="80" value="${escH(x.name)}" placeholder="자료 이름 — 예) 산사태 위험도" aria-label="자료 이름 ${i + 1}">
+        <input id="rep-mtw${i}" data-mtw="${i}" maxlength="120" value="${escH(x.where)}" placeholder="어디서 — 예) 산림청 산사태정보시스템" aria-label="어디서 ${i + 1}">
+        <button type="button" data-mtdel="${i}" aria-label="${i + 1}번 줄 지우기" title="이 줄 지우기">✕</button></div>`).join("")}
+      <button type="button" id="rep-mtadd">＋ 줄 더하기</button></fieldset>
+      <fieldset class="sec"><legend>메모</legend><textarea id="rep-mtm" maxlength="2000" rows="6" placeholder="작성 요령 · 확인할 곳 · 주의할 점 — 예) 도로통제 숫자는 도로과 보고서와 맞춘다">${escH(M.memo)}</textarea></fieldset></div>
+    <p class="msg" id="rep-mtmsg" role="status"></p>
+    <div class="of"><span class="sp"></span><button type="button" id="rep-mtc">닫기</button><button type="button" id="rep-mts" class="pri">저장</button></div></div>`;
+  box.querySelector(".op").focus();
+}
+function repMtRead() {
+  const M = REP.mt;
+  M.refs = M.refs.map((x, i) => ({ name: $(`rep-mtn${i}`)?.value ?? x.name, where: $(`rep-mtw${i}`)?.value ?? x.where }));
+  M.memo = $("rep-mtm")?.value ?? M.memo;
+}
+async function repMtSave() {
+  repMtRead();
+  const M = REP.mt, body = { refs: M.refs.filter(x => x.name.trim()), memo: M.memo };
+  try {
+    const res = await fetch(`/api/reports/meta/${encodeURIComponent(M.id)}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || `오류 ${res.status}`);
+    REP.d = await getJson("/api/reports");
+    REP.mt = null; REP.sel = M.id; toast("참고자료 · 메모를 저장했다"); repDraw();
+  } catch (e) { $("rep-mtmsg").textContent = `저장하지 못했다 — ${e.message}`; $("rep-mtmsg").className = "msg bad"; }
+}
+
+/* 사건 — 메뉴 · 메모 창은 다른 처리보다 먼저(capture) */
+$("rep").addEventListener("click", ev => {
+  const t = ev.target;
+  if (REP.swallow) { REP.swallow = false; ev.stopImmediatePropagation(); ev.preventDefault(); return; }   /* 길게 누른 뒤 손을 뗀 누름 */
+  if (REP.ctx) {
+    const b = t.closest("#rep-ctx button[data-ci]");
+    if (b) { const it = REP.ctx[+b.dataset.ci]; repCtxClose(); it?.fn?.(); }
+    else if (!t.closest("#rep-ctx")) repCtxClose();
+    ev.stopImmediatePropagation(); return;
+  }
+  if (REP.mt) {
+    if (t.id === "rep-mt" || t.closest("#rep-mtx, #rep-mtc")) { REP.mt = null; repMtDraw(); }
+    else if (t.closest("#rep-mtadd")) { repMtRead(); REP.mt.refs.push({ name: "", where: "" }); repMtDraw(); $(`rep-mtn${REP.mt.refs.length - 1}`)?.focus(); }
+    else if (t.closest("[data-mtdel]")) { repMtRead(); REP.mt.refs.splice(+t.closest("[data-mtdel]").dataset.mtdel, 1); repMtDraw(); }
+    else if (t.closest("#rep-mts")) repMtSave();
+    ev.stopImmediatePropagation(); return;
+  }
+  const mt = t.closest("[data-mt]");
+  if (mt) { ev.stopImmediatePropagation(); return repMtOpen(mt.dataset.mt); }
+  const add = t.closest("[data-gadd]");
+  if (add) { ev.stopImmediatePropagation(); const b = add.getBoundingClientRect(); return repCtxAdd(b.left, b.bottom + 4); }
+}, true);
+$("rep").addEventListener("submit", ev => {
+  const f = ev.target.closest("#rep-ctx form[data-ci]"); if (!f) return;
+  ev.preventDefault();
+  const it = REP.ctx?.[+f.dataset.ci], v = $("rep-ctx-in")?.value.trim();
+  if (!v) return;
+  repCtxClose(); it?.fn?.(v);
+});
+$("rep").addEventListener("contextmenu", ev => {
+  if (REP.op || REP.mt) return;
+  const tile = ev.target.closest("[data-id]"), g = ev.target.closest("[data-g]");
+  if (!tile && !g) return;
+  ev.preventDefault(); ev.stopImmediatePropagation();
+  if (tile) repCtxReport(tile.dataset.id, ev.clientX, ev.clientY); else repCtxGroup(g.dataset.g, ev.clientX, ev.clientY);
+}, true);
+/* 휴대폰 — 길게 누르면 같은 메뉴(손가락을 떼는 누름은 삼킨다) */
+let repLong = null;
+$("rep").addEventListener("pointerdown", ev => {
+  if (ev.pointerType === "mouse" || REP.op || REP.mt) return;
+  const tile = ev.target.closest("[data-id]"), g = ev.target.closest("[data-g]");
+  if (!tile && !g) return;
+  const x = ev.clientX, y = ev.clientY;
+  repLong = { x, y, t: setTimeout(() => { REP.swallow = true; if (tile) repCtxReport(tile.dataset.id, x, y); else repCtxGroup(g.dataset.g, x, y); }, 550) };
+});
+const repLongX = ev => { if (repLong && (ev.type !== "pointermove" || Math.hypot(ev.clientX - repLong.x, ev.clientY - repLong.y) > 10)) { clearTimeout(repLong.t); repLong = null; } };
+["pointerup", "pointercancel", "pointermove"].forEach(k => $("rep").addEventListener(k, repLongX));
+/* 끌어 놓기 — 폴더 탭 위: 그 폴더로 · 다른 보고서 위: 그 앞으로(폴더도 그 보고서 폴더로) */
+$("rep").addEventListener("dragstart", ev => {
+  const tile = ev.target.closest?.("[data-id]"); if (!tile) return;
+  ev.dataTransfer.setData("text/x-rep", tile.dataset.id); ev.dataTransfer.effectAllowed = "move"; tile.classList.add("drag");
+});
+$("rep").addEventListener("dragend", ev => ev.target.closest?.("[data-id]")?.classList.remove("drag"));
+$("rep").addEventListener("dragover", ev => {
+  const to = ev.target.closest("[data-g], [data-id]"); if (!to || !ev.dataTransfer.types.includes("text/x-rep")) return;
+  ev.preventDefault(); ev.dataTransfer.dropEffect = "move";
+  $("rep").querySelectorAll(".dropto").forEach(e => e !== to && e.classList.remove("dropto")); to.classList.add("dropto");
+});
+$("rep").addEventListener("dragleave", ev => ev.target.closest?.(".dropto")?.classList.remove("dropto"));
+$("rep").addEventListener("drop", ev => {
+  const id = ev.dataTransfer.getData("text/x-rep"), g = ev.target.closest("[data-g]"), tile = ev.target.closest("[data-id]");
+  $("rep").querySelectorAll(".dropto").forEach(e => e.classList.remove("dropto"));
+  if (!id) return;
+  ev.preventDefault();
+  if (g) { if (g.dataset.g !== repById(id)?.group) repMove(id, g.dataset.g); return; }
+  if (tile && tile.dataset.id !== id) repMove(id, repById(tile.dataset.id)?.group, tile.dataset.id);
+});
+document.addEventListener("keydown", ev => {
+  if ($("rep").hidden || ev.key !== "Escape") return;
+  if (REP.ctx) { ev.stopImmediatePropagation(); repCtxClose(); }
+  else if (REP.mt) { ev.stopImmediatePropagation(); REP.mt = null; repMtDraw(); }
+}, true);
