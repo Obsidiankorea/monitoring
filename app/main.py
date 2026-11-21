@@ -34,7 +34,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTex
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from . import aiwatch, apikeys, events, geocode, heat, its, lawwatch, river, safety, snow, tide, clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, serverupdate, sites, snaps, update
+from . import aiwatch, apikeys, events, geocode, heat, its, lawwatch, rhwpwatch, river, safety, snow, tide, clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, serverupdate, sites, snaps, update
 from . import auth as _auth  # 로그인(도 관리자 · 도 사용자 · 시군 사용자)
 from .collectors import alerts, bangjae_rain, forecast, grid_rain, prefetch, qpf, rain, shortfc
 from .config import CACHE, INTERVALS, POLL_DEFAULT
@@ -199,6 +199,8 @@ async def lifespan(app: FastAPI):
     sched.add_job(_reports_tick, "interval", seconds=60, id="reportwait", max_instances=1, coalesce=True)
     # 법령 변경 감시 — 하루 한 번(LAW_OC 가 있는 서버에서만). 위키는 고치지 않고 제안 파일만 남긴다(app/lawwatch.py)
     sched.add_job(lawwatch.run, "cron", hour=9, minute=10, id="lawwatch", max_instances=1, coalesce=True)
+    # rhwp 새 판 알림 — 하루 한 번, 보고서 서버의 판과 다르면 텔레그램 한 번(app/rhwpwatch.py). 올리지는 않는다
+    sched.add_job(rhwpwatch.run, "cron", hour=9, minute=15, id="rhwpwatch", max_instances=1, coalesce=True)
     # 하천 수위 · 댐 · 보 — 10분마다(HRFCO_KEY 가 있는 서버에서만, app/river.py). 켠 지 20초 뒤 첫 수집
     sched.add_job(river.run, "interval", minutes=10, id="river", max_instances=1, coalesce=True,
                   next_run_time=datetime.now() + timedelta(seconds=20))
@@ -882,6 +884,12 @@ async def api_law_run():
     if not config.KEYS.get("LAW_OC"):
         raise HTTPException(400, "LAW_OC 없음 — config/api_keys.txt")
     return await lawwatch.run()
+
+
+@app.post("/api/rhwp/run")
+async def api_rhwp_run():
+    """rhwp 새 판을 지금 한 번 본다(시험용) — {latest, have, told}."""
+    return await rhwpwatch.run()
 
 
 @app.get("/api/heat")
