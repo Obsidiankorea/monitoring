@@ -418,3 +418,27 @@ def test_report_layout_and_meta(monkeypatch):
     assert c.put("/api/reports/meta/없는것", json={}).status_code == 400
     c.delete("/api/reports/layout")
     assert c.get("/api/reports").json()["groups"] == list(reports.GROUPS)
+
+
+def test_sample_only_listed_cases_with_pages(monkeypatch, tmp_path):
+    """보고서 창 '샘플' — index.json 에 사례가 있는 것만, 쪽 그림 수 · 받기 · 쪽 · 없는 것은 404."""
+    import json
+    monkeypatch.setattr(config, "SNAPS", tmp_path)
+    d = tmp_path / "_reports"
+    (d / "view").mkdir(parents=True)
+    (d / "nature.hwp").write_bytes(HWP)
+    (d / "combo.png").write_bytes(b"png")                       # 시연 샘플이지만 사례 목록에 없다 → 보고서 창 샘플 아님
+    (d / "view" / "nature-1.png").write_bytes(b"p1")
+    (d / "view" / "nature-2.png").write_bytes(b"p2")
+    (d / "index.json").write_text(json.dumps({"nature": "2026. 8. 28. 호우"}), "utf-8")
+    assert reports.spl("nature") == {"ext": "hwp", "pages": 2, "case": "2026. 8. 28. 호우"}
+    assert reports.spl("combo") is None and reports.spl("daily") is None
+    c = TestClient(main.app)
+    r = c.get("/api/reports/sample/nature")
+    assert r.status_code == 200 and r.content == HWP and "filename*=UTF-8''" in r.headers["content-disposition"]
+    assert c.get("/api/reports/sample/nature/2.png").content == b"p2"
+    assert c.get("/api/reports/sample/nature/3.png").status_code == 404
+    assert c.get("/api/reports/sample/combo").status_code == 404
+    assert next(x for x in c.get("/api/reports").json()["reports"] if x["id"] == "nature")["spl"]["pages"] == 2
+    tm = next(x for x in c.get("/api/reports").json()["reports"] if x["id"] == "typhoon_meeting")
+    assert not tm["ready"] and tm["broken"]

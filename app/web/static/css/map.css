@@ -2260,6 +2260,7 @@ body.sj-on > header, body.sj-on #stage, body.sj-on #tl, body.sj-on #rail { displ
 #rep .th .ph u { height: 3%; background: #E3E9F0; border-radius: 2px; } #rep .th .ph u:nth-child(odd) { width: 80%; }
 #rep .th em { position: absolute; z-index: 2; font-style: normal; font-size: 12px; font-weight: 700; }
 #rep .th .soon { left: 8px; top: 8px; padding: 2px 8px; border-radius: 6px; color: var(--ink); background: var(--panel); border: 1px solid var(--line); }
+#rep .th .soon.bad { color: #fff; background: var(--bad, #C8402E); border-color: transparent; }
 #rep .th .run { left: 0; right: 0; bottom: 0; display: grid; gap: 6px; padding: 10px; color: #fff; background: rgba(4, 8, 14, .72); }
 #rep .th .run .sec { font-variant-numeric: tabular-nums; }
 #rep .nm { display: grid; gap: 2px; } #rep .nm b { font-size: 14px; } #rep .nm small { font-size: 12px; color: var(--ink-2); line-height: 1.35; }
@@ -2497,6 +2498,13 @@ body.tour-on #tools { display: flex; opacity: 1; pointer-events: auto; }
 
 /* 보고서 창 — 사용자 폴더 · 메뉴 · 끌어 놓기 · 참고자료와 메모 */
 #rep nav .gadd { min-width: 36px; padding: 0 10px; font-size: 16px; }
+/* 묶음 탭은 머리 줄 안(제목 옆) — 머리 단추(44px 네모) 꼴을 덮는다. 좁으면 다음 줄 전체로 */
+#rep .top { flex-wrap: wrap; row-gap: 8px; }
+#rep .top nav { padding: 0 0 0 6px; flex: 0 1 auto; min-width: 0; }
+#rep .top nav button { width: auto; height: auto; min-height: 36px; padding: 0 12px; font: 600 13px var(--sans); color: var(--ink-2); border: 1px solid var(--line); border-radius: 999px; }
+#rep .top nav button.on { color: var(--ink); border-color: var(--accent); background: color-mix(in oklab, var(--accent) 18%, transparent); }
+#rep .top nav .gadd { min-width: 36px; padding: 0 10px; font-size: 16px; }
+@media (max-width: 720px) { #rep .top nav { order: 9; flex-basis: 100%; padding: 0; } }
 #rep .rctx { position: absolute; z-index: 8; min-width: 200px; max-width: 300px; max-height: 70%; overflow: auto; padding: 6px; border-radius: 12px;
   background: var(--panel); border: 1px solid var(--line); box-shadow: 0 10px 30px rgba(0, 0, 0, .35); }
 #rep .rctx[hidden] { display: none; }
@@ -2519,3 +2527,16 @@ body.tour-on #tools { display: flex; opacity: 1; pointer-events: auto; }
 #rep .op.mte .mtr button, #rep #rep-mtadd { min-height: 34px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); color: var(--ink); cursor: pointer; }
 #rep .op.mte textarea { resize: vertical; line-height: 1.55; }
 @media (max-width: 480px) { #rep .op.mte .mtr { grid-template-columns: 1fr 34px; } }
+/* 보고서 샘플 — 타일 단추(옵션 ⚙ 아래) · 샘플 창(기간 · 지난 호우 때 보고서 쪽 그림) */
+#rep .rt-sp { position: absolute; top: 110px; right: 14px; z-index: 3; min-width: 44px; height: 32px; padding: 0 8px; border-radius: 999px;
+  font: 700 12px var(--sans); color: var(--ink-2); background: var(--panel); border: 1px solid var(--line); box-shadow: 0 2px 6px rgba(0,0,0,.25); cursor: pointer; }
+#rep .rt-sp:hover { color: var(--ink); border-color: var(--accent); }
+#rep .rt-op.cm ~ .rt-sp { top: 62px; }
+#rep .rt.off .rt-sp { top: 14px; }
+#rep .op.spd { width: 720px; }
+#rep .spd .sec .lg { font-size: 13px; color: var(--ink-2); }
+#rep .spv { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+#rep .spv.one { grid-template-columns: 1fr; }
+#rep .spv img { display: block; width: 100%; border-radius: 6px; background: #fff; border: 1px solid var(--line); }
+#rep .spv a:hover img { border-color: var(--accent); }
+#rep .spd a.btn { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; font: 600 13px var(--sans); color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; text-decoration: none; }

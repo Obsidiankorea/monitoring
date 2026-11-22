@@ -1269,6 +1269,26 @@ async def api_brief_sample():
     return {"ok": True, "share": await asyncio.to_thread(share.sample)}
 
 
+@app.get("/api/reports/sample/{rid}")
+async def api_report_sample(rid: str):
+    """보고서 창 '샘플' — 지난 호우 때 미리 만들어 둔 파일(받기)."""
+    from . import reports
+    if rid not in reports.BY_ID or not reports.spl(rid):
+        raise HTTPException(404, "이 보고서는 샘플이 없다")
+    f = reports.sample(rid)
+    name = f"샘플_{reports.BY_ID[rid]['name']}{f.suffix}"
+    return FileResponse(f, media_type=reports.media(name), headers={"Content-Disposition": reports.disposition(name), "Cache-Control": "no-cache"})
+
+
+@app.get("/api/reports/sample/{rid}/{n}.png")
+async def api_report_sample_page(rid: str, n: int):
+    from . import reports
+    p = reports.spl_page(rid, n)
+    if not p:
+        raise HTTPException(404, "없는 쪽")
+    return FileResponse(p, media_type="image/png", headers={"Cache-Control": "no-cache"})
+
+
 @app.get("/t/{token}")
 async def share_page(token: str):
     """태풍 브리핑 공유 페이지 — 로그인 없이(auth.OPEN '/t/'). 자료는 같은 주소 아래 data.json."""

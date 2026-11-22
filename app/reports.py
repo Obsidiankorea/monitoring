@@ -87,7 +87,8 @@ REG = [
      "desc": "통보문 · 예상 강수량 · 3시간 강수량 분포도(사흘)", "opts": [_TM, _TITLE]},
     {"id": "typhoon", "name": "태풍 예상경로보고", "group": "풍수해", "job": "typhoon", "ready": True,
      "desc": "태풍 표 · 진로도(감시 · 경계 · 비상구역 선) · 이름 뜻 · 예상진로 비교(기상청)", "opts": [_TM, _TITLE, _o("typ", "태풍 번호", "int", "", "태풍", "비우면 진행 중인 태풍(없으면 올해 마지막)", min=1, max=60)]},
-    {"id": "typhoon_meeting", "name": "태풍 대비 상황판단회의", "group": "풍수해", "job": "typhoon_meeting", "ready": True,
+    {"id": "typhoon_meeting", "name": "태풍 대비 상황판단회의", "group": "풍수해", "job": "typhoon_meeting", "ready": False,
+     "broken": "지금은 안 된다 — 고치는 중",                # 사용자 확인(2026-11-23): 만들어지지 않는다
      "desc": "기상상황 · 태풍 표 · 진로도 · 우리 도 영향범위(구역 진입 시각) · 현재/향후", "opts": [_TM, _TITLE, _o("typ", "태풍 번호", "int", "", "태풍", "비우면 진행 중인 태풍(없으면 올해 마지막)", min=1, max=60)]},
     {"id": "winter", "name": "기상 전망 보고", "group": "기후재난", "job": "winter", "ready": True,
      "desc": "통보문 종합 · 특보 · 그림 셋 · 현재기온 + 이틀 최저/최고", "opts": [_TM, _TITLE]},
@@ -155,6 +156,25 @@ def sample(rid: str):
     return next((p for p in sorted(d.glob(f"{rid}.*")) if p.is_file()), None) if d.exists() else None
 
 
+def spl(rid: str) -> dict | None:
+    """보고서 창 '샘플' — 지난 호우 때 미리 만들어 둔 것만(_reports/index.json 에 사례 이름이 있는 것). 쪽 그림은 _reports/view/<id>-<쪽>.png.
+    → {ext, pages, case} 또는 None. 시연 샘플(sample)과 같은 파일을 쓴다."""
+    d = config.SNAPS / "_reports"
+    try:
+        case = json.loads((d / "index.json").read_text("utf-8")).get(rid)
+    except (OSError, ValueError):
+        return None
+    f = sample(rid)
+    if not case or not f:
+        return None
+    return {"ext": f.suffix.lstrip("."), "pages": len(list((d / "view").glob(f"{rid}-*.png"))), "case": str(case)}
+
+
+def spl_page(rid: str, n: int):
+    p = config.SNAPS / "_reports" / "view" / f"{rid}-{n}.png"
+    return p if rid in BY_ID and p.is_file() else None
+
+
 # ── 사용자가 꾸미는 폴더 · 차례 · 참고자료 · 메모 — 서버 전체에 하나(로고처럼 모두에게 같다), DB 설정 ──
 LAYOUT_KEY, META_KEY = "report_layout", "report_meta"
 
@@ -213,7 +233,7 @@ def listing() -> dict:
     rank = {rid: i for i, rid in enumerate(lay["order"])}
     return {"reports": [{**{k: r[k] for k in ("id", "name", "desc", "opts", "ready")}, "group": lay["place"][r["id"]], "home": r["group"],
                          "meta": mt.get(r["id"]) or None, "wait": bool(r.get("wait")),
-                         "compose": r.get("compose") or "", "brief": bool(r.get("brief")),
+                         "compose": r.get("compose") or "", "brief": bool(r.get("brief")), "spl": spl(r["id"]), "broken": r.get("broken") or "",
                          **({"sample": bool(sample(r["id"])), "live": r["id"] in DEMO_LIVE and ready()} if config.DEMO else {}),
                          "thumb": (THUMBS / f"{r['id']}.png").is_file()} for r in sorted(REG, key=lambda r: rank[r["id"]])],
             "groups": lay["groups"],
