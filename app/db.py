@@ -255,7 +255,9 @@ _ADDED_COLUMNS = {
     "bangjae_rain": [("daw_name", "TEXT"), ("daw_mm", "REAL")],
     # 15분 강수량 — '지금 어디에 쏟아지고 있나'는 이 값이 제일 빨리 말해 준다.
     # 60분치는 이미 지나간 한 시간을 담고 있어 한 박자 늦다.
-    "obs_minute": [("rn_15m", "REAL")],
+    "obs_minute": [("rn_15m", "REAL"), ("wss", "REAL")],
+    # 겨울 화면(app/cold.py) — 바람(10분 평균) · 습도. 실효습도는 정시 습도로 날마다 평균을 낸다
+    "obs_hourly": [("ws", "REAL"), ("wd", "REAL"), ("hm", "REAL")],
     # 판단 기록 — 누른 사람(로그인 이름 · 역할), 지우기는 표시만(gone = '시각 · 누가'). AI 쪽(aireport)에는 who 를 넘기지 않는다
     "decision": [("who", "TEXT"), ("gone", "TEXT")],
     # 계정 신청 — 로그인 화면에서 신청하면 pending=1 · active=0, 관리자가 승인하면 pending=0 · active=1

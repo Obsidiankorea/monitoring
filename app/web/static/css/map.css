@@ -1482,7 +1482,7 @@ body.heat #ht-ttl { display: block; font-size: 28px; font-weight: 800; letter-sp
 body.heat #ht-sub { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 3px; font: 600 13.5px var(--sans); color: var(--ink-2); }
 #ht-mark { padding: 2px 8px; border-radius: 6px; text-shadow: none; color: #1A1400; background: var(--lv-watch); }
 #ht-mark[hidden] { display: none; }
-body.heat :is(.ttl-wrap, .hud-sub, #lsrc, #legend, #play, #sw, #ghost, #ly-alerts, #rail > .card:not(.hc)) { display: none !important; }
+body.heat :is(.ttl-wrap, .hud-sub, #lsrc, #legend, #play, #sw, #ghost, #ly-alerts, #rail > .card:not(.hc, .cc)) { display: none !important; }
 body.heat #cv { visibility: hidden; }
 body.heat :is(#labels, #ranks, #stns, #walerts, #wbadge) { display: none; }   /* 호우 특보 선 · 딱지까지 비운다 — 폭염특보는 시군 둘레로 */
 body.heat .hc { display: flex; }
@@ -1545,6 +1545,40 @@ body.heat #ht-lg { position: absolute; left: 22px; bottom: 22px; z-index: 5; dis
   .hr, .ht-ax { grid-template-columns: calc(104px * var(--k, 1)) minmax(0, 1fr) calc(86px * var(--k, 1)); gap: calc(8px * var(--k, 1)); }
   .hr svg, .ht-ax span:last-child { display: none; }
 }
+
+/* 겨울 화면(06g-cold.js) — 폭염 화면 틀(body.heat)에 body.cold. 폭염 카드 대신 겨울 카드 */
+.cc { display: none; }
+body.heat.cold .hc { display: none; }
+body.heat.cold .cc { display: flex; }
+#c-cd { flex: 1 1 auto; min-height: 0; } #c-ca { flex: none; }
+#cd-b { overflow: auto; }
+.cd-ly { display: flex; gap: 2px; align-self: flex-start; margin: 0 calc(10px * var(--k, 1)) calc(8px * var(--k, 1)); padding: 2px; border-radius: 999px; background: var(--panel-2); }
+.cd-ly button { white-space: nowrap; }
+.cd-ly button { min-height: calc(26px * var(--k, 1)); padding: 0 calc(10px * var(--k, 1)); border: 0; border-radius: 999px; background: none; color: var(--ink-2);
+  font: 700 calc(12px * var(--k, 1)) var(--sans); cursor: pointer; }
+.cd-ly button:hover { color: var(--ink); }
+.cd-ly button.on { background: var(--accent); color: #fff; }
+.cd-ly button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cd-kpi { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.cd-kpi b { font-size: calc(21px * var(--k, 1)); }
+.cdr { display: grid; grid-template-columns: calc(108px * var(--k, 1)) repeat(5, minmax(0, 1fr)) calc(112px * var(--k, 1)); align-items: center;
+  gap: calc(6px * var(--k, 1)); min-height: calc(30px * var(--k, 1)); padding: 0 6px; border-radius: 8px;
+  font: 700 calc(14px * var(--k, 1)) var(--mono); font-variant-numeric: tabular-nums; }
+.cdr > span { text-align: right; }
+.cdr > span em { font-style: normal; font-weight: 600; color: var(--ink-3); }
+.cdr > span.near { color: var(--lv-watch); } .cdr > span.watch { color: #EE8B2B; } .cdr > span.warn { color: #F2704F; }
+.cdr.h { min-height: calc(20px * var(--k, 1)); font: 600 calc(11px * var(--k, 1)) var(--sans); color: var(--ink-3); }
+.cdr.h span:first-child { text-align: left; }
+.cdr:not(.h):hover, .cdr.hov { background: color-mix(in oklab, var(--accent) 13%, transparent); }
+.cdb { display: flex; flex-wrap: wrap; gap: 3px; justify-content: flex-end; }
+.cdb i { padding: 1px 6px; border-radius: 5px; font: 700 calc(11px * var(--k, 1)) var(--sans); font-style: normal; color: var(--ink); background: color-mix(in oklab, var(--lv-watch) 28%, transparent); }
+.cdb i.watch { color: #1A1400; background: var(--lv-watch); } .cdb i.warn { color: #fff; background: var(--lv-warn); }
+@container (max-width: 520px) { .cdr { grid-template-columns: calc(92px * var(--k, 1)) repeat(5, minmax(0, 1fr)); } .cdr > :last-child { display: none; } }
+#c-cd { container-type: inline-size; }
+#mode.w-cold { background: color-mix(in oklab, #8DB6E6 22%, transparent); }
+#modefx.snow { background: linear-gradient(rgba(150,190,240,.45), rgba(90,130,200,.25)); }
+#modefx.snow i { width: 8px; height: 8px !important; border-radius: 50%; background: #F2F8FF; box-shadow: 0 0 6px #fff; animation-name: fxFlake; animation-timing-function: ease-in; }
+@keyframes fxFlake { to { transform: translate(40px, 110vh); } }
 
 /* 산사태 · 저수지 · 침수흔적(06d-safety.js) */
 #ly-slide .sfm { margin: 6px 0 2px; }

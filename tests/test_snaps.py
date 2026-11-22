@@ -28,7 +28,7 @@ def live(tmp_path, monkeypatch):
     db.init()
     with db.tx() as c:
         for tm in ("2026-10-18 23:00", "2026-10-19 00:00", "2026-10-19 01:00"):      # 01시는 T 뒤 — 버린다
-            c.execute("INSERT INTO obs_hourly VALUES('155', ?, 12.5, 40, 18, 'ok', ?)", (tm, tm))
+            c.execute("INSERT INTO obs_hourly(stn, tm, rn_hr1, rn_day, ta, quality, fetched_at) VALUES('155', ?, 12.5, 40, 18, 'ok', ?)", (tm, tm))
         for tmfc in ("202610182350", "202610190000", "202610190010", "202610190030"):  # 0030 은 T 뒤
             c.execute("INSERT INTO fcst_rn1 VALUES(?, '202610190100', '고성', '고성읍', 10, ?)", (tmfc, tmfc))
         c.execute("INSERT INTO snapshot VALUES('alerts', '2026-10-19 00:20', '2026-10-19 00:20', ?)",

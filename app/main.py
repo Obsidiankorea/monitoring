@@ -34,7 +34,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTex
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from . import aiwatch, apikeys, events, geocode, heat, its, lawwatch, rhwpwatch, river, safety, snow, tide, clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, serverupdate, sites, snaps, update
+from . import aiwatch, apikeys, cold, events, geocode, heat, its, lawwatch, rhwpwatch, river, safety, snow, tide, clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, serverupdate, sites, snaps, update
 from . import auth as _auth  # 로그인(도 관리자 · 도 사용자 · 시군 사용자)
 from .collectors import alerts, bangjae_rain, forecast, grid_rain, prefetch, qpf, rain, shortfc
 from .config import CACHE, INTERVALS, POLL_DEFAULT
@@ -896,6 +896,12 @@ async def api_rhwp_run():
 async def api_heat():
     """폭염 화면 — 시군별 관측 기온(app/heat.py)."""
     return heat.status()
+
+
+@app.get("/api/cold")
+async def api_cold():
+    """겨울 화면 — 시군별 기온 · 체감 · 바람 · 실효습도와 특보 기준까지 거리(app/cold.py)."""
+    return cold.status()
 
 
 @app.get("/api/snow")

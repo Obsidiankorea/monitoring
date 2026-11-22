@@ -104,10 +104,11 @@ function modeIcon() {
   const m = $("mode");
   if (!m) return;
   const n = HEAT ? null : snowNow(), k = n?.kind || "rain";
-  m.className = m.className.replace(/\bw-\w+/g, "").trim() + ` w-${HEAT ? "heat" : k}`;
-  m.innerHTML = HEAT ? "☀️" : k === "snow" ? "🌨️" : k === "both" ? `🌧️<b class="mb" aria-hidden="true">❄</b>` : "🌧️";
+  m.className = m.className.replace(/\bw-\w+/g, "").trim() + ` w-${HEAT ? (COLD ? "cold" : "heat") : k}`;
+  m.innerHTML = HEAT ? (COLD ? "❄️" : "☀️") : k === "snow" ? "🌨️" : k === "both" ? `🌧️<b class="mb" aria-hidden="true">❄</b>` : "🌧️";
   const what = !n || k === "rain" ? "" : k === "snow" ? ` · 지금 눈(${n.snow.join(" · ")})` : ` · 지금 비와 눈(눈 ${n.snow.join(" · ")})`;
-  m.title = `${HEAT ? "폭염" : "호우"} 화면${what} — 눌러서 ${HEAT ? "호우" : "폭염"} 화면으로 (M)`;
+  const cur = !HEAT ? "호우" : COLD ? "겨울" : "폭염", nxt = !HEAT ? "폭염" : COLD ? "호우" : "겨울";
+  m.title = `${cur} 화면${what} — 눌러서 ${nxt} 화면으로 (M)`;
   m.setAttribute("aria-label", m.title);
 }
 /* 강수 누적 줄의 적설 칩 — 그 시군에 쌓인 눈(cm, 산지 뺀 최대). 비만 오는 시군은 없다 */

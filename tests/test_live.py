@@ -33,8 +33,8 @@ def test_aws_acc_now_cell_adds_since_the_hour(store, tdb, monkeypatch):
     _grids(store, "202610031400", "202610031500")
     hl = next(s for s in sites.gn_sites() if s["sigun"] == "고성" and s["name"] == "학림")
     with tdb.tx() as c:
-        c.execute("INSERT INTO obs_hourly VALUES('155', '2026-10-03 14:00', 10, 10, 0, 'ok', 'x')")
-        c.execute("INSERT INTO obs_hourly VALUES('155', '2026-10-03 15:00', 10, 20, 0, 'ok', 'x')")
+        c.execute("INSERT INTO obs_hourly(stn, tm, rn_hr1, rn_day, ta, quality, fetched_at) VALUES('155', '2026-10-03 14:00', 10, 10, 0, 'ok', 'x')")
+        c.execute("INSERT INTO obs_hourly(stn, tm, rn_hr1, rn_day, ta, quality, fetched_at) VALUES('155', '2026-10-03 15:00', 10, 20, 0, 'ok', 'x')")
         for tm, mm in (("2026-10-03 13:00", 30), ("2026-10-03 14:00", 30), ("2026-10-03 15:00", 4)):   # 15시 = 진행 칸
             c.execute("INSERT INTO bangjae_hourly VALUES(?, 'BJ7', '학림', '고성', ?, 'x')", (tm, mm))
         _minute(c, "2026-10-03 15:20", "155", 23.5, 6.0)
@@ -88,7 +88,7 @@ def test_aws_hour_now_is_the_minute_60(store, tdb, monkeypatch):
     _grids(store, "202610031400", "202610031500")
     other = gridview.station_sites()["stations"][1]["stn"]
     with tdb.tx() as c:
-        c.execute("INSERT INTO obs_hourly VALUES('155', '2026-10-03 15:00', 7, 0, 0, 'ok', 'x')")
+        c.execute("INSERT INTO obs_hourly(stn, tm, rn_hr1, rn_day, ta, quality, fetched_at) VALUES('155', '2026-10-03 15:00', 7, 0, 0, 'ok', 'x')")
         _minute(c, "2026-10-03 15:20", "155", 0, 6.0)
         _minute(c, "2026-10-03 15:20", other, 0, 1.5)
     now = datetime(2026, 10, 3, 15, 21)
@@ -194,7 +194,7 @@ def test_bangjae_rain_is_empty_without_bangjae(tdb):
     """스방 지점이 하나도 없으면(서버 · 집) 빈 줄 — 화면이 기상청(매분 보강 마지막 칸 포함)으로 물러선다.
     ⚠️ 기상청 줄을 늘 덧붙이자 화면이 물러서지 않아 서버 화면에서 매분 칸이 사라졌다."""
     with tdb.tx() as c:
-        c.execute("INSERT INTO obs_hourly VALUES('155', '2026-10-03 14:00', 4, 4, 0, 'ok', 'x')")
+        c.execute("INSERT INTO obs_hourly(stn, tm, rn_hr1, rn_day, ta, quality, fetched_at) VALUES('155', '2026-10-03 14:00', 4, 4, 0, 'ok', 'x')")
         _minute(c, "2026-10-03 14:20", "155", 5.5, 3.0)
     now = datetime(2026, 10, 3, 14, 21)
     assert queries._rain_bangjae(2, now)["rows"] == []
@@ -211,7 +211,7 @@ def test_grid_acc_stations_stay_on_the_hour_without_minute_at_the_slot(store, td
     store.save("obsday", "202610031500", np.full(sh, 10.0))
     store.save("obsday", "202610031540", np.full(sh, 12.0))
     with tdb.tx() as c:
-        c.execute("INSERT INTO obs_hourly VALUES('155', '2026-10-03 15:00', 1, 10, 0, 'ok', 'x')")
+        c.execute("INSERT INTO obs_hourly(stn, tm, rn_hr1, rn_day, ta, quality, fetched_at) VALUES('155', '2026-10-03 15:00', 1, 10, 0, 'ok', 'x')")
     monkeypatch.setattr(gridview.clock, "now", lambda: datetime(2026, 10, 3, 15, 45))
     assert gridview.frame("acc")["tm"] == "202610031540"
     assert gridview.stations("acc")["tm"] == "202610031500"            # 15:40 매분이 없다 — 정시로(화면은 점을 감춘다)
@@ -229,8 +229,8 @@ def test_disabled_aws_left_out_of_surface_cards_and_now(store, tdb, monkeypatch)
     _grids(store, "202610031500")
     hl = next(s for s in sites.gn_sites() if s["sigun"] == "고성" and s["name"] == "학림")
     with tdb.tx() as c:
-        c.execute("INSERT INTO obs_hourly VALUES('155', '2026-10-03 15:00', 1, 1, 0, 'ok', 'x')")
-        c.execute("INSERT INTO obs_hourly VALUES('162', '2026-10-03 15:00', 12, 12, 0, 'ok', 'x')")
+        c.execute("INSERT INTO obs_hourly(stn, tm, rn_hr1, rn_day, ta, quality, fetched_at) VALUES('155', '2026-10-03 15:00', 1, 1, 0, 'ok', 'x')")
+        c.execute("INSERT INTO obs_hourly(stn, tm, rn_hr1, rn_day, ta, quality, fetched_at) VALUES('162', '2026-10-03 15:00', 12, 12, 0, 'ok', 'x')")
         c.execute("INSERT INTO bangjae_hourly VALUES('2026-10-03 14:00', 'BJ7', '학림', '고성', 30, 'x')")
         _minute(c, "2026-10-03 15:00", "155", 1, 1)
         _minute(c, "2026-10-03 15:00", "162", 12, 12)

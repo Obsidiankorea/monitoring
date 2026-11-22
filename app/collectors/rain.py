@@ -49,15 +49,25 @@ def _hour_slots(now: datetime, back: int) -> list[datetime]:
     return [top - timedelta(hours=i) for i in range(back)]
 
 
+def _ta(v: str) -> float | None:
+    """기온 — num() 은 -9 이하를 결측으로 버려 영하 9도 밑(한파)이 사라진다. 기온 결측은 -99.9 꼴이라 -50 이하만 버린다."""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return None if f <= -50 else f
+
+
 async def fetch_hour(slot: datetime) -> dict[str, dict]:
-    """한 정시의 전 지점 자료. 컬럼: YYMMDDHHMI STN TA WD WS RN_DAY RN_HR1 …"""
+    """한 정시의 전 지점 자료. 컬럼: YYMMDDHHMI STN TA WD WS RN_DAY RN_HR1 HM PA PS (바람 · 습도는 겨울 화면 · 실효습도)"""
     text = await fetch_text("/api/typ01/url/awsh.php",
                             {"tm": slot.strftime("%Y%m%d%H00"), "help": "0"})
     out: dict[str, dict] = {}
     for p in parse_rows(text):
         if len(p) < 7 or p[1] not in GN_STN:
             continue
-        out[p[1]] = {"ta": num(p[2]), "rn_day": num(p[5]), "rn_hr1": num(p[6])}
+        out[p[1]] = {"ta": _ta(p[2]), "wd": num(p[3]), "ws": num(p[4]), "rn_day": num(p[5]), "rn_hr1": num(p[6]),
+                     "hm": num(p[7]) if len(p) > 7 else None}
     return out
 
 
@@ -77,7 +87,7 @@ async def fetch_minute(at: datetime) -> dict[str, dict]:
                 return None
             return None if f <= -50 else f
 
-        out[p[1]] = {"rn_15m": v(10), "rn_60m": v(11), "rn_day": v(13)}
+        out[p[1]] = {"rn_15m": v(10), "rn_60m": v(11), "rn_day": v(13), "wss": v(5)}   # WSS = 1분 최대순간풍속
     return out
 
 
@@ -87,10 +97,35 @@ def store_minute(tm: str, rows: dict[str, dict], at: str) -> None:
         for stn, r in rows.items():
             con.execute(
                 """INSERT OR REPLACE INTO obs_minute
-                   (stn, tm, rn_15m, rn_60m, rn_day, quality, fetched_at)
-                   VALUES(?,?,?,?,?,?,?)""",
-                (stn, tm, r["rn_15m"], r["rn_60m"], r["rn_day"],
+                   (stn, tm, rn_15m, rn_60m, rn_day, wss, quality, fetched_at)
+                   VALUES(?,?,?,?,?,?,?,?)""",
+                (stn, tm, r["rn_15m"], r["rn_60m"], r["rn_day"], r.get("wss"),
                  "ok" if r["rn_60m"] is not None else "missing", at))
+
+
+HM_BACK_HOURS = 5 * 24      # 실효습도(오늘 + 앞 4일 평균습도)에 드는 만큼
+HM_PER_RUN = 6              # 한 번에 다시 받는 정시 수 — 바람 · 습도를 받기 전에 쌓인 시각을 천천히 메운다
+
+
+async def _backfill_hm(now: datetime, failed: list) -> int:
+    """기온만 있고 습도가 빈 정시(바람 · 습도를 받기 전에 쌓인 것)를 다시 받아 ws · wd · hm 만 채운다."""
+    lo = (now - timedelta(hours=HM_BACK_HOURS)).strftime("%Y-%m-%d %H:00")
+    with db.tx() as con:
+        tms = [r["tm"] for r in con.execute(
+            "SELECT tm FROM obs_hourly WHERE tm >= ? GROUP BY tm HAVING COUNT(ta) > 0 AND COUNT(hm) = 0 ORDER BY tm DESC LIMIT ?",
+            (lo, HM_PER_RUN))]
+    n = 0
+    for tm in tms:
+        try:
+            rows = await fetch_hour(datetime.strptime(tm, "%Y-%m-%d %H:%M"))
+        except KmaError as e:
+            failed.append(f"습도 {tm}: {e}")
+            continue
+        with db.tx() as con:
+            for stn, r in rows.items():
+                con.execute("UPDATE obs_hourly SET ws=?, wd=?, hm=? WHERE stn=? AND tm=?", (r["ws"], r["wd"], r["hm"], stn, tm))
+        n += bool(rows)
+    return n
 
 
 def _have_minute(tm: str) -> bool:
@@ -174,10 +209,11 @@ async def collect(now: datetime | None = None, back_hours: int | None = None) ->
                 q = "ok" if r and r["rn_hr1"] is not None else "missing"
                 con.execute(
                     """INSERT OR REPLACE INTO obs_hourly
-                       (stn, tm, rn_hr1, rn_day, ta, quality, fetched_at) VALUES(?,?,?,?,?,?,?)""",
-                    (stn, tm, (r or {}).get("rn_hr1"), (r or {}).get("rn_day"),
-                     (r or {}).get("ta"), q, at))
+                       (stn, tm, rn_hr1, rn_day, ta, ws, wd, hm, quality, fetched_at) VALUES(?,?,?,?,?,?,?,?,?,?)""",
+                    (stn, tm, *((r or {}).get(k) for k in ("rn_hr1", "rn_day", "ta", "ws", "wd", "hm")), q, at))
         filled += 1
+
+    filled_hm = await _backfill_hm(now, failed)
 
     # 정시 이후 구간 보강 — 화면에 표시할 '실제 최신 시각'이 여기서 나온다
     # (1분 수집기 `minute` 가 이미 받은 시각이면 다시 부르지 않는다)
@@ -198,6 +234,7 @@ async def collect(now: datetime | None = None, back_hours: int | None = None) ->
     db.log_collect("rain", ok, at,
                    f"정시 {filled}건 · 보강 {minute_at or '없음'} · 깊이 {back_hours}h"
                    + (f" · 빈시각 {blank}" if blank else "")
+                   + (f" · 습도 메움 {filled_hm}" if filled_hm else "")
                    + (f" · 실패 {len(failed)}" if failed else ""))
     return {"filled": filled, "blank": blank, "minute_at": minute_at,
             "depth": back_hours, "failed": failed}

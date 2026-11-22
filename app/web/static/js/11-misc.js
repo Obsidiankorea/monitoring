@@ -772,7 +772,7 @@ document.addEventListener("keydown", ev => {
   else if (ev.key === "e" || ev.key === "E") setOverlay("temp", !OV.has("temp"));
   else if (ev.key === "y" || ev.key === "Y") setOverlay("relief", !OV.has("relief"));
   else if (ev.key === "z" || ev.key === "Z") setOverlay("low", !OV.has("low"));
-  else if ((ev.key === "m" || ev.key === "M") && !CASE) setHeat(!HEAT);
+  else if ((ev.key === "m" || ev.key === "M") && !CASE) nextMode();
   else if (ev.key === "b" || ev.key === "B") toggleBasis();
   else if (ev.key === "f" || ev.key === "F") toggleAccFc();
   else if (ev.key === "h" || ev.key === "H") toggleAccH1();

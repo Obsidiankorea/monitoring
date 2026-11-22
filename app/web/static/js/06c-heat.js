@@ -4,7 +4,7 @@
    레이어 '기온'(E)은 호우 화면에서 시군 이름 밑에 기온만 곁들인다.
    기온은 /api/heat(AWS 정시 관측)만 실제 값. 체감온도 · 사흘 예보는 자료를 붙일 때까지 빈 칸으로 둔다 —
    틀을 미리 보도록 '예시' 단추로만 예시 값을 쓴다(화면에 예시임을 늘 적는다). */
-let HEAT = false, HT = null, HT_T = 0, HT_EX = false, HT_AL = null;
+let HEAT = false, COLD = false, HT = null, HT_T = 0, HT_EX = false, HT_AL = null;
 const HT_ST = [25, 28, 31, 33, 35, 37];
 const HT_C = ["#3A4A5E", "#6B6A4E", "#A5823A", "#D69A2C", "#EE7A22", "#E2401F", "#D6154A"];
 const HT_LO = 20, HT_HI = 40, HT_WATCH = 33, HT_WARN = 35;          // 33 · 35 = 폭염주의보 · 경보 일 최고 체감(2일 이상)
@@ -25,20 +25,22 @@ const htAlerts = () => (HT_EX ? [{ name: "폭염경보", lv: "warn", where: ["�
 async function loadHeat() {
   clearTimeout(HT_T);
   if (!HEAT && !OV.has("temp")) { HT = null; drawHeat(); return; }
-  try { HT = await getJson("/api/heat"); } catch (e) { HT = { err: e.message, rows: [] }; }
+  if (COLD) { try { CD = await getJson("/api/cold"); } catch (e) { CD = { err: e.message, rows: [] }; } }
+  else { try { HT = await getJson("/api/heat"); } catch (e) { HT = { err: e.message, rows: [] }; } }
   if (HEAT) {
     try { const j = test ? testAlerts() : await getJson("/api/alerts"); HT_AL = parseAlerts(j); } catch { HT_AL = null; }
   }
   drawHeat(); renderHeat();
   HT_T = setTimeout(loadHeat, 5 * 60 * 1000);
 }
-/* 화면을 바꿀 때 한 번 — 폭염으로: 붉게 달아오르며 해가 돈다 · 호우로: 화면 가득 빗줄기. 누를 때만(켤 때 · 저장 없이 맞출 때는 안 한다) */
-function modeFx(heat) {
+/* 화면을 바꿀 때 한 번 — 폭염으로: 붉게 달아오르며 해가 돈다 · 호우로: 화면 가득 빗줄기 · 겨울로: 눈송이. 누를 때만(켤 때 · 저장 없이 맞출 때는 안 한다) */
+function modeFx(kind) {
+  const heat = kind === "heat";
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   $("modefx")?.remove();
   const fx = document.createElement("div");
   fx.id = "modefx";
-  fx.className = heat ? "sun" : "rain";
+  fx.className = heat ? "sun" : kind === "cold" ? "rain snow" : "rain";
   fx.innerHTML = heat
     ? `<svg viewBox="-60 -60 120 120"><g class="ray">${Array.from({ length: 12 }, (_, i) => `<rect x="-3" y="-56" width="6" height="18" rx="3" transform="rotate(${i * 30})"/>`).join("")}</g><circle r="30"/></svg>`
     : Array.from({ length: 90 }, () => `<i style="left:${(Math.random() * 100).toFixed(1)}%;animation-delay:${(Math.random() * .7).toFixed(2)}s;animation-duration:${(.45 + Math.random() * .35).toFixed(2)}s;height:${(40 + Math.random() * 70).toFixed(0)}px"></i>`).join("");
@@ -46,11 +48,15 @@ function modeFx(heat) {
   $("mode").classList.remove("spin"); void $("mode").offsetWidth; $("mode").classList.add("spin");
   setTimeout(() => fx.remove(), 1700);
 }
-function setHeat(on, save = true) {
-  if (save && !!on !== HEAT) modeFx(!!on);
-  HEAT = !!on;
-  if (save) { try { localStorage.setItem("gn-map-heat", HEAT ? "1" : "0"); } catch {} }
+/* 화면 셋 — 호우(on=false) · 폭염(on) · 겨울(on, cold). 저장 값 gn-map-heat: 0 · 1 · 2 */
+function setHeat(on, save = true, cold = false) {
+  const was = !HEAT ? "rain" : COLD ? "cold" : "heat", now = !on ? "rain" : cold ? "cold" : "heat";
+  if (save && was !== now) modeFx(now);
+  HEAT = !!on; COLD = HEAT && !!cold;
+  if (save) { try { localStorage.setItem("gn-map-heat", HEAT ? (COLD ? "2" : "1") : "0"); } catch {} }
   document.body.classList.toggle("heat", HEAT);
+  document.body.classList.toggle("cold", COLD);
+  $("ht-ttl").textContent = COLD ? "겨울 상황" : "폭염 상황";
   const m = $("mode");
   modeIcon();                                              // 호우 화면 아이콘은 지금 눈 · 비에 따라(06f)
   loadHeat();
@@ -62,6 +68,7 @@ function setHeat(on, save = true) {
 function drawHeat() {
   const t = $("tempg");
   if (!t) return;
+  if (COLD) return drawCold();
   const D = htData(), by = Object.fromEntries((D?.rows || []).map(r => [r.sigun, r]));
   const gn = FEAT.filter(ft => ft.properties.kind !== "nb" && by[ft.properties.sigun]);
   const lvOf = {};                                        // 시군 → 가장 높은 폭염특보(주의보 뒤에 경보가 덮는다)
@@ -84,6 +91,7 @@ function htSpark(d) {
 }
 function renderHeat() {
   if (!HEAT) return;
+  if (COLD) return renderCold();
   const D = htData(), rows = [...(D?.rows || [])].sort((a, b) => b.ta - a.ta), k = V?.k || 1;
   $("ht-mark").hidden = !HT_EX;
   $("ht-ex").classList.toggle("on", HT_EX); $("ht-ex").setAttribute("aria-pressed", HT_EX);
@@ -122,11 +130,12 @@ function renderHeat() {
   $("ht-lg").innerHTML = `<b>기온 ℃</b>` + [...HT_ST].reverse().map(s => `<div><i style="background:${htCol(s)}"></i>${s}${s === HT_WARN ? "<em>경보선</em>" : s === HT_WATCH ? "<em>주의선</em>" : ""}</div>`).join("")
     + `<div><i style="background:${HT_C[0]}"></i>25 미만</div>`;
 }
-$("mode").onclick = () => setHeat(!HEAT);
+const nextMode = () => (!HEAT ? setHeat(true) : !COLD ? setHeat(true, true, true) : setHeat(false));   // 호우 → 폭염 → 겨울
+$("mode").onclick = nextMode;
 $("ht-ex").onclick = () => { HT_EX = !HT_EX; drawHeat(); renderHeat(); };
 function heatBoot() {
   $("mode").hidden = !!CASE;
-  let on = Q.get("heat") === "1";
-  if (!Q.has("heat") && !CASE) { try { on = localStorage.getItem("gn-map-heat") === "1"; } catch {} }
-  setHeat(on, false);
+  let on = Q.get("heat") || "0";
+  if (!Q.has("heat") && !CASE) { try { on = localStorage.getItem("gn-map-heat") || "0"; } catch {} }
+  setHeat(on !== "0", false, on === "2");
 }

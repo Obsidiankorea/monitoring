@@ -63,7 +63,7 @@ def test_aws_layer_from_stations_only(store, tdb, monkeypatch):
     hl = next(s for s in sites.gn_sites() if s["sigun"] == "고성" and s["name"] == "학림")
     with tdb.tx() as c:
         for tm in ("2026-10-03 14:00", "2026-10-03 15:00"):                       # 기상청 창원 10㎜씩
-            c.execute("INSERT INTO obs_hourly VALUES('155', ?, 10, 0, 0, 'ok', 'x')", (tm,))
+            c.execute("INSERT INTO obs_hourly(stn, tm, rn_hr1, rn_day, ta, quality, fetched_at) VALUES('155', ?, 10, 0, 0, 'ok', 'x')", (tm,))
         for tm in ("2026-10-03 13:00", "2026-10-03 14:00"):                       # 스방 13시 = 기상청 14시 칸
             c.execute("INSERT INTO bangjae_hourly VALUES(?, 'BJ7', '학림', '고성', 30, 'x')", (tm,))
         c.execute("INSERT INTO bangjae_hourly VALUES('2026-10-03 14:00', '155', '창원', '창원', 99, 'x')")  # 기상청 번호 — 뺀다
@@ -91,7 +91,7 @@ def test_aws_hour_layer_is_one_hour_of_the_same_stations(store, tdb, monkeypatch
         store.save("obs60", k, a)
     hl = next(s for s in sites.gn_sites() if s["sigun"] == "고성" and s["name"] == "학림")
     with tdb.tx() as c:
-        c.execute("INSERT INTO obs_hourly VALUES('155', '2026-10-03 14:00', 7, 0, 0, 'ok', 'x')")
+        c.execute("INSERT INTO obs_hourly(stn, tm, rn_hr1, rn_day, ta, quality, fetched_at) VALUES('155', '2026-10-03 14:00', 7, 0, 0, 'ok', 'x')")
         c.execute("INSERT INTO bangjae_hourly VALUES('2026-10-03 13:00', 'BJ7', '학림', '고성', 22, 'x')")  # = 14시 칸
     now = datetime(2026, 10, 3, 15, 20)
     monkeypatch.setattr(gridview.clock, "now", lambda: now)
@@ -289,7 +289,7 @@ def test_bangjae_rain_takes_kma_stations_from_kma(tdb):
     """내부망(스방) 카드도 기상청 지점 값은 기상청 API(obs_hourly) — 스방이 준 값은 버린다. 경남 AWS 만 스방."""
     from app import queries
     with tdb.tx() as c:
-        c.execute("INSERT INTO obs_hourly VALUES('155', '2026-10-03 14:00', 4, 0, 0, 'ok', 'x')")
+        c.execute("INSERT INTO obs_hourly(stn, tm, rn_hr1, rn_day, ta, quality, fetched_at) VALUES('155', '2026-10-03 14:00', 4, 0, 0, 'ok', 'x')")
         c.execute("INSERT INTO bangjae_hourly VALUES('2026-10-03 13:00', '155', '창원', '창원', 99, 'x')")
         c.execute("INSERT INTO bangjae_hourly VALUES('2026-10-03 13:00', 'BJ7', '학림', '고성', 30, 'x')")
     r = queries._rain_bangjae(2, datetime(2026, 10, 3, 14, 20))
