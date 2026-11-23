@@ -233,7 +233,7 @@ $("stage").addEventListener("mousemove", ev => {
     : fac > 1 ? `${(v / 10 * fac).toFixed(1)}㎜/h 환산</b> (15분 ${(v / 10).toFixed(1)}㎜)<b>`
     : `${(v / 10).toFixed(1)}㎜`;
   const el = OV.has("relief") || OV.has("low") ? elevAt(gx, gy) : null;
-  const wn = waterAt(mx, my);
+  const wn = [waterAt(mx, my), roadAt(mx, my)].filter(Boolean).join("</div><div>");
   tip.innerHTML = `<b>${val}</b>${where ? " · " + where : ""}${el != null && el > 0 ? `<div>표고 약 <b>${el}m</b>${el <= 10 ? " · 저지대" : ""}</div>` : ""}${wn ? `<div>${wn}</div>` : ""}<div class="d">${lat.toFixed(4)}°N ${lon.toFixed(4)}°E · 칸 ${Math.round(gx)}, ${Math.round(gy)}</div>`;
   tip.hidden = false;
   const tw = tip.offsetWidth, th = tip.offsetHeight;
@@ -249,6 +249,14 @@ function waterAt(mx, my) {
   if (!f) return "";
   const p = f.properties, kind = p.k === "river" ? ["", "국가하천", "지방하천", "소하천 등"][p.g] || "하천" : p.r ? "강 · 개울 물 면" : "호수 · 저수지";
   return `${p.k === "river" ? "하천" : "물"} <b>${escH(p.n || "이름 없음")}</b> · ${kind}${p.o ? " · 경남 밖" : ""}`;
+}
+/* 마우스 자리의 도로 이름 · 노선 번호(도로망 레이어를 켰을 때) — 굵은 등급 먼저 */
+function roadAt(mx, my) {
+  if (!OV.has("roads") || !GL_OK || !GL.getLayer("road-1")) return "";
+  const f = GL.queryRenderedFeatures([[mx - 4, my - 4], [mx + 4, my + 4]], { layers: ["road-1", "road-2", "road-3"] }).sort((a, b) => a.properties.g - b.properties.g)[0];
+  if (!f) return "";
+  const p = f.properties, kind = ["", "고속도로", "국도", "지방도"][p.g];
+  return `도로 <b>${escH(p.n || kind)}</b>${p.r ? ` · ${kind} ${escH(p.r)}${p.g === 1 ? "번" : "호선"}` : ` · ${kind}`}${p.o ? " · 경남 밖" : ""}`;
 }
 /* 시군을 누르면 고른다 — 오른쪽 패널이 그 시군 읍면동(격자)·지점(AWS)으로 바뀐다. 다시 누르거나 바다를 누르면 푼다.
    Ctrl(⌘)+클릭은 더하기·빼기 — 여러 시군 읍면동을 한 판에 견준다 */
@@ -749,6 +757,7 @@ document.addEventListener("keydown", ev => {
   if (!$("prefs").hidden || !$("help").hidden || ev.ctrlKey || ev.metaKey || ev.altKey) return;
   const i = (CASE ? "12" : "123456").indexOf(ev.key);
   if (i >= 0) { stopPlay(); if (HEAT) setHeat(false); pickLayer(keyKind(i)); }
+  else if (ev.key === "8") setOverlay("roads", !OV.has("roads"));
   else if (ev.key === "7" && !CASE) {                      // 적설 — 쌓인 눈 깊이(누적)로 칠하기 켜고 끄기(06f 눈만 보기)
     if (snowOnly()) setOverlay("snowonly", false);
     else { if (!OV.has("snow")) setOverlay("snow", true); setOverlay("snowonly", true); if (!SNOW) toast("적설 자료를 아직 받지 못했다"); }
@@ -853,7 +862,7 @@ async function boot() {
   if (SAF_IDS.some(id => OV.has(id))) loadSafety();
   if (OV.has("district")) loadDistrict();
   if (OV.has("tide")) loadTide();
-  glTerrain(); glWater();
+  glTerrain(); glWater(); glRoads();
   vsrtN = +SET.vsrt_n || 1; x4 = !!SET.x4;
   applyAccFull(); applyHdrPin();
   // 색 — ?pal=kma|blue 가 서버 설정보다 먼저(벽면 화면 고정용). 기상청 색은 서버가 뽑아 둔 범례를 받아 와야 쓴다

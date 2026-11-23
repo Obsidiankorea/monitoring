@@ -20,6 +20,7 @@ const OVL = [
   { id: "waterall", label: "지방하천 늘 보기", short: "지방하천", key: "", parent: "water", grp: "geo" },
   { id: "waterlbl", label: "강 이름 표시(시군 확대)", short: "강 이름", key: "", parent: "water", grp: "geo" },
   { id: "bldg", label: "건물(사람 사는 곳)", short: "건물", key: "", grp: "geo" },
+  { id: "roads", label: "도로망(고속 · 국도 · 지방도)", short: "도로", key: "8", grp: "geo" },
 ];
 /* 레이어 묶음 — 같은 grp 는 접었다 펴는 한 줄 아래로. 펼침은 이 PC 에 기억(브라우저 저장, 못 쓰면 접힌 채) */
 const LY_GRP = { geo: "지형 · 지리" };
@@ -65,6 +66,9 @@ const TIPS = new Map([
     호수 · 저수지(1ha 이상)와 넓은 강의 물은 면으로. 경남 밖은 회색으로 흐리게. 켜면 지도 오른쪽 아래에 출처가 뜬다.`],
   ["ov-waterall", `<b>지방하천 늘 보기</b> — 끄면(기본) 지방하천은 시군을 고른 확대에서만 보인다. 켜면 경남 전체 화면에서도 — 줄기가 촘촘해 비 색이 덜 보인다.`],
   ["ov-waterlbl", `<b>강 이름 표시</b> — 시군을 골라 확대했을 때 국가 · 지방하천 이름을 강을 따라 단다(읍면동 이름 · 관측소 글자와 겹치지 않는 자리만). 이름은 국토지리정보원 하천중심선의 이름 칸.`],
+  ["ov-roads", `<b>도로망</b> — 고속도로(주황, 굵게) · 일반국도(모래색) · 지방도(국가지원지방도 포함, 회색) 선. 시군도 · 골목길은 넣지 않았다.
+    선에 마우스를 올리면 도로 이름 · 노선 번호. 국가교통정보센터 전국 표준노드링크(2026-11-11 판)를 경남만 잘라 30m 로 줄인 것 — 교통 상황(통제 · 정체)은 아직 아니다.
+    경남 밖은 고속도로만 흐리게. 나들목 · 분기점 연결로는 뺐다. 켜면 지도 오른쪽 아래에 출처가 뜬다.`],
   ["ov-bldg", `<b>건물(사람 사는 곳)</b> — 경남 건물 전부(국토교통부 GIS건물통합정보, 약 160만 동)를 모래색으로. 진할수록 건물이 빽빽하다(시가지 · 아파트 단지), 옅은 점은 시골 마을.
     시군을 고르면 더 자세한 조각으로 바뀐다. 매월 갱신 자료 — 받은 달 기준. 켜면 지도 오른쪽 아래에 출처가 뜬다.`],
   ["ov-tide", `<b>조위</b> — 경남 해안 조위관측소의 바닷물 높이(해양조사원). 표식의 숫자는 지금 실측, 괄호는 예측과의 차이.
@@ -74,9 +78,21 @@ const TIPS = new Map([
 ]);
 let OV = new Set();
 /* 켜진 레이어 아이콘 — 누르면 그 범례·설명이 오른쪽으로 펼쳐진다(다시 누르면 닫힌다). 하나씩만 */
+/* 도로망 범례 — 등급 셋(선 굵기 · 색은 GL 층과 같은 테마 변수) */
+function renderRoadLegend() {
+  const box = $("ly-roads");
+  box.hidden = !OV.has("roads") || LY_OPEN !== "roads";
+  if (box.hidden) return;
+  const ln = (c, w) => `<svg width="34" height="10" aria-hidden="true"><line x1="2" y1="5" x2="32" y2="5" stroke="var(${c})" stroke-width="${w}" stroke-linecap="round"/></svg>`;
+  box.innerHTML = `<div class="hd2"><b>도로망</b><span>2026-11-11 판</span></div>`
+    + [["--road-1", 3.4, "고속도로", "도시고속 포함"], ["--road-2", 2.2, "일반국도", ""], ["--road-3", 1.4, "지방도", "국가지원지방도 포함"]]
+      .map(([c, w, n, d]) => `<div class="rr">${ln(c, w)}<b>${n}</b><span>${d}</span></div>`).join("")
+    + `<div class="nt">선에 마우스를 올리면 이름 · 노선 번호. 시군도 · 골목길 · 연결로는 뺐다. 출처 국가교통정보센터 표준노드링크</div>`;
+}
 const OV_IC = {
   alerts: `<svg viewBox="0 0 24 24"><path d="M7 16.5a4.2 4.2 0 0 1-.5-8.3 5.6 5.6 0 0 1 10.8 1.3A3.5 3.5 0 0 1 17 16.5"/><path d="m12.6 12-2.4 3.6h2.8L11.4 20"/></svg>`,
   stations: `<svg viewBox="0 0 24 24"><path d="M12 4 20 12 12 20 4 12z"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/></svg>`,
+  roads: `<svg viewBox="0 0 24 24"><path d="M8 3 5 21M16 3l3 18"/><path d="M12 4v3M12 10.5v3M12 17v3"/></svg>`,
   tide: `<svg viewBox="0 0 24 24"><path d="M3 15c2.2-2 3.8-2 6 0s3.8 2 6 0 3.8-2 6 0"/><path d="M3 20c2.2-2 3.8-2 6 0s3.8 2 6 0 3.8-2 6 0" opacity=".5"/><path d="M12 11V3M8.8 6 12 3l3.2 3"/></svg>`,
   slide: `<svg viewBox="0 0 24 24"><path d="M3 19 9.5 8l3.5 6 2-3 6 8z"/><path d="m11 13 1.5 1.5M8 16l1.5 1" opacity=".6"/></svg>`,
   reservoir: `<svg viewBox="0 0 24 24"><path d="M12 4 21 19H3z"/><path d="M7.5 15.5c1.5-1 3-1 4.5 0s3 1 4.5 0" opacity=".7"/></svg>`,
@@ -135,7 +151,7 @@ function renderLyIcons() {
     const lv = alLand().reduce((a, g) => ((LVRANK[g.lv] || 0) > (LVRANK[a] || 0) ? g.lv : a), null);
     return lv ? `var(--lv-${lv})` : "";
   };
-  box.innerHTML = ["alerts", "stations", "river", ...SAF_IDS, "district", "tide"].filter(id => OV.has(id)).map(id => {
+  box.innerHTML = ["alerts", "stations", "river", ...SAF_IDS, "district", "tide", "roads"].filter(id => OV.has(id)).map(id => {
     const o = OVL.find(x => x.id === id);
     const hiR = RIV?.rows ? RIV.rows.filter(s => s.kind === "wl" && (s.stage ?? -1) >= 1 && selHas(s.sigun)).length : 0;
     const sfN = id === "district" ? 0 : safCount(id);
@@ -152,6 +168,8 @@ function renderLyIcons() {
   const ir = box.querySelector(`[data-d="river"]`);
   if (ir) $("ly-river").style.top = ir.offsetTop + "px";
   for (const sid of SAF_IDS) { const b = box.querySelector(`[data-d="${sid}"]`); if (b) $(`ly-${sid}`).style.top = b.offsetTop + "px"; }
+  const ird = box.querySelector(`[data-d="roads"]`);
+  if (ird) $("ly-roads").style.top = ird.offsetTop + "px";
   const it = box.querySelector(`[data-d="tide"]`);
   if (it) { $("ly-tide").style.top = it.offsetTop + "px"; tdFit(); }
   fitAlCol();
@@ -203,6 +221,7 @@ function renderLayers() {
   renderSafetyLegend();
   districtLegend();
   renderTideLegend();
+  renderRoadLegend();
   renderLyIcons();
 }
 function setOverlay(id, on) {
@@ -219,6 +238,7 @@ function setOverlay(id, on) {
   if (id === "district") { if (on) setLyOpen(id); loadDistrict(); }
   if (id === "stnval") drawStations();
   if (id === "relief" || id === "low" || id === "bldg") glTerrain();
+  if (id === "roads") { if (on) setLyOpen("roads"); glRoads(); }
   if (id === "water" || id === "waterall" || id === "waterlbl") { glWater(); drawStations(); }
   renderLayers();
 }

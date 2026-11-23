@@ -102,6 +102,11 @@ function helpHtml(tab) {
     <tr><td><b>기상특보</b><div class="k">레이어 A</div></td><td><code>wrn_now_data.php</code></td>
       <td>발효 중 특보 · 예비특보. 재현 사례의 특보는 <b>산출</b>(격자 3·12시간 합에 호우 기준) — 이력 API 가 이 키로 403</td>
       <td>1분마다</td><td>기상청 특보 발표 원자료</td></tr>
+    <tr><td><b>도로망</b><div class="k">레이어 8</div></td><td>국가교통정보센터 <b>전국 표준노드링크</b><div class="k">MOCT_LINK.shp · 2026-11-11 판</div></td>
+      <td>고속국도 · 도시고속(101 · 102) · 일반국도(103) · 국가지원지방도 · 지방도(105 · 106) 링크만. 시군도 · 광역시도 · 연결로는 뺐다.
+        맞은편 방향 · 분리 차로는 한 줄로 합치고 30m 로 줄여 경남만(밖은 고속도로만) — <code>tools/build_roads.py</code></td>
+      <td>한 번 만들어 둔다(실행 중에 부르지 않는다). 원본은 달마다쯤 새 판</td>
+      <td>이용허락 '제한 없음'(공공데이터포털 15025526, 같은 자료의 옛 판) — 출처 국토교통부 표시</td></tr>
     <tr><td><b>재현 사례</b></td><td>위 500m <code>rn_60m</code> · <code>awsh.php</code> 매시</td>
       <td>지난 호우를 매시 격자·관측소 값 그대로 저장소에 굳혀 둔다(data/demo/map) — 볼 때 기상청을 다시 부르지 않는다</td>
       <td>—</td><td>—</td></tr></table>

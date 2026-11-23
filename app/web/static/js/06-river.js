@@ -7,10 +7,16 @@ const RV_C = ["var(--rv-0)", "var(--rv-1)", "var(--rv-2)", "var(--rv-3)", "var(-
 const RV_N = ["정상", "관심", "주의보", "경보", "심각"];
 async function loadRiver() {
   clearTimeout(RIV_T);
-  if (!OV.has("river") || CASE) { RIV = null; drawRiver(); renderRiverLegend(); renderLyIcons(); return; }
+  if (!OV.has("river") || CASE) { RIV = null; drawRiver(); renderRiverLegend(); renderLyIcons(); glItsFlood(); return; }
   try { RIV = await getJson("/api/river"); } catch (e) { RIV = { err: e.message }; }
+  glItsFlood();
   drawRiver(); renderRiverLegend(); renderLyIcons();
   RIV_T = setTimeout(loadRiver, 5 * 60 * 1000);
+}
+/* 지하차도 침수 위험 경보 도로 — 경보 링크 번호를 서버가 표준노드링크 선(칸 좌표)으로 바꿔 준다(rows[].lines). 하천 · 댐을 끄면 지운다 */
+function glItsFlood() {
+  const L = OV.has("river") && !CASE ? (RIV?.road?.rows || []).flatMap(r => r.lines || []) : [];
+  glData("itsfl", L.length + ":" + JSON.stringify(L[0] || "").slice(0, 40), () => L.length ? [glF({ type: "MultiLineString", coordinates: L })] : []);
 }
 const rvTop = s => (s.thr || []).filter(Boolean).pop() || null;         // 가장 높은 기준 수위(눈금 막대의 꼭대기)
 const rvHm = t => (t ? `${t.slice(8, 10)}:${t.slice(10, 12)}` : "—");
@@ -160,7 +166,7 @@ function renderRiverLegend() {
       .concat(oth.map(f => `<div class="rr">${dot("var(--ink-3)")}<b>${escH(f.obs || "")}</b><span>${escH(f.kind || "")}</span><em>${escH(f.river || "")} ${rvDt(f.at)}</em></div>`)).slice(0, 6).join("")
       : `<div class="nt">발령 없음(최근 24시간${RIV.nfld ? ` · 전국 ${RIV.nfld}건 중 경남 영향 없음` : ""})</div>`;
     const r9 = RIV.road, road = (r9?.rows || []).filter(r => !selOn() || SELS.some(n => r.name.includes(n))), rd = !r9?.on ? "" : `<div class="sec">지하차도 침수 위험</div>` + (r9.err ? `<div class="nt w">${escH(r9.err)}</div>`
-      : road.length ? road.slice(0, 6).map(r => `<div class="rr">${dot("var(--rv-3)")}<b>${escH(r.name)}</b><span>${r.links ? `링크 ${r.links}곳` : ""}</span><em>${rvDt(r.at)}</em></div>`).join("")
+      : road.length ? road.slice(0, 6).map(r => `<div class="rr">${dot("var(--rv-3)")}<b>${escH(r.name)}</b><span>${r.links ? `링크 ${r.links}곳${r.lines?.length ? ` · 지도에 ${r.lines.length}` : ""}` : ""}</span><em>${rvDt(r.at)}</em></div>`).join("")
       : `<div class="nt">${r9.active ? "경남 경보 없음" : "호우특보 때만 확인"}</div>`);
     body = `<div class="keys2">${chips}</div><div class="nt">막대 색 = 지금 수위 · <i class="rvk"></i>네모 = 홍수예보 발령</div>${nthr ? `<div class="nt">기준 수위 없는 지점 ${nthr}곳은 값만(흐린 막대)</div>` : ""}`
       + `<div class="sec">수위 높은 곳</div>${wlHtml}<div class="sec">댐 · 보 방류</div>${relHtml || `<div class="nt">값 없음</div>`}<div class="sec">홍수예보 발령</div>${fl}${rd}`;
@@ -170,7 +176,7 @@ function renderRiverLegend() {
     기준 수위가 제원에 없는 지점은 흐리게 값만.<br>
     <b>네모 테두리</b>는 홍수통제소가 그 지점에 낸 홍수예보(색은 주의보 · 경보) — 막대는 지금 수위, 네모는 앞으로의 예보다. 발령이 있는 지점에만, 해제될 때까지 나온다(해제를 못 받아도 발표 뒤 4일이면 지운다).<br>
     <b>댐 · 보</b>는 방류량(총방류)이 1시간 전보다 10 ㎥/s 이상 · 20% 이상 늘면 주황으로 번쩍인다. 방류가 얼마면 위험인지는 위키에 숫자가 없어 단계를 만들지 않았다 — 하류 시군은 댐 방류 협의 · 사전예고(위키 위험예보)를 따른다.<br>
-    <b>지하차도 침수 위험</b>은 국가교통정보센터 재난상황정보 — 호우경보를 따라 나오는 경보로, 지역까지만 알려 주고 지하차도 이름 · 위치는 없다. 호출이 월 1000건이라 호우특보 중에만 15분마다 확인한다.<br>
+    <b>지하차도 침수 위험</b>은 국가교통정보센터 재난상황정보 — 호우경보를 따라 나오는 경보로, 지하차도 이름은 없고 지역과 도로 링크 번호만 온다 — 링크 번호를 국가교통정보센터 표준노드링크 도로 선으로 바꿔 지도에 <b>빨간 굵은 선</b>으로 칠한다(경남 링크만). 호출이 월 1000건이라 호우특보 중에만 15분마다 확인한다.<br>
     점선 둘레 = 경남으로 흘러드는 낙동강 위쪽(경북 · 대구) 댐 · 보. 낙동강권역 자료는 11분 넘게 늦게 들어온다(지점마다 마지막 시각이 다르다). 10분마다 갱신.`);
   const t = RIV?.at ? RIV.at.slice(11, 16) : "";
   box.innerHTML = `<div class="hd2" title="눌러서 닫기"><b>하천 · 댐</b><span class="k">${RIV?.rows?.length ? `${RIV.rows.filter(s => selHas(s.sigun)).length}곳` : ""}</span><i class="inf" data-tip="river-now">i</i><span>${t}</span></div>` + body;

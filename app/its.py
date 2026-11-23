@@ -2,7 +2,8 @@
 
 호출이 월 1000건으로 묶여 있어 경남에 호우특보가 있을 때만 15분마다 부른다(평시 0건). 이 경보는 호우경보에서 만들어지므로 평시에 받을 것이 없다.
 ⚠️ 실제 응답은 기술기준과 다르다(2026-07~08 192건 확인) — body.items · 침수 건은 좌표 · 도로명 · 지하차도 이름이 비었고, 좌표가 없어 영역 조건에도 안 걸러져 전국이 온다.
-   그래서 지도에 찍지 못하고, 지역 이름과 링크 번호 앞 두 자리(38 = 경남, 진주 · 밀양 표본으로 확인)로만 가른다.
+   지역 이름과 링크 번호로 가른다 — 경남 링크인지는 앞자리가 아니라 표준노드링크의 경남 링크 목록으로(38x 뿐 아니라 39x · 창원 41x). 링크 번호는 그 표준노드링크와 같은 체계라
+   (2026-11-23 세종 건 15개 중 14개가 표준노드링크에 있었다) 경남 링크는 그 도로 선을 지도에 칠한다(status 의 rows[].lines, 칸 좌표).
 ⚠️ 해제되어도 endDate 가 '-' 로 남는 건이 있다 — 어제 · 오늘 발생한 것만 보고, 호우특보가 끝나면 비운다. 키는 NAS 서버에만 둔다(같은 키로 두 곳이 부르면 한도가 두 배로 줄어든다).
 """
 from __future__ import annotations
@@ -46,9 +47,10 @@ def parse(j: dict, now: datetime) -> list[dict]:
         links = [k for k in (x.get("linkId") or "").split(",") if k]
         end = x.get("endDate") or "-"
         # shortcut: 강원 고성도 지역 이름에 걸린다, 호우특보 시군과 맞출 일이 생기면 그때 좁힌다
-        gn = SIGUN.search(name) or any(k.startswith("38") for k in links)
+        gn = SIGUN.search(name) or any(k in gn_links() for k in links)
         if x.get("eventType") in ("D03", "D04") and gn and (end == "-" or end[:12] > f"{now:%Y%m%d%H%M}"):
-            out.append({"name": name or "지역 이름 없음", "type": x["eventType"], "at": (x.get("startDate") or "")[:12], "links": len(links)})
+            out.append({"name": name or "지역 이름 없음", "type": x["eventType"], "at": (x.get("startDate") or "")[:12], "links": len(links),
+                        "ids": [k for k in links if k in gn_links()]})
     return sorted(out, key=lambda r: r["at"], reverse=True)
 
 
@@ -79,5 +81,36 @@ async def run() -> None:
         log.warning("재난상황정보 수집 실패: %s", _LIVE["err"])
 
 
+_LINKS: dict | None = None
+
+
+def gn_links() -> dict:
+    """경남 땅 위 링크 번호 → 칸 × 50 정수 x, y, x, y … (표준노드링크, tools/build_roads.py 의 data/geo/gn_links.json.gz, 처음 부를 때 읽는다).
+    ⚠️ 번호 앞자리로 경남을 가르지 않는다 — 38x 말고도 39x(함안 · 창녕 · 고성 · 남해 · 하동 · 산청 · 함양 · 거창 · 합천) · 창원 414~418."""
+    global _LINKS
+    if _LINKS is None:
+        import gzip
+        import json
+        try:                                          # 꼴은 tools/build_roads.py — 번호는 차이로, 선은 첫 점 + 차이(칸 × 50 정수)
+            pk = json.loads(gzip.decompress((config.ROOT / "data" / "geo" / "gn_links.json.gz").read_bytes()))
+            n, _LINKS = 0, {}
+            for d, v in zip(pk["id"], pk["xy"]):
+                n += d
+                for i in range(2, len(v)):
+                    v[i] += v[i - 2]
+                _LINKS[str(n)] = v
+        except (OSError, ValueError, KeyError) as e:
+            log.warning("링크 선 파일을 못 읽었다: %s", e)
+            _LINKS = {}
+    return _LINKS
+
+
+def link_lines(ids: list[str]) -> list:
+    """경남 링크 번호 → 칸 좌표 선. 모르는 번호는 뺀다."""
+    _LINKS = gn_links()
+    return [[[v[i] / 50, v[i + 1] / 50] for i in range(0, len(v), 2)] for k in ids if (v := _LINKS.get(k))]   # 파일은 칸 × 50 정수 x, y, x, y …
+
+
 def status() -> dict:
-    return {"on": bool(_key()) or bool(_LIVE["rows"]), "active": hoou(), "calls": calls(datetime.now()), **_LIVE}
+    rows = [r | {"lines": link_lines(r.get("ids") or [])} for r in _LIVE["rows"]]
+    return {"on": bool(_key()) or bool(_LIVE["rows"]), "active": hoou(), "calls": calls(datetime.now()), **_LIVE, "rows": rows}

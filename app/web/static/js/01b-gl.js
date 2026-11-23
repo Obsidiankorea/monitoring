@@ -57,6 +57,16 @@ const GL_LAYERS = [
     paint: { "line-color": ["case", ["has", "o"], "#8A97A6", "#7DDCFF"], "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.7, 11, 1.6], "line-opacity": ["case", ["has", "o"], 0.3, 0.85] } },
   { id: "river", type: "line", source: "water", filter: ["all", ["==", ["get", "k"], "river"], ["==", ["get", "g"], 1]], layout: { visibility: "none", "line-join": "round", "line-cap": "round" },
     paint: { "line-color": ["case", ["has", "o"], "#8A97A6", "#7DDCFF"], "line-width": ["interpolate", ["linear"], ["zoom"], 8, 1.8, 11, 3.2], "line-opacity": ["case", ["has", "o"], 0.3, 0.9] } },
+  // 도로망(레이어 roads, 국가교통정보센터 표준노드링크 — tools/build_roads.py). g = 1 고속 · 2 국도 · 3 지방도(시군 확대에서 더 굵게), o = 경남 밖(고속만, 흐리게)
+  { id: "road-3", type: "line", source: "roads", filter: ["==", ["get", "g"], 3], layout: { visibility: "none", "line-join": "round", "line-cap": "round" },
+    paint: { "line-color": "var(--road-3)", "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.6, 11, 1.4], "line-opacity": 0.75 } },
+  { id: "road-2", type: "line", source: "roads", filter: ["==", ["get", "g"], 2], layout: { visibility: "none", "line-join": "round", "line-cap": "round" },
+    paint: { "line-color": "var(--road-2)", "line-width": ["interpolate", ["linear"], ["zoom"], 8, 1.1, 11, 2.2], "line-opacity": 0.85 } },
+  { id: "road-1", type: "line", source: "roads", filter: ["==", ["get", "g"], 1], layout: { visibility: "none", "line-join": "round", "line-cap": "round" },
+    paint: { "line-color": "var(--road-1)", "line-width": ["interpolate", ["linear"], ["zoom"], 8, 1.8, 11, 3.4], "line-opacity": ["case", ["has", "o"], 0.35, 0.95] } },
+  // 지하차도 침수 위험 경보가 걸린 도로(재난상황정보 링크 → 표준노드링크 선, 레이어 '하천 · 댐'을 켰을 때) — 경고색 굵게 + 테두리
+  { id: "itsfl-halo", type: "line", source: "itsfl", layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "var(--bd-halo)", "line-width": 7 } },
+  { id: "itsfl", type: "line", source: "itsfl", layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "var(--rv-3)", "line-width": 4 } },
   { id: "bd-halo", type: "line", source: "bd", filter: ["in", ["get", "t"], ["literal", ["sg", "cs"]]],
     layout: { "line-join": "round" }, paint: { "line-color": "var(--bd-halo)", "line-width": 4 } },
   { id: "bd-halo-z", type: "line", source: "bd", filter: ["in", ["get", "t"], ["literal", ["zn", "sb"]]],
@@ -115,7 +125,7 @@ function glInit() {
     center: gll(...GC), zoom: 8, maxZoom: 22,
     style: { version: 8, sources, layers: GL_LAYERS.map(L => ({ ...L, paint: glPaint(L) })) },
   });
-  GL.once("style.load", () => { GL_OK = true; if (V) { buildBase(); glCam(); draw(); } glTerrain(); glWater(); });
+  GL.once("style.load", () => { GL_OK = true; if (V) { buildBase(); glCam(); draw(); } glTerrain(); glWater(); glRoads(); });
 }
 /* 지형 · 건물 그림 — 켜진 것만 보인다. 처음 켤 때 terrain.json(bbox)을 읽고 그림을 한 번 올린다 */
 let TERRAIN = null;
@@ -138,7 +148,8 @@ async function glTerrain() {
 /* 지도 오른쪽 아래 출처 — 켠 레이어의 자료 출처만(국토지리정보원 · 국토교통부 자료 — 브이월드 CC BY, 출처 표시 의무) */
 function srcAttr() {
   const a = [OV.has("water") && `강 · 호수 · 저수지 © 국토지리정보원 연속수치지형도(브이월드)`,
-             OV.has("bldg") && `건물 © 국토교통부 GIS건물통합정보(브이월드)`].filter(Boolean);
+             OV.has("bldg") && `건물 © 국토교통부 GIS건물통합정보(브이월드)`,
+             OV.has("roads") && `도로망 © 국가교통정보센터 표준노드링크(2026-11-11)`].filter(Boolean);
   $("osm-attr").hidden = !a.length;
   $("osm-attr").innerHTML = a.join(" · ");
 }
@@ -158,6 +169,20 @@ async function glWater() {
   }
   for (const L of ["water", "water-ln", "water-r-ln", "river", "river-l", "river-s"]) GL.setLayoutProperty(L, "visibility", OV.has("water") && Array.isArray(WATER) ? "visible" : "none");
   GL.setLayerZoomRange("river-l", OV.has("waterall") ? 0 : 9.4, 24);
+}
+/* 도로망 — 처음 켤 때 roads.json(칸 좌표, 약 0.8MB · 압축 0.2MB)을 받아 올린다. 켜면 출처(#osm-attr)도 */
+let ROADS = null;
+async function glRoads() {
+  srcAttr();
+  if (!GL_OK) return;
+  if (OV.has("roads") && !ROADS) {
+    ROADS = "loading";
+    try {
+      ROADS = (await getJson("roads/roads.json")).features;
+      glSet("roads", glFC(ROADS.map(f => glF(f.geometry, f.properties))));
+    } catch (e) { ROADS = null; console.warn("도로망 자료를 못 읽었다", e); return; }
+  }
+  for (const L of ["road-1", "road-2", "road-3"]) GL.setLayoutProperty(L, "visibility", OV.has("roads") && Array.isArray(ROADS) ? "visible" : "none");
 }
 /* 마우스 자리 표고(m) — 지형 레이어를 켰을 때만. 125m 칸 표고(elev.i16.gz, 2MB)를 처음 물을 때 받는다. 아직이면 null */
 let ELEV = null;
