@@ -11,7 +11,8 @@ def _fc():
 
 
 def test_size_budget_and_shape():
-    assert F.stat().st_size < 1_000_000                      # 1MB 예산(build_roads.BUDGET)
+    import gzip
+    assert len(gzip.compress(F.read_bytes(), 6)) < 1_000_000   # 1MB 예산, 압축 뒤(build_roads.BUDGET)
     fc = _fc()
     assert fc["type"] == "FeatureCollection" and fc["features"]
     for f in fc["features"]:
@@ -70,12 +71,13 @@ SG = ROOT / "app" / "web" / "static" / "roads"
 
 
 def test_sigun_road_files():
-    """시군도 — 경남 18 시군 파일, 하나 600KB 아래(build_roads.SG_BUDGET), g = 4, 그 시군 안(칸 ±2)."""
+    """시군도 — 경남 18 시군 파일, 하나 압축 300KB 아래(build_roads.SG_BUDGET), g = 4."""
+    import gzip
     idx = json.loads((SG / "sg-index.json").read_text(encoding="utf-8"))
     assert len(idx) == 18 and {"창원", "남해", "합천"} <= set(idx)
     for nm, v in idx.items():
         f = SG / v["f"]
-        assert f.stat().st_size == v["b"] < 600_000 and v["n"] > 500, (nm, v)
+        assert f.stat().st_size == v["b"] and len(gzip.compress(f.read_bytes(), 6)) < 300_000 and v["n"] > 500, (nm, v)
         fc = json.loads(f.read_text(encoding="utf-8"))
         assert fc["features"] and all(x["properties"]["g"] == 4 for x in fc["features"])
         assert all(len(l) >= 2 for x in fc["features"] for l in x["geometry"]["coordinates"])

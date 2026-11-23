@@ -38,10 +38,16 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "tools" / ".cache" / "nodelink"
 OUT = ROOT / "app" / "web" / "static" / "roads" / "roads.json"
 LINKS = ROOT / "data" / "geo" / "gn_links.json.gz"   # 경남 땅 위 링크 번호 → 칸 좌표 선 — 서버만 읽는다(재난상황정보 침수 링크를 지도에, app/its.py)
-TOL = 0.06                     # 칸(500m) 단위 → 30m. 시군 확대에서도 한 픽셀이 약 76m 라 모양이 같다(1MB 예산)
+TOL = 0.02                     # 칸(500m) 단위 → 10m. 30m 로 했더니 리 단위 확대에서 굽은 길이 계단 · 스케치처럼 꺾였다(2026-11-23)
+KEY = 0.06                     # 맞은편 방향 링크 가리기만 30m 칸으로 — 분리 차로 상 · 하행 끝점이 같은 칸에 든다
 GRADE = {"101": 1, "102": 1, "103": 2, "105": 3, "106": 3}
-BUDGET = 1_000_000             # 바이트 — 넘으면 실패(TOL 을 키운다)
-SG_BUDGET = 600_000            # 시군도 시군 파일 하나(roads/sg-<번호>.json) — 넘으면 실패(2026-11-11 판 창원 420KB 가 가장 크다)
+BUDGET = 1_000_000             # 바이트, gzip 뒤 — 서버가 압축해 보낸다(GZipMiddleware). 넘으면 실패(TOL 을 키운다)
+SG_BUDGET = 300_000            # 시군도 시군 파일 하나(roads/sg-<번호>.json), gzip 뒤 — 넘으면 실패
+
+
+def gz(t: str) -> int:
+    import gzip
+    return len(gzip.compress(t.encode(), 6))
 
 
 def sigun_at(b):
@@ -102,6 +108,7 @@ def main():
         x, y = lcc_fwd_np(np.asarray(lo), np.asarray(la), p)
         return [(round(u / TOL) * TOL, round(v / TOL) * TOL) for u, v in zip(x, y)]
 
+    k30 = lambda q: (round(round(q[0] / KEY) * KEY, 2), round(round(q[1] / KEY) * KEY, 2))
     r = reader()
     sg_at = sigun_at(b)
     sg_seen, sg_lines, sg_n = set(), defaultdict(lambda: defaultdict(list)), Counter()   # 시군도(107) — 시군마다
@@ -110,12 +117,12 @@ def main():
     for sr in r.iterShapeRecords(fields=["LINK_ID", "ROAD_RANK", "ROAD_NAME", "ROAD_NO", "CONNECT"], bbox=bb):
         rec = sr.record.as_dict()
         if len(sr.shape.points) >= 2:          # 등급 · 연결로 가리지 않고 경남 땅 위 링크 전부(지하차도는 시군도에도 있다)
-            ln = dp(grid(sr.shape.points), TOL * 2)
+            ln = dp(grid(sr.shape.points), 0.12)
             if in_gn(*ln[len(ln) // 2]):     # 칸 × 50 정수(10m) 를 x, y, x, y … 한 줄로 — 칠하기용이라 60m 로 줄여도 된다
                 gn_links[rec["LINK_ID"]] = [round(v * 50) for q in ln for v in q]
         if rec["ROAD_RANK"] == "107" and rec["CONNECT"] != "1" and len(sr.shape.points) >= 2:
             pts = [(round(x, 2), round(y, 2)) for x, y in dp(grid(sr.shape.points), TOL)]
-            key = tuple(sorted((pts[0], pts[-1])))
+            key = tuple(sorted((k30(pts[0]), k30(pts[-1]))))
             sg = sg_at(*pts[len(pts) // 2])
             if sg and pts[0] != pts[-1] and key not in sg_seen:
                 sg_seen.add(key)
@@ -127,7 +134,7 @@ def main():
             continue
         pts = dp(grid(sr.shape.points), TOL)
         pts = [(round(x, 2), round(y, 2)) for x, y in pts]      # 칸 좌표 부동소수 끝자리 — 맞은편 방향 끝점이 같은 값이 되게
-        key = (g, *sorted((pts[0], pts[-1])))       # 맞은편 방향 링크 — 상 · 하행 노드가 따로인 길(분리 차로)도 칸 좌표 끝점이 같다
+        key = (g, *sorted((k30(pts[0]), k30(pts[-1]))))       # 맞은편 방향 링크 — 상 · 하행 노드가 따로인 길(분리 차로)도 칸 좌표 끝점이 같다
         if pts[0] == pts[-1] or key in seen or not inb(pts):
             continue
         seen.add(key)
@@ -146,7 +153,7 @@ def main():
     txt = json.dumps({"type": "FeatureCollection", "features": feats}, ensure_ascii=False, separators=(",", ":"))
     OUT.write_text(txt, encoding="utf-8")
     print(f"링크(방향 하나) 고속 {n_link[1]:,} · 국도 {n_link[2]:,} · 지방도 {n_link[3]:,}"
-          f" → 묶음 {len(feats):,} · 선 {sum(len(f['geometry']['coordinates']) for f in feats):,} · {len(txt.encode()):,} 바이트", file=sys.stderr)
+          f" → 묶음 {len(feats):,} · 선 {sum(len(f['geometry']['coordinates']) for f in feats):,} · {len(txt.encode()):,} 바이트(압축 {gz(txt):,})", file=sys.stderr)
     over, index = [], {}
     for (k, nm), byname in sorted(sg_lines.items()):
         fs = [{"type": "Feature", "properties": {"g": 4, "n": n, "r": ""},
@@ -154,8 +161,8 @@ def main():
         t = json.dumps({"type": "FeatureCollection", "features": fs}, ensure_ascii=False, separators=(",", ":"))
         (OUT.parent / f"sg-{k}.json").write_text(t, encoding="utf-8")
         index[nm] = {"f": f"sg-{k}.json", "n": sg_n[(k, nm)], "b": len(t.encode())}
-        print(f"  시군도 {nm} 링크 {sg_n[(k, nm)]:,} → sg-{k}.json {len(t.encode()):,} 바이트", file=sys.stderr)
-        if len(t.encode()) > SG_BUDGET:
+        print(f"  시군도 {nm} 링크 {sg_n[(k, nm)]:,} → sg-{k}.json {len(t.encode()):,} 바이트(압축 {gz(t):,})", file=sys.stderr)
+        if gz(t) > SG_BUDGET:
             over.append(nm)
     (OUT.parent / "sg-index.json").write_text(json.dumps(index, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print(f"시군도 모두 링크 {sum(sg_n.values()):,} · {sum(v['b'] for v in index.values()):,} 바이트", file=sys.stderr)
@@ -166,7 +173,7 @@ def main():
             "xy": [v[:2] + [v[i] - v[i - 2] for i in range(2, len(v))] for v in (gn_links[k] for k in ks)]}
     LINKS.write_bytes(gzip.compress(json.dumps(pack, separators=(",", ":")).encode(), 9, mtime=0))
     print(f"경남 링크 {len(gn_links):,} → {LINKS.name} {LINKS.stat().st_size:,} 바이트", file=sys.stderr)
-    if len(txt.encode()) > BUDGET:
+    if gz(txt) > BUDGET:
         raise SystemExit(f"{OUT} 가 {BUDGET:,} 바이트를 넘는다 — TOL 을 키운다")
     if over:
         raise SystemExit(f"시군도 파일이 {SG_BUDGET:,} 바이트를 넘는다: {', '.join(over)}")
