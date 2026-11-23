@@ -242,13 +242,17 @@ function repSpGo() {
   if (over.start && over.start >= over.end) { $("rep-spm").textContent = "기간 끝이 시작보다 뒤여야 한다"; $("rep-spm").className = "msg bad"; return; }
   const id = r.id;
   repSpClose();
-  if (r.compose) { repCmOpts(r, over); return repOpOpen(id); }   /* 상황판단회의 — 기간을 넣고 작성 창으로 */
+  if (r.compose) { repCmOpts(r, over); return repOpOpen(id, true); }   /* 상황판단회의 — 기간을 넣고 작성 창으로(넣은 기간은 둔다) */
   repRun(id, "dl", over);
 }
-function repOpOpen(id) {
+function repOpOpen(id, keep) {
   const r = repById(id);
   if (!r || !r.ready || REP.op === id) return;
   REP.opBack = document.activeElement; REP.op = id;
+  if (r.compose && !keep) {                                    /* 작성 창은 열 때마다 지금 기준 — 지난번 기간 · 고친 제목은 버린다(재난 종류 · 고른 문구는 둔다) */
+    repCmOpts(r, { start: "", end: "", title: "" });
+    const c = repCm(); c.auto = true; repCmSave(c);
+  }
   repOpDraw();
 }
 function repOpClose() {
@@ -386,8 +390,8 @@ function repCmDraw(r, focus) {
         <optgroup label="계절 · 시기">${REP_CMP.map(([n], i) => `<option value="s:${i}"${REP.ph && !REP.ph.err ? "" : " disabled"}>${escH(n)}</option>`).join("")}</optgroup>
         ${repCmMine().length ? `<optgroup label="내 프리셋">${repCmMine().map((x, i) => `<option value="m:${i}">${escH(x.name)}</option>`).join("")}</optgroup>` : ""}</select>
       <span class="sum" title="${escH(`${title} · ${kinds.join("·") || "종류 전체"}`)}"><b>${escH(title)}</b> · ${escH(kinds.join("·") || "종류 전체")} · ${escH(`${dt(pv.start)} ~ ${v.end ? dt(v.end) : "지금"}`)} · 자료 ${nex}/${REP_EX.length}</span>
-      <button type="button" id="rep-cm-set" aria-expanded="${REP_CMV.set}" aria-controls="rep-cm-x">설정 ${REP_CMV.set ? "▴" : "▾"}</button></div>
-    <div class="cmx" id="rep-cm-x"${REP_CMV.set ? "" : " hidden"}><form class="ob" id="rep-of" onsubmit="return false">
+</div>
+    <div class="cmx" id="rep-cm-x"><form class="ob" id="rep-of" onsubmit="return false">
       <fieldset class="sec"><legend>회의</legend>
         ${chips("")}
         <label class="fl" for="rep-cm-title"><span>회의 제목</span><input id="rep-cm-title" type="text" maxlength="60" value="${escH(title)}"></label>
@@ -396,7 +400,10 @@ function repCmDraw(r, focus) {
           <div class="row"><input id="rep-cm-psn" type="text" maxlength="30" placeholder="장마 초기대응" aria-label="프리셋 이름"><button type="button" id="rep-cm-pss">저장</button></div>
           ${repCmMine().map(x => `<div class="row pm"><span>${escH(x.name)}</span><button type="button" class="lnk" data-psd="${escH(x.name)}" aria-label="${escH(x.name)} 프리셋 지우기">지우기</button></div>`).join("")}
         </details></fieldset>
-      <fieldset class="sec"><legend>기간</legend>${r.opts.filter(o => o.sec === "기간").map(o => repField(o, pv[o.key])).join("")}</fieldset>
+      <fieldset class="sec"><legend>기간</legend>${r.opts.filter(o => o.sec === "기간").map(o => repField({ ...o, hint: o.key === "end" ? "비우면 지금" : "" }, pv[o.key])).join("")}
+        <div class="row dys" role="group" aria-label="기간 프리셋 — 오늘까지 며칠">${[2, 3].map(n => `<button type="button" data-days="${n}">${n}일</button>`).join("")}
+          <input id="rep-cm-nd" type="number" inputmode="numeric" min="1" max="31" value="5" aria-label="며칠(직접)"><button type="button" data-days="n">일</button>
+          <small class="mute">오늘 포함 — 2일이면 어제 00시 ~ 지금</small></div></fieldset>
       <fieldset class="sec"><legend>특보 시군 자료(자동)</legend>${REP_EX.map(([k, t, h]) => `<label class="ck" title="${escH(h)}"><input type="checkbox" data-cex="${escH(k)}"${c.ex[k] ? " checked" : ""}> ${escH(t)}</label>`).join("")}</fieldset>
     </form></div>
     <div class="cmt" role="tablist" aria-label="Ⅱ장 묶음">${REP_CM.map(([k, , t]) => `<button type="button" role="tab" data-tab="${escH(k)}" aria-selected="${k === g}">${escH(t)}<i>${repCmN(k)}</i></button>`).join("")}</div>
@@ -443,7 +450,14 @@ function repCmClick(t, r) {
   }
   const tb = t.closest("[data-tab]");
   if (tb) { REP_CMV.tab = tb.dataset.tab; return repCmDraw(r, `[data-tab="${CSS.escape(tb.dataset.tab)}"]`); }
-  if (t.closest("#rep-cm-set")) { REP_CMV.set = !REP_CMV.set; return repCmDraw(r, "#rep-cm-set"); }
+  const dy = t.closest("[data-days]");
+  if (dy) {                                                   /* 기간 프리셋 — 오늘 포함 n일(시작 = n−1일 전 00시, 끝 = 지금) */
+    const n = dy.dataset.days === "n" ? Number($("rep-cm-nd").value) : Number(dy.dataset.days);
+    if (!Number.isInteger(n) || n < 1 || n > 31) { $("rep-om").textContent = "며칠은 1~31 로 넣어 주세요"; $("rep-om").className = "msg bad"; return; }
+    const d = new Date(); d.setDate(d.getDate() - (n - 1));
+    repCmOpts(r, { start: `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}0000`, end: "" });
+    return repCmDraw(r, `[data-days="${dy.dataset.days}"]`);
+  }
   const pnb = t.closest("[data-pn]");
   if (pnb) return repCmPanel(r, pnb.dataset.pn === "1");
   if (repCmPn() && t.closest(".cml")) return repCmPanel(r, false);   /* 덮은 후보 밖을 누르면 닫는다 */

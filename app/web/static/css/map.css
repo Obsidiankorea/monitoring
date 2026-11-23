@@ -2547,3 +2547,4 @@ body.tour-on #tools { display: flex; opacity: 1; pointer-events: auto; }
 #ly-roads .rr { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 13px; }
 #ly-roads .rr span { color: var(--ink-3); font-size: 12px; }
 #ly-roads .nt { margin-top: 6px; font-size: 12px; color: var(--ink-3); line-height: 1.5; }
+#rep .dys input[type=number] { width: 64px; }
