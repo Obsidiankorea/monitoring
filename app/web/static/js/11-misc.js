@@ -253,9 +253,9 @@ function waterAt(mx, my) {
 /* 마우스 자리의 도로 이름 · 노선 번호(도로망 레이어를 켰을 때) — 굵은 등급 먼저 */
 function roadAt(mx, my) {
   if (!OV.has("roads") || !GL_OK || !GL.getLayer("road-1")) return "";
-  const f = GL.queryRenderedFeatures([[mx - 4, my - 4], [mx + 4, my + 4]], { layers: ["road-1", "road-2", "road-3"] }).sort((a, b) => a.properties.g - b.properties.g)[0];
+  const f = GL.queryRenderedFeatures([[mx - 4, my - 4], [mx + 4, my + 4]], { layers: ["road-1", "road-2", "road-3", "road-4"] }).sort((a, b) => a.properties.g - b.properties.g)[0];
   if (!f) return "";
-  const p = f.properties, kind = ["", "고속도로", "국도", "지방도"][p.g];
+  const p = f.properties, kind = ["", "고속도로", "국도", "지방도", "시군도"][p.g];
   return `도로 <b>${escH(p.n || kind)}</b>${p.r ? ` · ${kind} ${escH(p.r)}${p.g === 1 ? "번" : "호선"}` : ` · ${kind}`}${p.o ? " · 경남 밖" : ""}`;
 }
 /* 시군을 누르면 고른다 — 오른쪽 패널이 그 시군 읍면동(격자)·지점(AWS)으로 바뀐다. 다시 누르거나 바다를 누르면 푼다.

@@ -37,23 +37,45 @@ def test_grades_present_and_in_grid():
     assert (2, "14") in ns and (2, "2") in ns                 # 국도 14 · 2호선(경남을 지난다)
 
 
-def test_no_both_direction_duplicates():
-    """방향마다 따로인 링크 · 분리 차로를 한 줄로 — 같은 등급에서 끝점 짝이 같은 선이 또 있으면 안 된다."""
-    seen = set()
-    for f in _fc()["features"]:
-        for l in f["geometry"]["coordinates"]:
-            k = (f["properties"]["g"], *sorted(map(tuple, (l[0], l[-1]))))
-            assert k not in seen, k
-            seen.add(k)
+def test_few_gaps_between_lines():
+    """끊김 — 선 끝이 다른 선에 닿지 않고 50~250m 떨어진 곳(눈에 보이는 틈)이 등급마다 60곳 이하.
+    2026-11-11 판은 고속 52 · 국도 47 · 지방도 38 — 대개 빼 둔 연결로(CONNECT 1)로 이어지는 나들목 · 교차로.
+    (2026-11-23 '60m 곁 선 빼기'로 줄였을 때는 수백 곳 — 리 확대에서 점선처럼 보였다)"""
+    import math
+    from collections import Counter, defaultdict
+    L = [(f["properties"]["g"], l) for f in _fc()["features"] for l in f["geometry"]["coordinates"]]
+    idx = defaultdict(set)
+    for i, (_, l) in enumerate(L):
+        for a, b in zip(l, l[1:]):
+            for x in range(int(min(a[0], b[0])) - 1, int(max(a[0], b[0])) + 2):
+                for y in range(int(min(a[1], b[1])) - 1, int(max(a[1], b[1])) + 2):
+                    idx[(x, y)].add(i)
+
+    def seg(p, a, b):
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        t = max(0, min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy or 1)))
+        return math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy)
+    ends = Counter(tuple(p) for _, l in L for p in (l[0], l[-1]))
+    gaps = Counter()
+    for i, (g, l) in enumerate(L):
+        for p in (l[0], l[-1]):
+            if ends[tuple(p)] > 1:
+                continue
+            d = min((seg(p, a, b) for j in idx[(int(p[0]), int(p[1]))] if j != i for a, b in zip(L[j][1], L[j][1][1:])), default=9)
+            gaps[g] += 0.1 <= d < 0.5
+    assert all(v <= 60 for v in gaps.values()), gaps
 
 
-def test_cover_drops_parallel_carriageway():
-    """맞은편 차로(30m 옆 나란한 선)는 덮인 것으로, 1km 떨어진 다른 길은 아닌 것으로 — build_roads.covered."""
-    import sys
-    sys.path.insert(0, str(ROOT / "tools"))
-    from build_roads import cells, covered
-    a = [(0.0, 0.0), (10.0, 0.0)]
-    occ = set(cells(a))
-    assert covered(cells([(0.0, 0.06), (10.0, 0.06)]), occ)          # 30m 옆
-    assert not covered(cells([(0.0, 2.0), (10.0, 2.0)]), occ)        # 1km 옆
-    assert not covered(cells([(5.0, 0.0), (5.0, 8.0)]), occ)         # 갈라져 나가는 길
+SG = ROOT / "app" / "web" / "static" / "roads"
+
+
+def test_sigun_road_files():
+    """시군도 — 경남 18 시군 파일, 하나 600KB 아래(build_roads.SG_BUDGET), g = 4, 그 시군 안(칸 ±2)."""
+    idx = json.loads((SG / "sg-index.json").read_text(encoding="utf-8"))
+    assert len(idx) == 18 and {"창원", "남해", "합천"} <= set(idx)
+    for nm, v in idx.items():
+        f = SG / v["f"]
+        assert f.stat().st_size == v["b"] < 600_000 and v["n"] > 500, (nm, v)
+        fc = json.loads(f.read_text(encoding="utf-8"))
+        assert fc["features"] and all(x["properties"]["g"] == 4 for x in fc["features"])
+        assert all(len(l) >= 2 for x in fc["features"] for l in x["geometry"]["coordinates"])

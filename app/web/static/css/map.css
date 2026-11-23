@@ -19,7 +19,7 @@
   --bd-halo: rgba(9, 13, 19, .78);
   --coast: #8A9CB2;       /* 해안선·바깥 경계 — ⚠️ #4F6178 은 청색 칸 위에서 묻혀 땅 · 바다가 안 갈렸다(10-25) */
   --zone: #A9BACD;        /* 권역 경계 */
-  --road-1: #E0A24A; --road-2: #CDBB91; --road-3: #8E8878;   /* 도로망 — 고속 · 국도 · 지방도(강수 청색과 안 겹치는 모래 · 주황 계열) */
+  --road-1: #E0A24A; --road-2: #CDBB91; --road-3: #8E8878; --road-4: #6F7680;   /* 도로망 — 고속 · 국도 · 지방도(강수 청색과 안 겹치는 모래 · 주황 계열) */
   --halo: #090D13;        /* 글자 테두리 — 칠해진 칸 위에서도 읽히게 */
   --hatch: #8093A8;       /* 결측 빗금 */
   --nb-ink: #56677B;
@@ -59,7 +59,7 @@
   --bd: #56677D; --bd-halo: rgba(255, 255, 255, .85);
   --coast: #6C7D92;
   --zone: #2E3D50;
-  --road-1: #C26A12; --road-2: #8A7348; --road-3: #A39B8C;
+  --road-1: #C26A12; --road-2: #8A7348; --road-3: #A39B8C; --road-4: #B4B9C0;
   --halo: #FFFFFF;
   --hatch: #6A7C92;
   --nb-ink: #8C9BAE;
@@ -89,7 +89,7 @@
   --bd: #C3CCD6; --bd-halo: rgba(30, 33, 38, .75);
   --coast: #A0AAB6;
   --zone: #D3DAE2;
-  --road-1: #F0B45A; --road-2: #D8C9A2; --road-3: #9A958A;
+  --road-1: #F0B45A; --road-2: #D8C9A2; --road-3: #9A958A; --road-4: #858C95;
   --halo: #2B2F35;
   --hatch: #949FAC;
   --nb-ink: #7F8995;
@@ -1031,6 +1031,7 @@ body.tl-on.panel-cards .card { transform: none; opacity: 1; }
 #over .en { font-weight: 600; fill: var(--ink-2); text-anchor: middle; dominant-baseline: central; }
 #over .rn { font-weight: 400; fill: var(--ink-3); text-anchor: middle; dominant-baseline: central; }
 #over .rvl { font-weight: 600; font-style: italic; fill: #8FE3FF; text-anchor: middle; dominant-baseline: central; paint-order: stroke; stroke: #0B1A2A; letter-spacing: .04em; }   /* 강 이름(02-data drawWaterLabels) */
+#over .rdl { font-weight: 700; fill: var(--road-2); text-anchor: middle; dominant-baseline: central; paint-order: stroke; stroke: var(--halo); }   /* 도로 이름(02-data lineLabels) */
 #over .en .pc { fill: var(--lv-warn); font-weight: 700; }
 /* 날아가는 동안 — 선은 transform 으로 같이 커지되 굵기는 그대로, 글자·점은 잠깐 감췄다가 다 오면 새로 그린다 */
 #stage.zooming #mapwrap path { vector-effect: non-scaling-stroke; }

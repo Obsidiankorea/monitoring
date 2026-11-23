@@ -58,12 +58,15 @@ const GL_LAYERS = [
   { id: "river", type: "line", source: "water", filter: ["all", ["==", ["get", "k"], "river"], ["==", ["get", "g"], 1]], layout: { visibility: "none", "line-join": "round", "line-cap": "round" },
     paint: { "line-color": ["case", ["has", "o"], "#8A97A6", "#7DDCFF"], "line-width": ["interpolate", ["linear"], ["zoom"], 8, 1.8, 11, 3.2], "line-opacity": ["case", ["has", "o"], 0.3, 0.9] } },
   // 도로망(레이어 roads, 국가교통정보센터 표준노드링크 — tools/build_roads.py). g = 1 고속 · 2 국도 · 3 지방도(시군 확대에서 더 굵게), o = 경남 밖(고속만, 흐리게)
+  // 시군도(107) — 시군을 골라 확대했을 때만, 고른 시군 파일(roads/sg-<번호>.json)을 처음 한 번 받는다(glRoadsSg)
+  { id: "road-4", type: "line", source: "roads4", layout: { visibility: "none", "line-join": "round", "line-cap": "round" },
+    paint: { "line-color": "var(--road-4)", "line-width": ["interpolate", ["linear"], ["zoom"], 9, 0.5, 12, 1.2], "line-opacity": 0.7 } },
   { id: "road-3", type: "line", source: "roads", filter: ["==", ["get", "g"], 3], layout: { visibility: "none", "line-join": "round", "line-cap": "round" },
     paint: { "line-color": "var(--road-3)", "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.6, 11, 1.4], "line-opacity": 0.75 } },
   { id: "road-2", type: "line", source: "roads", filter: ["==", ["get", "g"], 2], layout: { visibility: "none", "line-join": "round", "line-cap": "round" },
     paint: { "line-color": "var(--road-2)", "line-width": ["interpolate", ["linear"], ["zoom"], 8, 1.1, 11, 2.2], "line-opacity": 0.85 } },
   { id: "road-1", type: "line", source: "roads", filter: ["==", ["get", "g"], 1], layout: { visibility: "none", "line-join": "round", "line-cap": "round" },
-    paint: { "line-color": "var(--road-1)", "line-width": ["interpolate", ["linear"], ["zoom"], 8, 1.8, 11, 3.4], "line-opacity": ["case", ["has", "o"], 0.35, 0.95] } },
+    paint: { "line-color": "var(--road-1)", "line-width": ["interpolate", ["linear"], ["zoom"], 8, 1.2, 11, 2.2], "line-opacity": ["case", ["has", "o"], 0.25, 0.5] } },   // 고속도로는 우리 관할이 아니다 — 흐리게(맥락)
   // 지하차도 침수 위험 경보가 걸린 도로(재난상황정보 링크 → 표준노드링크 선, 레이어 '하천 · 댐'을 켰을 때) — 경고색 굵게 + 테두리
   { id: "itsfl-halo", type: "line", source: "itsfl", layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "var(--bd-halo)", "line-width": 7 } },
   { id: "itsfl", type: "line", source: "itsfl", layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "var(--rv-3)", "line-width": 4 } },
@@ -180,9 +183,31 @@ async function glRoads() {
     try {
       ROADS = (await getJson("roads/roads.json")).features;
       glSet("roads", glFC(ROADS.map(f => glF(f.geometry, f.properties))));
+      if (OV.has("roadlbl")) drawStations();                   // 도로 이름 — 자료가 막 왔다
     } catch (e) { ROADS = null; console.warn("도로망 자료를 못 읽었다", e); return; }
   }
   for (const L of ["road-1", "road-2", "road-3"]) GL.setLayoutProperty(L, "visibility", OV.has("roads") && Array.isArray(ROADS) ? "visible" : "none");
+  glRoadsSg();
+}
+/* 시군도 — 도로망을 켜고 시군을 골라 확대(CAM)했을 때 고른 시군 파일만. 받은 시군은 다시 받지 않는다. 확대를 풀면 감춘다(자료는 둔다).
+   그리기마다 불린다(02-data drawWaterLabels) — 받을 것이 없으면 바로 돈다 */
+const RSG = { idx: null, got: {}, busy: false, key: "" };
+async function glRoadsSg() {
+  if (!GL_OK || !GL.getLayer("road-4")) return;
+  const want = OV.has("roads") && CAM && selOn() ? SELS : [];
+  GL.setLayoutProperty("road-4", "visibility", want.length ? "visible" : "none");
+  if (!want.length || RSG.busy) return;
+  const need = want.filter(n => !RSG.got[n]);
+  if (need.length) {
+    RSG.busy = true;
+    try {
+      RSG.idx ||= await getJson("roads/sg-index.json");
+      for (const n of need) if (RSG.idx[n]) RSG.got[n] = (await getJson(`roads/${RSG.idx[n].f}`)).features;
+    } catch (e) { console.warn("시군도 자료를 못 읽었다", e); }
+    RSG.busy = false;
+  }
+  const key = want.filter(n => RSG.got[n]).join();
+  if (key !== RSG.key) { RSG.key = key; glSet("roads4", glFC(want.flatMap(n => RSG.got[n] || []).map(f => glF(f.geometry, f.properties)))); }
 }
 /* 마우스 자리 표고(m) — 지형 레이어를 켰을 때만. 125m 칸 표고(elev.i16.gz, 2MB)를 처음 물을 때 받는다. 아직이면 null */
 let ELEV = null;

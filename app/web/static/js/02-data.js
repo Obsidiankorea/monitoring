@@ -687,27 +687,36 @@ function drawEmdNames(taken) {
   g.innerHTML = out.join("");
   drawWaterLabels(placed);
 }
-/* 강 이름(레이어 옵션 waterlbl) — 시군 확대에서 국가 · 지방하천 이름을 강 줄기를 따라(기울여) 단다. 읍면동 이름 다음 — 남은 빈자리에만.
-   한 이름은 화면에서 가장 긴 줄기에, 450px 마다 하나씩. 좌표는 water.json(칸) → V.toX/Y */
+/* 강 이름(레이어 옵션 waterlbl) · 도로 이름(roadlbl) — 시군 확대에서 줄기를 따라(기울여) 단다. 읍면동 이름 다음 — 남은 빈자리에만(강 먼저).
+   한 이름은 화면에서 가장 긴 줄기에, 450px 마다 하나씩. 좌표는 water.json · roads.json(칸) → V.toX/Y */
 function drawWaterLabels(placed) {
   const g = $("wlab");
   if (!g) return;
-  if (!OV.has("water") || !OV.has("waterlbl") || !CAM || !selOn() || !Array.isArray(WATER) || !V) { g.innerHTML = ""; return; }
-  const A = mapArea(), fs = Math.max(11.5, Math.min(18, V.u * 3.6)), out = [];
+  glRoadsSg();                                              // 시군도 — 확대 · 고른 시군이 바뀌면 받거나 감춘다
+  if (!CAM || !selOn() || !V) { g.innerHTML = ""; return; }
+  const out = [];
+  if (OV.has("water") && OV.has("waterlbl") && Array.isArray(WATER))
+    lineLabels(WATER, p => (p.k === "river" && p.g <= 2 && !p.o ? p.n : ""), "rvl", 3.6, placed, out);
+  if (OV.has("roads") && OV.has("roadlbl") && Array.isArray(ROADS))
+    lineLabels(ROADS, p => (p.o || p.g === 1 ? "" : p.n || (p.r ? `${["", "", "국도", "지방도"][p.g]} ${p.r}호선` : "")), "rdl", 3.2, placed, out);   // 고속도로는 관할 밖 — 이름 안 단다
+  g.innerHTML = out.join("");
+}
+function lineLabels(feats, nameOf, cls, fk, placed, out) {
+  const A = mapArea(), fs = Math.max(11, Math.min(18, V.u * fk));
   const hit = b => placed.some(p => b.x0 < p.x1 && b.x1 > p.x0 && b.y0 < p.y1 && b.y1 > p.y0);
   const runs = new Map();                                   // 이름 → [화면 점 줄기 …]
   const keep = (n, r) => { if (r.length > 1) (runs.get(n) || runs.set(n, []).get(n)).push(r); };
-  for (const f of WATER) {
-    const p = f.properties;
-    if (p.k !== "river" || !p.n || p.g > 2 || p.o) continue;
+  for (const f of feats) {
+    const name = nameOf(f.properties);
+    if (!name) continue;
     for (const line of f.geometry.coordinates) {
       let cur = [];
       for (const [gx, gy] of line) {
         const x = V.toX(gx), y = V.toY(gy);
         if (x > A.x0 && x < A.x1 && y > A.y0 && y < A.y1) cur.push([x, y]);
-        else { keep(p.n, cur); cur = []; }
+        else { keep(name, cur); cur = []; }
       }
-      keep(p.n, cur);
+      keep(name, cur);
     }
   }
   const len = r => r.slice(1).reduce((s, q, i) => s + Math.hypot(q[0] - r[i][0], q[1] - r[i][1]), 0);
@@ -726,10 +735,9 @@ function drawWaterLabels(placed) {
       const bx = { x0: x - (c * w + sn * fs) / 2, x1: x + (c * w + sn * fs) / 2, y0: y - (sn * w + c * fs) / 2, y1: y + (sn * w + c * fs) / 2 };
       if (hit(bx)) continue;
       placed.push(bx);
-      out.push(`<text class="rvl" transform="translate(${x.toFixed(1)},${y.toFixed(1)}) rotate(${ang.toFixed(1)})" style="font-size:${fs.toFixed(1)}px;stroke-width:${(fs * 0.22).toFixed(1)}px">${escH(name)}</text>`);
+      out.push(`<text class="${cls}" transform="translate(${x.toFixed(1)},${y.toFixed(1)}) rotate(${ang.toFixed(1)})" style="font-size:${fs.toFixed(1)}px;stroke-width:${(fs * 0.22).toFixed(1)}px">${escH(name)}</text>`);
     }
   }
-  g.innerHTML = out.join("");
 }
 
 /* 재생 막대 — 범례 오른쪽 ~ 패널 왼쪽 빈자리 가운데. 막대(약 880px)가 그보다 넓으면 눈금 줄(TRK.Wt)을 줄인다.
