@@ -42,7 +42,7 @@ async function putOff(list) {
   show(); loadFlow(); CARDS = null; loadCards();
 }
 $("stage").addEventListener("contextmenu", ev => {
-  if (CASE || !V || !GEO || ev.target.closest("#tl, #play, #legend, #layers, #rail, #pop, #stn-pop, #sw, #camgrab, #cambar, #tools, #aiw, #showdots")) return;
+  if (CASE || !V || !GEO || ev.target.closest("#tl, #play, #legend, #layers, #rail, #bv, #pop, #stn-pop, #sw, #camgrab, #cambar, #tools, #aiw, #showdots")) return;
   const rc = $("stage").getBoundingClientRect();
   const mx = (ev.clientX - rc.left - MT.tx) / MT.sc, my = (ev.clientY - rc.top - MT.ty) / MT.sc;
   const st = stationAt(mx, my);
@@ -180,7 +180,7 @@ function tipUnpin() { TIP_PIN = null; const t = $("tip"); t.classList.remove("pi
 $("stage").addEventListener("mousemove", ev => {
   if (TIP_PIN) return;
   // 오른쪽 클릭 메뉴가 열려 있으면 툴팁을 감춘다 — 메뉴를 덮지 않게
-  if (!V || !GEO || !$("stn-pop").hidden || ev.target.closest("#tl, #play, #legend, #layers, #rail, #pop, #sw, #camgrab, #cambar, #tools, #aiw, #showdots, #td-pop, .rng-pop")) { $("tip").hidden = true; $("stage").style.cursor = ""; return; }
+  if (!V || !GEO || !$("stn-pop").hidden || ev.target.closest("#tl, #play, #legend, #layers, #rail, #bv, #pop, #sw, #camgrab, #cambar, #tools, #aiw, #showdots, #td-pop, .rng-pop")) { $("tip").hidden = true; $("stage").style.cursor = ""; return; }
   const rc = $("stage").getBoundingClientRect(), x = ev.clientX - rc.left, y = ev.clientY - rc.top;
   const mx = (x - MT.tx) / MT.sc, my = (y - MT.ty) / MT.sc;
   const gx = V.fromX(mx), gy = V.fromY(my), v = valueAt(gx, gy), tip = $("tip");
@@ -220,6 +220,15 @@ $("stage").addEventListener("mousemove", ev => {
   const inHr = c >= 0 && r >= 0 && c < hb.w && r < hb.h;
   const sg = inHr && MSIG ? GEO.sigun.find(s => s.id === MSIG[r * hb.w + c]) : null;
   highlight(sg && sg.kind === "gn" ? sg.name : null);
+  if (BV.on) {                           // 두 변수 판단 — 그 칸의 누적 · 앞으로를 판정값과 견준 설명(07e bvTip)
+    const t = inHr ? bvTip(r, c) : "";
+    if (!t) { tip.hidden = true; return; }
+    tip.innerHTML = t; tip.hidden = false;
+    const tw = tip.offsetWidth, th = tip.offsetHeight;
+    tip.style.left = (x + 16 + tw < V.W - 6 ? x + 16 : Math.max(6, x - 16 - tw)) + "px";
+    tip.style.top = Math.max(6, Math.min(V.H - th - 6, y - th / 2)) + "px";
+    return;
+  }
   if (v === undefined) { tip.hidden = true; return; }
   loadEmd();
   let where = "";
@@ -758,6 +767,7 @@ document.addEventListener("keydown", ev => {
   const i = (CASE ? "12" : "123456").indexOf(ev.key);
   if (i >= 0) { stopPlay(); if (HEAT) setHeat(false); pickLayer(keyKind(i)); }
   else if (ev.key === "8") setOverlay("roads", !OV.has("roads"));
+  else if (ev.key === "9") { stopPlay(); if (HEAT) setHeat(false); bvSet(!BV.on); }
   else if (ev.key === "7" && !CASE) {                      // 적설 — 쌓인 눈 깊이(누적)로 칠하기 켜고 끄기(06f 눈만 보기)
     if (snowOnly()) setOverlay("snowonly", false);
     else { if (!OV.has("snow")) setOverlay("snow", true); setOverlay("snowonly", true); if (!SNOW) toast("적설 자료를 아직 받지 못했다"); }

@@ -303,8 +303,8 @@ function leftBound() {
 function tlFit() {
   let tx = 0, ty = 0, sc = 1;
   // 패널이 나오거나 특보 줄을 펼치면 지도가 그 사이로 비켜 선다(겹치지 않게)
-  if (tlOn || alShown()) {
-    const left = leftBound(), right = tlOn ? V.W - tlWidth() - 16 : V.W - 16;
+  if (BV.on || tlOn || alShown()) {     // 두 변수 판단(07e) — 위 오른쪽 패널만큼 비킨다(아래 패널은 남동쪽 바다로 파고든다)
+    const left = leftBound(), right = BV.on ? V.W - bvTopW() - 30 : tlOn ? V.W - tlWidth() - 16 : V.W - 16;
     const mw = (V.X1 - V.X0) * V.b.s, avail = right - left;
     sc = Math.min(1, avail / mw);
     tx = left + (avail - mw * sc) / 2 - sc * V.b.ox;
@@ -332,7 +332,7 @@ function mapArea() {
   const st = $("stage").getBoundingClientRect(), lg = $("legend").getBoundingClientRect();
   const hb = $("hud").getBoundingClientRect(), pl = $("play");
   const x0 = leftBound();
-  const x1 = tlOn ? V.W - tlWidth() - 16 : V.W - 16;
+  const x1 = BV.on ? V.W - bvTopW() - 30 : tlOn ? V.W - tlWidth() - 16 : V.W - 16;
   const y0 = Math.max(16, hb.height ? hb.bottom - st.top + 12 : 16);   // 지도 위 제목 밑부터
   const y1 = !pl.hidden && pl.offsetHeight ? pl.getBoundingClientRect().top - st.top - 10 : V.H - 16;
   return { x0, y0, x1, y1 };

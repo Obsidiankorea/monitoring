@@ -177,6 +177,7 @@ async function glWater() {
 let ROADS = null;
 async function glRoads() {
   srcAttr();
+  roadCol();
   if (!GL_OK) return;
   if (OV.has("roads") && !ROADS) {
     ROADS = "loading";
@@ -188,6 +189,12 @@ async function glRoads() {
   }
   for (const L of ["road-1", "road-2", "road-3"]) GL.setLayoutProperty(L, "visibility", OV.has("roads") && Array.isArray(ROADS) ? "visible" : "none");
   glRoadsSg();
+}
+/* 도로 색 — 레이어 옵션 '등급마다 다른 색'(roadcol)이면 --road-* 를 또렷한 색으로 바꿔 끼운다(map.css :root[data-roadcol]) */
+function roadCol() {
+  const on = OV.has("roadcol"), de = document.documentElement;
+  de.toggleAttribute("data-roadcol", on);
+  if (GL_OK) glTheme();                 // 처음엔 GL 이 늦게 뜬다 — 뜬 뒤 glRoads 가 다시 부른다
 }
 /* 시군도 — 도로망을 켜고 시군을 골라 확대(CAM)했을 때 고른 시군 파일만. 받은 시군은 다시 받지 않는다. 확대를 풀면 감춘다(자료는 둔다).
    그리기마다 불린다(02-data drawWaterLabels) — 받을 것이 없으면 바로 돈다 */
@@ -231,6 +238,7 @@ function elevAt(gx, gy) {
 function glTheme() {
   if (!GL_OK) return;
   for (const L of GL_LAYERS) for (const [k, v] of Object.entries(glPaint(L))) if (!k.endsWith("-transition")) GL.setPaintProperty(L.id, k, v);
+  if (OV.has("roadcol")) GL.setPaintProperty("road-1", "line-opacity", ["case", ["has", "o"], 0.35, 0.85]);   // 색 모드면 고속도로도 덜 흐리게
 }
 const glSet = (id, data) => GL.getSource(id).setData(data);
 /* 자료가 바뀌었을 때만 소스에 올린다 — 카메라가 멈출 때마다 buildBase 가 다시 불러도 같은 열쇠면 그냥 지나간다 */

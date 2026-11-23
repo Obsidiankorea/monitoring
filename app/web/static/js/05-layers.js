@@ -22,6 +22,7 @@ const OVL = [
   { id: "bldg", label: "건물(사람 사는 곳)", short: "건물", key: "", grp: "geo" },
   { id: "roads", label: "도로망(고속 · 국도 · 지방도)", short: "도로", key: "8", grp: "geo" },
   { id: "roadlbl", label: "도로 이름 표시(시군 확대)", short: "도로 이름", key: "", parent: "roads", grp: "geo" },
+  { id: "roadcol", label: "등급마다 다른 색(초록 · 주황 · 노랑 · 보라)", short: "도로 색", key: "", parent: "roads", grp: "geo" },
 ];
 /* 레이어 묶음 — 같은 grp 는 접었다 펴는 한 줄 아래로. 펼침은 이 PC 에 기억(브라우저 저장, 못 쓰면 접힌 채) */
 const LY_GRP = { geo: "지형 · 지리" };
@@ -72,6 +73,7 @@ const TIPS = new Map([
     경남 밖은 고속도로만 흐리게. 나들목 · 분기점 연결로는 뺐다. 켜면 지도 오른쪽 아래에 출처가 뜬다.`],
   ["ov-roadlbl", `<b>도로 이름 표시</b> — 시군을 골라 확대했을 때 고속도로 · 국도 · 지방도 이름을 도로를 따라 단다(읍면동 · 강 이름 · 관측소 글자와 겹치지 않는 자리만).
     국도 · 지방도는 시군마다 이름이 바뀌어(○○대로) 그 노선에서 가장 긴 구간의 이름 하나를 단다. 이름이 없으면 '국도 14호선'처럼 번호로.`],
+  ["ov-roadcol", `<b>등급마다 다른 색</b> — 기본은 비 색과 안 섞이게 모래 · 회색 계열이라 등급끼리 잘 안 갈린다. 켜면 고속도로 초록 · 국도 주황 · 지방도 노랑 · 시군도 보라로 또렷하게(고속도로도 덜 흐리게).`],
   ["ov-bldg", `<b>건물(사람 사는 곳)</b> — 경남 건물 전부(국토교통부 GIS건물통합정보, 약 160만 동)를 모래색으로. 진할수록 건물이 빽빽하다(시가지 · 아파트 단지), 옅은 점은 시골 마을.
     시군을 고르면 더 자세한 조각으로 바뀐다. 매월 갱신 자료 — 받은 달 기준. 켜면 지도 오른쪽 아래에 출처가 뜬다.`],
   ["ov-tide", `<b>조위</b> — 경남 해안 조위관측소의 바닷물 높이(해양조사원). 표식의 숫자는 지금 실측, 괄호는 예측과의 차이.
@@ -88,7 +90,7 @@ function renderRoadLegend() {
   if (box.hidden) return;
   const ln = (c, w) => `<svg width="34" height="10" aria-hidden="true"><line x1="2" y1="5" x2="32" y2="5" stroke="var(${c})" stroke-width="${w}" stroke-linecap="round"/></svg>`;
   box.innerHTML = `<div class="hd2"><b>도로망</b><span>2026-11-11 판</span></div>`
-    + [["--road-2", 2.2, "일반국도", ""], ["--road-3", 1.4, "지방도", "국가지원지방도 포함"], ["--road-4", 1, "시군도", "시군을 골라 확대했을 때만"], ["--road-1", 1.6, "고속도로", "흐리게(관할 밖)"]]
+    + [["--road-2", 2.2, "일반국도", ""], ["--road-3", 1.4, "지방도", "국가지원지방도 포함"], ["--road-4", 1, "시군도", "시군을 골라 확대했을 때만"], ["--road-1", 1.6, "고속도로", OV.has("roadcol") ? "관할 밖" : "흐리게(관할 밖)"]]
       .map(([c, w, n, d]) => `<div class="rr">${ln(c, w)}<b>${n}</b><span>${d}</span></div>`).join("")
     + `<div class="nt">선에 마우스를 올리면 이름 · 노선 번호. 골목길 · 연결로는 없다(원본에 시군도보다 작은 등급이 없다). 출처 국가교통정보센터 표준노드링크</div>`;
 }
@@ -241,7 +243,7 @@ function setOverlay(id, on) {
   if (id === "district") { if (on) setLyOpen(id); loadDistrict(); }
   if (id === "stnval") drawStations();
   if (id === "relief" || id === "low" || id === "bldg") glTerrain();
-  if (id === "roads") { if (on) setLyOpen("roads"); glRoads(); }
+  if (id === "roads" || id === "roadcol") { if (on) setLyOpen("roads"); glRoads(); }
   if (id === "roads" || id === "roadlbl") drawStations();       // 도로 이름(시군 확대) — 읍면동 이름과 같이 다시 단다
   if (id === "water" || id === "waterall" || id === "waterlbl") { glWater(); drawStations(); }
   renderLayers();

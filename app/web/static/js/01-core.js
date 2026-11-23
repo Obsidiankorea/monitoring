@@ -212,6 +212,7 @@ const SHOW = { on: false, name: "", items: [], i: 0, timer: null, paused: false,
 let SLIDE_SC = 0;                         // 화면 재생 — 그 화면만 따로 쓰는 범례 끝 눈금(0 = 지도 설정 그대로)
 const awsLive = () => !test && !CASE && !!SET.aws_live;      // AWS 실시간 감시(R) — setLive
 let kind = "obs60", vsrtN = 1, x4 = false;
+const BV = { on: false, D: null, i: 0 };   // 두 변수 판단(07e-bivar) — 켜면 지도 · 오른쪽 패널을 그것이 그린다
 let OBS_TM = null;                      // 60분 층을 지난 시각으로 볼 때(재생·끌기)
 let test = Q.get("test") === "1";
 let CUR = null, CURSTAT = null;          // 지금 그리는 격자, 시군 통계
@@ -458,7 +459,8 @@ let RENDER_MS = 0;
    fade: 재생·끌기로 프레임이 넘어갈 때 앞 그림을 잠깐 남겨 겹쳐 사라지게 한다(뚝뚝 끊기지 않게). */
 function draw(fade = false) {
   const t0 = performance.now();
-  glRain(CUR && V?.s ? offscreen(CUR) : null, CUR, fade);
+  if (BV.on) { if (BV.base) bvDraw(); else if (GL_OK) { glCanvas("rain"); glCanvas("hatch"); } }
+  else glRain(CUR && V?.s ? offscreen(CUR) : null, CUR, fade);
   drawLabels();
   RENDER_MS = performance.now() - t0;
 }
@@ -467,7 +469,7 @@ function draw(fade = false) {
 function drawLabels() {
   const g = $("labels");
   if (!g) return;
-  if (!CURSTAT || !V || !V.s) { g.innerHTML = ""; LABELBOX = NAMEBOX.concat(ALERTBOX); drawStations(); return; }
+  if (!CURSTAT || !V || !V.s || BV.on) { g.innerHTML = ""; LABELBOX = NAMEBOX.concat(ALERTBOX); drawStations(); return; }
   const fac = factor(), min = stepsOf(kind)[0];
   const rows = CURSTAT.rows.filter(r => r.kind === "gn" && r.max != null && r.max * fac >= min && r.where)
     .sort((a, b) => b.max - a.max);
@@ -642,7 +644,7 @@ function isPast() {                     // 일부러 지난 시각을 보는 중
   return !CASE && (pinned(kind) || (OBSK.has(kind) && OBS_TM && OBS_TM !== metaOf(kind).tm));
 }
 /* 층 이름 — 실황 누적은 카드 구간으로 부른다('어제 0시부터 누적') */
-const labelOf = k => (k === "acc" && !CASE) ? `${accSpan().label} 누적`
+const labelOf = k => BV.on ? bvLabel() : (k === "acc" && !CASE) ? `${accSpan().label} 누적`
   : k === "aws" ? `AWS ${accSpan().label} 누적` : (metaOf(k).label || k);
 function paintHead() {
   const L = metaOf(kind);
@@ -724,11 +726,13 @@ function buildMenu() {
       + item(sk, "5·6", "단기 예보", row === "shrt",
              `<span class="chips">${chip("shrt_today", "오늘 <kbd>5</kbd>", kind === "shrt_today")}${chip("shrt_tomorrow", "내일 <kbd>6</kbd>", kind === "shrt_tomorrow")}</span>`);
   }
+  html += grp("판단") + `<button class="it${BV.on ? " on" : ""}" role="menuitemradio" aria-checked="${BV.on}" data-bv="1" style="--i:${i++}" title="색 = 이번 비 누적 × 최근 1시간, 빗금 = 앞으로 6시간 가장 센 시우량. 오른쪽에 시군 × 시각 판단 시간표">
+      <span><b>두 변수 판단</b><small>누적 × 1시간 색 · 앞으로 빗금 · 시군 시간표</small></span><span class="t"></span><kbd>9</kbd></button>`;
   $("lmenu").innerHTML = html
     + `<div class="foot" style="--i:${i}"><button data-a="tl">패널 <kbd>L</kbd></button><button data-a="help">도움말 <kbd>?</kbd></button>`
     + `<button data-a="prefs">설정 <kbd>Ctrl ,</kbd></button></div>`;
   for (const b of $("lmenu").querySelectorAll(".it"))
-    b.onclick = () => { stopPlay(); lmenu(false); pickLayer(b.dataset.k); };
+    b.onclick = () => { stopPlay(); lmenu(false); b.dataset.bv ? bvSet(!BV.on) : pickLayer(b.dataset.k); };
   for (const c of $("lmenu").querySelectorAll(".chip"))
     c.onclick = ev => { ev.stopPropagation(); stopPlay(); lmenu(false); pickLayer(c.dataset.k); };
   // 자료 스위치 — 메뉴는 열어 둔 채(무엇이 바뀌었나 줄에서 바로 보이게)
@@ -769,6 +773,7 @@ function lmenuKey(ev) {
    (오른쪽 위 카드도 '단기 내일' → '강수 누적'으로 돌아간다). 앞 층이 없으면 60분 */
 let PREVK = null;
 function pickLayer(k) {
+  if (BV.on) { bvSet(false); if (k === kind) return; }
   if (k === kind && k.startsWith("shrt")) { choose(PREVK && KINDS.includes(PREVK) ? normKind(PREVK) : srcKind("h1"), true); return; }
   if (k.startsWith("shrt") && !kind.startsWith("shrt")) PREVK = kind;
   choose(k, true);

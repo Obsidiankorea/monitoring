@@ -329,6 +329,17 @@ async def api_grid_flow(hours: int = Query(6, ge=1, le=24), step: int = Query(10
         raise HTTPException(404, str(e)) from e
 
 
+@app.get("/api/bivar")
+async def api_bivar(case: str | None = None):
+    """두 변수 판단 — 시각마다 9색(이번 비 누적 × 최근 1시간) 그림 · 빗금(앞으로 6시간) · 시군 판단 줄(app/bivar.py).
+    실황은 누적 구간 정시 + 초단기 +1~6, `case=` 면 재현 사례 전부."""
+    from . import bivar
+    try:
+        return await asyncio.to_thread(bivar.build, case)
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
+
+
 @app.get("/api/grid/cases")
 async def api_grid_cases():
     """재현 사례 목록(data/demo/map/*) — 지난 호우를 격자 그대로 굳혀 둔 것."""
