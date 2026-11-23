@@ -306,8 +306,8 @@ function tlFit() {
   if (BV.on || tlOn || alShown()) {     // 두 변수 판단(07e) — 위 오른쪽 패널만큼 비킨다(아래 패널은 남동쪽 바다로 파고든다)
     const left = leftBound(), right = BV.on ? V.W - bvTopW() - 30 : tlOn ? V.W - tlWidth() - 16 : V.W - 16;
     const mw = (V.X1 - V.X0) * V.b.s, avail = right - left;
-    sc = Math.min(1, avail / mw);
-    tx = left + (avail - mw * sc) / 2 - sc * V.b.ox;
+    sc = Math.min(1, avail / mw) * (BV.on ? 0.9 : 1);          // 두 변수 판단 — 90% 로 줄여 왼쪽에 붙인다(오른쪽 패널에 자리를)
+    tx = (BV.on ? left : left + (avail - mw * sc) / 2) - sc * V.b.ox;
     ty = (1 - sc) * V.H / 2;
   }
   return { tx, ty, sc };

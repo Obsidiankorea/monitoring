@@ -89,7 +89,7 @@ function bvSet(on) {
   draw();
 }
 /* 자리 — 위 패널 폭(지도가 비켜설 몫, tlFit 이 읽는다)과 아래 패널의 왼쪽 위 모서리(지도가 갈 틀에서 거제 동쪽 끝 · 김해 남쪽 끝) */
-const bvTopW = () => Math.round(Math.min(Math.max(360 * V.k, V.W * 0.25), V.W * 0.32));
+const bvTopW = () => Math.round(Math.min(Math.max(460 * V.k, V.W * 0.3), V.W * 0.38));
 let BV_NOTCH = null;
 function bvNotch() {
   if (BV_NOTCH || !MSIG || !META || !GEO) return BV_NOTCH;
@@ -113,7 +113,10 @@ function bvLayout() {
   const minW = Math.max(w + 120 * k, 520 * k);
   const left = Math.round(Math.min(V.W - 16 - minW, Math.max(V.W * 0.38, n ? sx(n.gx) + 16 * k : V.W * 0.5)));
   // 시간표 열여덟 줄이 숨 쉬게 아래 카드는 380px 이상(낮은 화면이면 남동쪽 바다보다 위로 올라온다)
-  const top = Math.round(Math.min(V.H * 0.6, V.H - 16 - 380 * k, Math.max(V.H * 0.36, n ? sy(n.gy) + 10 * k : V.H * 0.5)));
+  let top = Math.round(Math.min(V.H * 0.6, V.H - 16 - 380 * k, Math.max(V.H * 0.36, n ? sy(n.gy) + 10 * k : V.H * 0.5)));
+  // 위 카드(지금 상태)가 다 보이게 — 아래 카드를 그만큼 내린다(아래 카드 380px 는 지킨다)
+  const need = $("bv-a")?.scrollHeight ? $("bv-a").scrollHeight + 16 + 12 : 0;
+  if (need > top) top = Math.round(Math.min(need, Math.max(top, V.H - 16 - 380 * k)));
   de.style.setProperty("--bv-l", left + "px");
   de.style.setProperty("--bv-t", top + "px");
 }
@@ -185,6 +188,7 @@ function bvPanel() {
   q("all").onchange = () => bvCursor(BV.i);
   $("bv-key").innerHTML = bvFutL().map((s, i) => `<div><canvas data-l="${i}"></canvas><span>${["없음", "성긴 빗금", "촘촘한 빗금", "지그재그"][i]} ${s}</span></div>`).join("");
   bvTimeline();
+  requestAnimationFrame(bvLayout);           // 위 카드 내용이 생겼다 — 그 높이에 맞춰 아래 카드 자리를 다시
 }
 function bvPlay() {
   BV.play = setInterval(() => bvFrame((BV.i + 1) % BV.D.frames.length), 900);
