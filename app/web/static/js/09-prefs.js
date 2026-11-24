@@ -7,7 +7,7 @@ function prefTabs() {
   const panes = [];
   let cur = null;
   // 머리글 열 개를 네 탭으로 — 탭이 많아 글자가 꺾이던 것을 묶는다(머리글은 탭 안의 소제목으로 남는다)
-  const GROUP = { "재생": "화면", "오른쪽 패널": "화면", "화면": "화면", "관측소": "자료", "API 절약": "자료",
+  const GROUP = { "재생": "화면", "오른쪽 패널": "화면", "화면": "화면", "자료 받는 곳": "자료", "관측소": "자료", "API 절약": "자료",
                   "AI 답변": "AI", "AI 알림": "AI", "AI 위키": "AI", "연락처 잠금": "AI", "API 키": "시스템", "업데이트": "시스템", "데모": "시스템" };
   for (const el of [...box.children]) {
     if (el === top) continue;
@@ -113,6 +113,13 @@ function openPrefs() {
     <div class="row"><span class="k">오른쪽 위 도구</span><span class="seg">${[["show", "항상"], ["auto", "마우스를 움직이면"], ["hide", "숨김"]]
       .map(([v, l]) => `<button data-tools="${v}" class="${TOOLS === v ? "on" : ""}">${l}</button>`).join("")}</span></div>
     <div class="row"><span class="k"></span><span class="note">패널 · 도움말 · 설정 — 숨겨도 제목 메뉴 아래와 단축키(L · ? · Ctrl+,)로 연다.</span></div>
+    <h4>자료 받는 곳</h4>
+    <div class="row"><span class="note"><b>이 PC 에서 수집</b> = 이 PC 가 기상청을 직접 부른다 · <b>서버에서 받기</b> = 서버가 받아 둔 것을 본다(이 PC 수집 멈춤, 스방 없음)
+      · <b>서버 + 이 PC 스방</b> = 행망 PC 용 — 기상청 자료는 서버에서 읽고(호출 절약), 스방(내부망)만 이 PC 가 수집한다. 이 PC 에서 서버로는 아무것도 보내지 않는다.
+      서버 로그인은 API 키의 <b>GN_SERVER_KEY</b>(서버 기계 열쇠, 읽기 전용). 업데이트 · 저장공간은 언제나 이 PC 것.</span></div>
+    <div class="row"><span class="k">받는 곳</span><span class="seg" id="pf-og">${[["local", "이 PC 에서 수집"], ["server", "서버에서 받기"], ["mix", "서버 + 이 PC 스방"]].map(([m, t]) => `<button type="button" data-og="${m}">${t}</button>`).join("")}</span></div>
+    <div class="row"><span class="k">서버 주소</span><input id="pf-og-url" style="flex:1;min-width:0;font:inherit" spellcheck="false" placeholder="https://gisang.day"><button id="pf-og-test" type="button">연결 확인</button></div>
+    <div class="row"><span class="note" id="pf-og-st">읽는 중…</span></div>
     <h4>관측소</h4>
     <div class="row"><span class="k">경남 AWS(내부망)</span>${seg("gn_off", [[false, "쓴다"], [true, "끈다"]])}</div>
     <div class="row"><span class="k"></span><span class="note">끄면 스방 수집을 멈추고, 면(AWS 누적 · 1시간) · 강수 누적 카드 · 지금 오는 비에서 경남 AWS 를 모두 뺀다 — 기상청 AWS 만 쓴다.
@@ -174,6 +181,7 @@ function openPrefs() {
   loadKeys();
   loadAlert();
   loadSaver();
+  loadOrigin();
   $("prefs").hidden = false;
   $("pf-x").onclick = closePrefs;
   const pickSet = (k, v) => {
@@ -373,6 +381,47 @@ async function updAct(a) {
   }
   UPD.msg = `<span class="warnx">다시 뜨지 않았다 — 창을 확인하세요</span>`; updPaint();
 }
+/* ── 자료 받는 곳(설정) — 이 PC / 서버 / 서버 + 이 PC 스방. 종합 화면 설정 › 자료와 같은 /api/origin(이 PC 에 둔다) ── */
+let ORIGIN = null;
+const OG_NAME = { local: "이 PC 에서 수집", server: "서버에서 받기", mix: "서버 + 이 PC 스방" };
+function originPaint(msg) {
+  const st = $("pf-og-st");
+  if (!st || !ORIGIN) return;
+  document.querySelectorAll("#pf-og button").forEach(b => b.classList.toggle("on", b.dataset.og === ORIGIN.mode));
+  const u = $("pf-og-url"); if (u && document.activeElement !== u) u.value = ORIGIN.url || "";
+  st.innerHTML = msg || `지금: <b>${OG_NAME[ORIGIN.mode] || ORIGIN.mode}</b>` + (ORIGIN.mode === "local" ? (ORIGIN.collecting ? " · 이 PC 가 수집 중" : "")
+    : ORIGIN.mode === "mix" ? ` · 기상청 자료는 ${escH(ORIGIN.url)}, 스방은 이 PC` : ` · ${escH(ORIGIN.url)} — 이 PC 수집 멈춤`);
+}
+async function loadOrigin() {
+  try { ORIGIN = await getJson("/api/origin"); originPaint(); }
+  catch (e) { const st = $("pf-og-st"); if (st) st.innerHTML = `<span class="warnx">못 읽었다 — ${escH(e.message)}</span>`; }
+}
+async function originTest() {
+  const url = $("pf-og-url").value.trim();
+  originPaint("확인 중…");
+  try {
+    const r = await fetch("/api/origin/test", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url }) });
+    const j = await r.json();
+    const ok = r.ok && j.ok;
+    originPaint(ok ? `됨 — 서버 수집 ${j.collect_ok.length}/${j.n} 정상` : `<span class="warnx">안 됨 — ${escH(j.error || j.detail || r.status)}</span>`);
+    return ok;
+  } catch (e) { originPaint(`<span class="warnx">안 됨 — ${escH(e.message)}</span>`); return false; }
+}
+async function originSet(mode) {
+  const url = $("pf-og-url").value.trim();
+  if (mode !== "local" && !(await originTest())) return;       // 연결되지 않는 서버로 바꾸면 화면이 텅 빈다
+  try {
+    const r = await fetch("/api/origin", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ mode, url }) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.detail || r.status);
+    location.reload();                                           // 자료가 통째로 다른 곳에서 오므로 다시 읽는다
+  } catch (e) { originPaint(`<span class="warnx">저장 못 함 — ${escH(e.message)}</span>`); }
+}
+$("prefs").addEventListener("click", ev => {
+  const t = ev.target;
+  if (t.id === "pf-og-test") originTest();
+  else if (t.closest?.("#pf-og") && t.dataset.og && ORIGIN && t.dataset.og !== ORIGIN.mode) originSet(t.dataset.og);
+});
 /* ── API 절약 모드(설정) — 기상청 호출 간격 ── */
 let SAVER = null;
 const SV_NAME = { alerts: "특보", rain: "강수", minute: "매분", forecast: "예보", qpf: "예측", bangjae: "스방", short: "단기", grid: "격자", odam: "실황", tide: "조위" };

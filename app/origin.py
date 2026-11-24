@@ -135,10 +135,13 @@ async def test(url: str) -> dict:
         r = await client().get(f"{base}/api/status", timeout=httpx.Timeout(6.0, connect=4.0))
         r.raise_for_status()
         st = r.json().get("collect", {})
-        if _key():                               # 열쇠가 맞는지도 — 읽기 하나(로그인이 걸린 자료)
-            k = await client().get(f"{base}/api/alerts", headers={"X-GN-Key": _key()}, timeout=httpx.Timeout(8.0, connect=4.0))
-            if k.status_code in (401, 403):
-                return {"ok": False, "url": base, "error": "서버가 기계 열쇠(GN_SERVER_KEY)를 받지 않는다 — 서버의 GN_API_KEY 값인지 확인"}
+        # 로그인이 걸린 읽기 하나 — /api/status 는 로그인 없이 열려 있어 그것만 보면 '됨'인데 화면 자료는 401 로 텅 빈다
+        k = await client().get(f"{base}/api/alerts", headers={"X-GN-Key": _key()} if _key() else None,
+                               timeout=httpx.Timeout(8.0, connect=4.0))
+        if k.status_code in (401, 403):
+            why = ("서버가 기계 열쇠(GN_SERVER_KEY)를 받지 않는다 — 서버의 GN_API_KEY 값인지 확인" if _key()
+                   else "서버에 로그인이 걸려 있다 — 설정 › 시스템 › API 키의 GN_SERVER_KEY(서버 기계 열쇠)를 넣는다")
+            return {"ok": False, "url": base, "error": why}
     except (httpx.HTTPError, ValueError) as e:
         return {"ok": False, "url": base, "error": f"{type(e).__name__}: {e}"[:200]}
     ok = sorted(k for k, v in st.items() if isinstance(v, dict) and v.get("ok"))
