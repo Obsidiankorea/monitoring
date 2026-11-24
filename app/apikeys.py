@@ -27,6 +27,7 @@ EDITABLE = [
     ("TELEGRAM_CHAT_ID", "텔레그램 채팅 번호", "알림 받을 곳", "telegram"),
     ("JAENAN_URL", "재난상황보고서 서버 주소", "보고서 창 — 언레이드 jaenan-weather(비우면 http://100.106.116.92:8765)", "jaenan"),
     ("JAENAN_TOKEN", "재난상황보고서 서버 토큰", "보고서 창 — 한글 보고서 만들기 · 받기", "jaenan"),
+    ("GN_SERVER_KEY", "기상 서버(gisang.day) 읽기 열쇠", "자료 받는 곳 '서버 + 이 PC 스방' — 서버의 GN_API_KEY 값(읽기 전용, app/origin.py)", "gisang"),
 ]
 NAMES = {n for n, *_ in EDITABLE}
 DOCS = config.ROOT / "docs" / "api"
