@@ -42,6 +42,9 @@ _HWP = [_TM, _o("wicon", "날씨 칸", "choice", "icon", "날씨 칸", "시군�
         _o("wicon_mm", "아이콘 높이(mm)", "int", 8, "날씨 칸", min=3, max=30),
         _o("alert_compact", "특보 지역 축약", "bool", False, "특보", "빠진 곳이 몇 개 이하면 '전 시군(제외: …)'"),
         _o("alert_compact_n", "축약 — 제외 몇 개 이하", "int", 5, "특보", min=1, max=25)]
+_DIST = [_o("dist_days", "분포도 날 수", "int", 3, "3시간 예상강우", "오늘부터 며칠(한 날 8칸)", min=1, max=3)]
+_DAW_MODE = [_o("daw_mode", "다우지점 칸", "choice", "point", "다우지점", "서버는 스방(내부망)이 없어 강수 표 · 강우 현황 값(기상청)으로",
+                values=[["point", "다우지점 셋"], ["sigun", "다우시군 셋"]])]
 _DAW = [_o("daw_per", "시군당", "int", 2, "다우지점", "강수량 큰 곳부터 — 시군마다 최대 몇 곳", min=1, max=5),
         _o("daw_total", "모두", "int", 10, "다우지점", "모두 합쳐 몇 곳까지", min=1, max=30)]
 _CODES = [["W", "강풍"], ["R", "호우"], ["C", "한파"], ["D", "건조"], ["O", "해일"], ["N", "지진해일"], ["V", "풍랑"], ["T", "태풍"],
@@ -53,7 +56,7 @@ REG = [
      "ready": True, "wait": True},
     {"id": "daily", "name": "일일상황보고", "group": "재난상황과", "job": "daily", "desc": "기온 · 강수량 · 다우지점 · 예보 · 특보", "opts": _HWP + _DAW,
      "ready": True, "wait": False},                # 같은 엔진이라 wait=True 로 켜면 17시 대기가 된다(이번에는 기상상황보고만)
-    {"id": "nature", "name": "풍수해보고", "group": "풍수해", "job": "nature", "desc": "호우 대처상황보고 — 특보 이력 · 기상전망 · 강우 현황 · 그림", "ready": True,
+    {"id": "nature", "name": "호우 대처상황 보고", "group": "풍수해", "job": "nature", "desc": "특보 이력 · 기상전망 · 강우 현황 · 그림", "ready": True,
      "opts": [_o("start", "기간 시작", "datetime", sec="기간", hint="비우면 전일 00시"),
               _o("end", "기간 끝", "datetime", sec="기간", hint="비우면 지금"),
               _o("kind", "재난 이름", "text", "호우", "제목", "제목의 '호우 대처상황보고' 앞말", max=10),
@@ -61,7 +64,7 @@ REG = [
                                                               ["(4보)", "(4보)"], ["(최종)", "(최종)"]]),
               _o("wrn", "특보 이력에 넣을 종류", "multi", ["호우"], "특보 이력", values=[[x, x] for x in ("호우", "태풍", "강풍", "풍랑", "대설")]),
               _o("stage", "비상단계 칸", "text", "", "특보 이력", "예) 상시대비단계 (10.19. 02:00~) — 비우면 빈칸", max=60),
-              _o("step", "특보 훑기 간격(분)", "int", 10, "특보 이력", "해제 시각은 분 단위로 다시 좁힌다", min=1, max=60)] + _DAW},
+              _o("step", "특보 훑기 간격(분)", "int", 10, "특보 이력", "해제 시각은 분 단위로 다시 좁힌다", min=1, max=60)] + _DIST + _DAW_MODE},
     {"id": "report", "name": "긴급상황보고", "group": "재난상황과", "job": "report", "desc": "강수량 · 다우지점 표(시제품)", "ready": True,
      "opts": [_TM,
               _o("codes", "강조할 특보", "multi", ["R"], "특보", "표로 넣을 특보 — 나머지는 아래 요약 줄", values=_CODES),
