@@ -1581,7 +1581,8 @@ async def api_admin_mem(request: Request):
     u = getattr(request.state, "user", None) or {}
     if u.get("machine") or u.get("role", "admin") != "admin":
         raise HTTPException(403, "관리자만")
-    return JSONResponse(await asyncio.to_thread(memstat.report), headers={"Cache-Control": "no-store"})
+    trim = request.query_params.get("trim") == "1"   # ?trim=1 — 빈 힙을 OS 에 돌려준 앞뒤 RSS(조각화 확인)
+    return JSONResponse(await asyncio.to_thread(memstat.report, 15, trim), headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/status")

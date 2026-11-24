@@ -14,3 +14,8 @@ def test_deep_counts_numpy_and_nesting():
 def test_report_shape():
     r = memstat.report(top=3)
     assert {"rss_mb", "caches", "numpy", "objects"} <= set(r) and len(r["objects"]) == 3
+
+
+def test_report_trim_keeps_before():
+    r = memstat.report(top=1, do_trim=True)      # 윈도에서는 trim 이 그냥 False
+    assert "rss_before_trim_mb" in r

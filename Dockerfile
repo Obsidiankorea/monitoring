@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends tzdata \
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 TZ=Asia/Seoul \
     HOST=0.0.0.0 PORT=8000 GN_STATE=/state \
-    SKIP_COLLECT=bangjae
+    SKIP_COLLECT=bangjae \n    MALLOC_ARENA_MAX=2
 
 # AI 상황판단 자유 질문(GN_AI=claude-cli) — Claude Code 를 공식 설치 스크립트로. 인증은 실행할 때
 # config/claude/token.txt(claude setup-token)로 한다 — 이미지에 굽지 않는다. 빼려면 --build-arg WITH_CLAUDE=0

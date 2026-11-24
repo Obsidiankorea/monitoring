@@ -51,7 +51,20 @@ def rss_mb() -> float | None:
         return None
 
 
-def report(top: int = 15) -> dict:
+def trim() -> bool:
+    """glibc 가 쥔 빈 힙을 OS 에 돌려준다(malloc_trim). glibc 가 아니면 False."""
+    try:
+        import ctypes
+        return bool(ctypes.CDLL("libc.so.6").malloc_trim(0))
+    except (OSError, AttributeError):
+        return False
+
+
+def report(top: int = 15, do_trim: bool = False) -> dict:
+    before = rss_mb()
+    if do_trim:
+        gc.collect()
+        trim()
     caches = []
     for mod, name in CACHES:
         m = sys.modules.get(mod)
@@ -71,7 +84,10 @@ def report(top: int = 15) -> dict:
     kinds = Counter(type(o).__name__ for o in gc.get_objects())
     arrays = [o for o in gc.get_objects() if type(o).__module__ == "numpy" and hasattr(o, "nbytes") and getattr(o, "base", None) is None]
     big = sorted(arrays, key=lambda a: -a.nbytes)[:top]
-    return {"rss_mb": rss_mb(), "caches": caches,
+    out = {"rss_mb": rss_mb(), "caches": caches,
             "numpy": {"n": len(arrays), "mb": round(sum(a.nbytes for a in arrays) / 2**20, 1),
                       "big": [{"shape": list(a.shape), "dtype": str(a.dtype), "mb": round(a.nbytes / 2**20, 1)} for a in big]},
             "objects": kinds.most_common(top)}
+    if do_trim:
+        out["rss_before_trim_mb"] = before
+    return out
