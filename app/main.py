@@ -1576,9 +1576,22 @@ async def api_update_restart():
 
 @app.get("/api/status")
 async def api_status():
-    return {"collect": queries.status(), "poll": POLL_DEFAULT, "reports_busy": REP_BUSY["n"],
+    mine = {"collect": queries.status(), "poll": POLL_DEFAULT, "reports_busy": REP_BUSY["n"],
             "intervals": intervals(),
             "qpf": qpf.cfg(), "publish": db.publish_stats()}
+    base = origin.remote()
+    if origin.mode() == "mix" and base:
+        # 서버 + 이 PC 스방 — 수집 상태는 서버 것이되 스방은 이 PC 것(서버는 내부망에 닿지 않아 늘 '조회 실패'다)
+        code, body, _ = await origin.forward(base, "GET", "/api/status", "", b"", None)
+        try:
+            j = json.loads(body) if code == 200 else None
+        except ValueError:
+            j = None
+        if isinstance(j, dict) and isinstance(j.get("collect"), dict):
+            j["collect"]["bangjae"] = mine["collect"].get("bangjae") or j["collect"].get("bangjae")
+            j["reports_busy"] = mine["reports_busy"]          # 보고서는 이 PC 보고서 엔진
+            return j
+    return mine
 
 
 @app.get("/api/settings")

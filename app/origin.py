@@ -31,7 +31,7 @@ DEFAULT = {"mode": "local", "url": "https://gisang.day"}
 MODES = ("local", "server", "mix")
 LOCAL_ONLY = ("/api/origin", "/api/update", "/api/storage", "/api/settings/retention")
 # mix 에서 이 PC 가 답하는 것 — 스방 자료(서버에는 없다) · 설정(이 PC DB) · 보고서(이 PC 보고서 엔진, app/reports.py)
-MIX_LOCAL = ("/api/bangjae", "/api/settings", "/api/reports", "/api/auth", "/api/keys")
+MIX_LOCAL = ("/api/bangjae", "/api/settings", "/api/reports", "/api/auth", "/api/keys", "/api/status")   # status 는 서버 것 + 이 PC 스방(main.api_status)
 TIMEOUT = httpx.Timeout(20.0, connect=5.0)
 # 넘길 때 버리는 머리 — 길이·압축은 httpx 가 푼 몸에 맞지 않는다(gzip 을 풀어 받는다)
 _DROP = {"content-length", "content-encoding", "transfer-encoding", "connection", "keep-alive", "server", "date"}
