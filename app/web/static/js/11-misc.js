@@ -830,6 +830,7 @@ async function originBadge() {
   try {
     const o = await getJson("/api/origin");
     if (o.mode === "server") ORIGIN_BADGE = `<span class="badge srv" title="자료를 서버(${o.url})에서 받는 중 — 종합 화면 설정 › 자료">서버</span>`;
+    else if (o.mode === "mix") ORIGIN_BADGE = `<span class="badge srv" title="기상청 자료는 서버(${o.url}), 스방은 이 PC — 종합 화면 설정 › 자료">서버+스방</span>`;
   } catch {}
 }
 let ORIGIN_BADGE = "";

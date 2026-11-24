@@ -606,7 +606,7 @@ const NOWD = () => (window.GN_NOW ? new Date(window.GN_NOW) : new Date());
 /* 시연 서버(:8001 — 언레이드 gn-demo · PC python -m app.main --demo) 주소. 실황은 8000.
    ⚠️ PC 가 서버에서 받는 중이면 시연도 그 서버의 것이다 — 이 PC 의 8001 이 아니라 서버의 8001 */
 let SNAP_HOST = location.hostname;
-if (!window.GN_SNAP) getJson("/api/origin").then(o => { if (o.mode === "server" && o.url) SNAP_HOST = new URL(o.url).hostname; }).catch(() => {});
+if (!window.GN_SNAP) getJson("/api/origin").then(o => { if (o.mode !== "local" && o.url) SNAP_HOST = new URL(o.url).hostname; }).catch(() => {});
 const TUNNEL = !location.port && /[a-z]/i.test(location.hostname) && location.hostname.includes(".");   // https 터널 주소(gisang.day — 시연은 demo.gisang.day)
 const SNAP_URL = (path = "") => TUNNEL ? `${location.protocol}//${location.hostname.replace(/^(demo\.)?/, "demo.")}${path}`
   : `${location.protocol}//${SNAP_HOST}:8001${path}`;

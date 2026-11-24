@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import threading
 from datetime import datetime, timedelta
@@ -127,11 +128,12 @@ THUMBS = config.ROOT / "app" / "web" / "static" / "img" / "reports"   # 썸네�
 
 
 def url() -> str:
-    return (config.KEYS.get("JAENAN_URL") or URL0).rstrip("/")
+    # 런처(재난상황보고서)가 대시보드를 켜며 띄운 이 PC 보고서 서버 — 스방(내부망) 자료로 만든다(dashboard_bridge.보고서서버시작)
+    return (os.environ.get("GN_REPORT_URL") or config.KEYS.get("JAENAN_URL") or URL0).rstrip("/")
 
 
 def _tok() -> str:
-    return config.KEYS.get("JAENAN_TOKEN") or ""
+    return os.environ.get("GN_REPORT_TOKEN") or config.KEYS.get("JAENAN_TOKEN") or ""
 
 
 def ready() -> bool:

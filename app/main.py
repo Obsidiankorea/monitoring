@@ -213,7 +213,10 @@ async def lifespan(app: FastAPI):
     sched.add_job(_nightly, "cron", hour=4, minute=20, id="maint",
                   max_instances=1, coalesce=True)
     sched.start()
-    if origin.remote():
+    if origin.mode() == "mix" and origin.remote():
+        # 설정 '서버 + 이 PC 스방' — 스방만 이 PC 가 수집한다(기상청은 서버가 받은 것을 읽는다)
+        _mix(sched, skip)
+    elif origin.remote():
         # 설정 '서버에서 받기' — 이 PC 는 수집하지 않는다(같은 키로 호출이 두 배가 되지 않게)
         sched.pause()
         log.info("자료는 서버(%s)에서 받는다 — 이 PC 수집기 멈춤", origin.remote())
@@ -1799,6 +1802,23 @@ def _collecting() -> bool:
     return bool(sch) and sch.running and sch.state == 1          # 1 = STATE_RUNNING(멈춤 2)
 
 
+MIX_KEEP = ("bangjae", "maint")                 # mix 에서 이 PC 가 계속 돌리는 일 — 스방 수집 · 밤 치우기
+
+
+def _mix(sch, skip) -> None:
+    """서버 + 이 PC 스방 — 스방 수집기(와 밤 치우기)만 돌리고 나머지(기상청 수집 · 미리 계산 · 감시)는 멈춘다."""
+    if sch.state == 2:
+        sch.resume()
+    for j in sch.get_jobs():
+        if j.id in MIX_KEEP:
+            sch.resume_job(j.id)
+        else:
+            sch.pause_job(j.id)
+    if "bangjae" not in skip and "bangjae" in COLLECTORS:
+        asyncio.create_task(run_one("bangjae"))
+    log.info("기상청 자료는 서버(%s)에서, 스방은 이 PC 가 수집한다", origin.remote())
+
+
 @app.get("/api/origin")
 async def api_origin_get():
     return {**origin.cfg(), "collecting": _collecting()}
@@ -1813,11 +1833,16 @@ async def api_origin_put(body: dict):
         raise HTTPException(400, str(e)) from e
     sch = getattr(app.state, "sched", None)
     if sch and sch.running:
-        if c["mode"] == "server" and sch.state == 1:
+        if c["mode"] == "mix":
+            _mix(sch, getattr(app.state, "skip", set()))
+        elif c["mode"] == "server" and sch.state == 1:
             sch.pause()
             log.info("자료는 서버(%s)에서 받는다 — 이 PC 수집기 멈춤", c["url"])
-        elif c["mode"] == "local" and sch.state == 2:
-            sch.resume()
+        elif c["mode"] == "local":
+            if sch.state == 2:
+                sch.resume()
+            for j in sch.get_jobs():             # mix 에서 멈춘 일들 다시
+                sch.resume_job(j.id)
             for kind in COLLECTORS:
                 if kind not in getattr(app.state, "skip", set()):
                     asyncio.create_task(run_one(kind))
@@ -1838,7 +1863,7 @@ async def api_origin_test(body: dict):
 async def from_server(request: Request, call_next):
     """'서버에서 받기'면 화면이 부르는 /api/… 를 서버로 넘긴다(받는 곳 설정·업데이트·저장공간은 이 PC)."""
     base = origin.remote()
-    if not base or not origin.should_proxy(request.url.path):
+    if not base or not origin.should_proxy(request.url.path, request.method, request.url.query):
         return await call_next(request)
     body = await request.body() if request.method in ("POST", "PUT", "PATCH", "DELETE") else b""
     code, content, head = await origin.forward(base, request.method, request.url.path,
