@@ -1574,6 +1574,16 @@ async def api_update_restart():
     return {"ok": True, "code": RESTART_CODE}
 
 
+@app.get("/api/admin/mem")
+async def api_admin_mem(request: Request):
+    """메모리 어디에 쓰나(관리자만) — 캐시별 개수 · 대강 크기, numpy 배열, 객체 종류, RSS(app/memstat.py)."""
+    from . import memstat
+    u = getattr(request.state, "user", None) or {}
+    if u.get("machine") or u.get("role", "admin") != "admin":
+        raise HTTPException(403, "관리자만")
+    return JSONResponse(await asyncio.to_thread(memstat.report), headers={"Cache-Control": "no-store"})
+
+
 @app.get("/api/status")
 async def api_status():
     mine = {"collect": queries.status(), "poll": POLL_DEFAULT, "reports_busy": REP_BUSY["n"],
