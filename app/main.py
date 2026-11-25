@@ -1713,6 +1713,23 @@ async def api_kma_raw(path: str, q: str = ""):
     return Response(got[1], media_type=got[0] or "text/plain")
 
 
+@app.get("/api/kma/pass")
+async def api_kma_pass(request: Request, path: str):
+    """재난상황보고서 서버용 — 기상청(apihub-pub)에 이 서버 키로 대신 물어 받은 그대로 돌려준다. 나머지 인자는 기상청 인자(authKey 는 버린다).
+    기상청이 실패하면 502 + X-GN-Kma-Fail(보고서 서버는 그때 기상청에 다시 묻지 않는다 — 같은 기상청을 두 번 두드릴 뿐)."""
+    from . import kma as _kma
+    if config.DEMO:
+        raise HTTPException(404, "시연 서버는 기상청에 묻지 않는다")
+    q = [(k, v) for k, v in request.query_params.multi_items() if k != "path" and k.lower() != "authkey"]
+    try:
+        ctype, body = await _kma.passthrough(path, q)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    except _kma.KmaError as e:
+        return PlainTextResponse(str(e)[:300], status_code=502, headers={"X-GN-Kma-Fail": "1"})
+    return Response(body, media_type=ctype or "text/plain")
+
+
 @app.get("/api/clock.js")
 async def api_clock_js():
     """화면이 맨 먼저 읽는 작은 스크립트 — 시연이면 멈춘 시각(ms)과 그 시연, 실황이면 null."""

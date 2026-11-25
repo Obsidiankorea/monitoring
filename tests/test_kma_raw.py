@@ -54,3 +54,27 @@ def test_backfill_newest_first(tdb, monkeypatch):
     assert all(a < first.strftime("%Y%m%d%H%M") for a in asked)
     asked.clear()
     assert asyncio.run(alerts.backfill_raw(hours=2, workers=2)) == 0 and asked == []
+
+
+def test_pass_api(tdb, monkeypatch):
+    """/api/kma/pass — 이 서버 키로 대신 묻기 · authKey 버림 · 1분 캐시 · 기상청 실패는 502 + X-GN-Kma-Fail · 경로 제한."""
+    asked = []
+
+    async def fake(path, params):
+        asked.append((path, params))
+        if params.get("stn") == "bad":
+            raise kma.KmaError("실패")
+        return "image/png", b"PNG"
+    monkeypatch.setattr(kma, "fetch_resp", fake)
+    kma._pass_cache.clear()
+    c = TestClient(main.app)
+    p = "/api/typ01/cgi-bin/url/nph-wrn7"
+    r = c.get("/api/kma/pass", params={"path": p, "stn": "1", "authKey": "x"})
+    assert r.status_code == 200 and r.content == b"PNG" and r.headers["content-type"] == "image/png"
+    assert asked == [(p, {"stn": "1"})]
+    c.get("/api/kma/pass", params={"path": p, "stn": "1"})
+    assert len(asked) == 1                                                  # 1분 캐시
+    r = c.get("/api/kma/pass", params={"path": p, "stn": "bad"})
+    assert r.status_code == 502 and r.headers.get("X-GN-Kma-Fail") == "1"
+    assert c.get("/api/kma/pass", params={"path": "/api/typ01/../x"}).status_code == 400
+    assert c.get("/api/kma/pass", params={"path": "/admin"}).status_code == 400
