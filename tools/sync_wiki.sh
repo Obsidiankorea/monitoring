@@ -6,7 +6,7 @@
 #   bash tools/sync_wiki.sh --dry     바뀔 파일만 보여 준다(보내지 않는다)
 #   bash tools/sync_wiki.sh --prune   PC 에서 지운 페이지를 NAS 에서도 지운다(.md · data 만, raw 는 건드리지 않는다)
 #
-# 보내지 않는 것: .obsidian · PDF · zip(원본 · 위키 묶음 — 바뀌지 않는다) · raw/추출본. raw/*.md(원본 목록)는 보낸다.
+# 보내지 않는 것: .obsidian · .git · PDF · zip(원본 · 위키 묶음 — 바뀌지 않는다) · raw/추출본. raw/*.md(원본 목록)는 보낸다.
 # NAS 의 그 폴더는 헤르메스 컨테이너(uid 10000) 소유 · 본인만 읽기라 보낸 뒤 소유자와 권한(700/600)을 맞춘다. 보내기 전에 gn-monitor 쪽에 백업을 남긴다.
 set -euo pipefail
 VAULT=${WIKI_VAULT:-"$HOME/obsidian/재난"}
@@ -20,11 +20,11 @@ DRY=0; PRUNE=0
 for a in "$@"; do case "$a" in --dry) DRY=1;; --prune) PRUNE=1;; *) echo "알 수 없는 옵션: $a"; exit 2;; esac; done
 [ -d "$VAULT" ] || { echo "위키 폴더가 없다: $VAULT"; exit 1; }
 SSH=(ssh -i "$KEY" -o ConnectTimeout=15 "$HOST")
-EXC=(--exclude=./.obsidian --exclude='*.pdf' --exclude='*.zip' --exclude=./raw/추출본)
+EXC=(--exclude=./.obsidian --exclude=./.git --exclude='*.pdf' --exclude='*.zip' --exclude=./raw/추출본 --exclude='./raw/*.txt' --exclude='./raw/*.hwp' --exclude='./raw/*.hwpx')   # raw 의 추출본 · 한글 원문은 안 보낸다(판결문에 실명)
 
 # 보낼 파일 목록 · 크기(PC) / NAS 에 있는 것 — 다른 것만 보여 준다
-local_list() { (cd "$VAULT" && find . -type f ! -path './.obsidian/*' ! -path './raw/추출본/*' ! -name '*.pdf' ! -name '*.zip' -printf '%P\t%s\n' | sort); }
-remote_list() { "${SSH[@]}" "cd '$DEST' && find . -type f ! -path './.obsidian/*' ! -path './raw/추출본/*' ! -name '*.pdf' ! -name '*.zip' -printf '%P\t%s\n' | sort"; }
+local_list() { (cd "$VAULT" && find . -type f ! -path './.obsidian/*' ! -path './.git/*' ! -path './raw/추출본/*' ! -path './raw/*.txt' ! -path './raw/*.hwp' ! -path './raw/*.hwpx' ! -name '*.pdf' ! -name '*.zip' -printf '%P\t%s\n' | sort); }
+remote_list() { "${SSH[@]}" "cd '$DEST' && find . -type f ! -path './.obsidian/*' ! -path './raw/추출본/*' ! -path './raw/*.txt' ! -path './raw/*.hwp' ! -path './raw/*.hwpx' ! -name '*.pdf' ! -name '*.zip' -printf '%P\t%s\n' | sort"; }
 L=$(mktemp); R=$(mktemp); trap 'rm -f "$L" "$R"' EXIT
 local_list > "$L"; remote_list > "$R"
 echo "PC $(wc -l < "$L")개 · NAS $(wc -l < "$R")개"
