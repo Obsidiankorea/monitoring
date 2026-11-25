@@ -38,7 +38,8 @@ def main() -> None:
         from app.main import app
         uvicorn.run(app, host=os.environ.get("HOST", "127.0.0.1"), port=8001)
         return
-    keys = ROOT / "config" / "api_keys.txt"
+    from app.config import key_file           # 공용 ~/.gisang/api_keys.txt 가 있으면 그것
+    keys = key_file()
     if not keys.exists():
         shutil.copy2(ROOT / "config" / "api_keys.example.txt", keys)
         print("[*] config\\api_keys.txt 를 만들었습니다 — 키를 넣고 저장한 뒤 메모장을 닫으세요")

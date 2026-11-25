@@ -46,3 +46,15 @@ def test_every_key_has_a_doc_with_front_matter():
     assert apikeys.dday("2000-01-01") < 0 and apikeys.dday("없음") is None
     row = next(r for r in apikeys.status() if r["name"] == "HRFCO_KEY")
     assert row["doc"] == "hrfco" and row["site"].startswith("https://")
+
+
+def test_shared_key_file(tmp_path, monkeypatch):
+    """공용 키 파일(GISANG_KEYS · ~/.gisang/api_keys.txt)이 있으면 그것 — 재난상황보고서 런처와 한 파일. 없으면 config/api_keys.txt."""
+    from app import config
+    f = tmp_path / "k.txt"
+    f.write_text("ORG_API_KEY=x\n", encoding="utf-8")
+    monkeypatch.setenv("GISANG_KEYS", str(f))
+    assert config.key_file() == f
+    monkeypatch.setenv("GISANG_KEYS", str(tmp_path / "none.txt"))
+    monkeypatch.setattr(config.Path, "home", classmethod(lambda cls: tmp_path))
+    assert config.key_file() == config.ROOT / "config" / "api_keys.txt"

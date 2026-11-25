@@ -63,10 +63,19 @@ DB_PATH = STATE / "gnweather.db"
 KMA_HOST = "https://apihub-pub.kma.go.kr"
 
 
+def key_file() -> Path:
+    """키 파일 — ① 환경변수 GISANG_KEYS ② 공용 ~/.gisang/api_keys.txt(재난상황보고서 런처와 같은 파일) ③ config/api_keys.txt.
+    있는 것 가운데 앞의 것. 아무것도 없으면 ③(새로 만들 곳)."""
+    for p in (os.environ.get("GISANG_KEYS"), Path.home() / ".gisang" / "api_keys.txt"):
+        if p and Path(p).is_file():
+            return Path(p)
+    return ROOT / "config" / "api_keys.txt"
+
+
 def _load_keys() -> dict[str, str]:
-    """config/api_keys.txt(KEY=VALUE)와 환경변수를 합쳐 읽는다."""
+    """키 파일(key_file, KEY=VALUE)과 환경변수를 합쳐 읽는다."""
     out: dict[str, str] = {}
-    f = ROOT / "config" / "api_keys.txt"
+    f = key_file()
     if f.exists():
         # utf-8-sig — 메모장이 BOM 을 붙여 저장해도 첫 키 이름이 깨지지 않게.
         for line in f.read_text(encoding="utf-8-sig").splitlines():

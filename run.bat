@@ -109,6 +109,9 @@ if "%NEED%"=="1" (
 rem -- 3. 기상청 키 -------------------------------------------------
 rem 키는 저장소에 없다(.gitignore). 없으면 인수인계 묶음에서 가져오고,
 rem 그것도 없으면 틀(config\api_keys.example.txt)을 복사해 메모장으로 연다.
+rem shared key file (GISANG_KEYS or %USERPROFILE%\.gisang\api_keys.txt, same as the report launcher)
+if defined GISANG_KEYS if exist "%GISANG_KEYS%" goto keyok
+if exist "%USERPROFILE%\.gisang\api_keys.txt" goto keyok
 if not exist "config\api_keys.txt" (
   if exist "handoff-mac\config\api_keys.txt" (
     if not exist config mkdir config

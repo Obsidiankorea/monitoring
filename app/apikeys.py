@@ -32,7 +32,7 @@ EDITABLE = [
 NAMES = {n for n, *_ in EDITABLE}
 DOCS = config.ROOT / "docs" / "api"
 SLUGS = {d for *_, d in EDITABLE}
-FILE = config.ROOT / "config" / "api_keys.txt"
+FILE = config.key_file()                 # 읽은 그 파일에 쓴다(공용 ~/.gisang 이 있으면 그곳)
 
 
 def front(slug: str) -> dict:
