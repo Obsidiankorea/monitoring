@@ -6,6 +6,7 @@
 #   bash tools/sync_wiki.sh --dry     바뀔 파일만 보여 준다(보내지 않는다)
 #   bash tools/sync_wiki.sh --prune   PC 에서 지운 페이지를 NAS 에서도 지운다(.md · data 만, raw 는 건드리지 않는다)
 #
+# 커밋된 상태(git HEAD)만 보낸다 — 작업 폴더의 미커밋 · 미추적 파일(다른 세션 작업 중)은 안 간다.
 # 보내지 않는 것: .obsidian · .git · PDF · zip(원본 · 위키 묶음 — 바뀌지 않는다) · raw/추출본. raw/*.md(원본 목록)는 보낸다.
 # NAS 의 그 폴더는 헤르메스 컨테이너(uid 10000) 소유 · 본인만 읽기라 보낸 뒤 소유자와 권한(700/600)을 맞춘다. 보내기 전에 gn-monitor 쪽에 백업을 남긴다.
 set -euo pipefail
@@ -19,13 +20,16 @@ DASH=${NAS_DASH:-http://100.106.116.92:8000}
 DRY=0; PRUNE=0
 for a in "$@"; do case "$a" in --dry) DRY=1;; --prune) PRUNE=1;; *) echo "알 수 없는 옵션: $a"; exit 2;; esac; done
 [ -d "$VAULT" ] || { echo "위키 폴더가 없다: $VAULT"; exit 1; }
+git -C "$VAULT" rev-parse --verify -q HEAD >/dev/null || { echo "위키가 git 저장소가 아니다: $VAULT"; exit 1; }
+SRC=$(mktemp -d); git -C "$VAULT" archive HEAD | tar -xf - -C "$SRC"
+echo "보낼 판: $(git -C "$VAULT" log --oneline -1)$(git -C "$VAULT" status --porcelain | grep -qv '^.. \.obsidian/' && echo ' (미커밋 변경은 안 보낸다)')"
 SSH=(ssh -i "$KEY" -o ConnectTimeout=15 "$HOST")
 EXC=(--exclude=./.obsidian --exclude=./.git --exclude='*.pdf' --exclude='*.zip' --exclude=./raw/추출본 --exclude='./raw/*.txt' --exclude='./raw/*.hwp' --exclude='./raw/*.hwpx')   # raw 의 추출본 · 한글 원문은 안 보낸다(판결문에 실명)
 
 # 보낼 파일 목록 · 크기(PC) / NAS 에 있는 것 — 다른 것만 보여 준다
-local_list() { (cd "$VAULT" && find . -type f ! -path './.obsidian/*' ! -path './.git/*' ! -path './raw/추출본/*' ! -path './raw/*.txt' ! -path './raw/*.hwp' ! -path './raw/*.hwpx' ! -name '*.pdf' ! -name '*.zip' -printf '%P\t%s\n' | sort); }
+local_list() { (cd "$SRC" && find . -type f ! -path './.obsidian/*' ! -path './.git/*' ! -path './raw/추출본/*' ! -path './raw/*.txt' ! -path './raw/*.hwp' ! -path './raw/*.hwpx' ! -name '*.pdf' ! -name '*.zip' -printf '%P\t%s\n' | sort); }
 remote_list() { "${SSH[@]}" "cd '$DEST' && find . -type f ! -path './.obsidian/*' ! -path './raw/추출본/*' ! -path './raw/*.txt' ! -path './raw/*.hwp' ! -path './raw/*.hwpx' ! -name '*.pdf' ! -name '*.zip' -printf '%P\t%s\n' | sort"; }
-L=$(mktemp); R=$(mktemp); trap 'rm -f "$L" "$R"' EXIT
+L=$(mktemp); R=$(mktemp); trap 'rm -rf "$L" "$R" "$SRC"' EXIT
 local_list > "$L"; remote_list > "$R"
 echo "PC $(wc -l < "$L")개 · NAS $(wc -l < "$R")개"
 NEW=$(comm -23 "$L" "$R" | cut -f1 | sort -u)            # PC 에만 있거나 크기가 다른 것
@@ -37,7 +41,7 @@ echo "── NAS 에만 있는 파일 $(printf '%s\n' "$GONE" | grep -c . || tru
 "${SSH[@]}" "mkdir -p '$BAK' && tar czf \"$BAK/wiki-knowledge-\$(date +%Y%m%d-%H%M).tgz\" -C '$(dirname "$DEST")' --exclude='재난/raw' --exclude='*.zip' '$(basename "$DEST")' && ls -1t '$BAK'/wiki-knowledge-*.tgz | tail -n +6 | xargs -r rm -f"
 echo "백업 완료 → $BAK"
 
-tar -C "$VAULT" -cf - "${EXC[@]}" . | "${SSH[@]}" "tar -xf - -C '$DEST' --no-same-owner && chown -R 10000:10000 '$DEST' && chmod -R u=rwX,go= '$DEST'"
+tar -C "$SRC" -cf - "${EXC[@]}" . | "${SSH[@]}" "tar -xf - -C '$DEST' --no-same-owner && chown -R 10000:10000 '$DEST' && chmod -R u=rwX,go= '$DEST'"
 echo "보냈다 → $HOST:$DEST"
 
 if [ "$PRUNE" = 1 ] && [ -n "$GONE" ]; then
