@@ -22,6 +22,8 @@ EDITABLE = [
     ("SD_SLIDE_PRED_KEY", "재난안전데이터 · 산사태 예측", "산림청 예측정보 — 레이어 '산사태'(J), 호우 · 태풍 특보 때만", "safetydata"),
     ("SD_RESERVOIR_KEY", "재난안전데이터 · 위험저수지", "저수지 계측기 경보 — 레이어 '위험저수지'(K)", "safetydata"),
     ("SD_FLOODMAP_KEY", "재난안전데이터 · 침수흔적도", "과거 침수 구역 — 레이어 '침수흔적'(N), 7일마다", "safetydata"),
+    ("SANSATAI_ID", "산사태정보시스템 기관아이디", "산림청 산사태 실황 · 예측(읍면동) · 발령 현황 · 산악기상 — 레이어 '산사태'(J)", "sansatai"),
+    ("SANSATAI_PW", "산사태정보시스템 비밀번호", "위 아이디의 비밀번호 — 화면에 끝 글자도 보이지 않는다", "sansatai"),
     ("VWORLD_KEY", "브이월드 지오코더", "지구 주소 → 좌표(서버가 켜질 때, 메모리에만) — 지구별 강수 · 산점도", "vworld"),
     ("TELEGRAM_BOT_TOKEN", "텔레그램 봇 토큰", "AI 알림 · 법령 알림", "telegram"),
     ("TELEGRAM_CHAT_ID", "텔레그램 채팅 번호", "알림 받을 곳", "telegram"),
@@ -56,7 +58,7 @@ def status() -> list[dict]:
     out = []
     for name, label, use, doc in EDITABLE:
         v, f = config.KEYS.get(name, ""), front(doc)
-        out.append({"name": name, "label": label, "use": use, "set": bool(v), "tail": v[-4:] if len(v) > 8 else "",
+        out.append({"name": name, "label": label, "use": use, "set": bool(v), "tail": v[-4:] if len(v) > 8 and not name.endswith("_PW") else "",
                     "env": bool(os.environ.get(name)), "doc": doc, "site": f.get("관리URL", ""), "acct": f.get("계정", ""),
                     "expire": f.get("만료", ""), "dday": dday(f.get("만료", "")), "state": f.get("상태", "")})
     return out

@@ -32,6 +32,8 @@ const GL_LAYERS = [
   { id: "rain", type: "raster", source: "rain", paint: { "raster-resampling": "nearest", "raster-fade-duration": 0, "raster-opacity-transition": { duration: 300 } } },
   { id: "ghost", type: "raster", source: "ghost", paint: { "raster-resampling": "nearest", "raster-fade-duration": 0, "raster-opacity": 0 } },
   { id: "hatch", type: "raster", source: "hatch", paint: { "raster-fade-duration": 0 } },
+  // 산림청 강우반영 산사태위험도(레이어 '산사태' J) — 서버가 500m 칸 등급 그림으로 바꿔 준다(/api/sansatai/risk.png, 06d)
+  { id: "slrisk", type: "raster", source: "slrisk", layout: { visibility: "none" }, paint: { "raster-resampling": "nearest", "raster-fade-duration": 0, "raster-opacity": 0.6 } },
   // 지형(레이어 relief · low) — 강수 위 · 경계 밑. 미리 만든 그림 한 장씩(tools/build_terrain.py)
   // 경남 전체(지도 줌 10 아래)는 한 장 그림, 확대하면 조각(-t, 서버 /terrain/t — 30m 자료 · 줌 12부터 등고선)
   { id: "low", type: "raster", source: "low", maxzoom: 10, layout: { visibility: "none" }, paint: { "raster-fade-duration": 0 } },
@@ -103,7 +105,7 @@ GL_LAYERS.push(
   { id: "flood-line", type: "line", source: "flood", paint: { "line-color": "var(--sf-flood)", "line-opacity": 0.5, "line-width": 0.6 } },
 );
 const TER_IDS = ["relief", "low", "bldg"];   // 지형 체계 그림(terrain/*.png + /terrain/t/ 조각)
-const CANVAS_SRC = ["rain", "ghost", "hatch", "low", "relief", "bldg"];   // 격자 그림 — 이미지 소스(low · relief 는 파일 그림)
+const CANVAS_SRC = ["rain", "ghost", "hatch", "slrisk", "low", "relief", "bldg"];   // 격자 그림 — 이미지 소스(low · relief 는 파일 그림)
 const BLANK_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
 
 /* "var(--x)" → 지금 테마의 값. 식(배열) 안도 찾아 바꾼다 */

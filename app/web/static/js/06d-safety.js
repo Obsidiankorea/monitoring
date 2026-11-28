@@ -34,10 +34,76 @@ try { SAF_DEP = localStorage.getItem("gn-flood-dep") === "1"; } catch {}
 const FL_DEP = [[0.5, "#7FE3F0", "0.5m 미만"], [1, "#F5E663", "0.5~1m"], [2, "#F5A142", "1~2m"], [3, "#EF5B4C", "2~3m"], [99, "#D05BE6", "3m 이상"]];
 const flDepExpr = () => ["case", ["<", ["get", "dep"], 0], "#9AA3B2",
   ["step", ["get", "dep"], FL_DEP[0][1], ...FL_DEP.slice(0, -1).flatMap(([v], k) => [v, FL_DEP[k + 1][1]])]];
+/* ── 산림청 산사태정보시스템(/api/sansatai) — 레이어 '산사태'(J)에 같이 ─────────────────────────────
+   강우반영 산사태위험도: 서버가 산림청 등급 격자를 우리 500m 칸 그림으로 바꿔 둔다 → 강수 격자처럼 GL 'slrisk' 층에 그대로 얹는다.
+   보기: 1~3등급(기본 — 평시엔 거의 다 5등급이라 산지가 온통 파랗게 덮인다) · 전체(산림청 화면과 같게). 이 브라우저 기억 */
+let SST = null, SST_IMG = null, SST_KEY = "";
+let SST_MAX = 3;
+try { SST_MAX = +localStorage.getItem("gn-sst-max") || 3; } catch {}
+const SST_C = ["", "#FF0000", "#FFC900", "#B6FF8E", "#30C2FF", "#0000FF"];
+async function loadSansatai() {
+  if (!OV.has("slide") || CASE) { SST_IMG = null; return; }
+  try { SST = await getJson("/api/sansatai"); } catch (e) { SST = { fail: e.message }; }
+  const anal = SST?.risk?.anal;
+  if (!anal) { SST_IMG = null; return; }
+  const key = `${anal}-${SST_MAX}`;
+  if (SST_IMG && SST_IMG.dataset.key === key) return;
+  const img = new Image();
+  img.dataset.key = key;
+  await new Promise(ok => { img.onload = ok; img.onerror = ok; img.src = `/api/sansatai/risk.png?anal=${anal}&max=${SST_MAX}&res=100`; });
+  SST_IMG = img.naturalWidth ? img : null;
+}
+function sstDraw() {
+  if (!GL_OK || !META?.grids?.hr) return;
+  const on = OV.has("slide") && !CASE && SST_IMG;
+  const key = on ? SST_IMG.dataset.key : "";
+  if (key === SST_KEY) return;
+  SST_KEY = key;
+  if (!on) { glCanvas("slrisk"); return; }
+  // 그림은 100m 칸(500m 칸 × 5) — 캔버스는 그림 크기, 네 모서리는 500m 격자 범위(hr bbox) 그대로
+  const hb = META.grids.hr;
+  glCanvas("slrisk", SST_IMG.naturalWidth, SST_IMG.naturalHeight, c => { c.imageSmoothingEnabled = false; c.drawImage(SST_IMG, 0, 0); },
+    gridCorners({ grid: "hr", w: hb.w, h: hb.h }));
+}
+function sstBody() {
+  const dot = c => `<i class="dt" style="background:${c}"></i>`;
+  const row = (c, b, s, e) => `<div class="rr">${dot(c)}<b>${escH(b)}</b><span>${escH(s)}</span><em>${escH(e)}</em></div>`;
+  if (!SST) return `<div class="sec">강우반영 산사태위험도 (산림청)</div><div class="nt">읽는 중…</div>`;
+  if (SST.fail) return `<div class="sec">강우반영 산사태위험도 (산림청)</div><div class="nt w">불러오지 못했다 — ${escH(SST.fail)}</div>`;
+  const r = SST.risk, LV = ["", "var(--lv-watch)", "var(--lv-warn)", "var(--lv-warn)"];
+  let o = `<div class="sec">강우반영 산사태위험도 (산림청 · 매시)</div>`;
+  if (!r) o += `<div class="nt w">${escH(SST.err?.risk || "아직 받지 않았다")}</div>`;
+  else {
+    const top = (r.top || []).filter(t => selHas(t.sigun)).slice(0, 6);
+    const km = v => `${(+v).toLocaleString(undefined, { maximumFractionDigits: v < 10 ? 2 : 0 })}㎢`;
+    o += `<div class="nt">분석 ${escH(r.at.slice(5))} · 경남 1등급 ${km(r.gn[0])} · 2등급 ${km(r.gn[1])} · 3등급 ${km(r.gn[2])} (100m 칸 면적)</div>`
+      + `<div class="keys2">${[1, 2, 3, 4, 5].map(g => `<span>${dot(SST_C[g])}${g}등급</span>`).join("")}</div>`
+      + `<div class="seg sfm"><button data-sx="3" class="${SST_MAX === 3 ? "on" : ""}">1~3등급</button><button data-sx="5" class="${SST_MAX === 5 ? "on" : ""}">전체(산림청과 같게)</button></div>`
+      + (top.length ? top.map(t => row(SST_C[t.g1 ? 1 : 2], t.sigun, `1등급 ${km(t.g1)} · 2등급 ${km(t.g2)}`, "")).join("") : `<div class="nt">1 · 2등급 없음</div>`);
+  }
+  o += `<div class="sec">예측 대비 발령 (산림청 시스템)</div>`;
+  if (!SST.login) return o + `<div class="nt w">계정이 없다 — 설정 › 시스템 › API 키 › 산사태정보시스템 아이디 · 비밀번호</div>`;
+  if (SST.err?.login) return o + `<div class="nt w">${escH(SST.err.login)}</div>`;
+  const un = (SST.unissued || []).filter(s => selHas(s.sigun)), st = (SST.status || []).filter(s => selHas(s.sigun) && s.issued);
+  o += un.length ? un.map(s => row(LV[s.lv], s.sigun, `예측 ${s.name} — 발령 없음`, `분석 ${String(s.anal || "").slice(5)}`)).join("")
+    : `<div class="nt">예측이 걸리고 발령이 없는 시군 없음</div>`;
+  o += st.map(s => row(LV[s.lv], s.sigun, `예측 ${s.name} · 발령 ${s.issued}`, String(s.issued_at || "").slice(5))).join("");
+  const pr = (SST.pred || []).filter(p => selHas(p.sigun));
+  const last = pr.reduce((m, p) => (p.anal > m ? p.anal : m), "");
+  const now = pr.filter(p => p.anal === last);
+  o += `<div class="sec">실황 · 예측 읍면동 (지난 6시간)</div>`
+    + (now.length ? now.map(p => row(LV[p.lv], `${p.sigun} ${p.kind}`, p.name, p.emd.slice(0, 6).join(" · ") + (p.emd.length > 6 ? ` 외 ${p.emd.length - 6}` : ""))).join("")
+      + `<div class="nt">분석 ${escH(last.slice(5))}시 기준</div>`
+      : `<div class="nt">지난 6시간 걸린 곳 없음</div>`);
+  const mtn = (SST.mtn || []).filter(m => m.mm > 0 && selHas(m.sigun)).sort((a, b) => b.mm - a.mm).slice(0, 5);
+  if (mtn.length) o += `<div class="sec">산악기상 시간 강우 (산림청 관측소)</div>` + mtn.map(m => row("var(--ink-3)", m.name, `${m.mm}mm`, m.at.slice(11))).join("");
+  return o;
+}
 async function loadSafety() {
   clearTimeout(SAF_T);
-  if (!safAny() || CASE) { SAF = null; drawAlerts(); drawSafety(); renderSafetyLegend(); renderLyIcons(); loadVuln(); return; }
+  if (!safAny() || CASE) { SAF = null; SST_IMG = null; drawAlerts(); drawSafety(); renderSafetyLegend(); renderLyIcons(); loadVuln(); return; }
   try { SAF = await getJson("/api/safety"); } catch (e) { SAF = { fail: e.message }; }
+  await loadSansatai();
   await loadVuln();
   if (OV.has("flood") && !SAF_FL && SAF?.flood) { try { SAF_FL = await getJson("/api/safety/flood"); } catch { SAF_FL = []; } }
   drawAlerts(); drawSafety(); renderSafetyLegend(); renderLyIcons();   // 산사태 딱지가 생기면 특보 딱지 크기 · 기온 자리가 바뀐다
@@ -71,6 +137,7 @@ function drawSafety() {
     GL.setPaintProperty("flood", "fill-opacity", SAF_DEP ? 0.5 : 0.22);
     GL.setPaintProperty("flood-line", "line-color", SAF_DEP ? flDepExpr() : cssVal("var(--sf-flood)"));
   }
+  sstDraw();
   if (!safAny() || !V || !V.s || !SAF || SAF.fail) { g.innerHTML = safVuln(); return; }
   const out = [], badges = [], pts = [];
   if (OV.has("slide")) {
@@ -135,7 +202,9 @@ function safetyTip(h) {
 }
 TIPS.set("slide-now", `재난안전데이터공유플랫폼(행정안전부) 자료 — 전국을 다 받아 경남만 남긴다(키마다 하루 1000건).<br>
   <b>산사태 예보</b>는 시장 · 군수가 낸 주의보 · 경보 기록 — 발령 뒤 해제가 없으면 '발령 중'(72시간까지). <b>예측</b>은 산림청 예측정보 — 분석 뒤 하루만 '지금'으로 본다(몇 시간 앞 예측인지는 받지 못한다).<br>
-  서버는 <b>경남에 호우 · 태풍 특보가 있을 때만</b> 받는다(예보 10분 · 예측 30분). '늘 받기'를 누르면 특보가 없어도 받는다.`);
+  서버는 <b>경남에 호우 · 태풍 특보가 있을 때만</b> 받는다(예보 10분 · 예측 30분). '늘 받기'를 누르면 특보가 없어도 받는다.<br>
+  <b>강우반영 산사태위험도</b>(아래)는 산림청 산사태정보시스템이 매시 낸 등급 격자(원본 약 10m)를 100m 칸으로 옮긴 것 — 산림청 화면과 같은 5색으로 지도에 얹는다. 면적은 100m 칸 수 × 0.01㎢.
+  <b>예측 대비 발령 · 읍면동</b>은 같은 시스템에 경상남도 계정으로 로그인해 받는다(10분마다).`);
 TIPS.set("reservoir-now", `재해위험 저수지 계측기(수위계 · 경사계) 경보 — 재난안전데이터공유플랫폼, 30분마다.<br>
   마지막 기록이 발령이면 세모를 단계 색(관심 · 주의 · 경계 · 심각 · 대피)으로, 해제면 회색으로. 계측기 고장으로 잘못 잴 수 있고 해제를 못 받은 발령도 남아 있다 — 시각을 같이 본다.`);
 TIPS.set("flood-now", `2002년부터 실제 침수된 구역(행정안전부 침수흔적도) — 옅은 파랑 면. 7일마다 받는다. 면에 마우스를 올리면 해 · 재해 이름 · 침수심 · 원인.`);
@@ -188,8 +257,14 @@ function safLegend(id) {
             + `<div class="nt">침수심 = 그때 실제로 잠긴 깊이(침수흔적도). 같은 곳이 여러 해 겹치면 깊은 것이 위로 보이지 않을 수 있다.</div>` : "") : "");
     }
   }
-  box.innerHTML = `<div class="hd2" title="눌러서 닫기"><b>${TITLE}</b><i class="inf" data-tip="${id}-now">i</i></div>` + body;
+  box.innerHTML = `<div class="hd2" title="눌러서 닫기"><b>${TITLE}</b><i class="inf" data-tip="${id}-now">i</i></div>` + body
+    + (id === "slide" ? sstBody() : "");
   box.querySelector(".hd2").onclick = ev => { if (!ev.target.closest(".inf")) setLyOpen(null); };
+  for (const b of box.querySelectorAll("[data-sx]")) b.onclick = async () => {
+    SST_MAX = +b.dataset.sx;
+    try { localStorage.setItem("gn-sst-max", String(SST_MAX)); } catch {}
+    await loadSansatai(); drawSafety(); safLegend("slide");
+  };
   for (const b of box.querySelectorAll("[data-fd]")) b.onclick = () => {
     SAF_DEP = b.dataset.fd === "1";
     try { localStorage.setItem("gn-flood-dep", SAF_DEP ? "1" : "0"); } catch {}

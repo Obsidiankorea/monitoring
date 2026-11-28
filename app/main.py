@@ -34,7 +34,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTex
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from . import aiwatch, apikeys, cold, events, geocode, heat, its, lawwatch, rhwpwatch, river, safety, snow, tide, clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, serverupdate, sites, snaps, update
+from . import aiwatch, apikeys, cold, events, geocode, heat, its, lawwatch, rhwpwatch, river, safety, sansatai, snow, tide, clock, config, db, demo, gridcase, gridstore, gridview, maint, origin, queries, serverupdate, sites, snaps, update
 from . import auth as _auth  # 로그인(도 관리자 · 도 사용자 · 시군 사용자)
 from .collectors import alerts, bangjae_rain, forecast, grid_rain, prefetch, qpf, rain, shortfc
 from .config import CACHE, INTERVALS, POLL_DEFAULT
@@ -207,6 +207,10 @@ async def lifespan(app: FastAPI):
     # 재난안전데이터 — 산사태 예보 · 예측, 위험저수지, 침수흔적(키마다 따로, 하루 1000건 — app/safety.py). 켠 지 40초 뒤 첫 수집
     sched.add_job(safety.run, "interval", minutes=10, id="safety", max_instances=1, coalesce=True,
                   next_run_time=datetime.now() + timedelta(seconds=40))
+    # 산림청 산사태정보시스템 — 강우반영 위험도(공개, 새 분석 시각일 때만 그림) + 계정이 있으면 실황 · 예측 · 발령 현황 · 산악기상(app/sansatai.py)
+    if "sansatai" not in skip:
+        sched.add_job(sansatai.run, "interval", minutes=10, id="sansatai", max_instances=1, coalesce=True,
+                      next_run_time=datetime.now() + timedelta(seconds=50))
     # 지하차도 침수 위험 경보 — 경남 호우특보 중에만 부른다(ITS_KEY, 월 1000건 — app/its.py)
     sched.add_job(its.run, "interval", minutes=15, id="its", max_instances=1, coalesce=True)
     # 하루 한 번 묵은 자료 치우기 — 안 하면 DB 와 이미지 캐시가 계속 자란다
@@ -969,6 +973,46 @@ async def api_slide_vuln():
 async def api_safety_flood():
     """경남 침수흔적 다각형(경위도) — 7일마다 받아 둔 파일 그대로."""
     return PlainTextResponse(safety.flood(), media_type="application/json")
+
+
+@app.get("/api/sansatai")
+async def api_sansatai():
+    """산림청 산사태정보시스템 — 강우반영 위험도 요약(시군별 등급 칸 수) · 실황 · 예측(읍면동) · 발령 현황(미발령) · 산악기상."""
+    if not config.DEMO and not sansatai._LIVE["at"]:
+        await sansatai.run()                                   # 첫 요청이 스케줄러보다 먼저 오면 그 자리에서 한 번
+    return sansatai.status()
+
+
+@app.get("/api/sansatai/risk.png")
+async def api_sansatai_risk_png(anal: str | None = Query(None, pattern=r"^\d{10}$"),
+                                max_grade: int = Query(5, ge=1, le=5, alias="max"), scale: int = Query(1, ge=1, le=8),
+                                res: int = 100, raw: bool = False):
+    """강우반영 산사태위험도 그림(투명 바탕 · 산림청 5색). 경남 hr 범위라 지도 격자 네 모서리에 그대로 얹힌다.
+    res = 100(기본, 100m 칸 2080×1890 — 산림청 화면과 같은 모양) | 500(500m 칸, 칸에서 면적이 가장 넓은 등급).
+    scale = 칸 하나 픽셀 수(500m 보고서 그림은 4~8), max = 이 등급까지만(2 면 1 · 2등급만).
+    raw=1 = 산림청 원본(경위도 sansatai.BBOX, 0.001°/px) 그대로."""
+    if res not in (100, 500):
+        raise HTTPException(422, "res 는 100 또는 500")
+    if raw:
+        p = sansatai.raw_path(anal)
+        if not p:
+            raise HTTPException(404, "원본 그림이 없다(하루만 둔다)")
+        return FileResponse(p, media_type="image/png", headers={"Cache-Control": "public, max-age=600"})
+    got = sansatai.load_cells(anal, res)
+    if not got:
+        raise HTTPException(404, "위험도 칸 지도가 아직 없다")
+    png = await asyncio.to_thread(sansatai.cells_png, got[1], max_grade, scale)
+    return Response(png, media_type="image/png", headers={"Cache-Control": "public, max-age=600", "X-Anal": got[0]})
+
+
+@app.get("/api/sansatai/history")
+async def api_sansatai_history(fr: str = Query(..., pattern=r"^\d{4}-\d\d-\d\d( \d\d)?$"),
+                               to: str = Query(..., pattern=r"^\d{4}-\d\d-\d\d( \d\d)?$")):
+    """쌓인 실황 · 예측(읍면동)과 위험도 시군 등급 면적(㎢) — 보고서 · 사후 분석용. fr · to = 'YYYY-MM-DD' 또는 'YYYY-MM-DD HH'."""
+    f = fr if len(fr) > 10 else fr + " 00"
+    t = to if len(to) > 10 else to + " 23"
+    return {"pred": sansatai.history(f, t),
+            "risk": sansatai.risk_history(f.replace("-", "").replace(" ", ""), t.replace("-", "").replace(" ", ""))}
 
 
 @app.get("/api/keys")

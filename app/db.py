@@ -221,6 +221,17 @@ CREATE TABLE IF NOT EXISTS duty_log (
   who TEXT NOT NULL, action TEXT, more TEXT, memo TEXT NOT NULL, photo TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_duty_log ON duty_log(rid, id);
+-- 산림청 산사태정보시스템(app/sansatai.py). 실황 · 예측 — 읍면동 묶음 한 줄(sta = 산림청 묶음 번호). 지우지 않고 쌓는다(하루 수십 줄, 비 올 때만)
+CREATE TABLE IF NOT EXISTS sansatai_pred (
+  anal TEXT NOT NULL, kind TEXT NOT NULL, sigun TEXT NOT NULL, gu TEXT, sta TEXT NOT NULL,
+  lv INTEGER NOT NULL, emd TEXT, emd_cd TEXT, fetched_at TEXT,
+  PRIMARY KEY (anal, kind, sta)
+);
+CREATE INDEX IF NOT EXISTS idx_sst_pred_sg ON sansatai_pred(sigun, anal);
+-- 강우반영 산사태위험도 — 분석 시각마다 경남 · 시군 등급별 500m 칸 수(JSON [1등급, … 5등급])
+CREATE TABLE IF NOT EXISTS sansatai_risk (
+  anal TEXT PRIMARY KEY, gn TEXT NOT NULL, sigun TEXT NOT NULL, fetched_at TEXT
+);
 -- 로그인(app/auth.py) — 비밀번호는 scrypt 해시, 접속은 쿠키의 sha256 만
 CREATE TABLE IF NOT EXISTS app_user (
   id INTEGER PRIMARY KEY, login TEXT UNIQUE NOT NULL, name TEXT NOT NULL DEFAULT '',
