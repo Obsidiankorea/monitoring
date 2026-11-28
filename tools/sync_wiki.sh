@@ -10,6 +10,9 @@
 # 보내지 않는 것: .obsidian · .git · PDF · zip(원본 · 위키 묶음 — 바뀌지 않는다) · raw/추출본. raw/*.md(원본 목록)는 보낸다.
 # NAS 의 그 폴더는 헤르메스 컨테이너(uid 10000) 소유 · 본인만 읽기라 보낸 뒤 소유자와 권한(700/600)을 맞춘다. 보내기 전에 gn-monitor 쪽에 백업을 남긴다.
 set -euo pipefail
+# 2026-11-28 위키 원본을 NAS 로 옮김 — 원본은 NAS knowledge/재난(git, 허브 claude-dev:/home/dev/repos/재난.git). PC 는 허브에서 pull/push.
+# 이 스크립트로 보내면 PC 판이 NAS 원본을 덮으므로 막는다. 옛 방식이 꼭 필요할 때만 SYNC_WIKI_LEGACY=1.
+[ "${SYNC_WIKI_LEGACY:-0}" = 1 ] || { echo "중단: 위키 원본이 NAS 로 옮겨졌다(2026-11-28). PC→NAS 덮어쓰기는 막혀 있다 — 허브 git 으로 push 하라."; exit 3; }
 VAULT=${WIKI_VAULT:-"$HOME/obsidian/재난"}
 HOST=${NAS_HOST:-root@100.106.116.92}
 KEY=${NAS_KEY:-"$HOME/.ssh/unraid_tower"}
