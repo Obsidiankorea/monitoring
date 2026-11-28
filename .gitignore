@@ -27,3 +27,6 @@ data/snaps/*
 !data/snaps/fake-*/
 # 우려지역 담당자 연락처 — 상황판단 모드 전용(app/contacts.py). 저장소 · 위키에 두지 않는다
 data/contacts.csv
+
+# 산림청 산사태정보시스템 원본 · 첨부(tools/sansatai_dump.py)
+data/sansatai/
